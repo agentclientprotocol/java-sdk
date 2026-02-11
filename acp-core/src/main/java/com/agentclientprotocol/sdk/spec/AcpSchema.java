@@ -312,6 +312,21 @@ public final class AcpSchema {
 		public PromptRequest(String sessionId, List<ContentBlock> prompt) {
 			this(sessionId, prompt, null);
 		}
+
+		/**
+		 * Returns the text of the first {@link TextContent} block in the prompt, or an empty
+		 * string if no text content is present.
+		 */
+		public String text() {
+			if (prompt == null) {
+				return "";
+			}
+			return prompt.stream()
+				.filter(c -> c instanceof TextContent)
+				.map(c -> ((TextContent) c).text())
+				.findFirst()
+				.orElse("");
+		}
 	}
 
 	/**
