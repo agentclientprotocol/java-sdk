@@ -1,24 +1,32 @@
 # ACP Java SDK
 
+> **Documentation**: https://springaicommunity.mintlify.app/acp-java-sdk
+
 Pure Java implementation of the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) specification for building both clients and agents.
 
 ## Overview
 
-The Agent Client Protocol (ACP) standardizes communication between code editors and coding agents. This SDK enables Java applications to:
+The Agent Client Protocol (ACP) standardizes communication between code editors and coding agents. This SDK provides two modules:
 
-- **Connect to** ACP-compliant agents (Client SDK)
-- **Build** ACP-compliant agents in Java (Agent SDK)
+- **Client** — connect to and interact with ACP-compliant agents
+- **Agent** — build ACP-compliant agents in Java
+
+Three API styles for building agents:
+
+| Style | Best for | Example |
+|-------|----------|---------|
+| [**Annotation-based**](#2-hello-world-agent-annotation-based) | Least boilerplate — `@AcpAgent`, `@Prompt` annotations | [Jump to example](#2-hello-world-agent-annotation-based) |
+| [**Sync**](#3-hello-world-agent-sync) | Simple blocking handlers with plain return values | [Jump to example](#3-hello-world-agent-sync) |
+| [**Async**](#4-hello-world-agent-async) | Reactive applications using Project Reactor `Mono` | [Jump to example](#4-hello-world-agent-async) |
 
 **Key Features:**
-- Java 17+, reactive (Project Reactor), type-safe
-- Async and sync APIs
-- Stdio and WebSocket transports
+- Java 17+, type-safe, stdio and WebSocket transports
 - Capability negotiation and structured error handling
-- **[Annotation-based agents](acp-agent-support/README.md)** - Spring MVC-style `@AcpAgent`, `@Prompt` annotations
+- For a hands-on walkthrough, see the **[ACP Java Tutorial](https://github.com/markpollack/acp-java-tutorial)**
 
 ## Installation
 
-> **Note:** Not yet published to Maven Central. For now, build and install locally using `./mvnw install`.
+Published to Maven Central:
 
 ```xml
 <dependency>
@@ -52,7 +60,7 @@ For WebSocket server support (agents accepting WebSocket connections):
 
 ### 1. Hello World Client
 
-Connect to an ACP agent and send a prompt:
+Connect to an ACP agent and send a prompt ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-01-first-contact)):
 
 ```java
 import com.agentclientprotocol.sdk.client.*;
@@ -78,73 +86,9 @@ var response = client.prompt(new PromptRequest(
 client.close();
 ```
 
-### 2. Hello World Agent (Sync)
+### 2. Hello World Agent (Annotation-Based)
 
-Create a minimal ACP agent using the sync API (recommended for simplicity):
-
-```java
-import com.agentclientprotocol.sdk.agent.*;
-import com.agentclientprotocol.sdk.agent.transport.*;
-import com.agentclientprotocol.sdk.spec.AcpSchema.*;
-import java.util.List;
-import java.util.UUID;
-
-// Create stdio transport
-var transport = new StdioAcpAgentTransport();
-
-// Build sync agent - handlers use plain return values (no Mono!)
-AcpSyncAgent agent = AcpAgent.sync(transport)
-    .initializeHandler(req ->
-        new InitializeResponse(1, new AgentCapabilities(), List.of()))
-    .newSessionHandler(req ->
-        new NewSessionResponse(UUID.randomUUID().toString(), null, null))
-    .promptHandler((req, context) -> {
-        // Send updates using blocking void method
-        context.sendUpdate(req.sessionId(),
-            new AgentMessageChunk("agent_message_chunk",
-                new TextContent("Hello from the agent!")));
-        // Return response directly (no Mono!)
-        return new PromptResponse(StopReason.END_TURN);
-    })
-    .build();
-
-// Run agent (blocks until client disconnects)
-agent.run();
-```
-
-### 2b. Hello World Agent (Async)
-
-For reactive applications, use the async API:
-
-```java
-import com.agentclientprotocol.sdk.agent.*;
-import com.agentclientprotocol.sdk.agent.transport.*;
-import com.agentclientprotocol.sdk.spec.AcpSchema.*;
-import reactor.core.publisher.Mono;
-import java.util.List;
-import java.util.UUID;
-
-var transport = new StdioAcpAgentTransport();
-
-AcpAsyncAgent agent = AcpAgent.async(transport)
-    .initializeHandler(req -> Mono.just(
-        new InitializeResponse(1, new AgentCapabilities(), List.of())))
-    .newSessionHandler(req -> Mono.just(
-        new NewSessionResponse(UUID.randomUUID().toString(), null, null)))
-    .promptHandler((req, context) ->
-        context.sendUpdate(req.sessionId(),
-                new AgentMessageChunk("agent_message_chunk",
-                    new TextContent("Hello from the agent!")))
-            .then(Mono.just(new PromptResponse(StopReason.END_TURN))))
-    .build();
-
-// Start and await termination
-agent.start().then(agent.awaitTermination()).block();
-```
-
-### 2c. Hello World Agent (Annotation-Based)
-
-For the simplest agent development experience, use annotations (see [full documentation](acp-agent-support/README.md)):
+The simplest way to build an agent — use annotations ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-12-echo-agent)):
 
 ```java
 import com.agentclientprotocol.sdk.annotation.*;
@@ -178,20 +122,92 @@ AcpAgentSupport.create(new HelloAgent())
     .run();
 ```
 
-This approach reduces boilerplate by ~50% compared to the builder API while producing identical runtime behavior.
+### 3. Hello World Agent (Sync)
+
+The builder API with blocking handlers and plain return values ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-13-agent-handlers)):
+
+```java
+import com.agentclientprotocol.sdk.agent.*;
+import com.agentclientprotocol.sdk.agent.transport.*;
+import com.agentclientprotocol.sdk.spec.AcpSchema.*;
+import java.util.List;
+import java.util.UUID;
+
+// Create stdio transport
+var transport = new StdioAcpAgentTransport();
+
+// Build sync agent - handlers use plain return values (no Mono!)
+AcpSyncAgent agent = AcpAgent.sync(transport)
+    .initializeHandler(req ->
+        new InitializeResponse(1, new AgentCapabilities(), List.of()))
+    .newSessionHandler(req ->
+        new NewSessionResponse(UUID.randomUUID().toString(), null, null))
+    .promptHandler((req, context) -> {
+        // Send updates using blocking void method
+        context.sendUpdate(req.sessionId(),
+            new AgentMessageChunk("agent_message_chunk",
+                new TextContent("Hello from the agent!")));
+        // Return response directly (no Mono!)
+        return new PromptResponse(StopReason.END_TURN);
+    })
+    .build();
+
+// Run agent (blocks until client disconnects)
+agent.run();
+```
+
+### 4. Hello World Agent (Async)
+
+For reactive applications, use the async API with Project Reactor ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-22-async-agent)):
+
+```java
+import com.agentclientprotocol.sdk.agent.*;
+import com.agentclientprotocol.sdk.agent.transport.*;
+import com.agentclientprotocol.sdk.spec.AcpSchema.*;
+import reactor.core.publisher.Mono;
+import java.util.List;
+import java.util.UUID;
+
+var transport = new StdioAcpAgentTransport();
+
+AcpAsyncAgent agent = AcpAgent.async(transport)
+    .initializeHandler(req -> Mono.just(
+        new InitializeResponse(1, new AgentCapabilities(), List.of())))
+    .newSessionHandler(req -> Mono.just(
+        new NewSessionResponse(UUID.randomUUID().toString(), null, null)))
+    .promptHandler((req, context) ->
+        context.sendUpdate(req.sessionId(),
+                new AgentMessageChunk("agent_message_chunk",
+                    new TextContent("Hello from the agent!")))
+            .then(Mono.just(new PromptResponse(StopReason.END_TURN))))
+    .build();
+
+// Start and await termination
+agent.start().then(agent.awaitTermination()).block();
+```
 
 ---
 
 ## Progressive Examples
 
-### 3. Streaming Updates
+### 5. Streaming Updates
 
-Send real-time updates to the client during prompt processing.
+Send real-time updates to the client during prompt processing (tutorial: [client-side](https://github.com/markpollack/acp-java-tutorial/tree/main/module-05-streaming-updates), [agent-side](https://github.com/markpollack/acp-java-tutorial/tree/main/module-14-sending-updates)).
 
-**Agent (Sync) - recommended:**
+**Annotation-based:**
+```java
+@Prompt
+PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) {
+    ctx.sendUpdate(req.sessionId(),
+        new AgentThoughtChunk("agent_thought_chunk", new TextContent("Thinking...")));
+    ctx.sendMessage("Here's my response.");
+    return PromptResponse.endTurn();
+}
+```
+
+**Sync:**
 ```java
 .promptHandler((req, context) -> {
-    // Blocking void calls - simple and straightforward
     context.sendUpdate(req.sessionId(),
         new AgentThoughtChunk("agent_thought_chunk",
             new TextContent("Thinking...")));
@@ -202,7 +218,7 @@ Send real-time updates to the client during prompt processing.
 })
 ```
 
-**Agent (Async):**
+**Async:**
 ```java
 .promptHandler((request, context) -> {
     return context.sendUpdate(request.sessionId(),
@@ -227,9 +243,9 @@ AcpSyncClient client = AcpClient.sync(transport)
     .build();
 ```
 
-### 4. Agent-to-Client Requests
+### 6. Agent-to-Client Requests
 
-Agents can request file operations from the client. The `context` parameter provides access to all agent capabilities.
+Agents can request file operations from the client ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-15-agent-requests)). The `context` parameter provides access to all agent capabilities.
 
 **Agent (Sync) - reading files:**
 ```java
@@ -266,9 +282,9 @@ AcpSyncClient client = AcpClient.sync(transport)
     .build();
 ```
 
-### 5. Capability Negotiation
+### 7. Capability Negotiation
 
-Check what features the peer supports before using them:
+Check what features the peer supports before using them ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-17-capability-negotiation)):
 
 ```java
 // Client: check agent capabilities after initialize
@@ -297,9 +313,9 @@ clientCaps.requireWriteTextFile();
 agent.writeTextFile(...);
 ```
 
-### 6. Error Handling
+### 8. Error Handling
 
-Handle protocol errors with structured exceptions:
+Handle protocol errors with structured exceptions ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-11-error-handling)):
 
 ```java
 import com.agentclientprotocol.sdk.error.*;
@@ -321,7 +337,7 @@ try {
 }
 ```
 
-### 7. WebSocket Transport
+### 9. WebSocket Transport
 
 Use WebSocket instead of stdio for network-based communication:
 
@@ -368,6 +384,16 @@ agent.start().block();  // Starts WebSocket server on port 8080
 | `com.agentclientprotocol.sdk.annotation` | Agent annotations (`@AcpAgent`, `@Prompt`, etc.) |
 | `com.agentclientprotocol.sdk.capabilities` | Capability negotiation (`NegotiatedCapabilities`) |
 | `com.agentclientprotocol.sdk.error` | Exceptions (`AcpProtocolException`, `AcpCapabilityException`) |
+
+### Maven Artifacts
+
+| Artifact | Description |
+|----------|-------------|
+| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio and WebSocket client transports |
+| [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
+| [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
+| [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
+| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | Jetty-based WebSocket server transport for agents |
 
 ### Transports
 
@@ -422,6 +448,10 @@ MockAcpClient mockClient = MockAcpClient.builder(pair.clientTransport())
 
 ---
 
+## Tutorial
+
+For a hands-on, progressive introduction to the SDK, see the **[ACP Java Tutorial](https://github.com/markpollack/acp-java-tutorial)** -- 30 modules covering client basics, agent development, streaming, testing, and IDE integration.
+
 ## Roadmap
 
 ### v0.9.0 (Current)
@@ -430,9 +460,10 @@ MockAcpClient mockClient = MockAcpClient.builder(pair.clientTransport())
 - Capability negotiation
 - Structured error handling
 - Full protocol compliance (all SessionUpdate types, MCP configs, `_meta` extensibility)
+- Snapshot builds published to Maven Central
 - 258 tests
 
 ### v1.0.0 (Planned)
-- Maven Central publishing
+- Stable release to Maven Central
 - Production hardening
 - Performance optimizations

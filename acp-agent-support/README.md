@@ -1,6 +1,6 @@
 # ACP Agent Support Module
 
-The `acp-agent-support` module provides a Spring MVC-style annotation-based programming model for building ACP agents. It eliminates boilerplate code while maintaining full compatibility with the builder-based API from `acp-core`.
+The `acp-agent-support` module provides an annotation-based programming model for building ACP agents. It eliminates boilerplate code while maintaining full compatibility with the builder-based API from `acp-core`.
 
 ## Quick Start
 
