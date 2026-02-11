@@ -14,8 +14,7 @@ import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
  * Composite that chains multiple return value handlers.
  *
  * <p>NOTE: Unlike argument resolvers, NO caching is used here.
- * This follows the Spring MVC pattern where return types vary more
- * and caching provides less benefit.
+ * Return types vary more and caching provides less benefit.
  *
  * @author Mark Pollack
  * @since 1.0.0

@@ -16,10 +16,9 @@ import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
  * Composite that chains multiple argument resolvers.
  * Caches resolver selection per parameter for performance.
  *
- * <p>This follows the Spring MVC pattern where resolver lookup is
- * cached using {@link AcpMethodParameter} as the cache key. The first
- * resolver that supports a parameter is cached and reused for subsequent
- * invocations.
+ * <p>Resolver lookup is cached using {@link AcpMethodParameter} as the
+ * cache key. The first resolver that supports a parameter is cached and
+ * reused for subsequent invocations.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -28,7 +27,7 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 
 	private final List<ArgumentResolver> resolvers = new ArrayList<>();
 
-	// Cache: parameter -> resolver (Spring pattern)
+	// Cache: parameter -> resolver
 	private final ConcurrentMap<AcpMethodParameter, ArgumentResolver> resolverCache = new ConcurrentHashMap<>(256);
 
 	// Sentinel value for "no resolver found"

@@ -66,7 +66,7 @@ import org.slf4j.LoggerFactory;
  * Bootstrap class for annotation-based ACP agents.
  *
  * <p>This class provides a fluent builder API to configure and run
- * annotation-based agents without requiring Spring or other frameworks.
+ * annotation-based agents without requiring any external framework.
  *
  * <p>Example usage:
  * <pre>{@code

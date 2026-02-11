@@ -14,8 +14,7 @@ import java.util.Objects;
  * Metadata about a method parameter. Implements equals/hashCode
  * for use as cache key in argument resolver lookup.
  *
- * <p>This class follows the Spring MVC pattern of pre-computing
- * and caching parameter metadata for performance.
+ * <p>Pre-computes and caches parameter metadata for performance.
  *
  * @author Mark Pollack
  * @since 1.0.0
