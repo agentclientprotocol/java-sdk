@@ -14,7 +14,6 @@ import java.util.function.Supplier;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
-import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.handler.DirectResponseHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.MonoHandler;
@@ -45,19 +44,8 @@ import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
-import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionRequest;
-import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
-import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

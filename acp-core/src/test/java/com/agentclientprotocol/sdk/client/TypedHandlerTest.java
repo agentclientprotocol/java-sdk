@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
-import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
