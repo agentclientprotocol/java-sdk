@@ -809,7 +809,8 @@ public final class AcpSchema {
 			@JsonSubTypes.Type(value = ToolCallUpdateNotification.class, name = "tool_call_update"),
 			@JsonSubTypes.Type(value = Plan.class, name = "plan"),
 			@JsonSubTypes.Type(value = AvailableCommandsUpdate.class, name = "available_commands_update"),
-			@JsonSubTypes.Type(value = CurrentModeUpdate.class, name = "current_mode_update") })
+			@JsonSubTypes.Type(value = CurrentModeUpdate.class, name = "current_mode_update"),
+			@JsonSubTypes.Type(value = UsageUpdate.class, name = "usage_update") })
 	public interface SessionUpdate {
 
 	}
@@ -929,6 +930,20 @@ public final class AcpSchema {
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public CurrentModeUpdate(String sessionUpdate, String currentModeId) {
 			this(sessionUpdate, currentModeId, null);
+		}
+	}
+
+	/**
+	 * Usage update - reports token/resource usage for the session
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UsageUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
+									@JsonProperty("used") Long used,
+									@JsonProperty("size") Long size,
+									@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
+		public UsageUpdate(String sessionUpdate, Long used, Long size) {
+			this(sessionUpdate, used, size, null);
 		}
 	}
 

@@ -87,6 +87,20 @@ class GoldenFileTest {
 	}
 
 	@Test
+	void parseSessionUpdateUsageUpdate() throws IOException {
+		String json = loadGoldenFile("session-update-usage-update.json");
+		JsonNode node = objectMapper.readTree(json);
+
+		assertThat(node.get("method").asText()).isEqualTo("session/update");
+		assertThat(node.has("id")).isFalse();
+		assertThat(node.get("params").get("sessionId").asText()).isEqualTo("sess_abc123");
+		JsonNode update = node.get("params").get("update");
+		assertThat(update.get("sessionUpdate").asText()).isEqualTo("usage_update");
+		assertThat(update.get("used").asLong()).isEqualTo(53000L);
+		assertThat(update.get("size").asLong()).isEqualTo(200000L);
+	}
+
+	@Test
 	void serializeInitializeRequestMatchesExpectedStructure() throws IOException {
 		AcpSchema.InitializeRequest request = new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities());
 		AcpSchema.JSONRPCRequest jsonRpcRequest = new AcpSchema.JSONRPCRequest(AcpSchema.METHOD_INITIALIZE, "1",
