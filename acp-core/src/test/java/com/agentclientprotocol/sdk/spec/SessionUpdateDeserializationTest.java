@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for deserializing all 8 SessionUpdate types from JSON.
+ * Tests for deserializing all 9 SessionUpdate types from JSON.
  *
  * <p>
  * These tests verify that each SessionUpdate type can be correctly deserialized from JSON,
@@ -256,6 +256,27 @@ class SessionUpdateDeserializationTest {
 		AcpSchema.CurrentModeUpdate modeUpdate = (AcpSchema.CurrentModeUpdate) update;
 		assertThat(modeUpdate.sessionUpdate()).isEqualTo("current_mode_update");
 		assertThat(modeUpdate.currentModeId()).isEqualTo("architect");
+	}
+
+	// ---------------------------
+	// UsageUpdate Tests
+	// ---------------------------
+
+	@Test
+	void usageUpdateDeserialization() throws IOException {
+		String json = loadGolden("session-update-usage-update.json");
+
+		// The golden file is a full JSON-RPC notification; extract the inner update
+		com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+		String updateJson = root.get("params").get("update").toString();
+
+		AcpSchema.SessionUpdate update = deserializeSessionUpdate(updateJson);
+
+		assertThat(update).isInstanceOf(AcpSchema.UsageUpdate.class);
+		AcpSchema.UsageUpdate usageUpdate = (AcpSchema.UsageUpdate) update;
+		assertThat(usageUpdate.sessionUpdate()).isEqualTo("usage_update");
+		assertThat(usageUpdate.used()).isEqualTo(53000L);
+		assertThat(usageUpdate.size()).isEqualTo(200000L);
 	}
 
 	// ---------------------------
