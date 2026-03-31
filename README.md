@@ -26,22 +26,11 @@ Three API styles for building agents:
 
 ## Installation
 
-Snapshot builds are published to Maven Central Snapshots. Add the snapshot repository and dependency:
-
 ```xml
-<repositories>
-    <repository>
-        <id>central-snapshots</id>
-        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
-        <snapshots><enabled>true</enabled></snapshots>
-        <releases><enabled>false</enabled></releases>
-    </repository>
-</repositories>
-
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
 </dependency>
 ```
 
@@ -50,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
 </dependency>
 ```
 
@@ -59,7 +48,7 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
 </dependency>
 ```
 
@@ -454,16 +443,14 @@ This SDK is part of the [Agent Client Protocol](https://agentclientprotocol.com/
 
 ## Roadmap
 
-### v0.9.0 (Current)
+### v0.9.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 - Client and Agent SDKs with async/sync APIs
 - Stdio and WebSocket transports
 - Capability negotiation
 - Structured error handling
 - Full protocol compliance (all SessionUpdate types, MCP configs, `_meta` extensibility)
-- Snapshot builds published to Maven Central Snapshots
 - 258 tests
 
 ### v1.0.0 (Planned)
-- Stable release published to Maven Central
 - Production hardening
 - Performance optimizations
