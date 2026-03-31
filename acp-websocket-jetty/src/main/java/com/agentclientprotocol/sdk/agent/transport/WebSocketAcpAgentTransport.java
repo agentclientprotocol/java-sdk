@@ -224,12 +224,9 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return connectionReady.asMono().then(Mono.defer(() -> {
-			if (outboundSink.tryEmitNext(message).isSuccess()) {
-				return Mono.empty();
-			}
-			else {
-				return Mono.error(new RuntimeException("Failed to enqueue message"));
-			}
+			outboundSink.emitNext(message,
+					Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+			return Mono.empty();
 		}));
 	}
 

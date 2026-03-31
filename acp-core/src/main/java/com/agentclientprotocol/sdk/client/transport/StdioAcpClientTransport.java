@@ -260,12 +260,9 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
-		if (this.outboundSink.tryEmitNext(message).isSuccess()) {
-			return Mono.empty();
-		}
-		else {
-			return Mono.error(new RuntimeException("Failed to enqueue message"));
-		}
+		this.outboundSink.emitNext(message,
+				Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+		return Mono.empty();
 	}
 
 	/**

@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent.transport;
 
+import java.time.Duration;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -277,12 +278,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return Mono.zip(inboundReady.asMono(), outboundReady.asMono()).then(Mono.defer(() -> {
-			if (outboundSink.tryEmitNext(message).isSuccess()) {
-				return Mono.empty();
-			}
-			else {
-				return Mono.error(new RuntimeException("Failed to enqueue message"));
-			}
+			outboundSink.emitNext(message,
+					Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+			return Mono.empty();
 		}));
 	}
 
