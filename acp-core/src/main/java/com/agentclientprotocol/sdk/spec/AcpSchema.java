@@ -194,9 +194,10 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record InitializeRequest(@JsonProperty("protocolVersion") Integer protocolVersion,
 			@JsonProperty("clientCapabilities") ClientCapabilities clientCapabilities,
+			@JsonProperty("clientInfo") Implementation clientInfo,
 			@JsonProperty("_meta") Map<String, Object> meta) {
 		public InitializeRequest(Integer protocolVersion, ClientCapabilities clientCapabilities) {
-			this(protocolVersion, clientCapabilities, null);
+			this(protocolVersion, clientCapabilities, null, null);
 		}
 	}
 
@@ -208,10 +209,11 @@ public final class AcpSchema {
 	public record InitializeResponse(@JsonProperty("protocolVersion") Integer protocolVersion,
 			@JsonProperty("agentCapabilities") AgentCapabilities agentCapabilities,
 			@JsonProperty("authMethods") List<AuthMethod> authMethods,
+			@JsonProperty("agentInfo") Implementation agentInfo,
 			@JsonProperty("_meta") Map<String, Object> meta) {
 		public InitializeResponse(Integer protocolVersion, AgentCapabilities agentCapabilities,
 				List<AuthMethod> authMethods) {
-			this(protocolVersion, agentCapabilities, authMethods, null);
+			this(protocolVersion, agentCapabilities, authMethods, null, null);
 		}
 
 		/**
@@ -1087,6 +1089,18 @@ public final class AcpSchema {
 	// ---------------------------
 	// Supporting Types
 	// ---------------------------
+
+	/**
+	 * Metadata about an implementation (client or agent).
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record Implementation(@JsonProperty("name") String name, @JsonProperty("version") String version,
+			@JsonProperty("title") String title) {
+		public Implementation(String name, String version) {
+			this(name, version, null);
+		}
+	}
 
 	/**
 	 * MCP server configuration.

@@ -292,7 +292,7 @@ class AcpSchemaSerializationTest {
 	void initializeRequestWithMetaSerialization() throws IOException {
 		Map<String, Object> meta = Map.of("zed.dev/debugMode", true, "custom/version", "1.0.0");
 		AcpSchema.InitializeRequest request = new AcpSchema.InitializeRequest(1,
-				new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true), meta);
+				new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true), null, meta);
 
 		String json = jsonMapper.writeValueAsString(request);
 		assertThat(json).contains("\"_meta\"");
