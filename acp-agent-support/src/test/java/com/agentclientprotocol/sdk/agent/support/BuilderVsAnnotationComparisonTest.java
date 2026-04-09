@@ -5,9 +5,7 @@
 package com.agentclientprotocol.sdk.agent.support;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
