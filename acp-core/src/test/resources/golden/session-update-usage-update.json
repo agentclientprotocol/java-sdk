@@ -1,12 +1,5 @@
 {
-  "jsonrpc": "2.0",
-  "method": "session/update",
-  "params": {
-    "sessionId": "sess_abc123",
-    "update": {
-      "sessionUpdate": "usage_update",
-      "used": 53000,
-      "size": 200000
-    }
-  }
+  "sessionUpdate": "usage_update",
+  "used": 53000,
+  "size": 200000
 }

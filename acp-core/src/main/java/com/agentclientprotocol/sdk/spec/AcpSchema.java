@@ -934,17 +934,26 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Usage update - reports token/resource usage for the session
+	 * Usage update - context window and cost update for the session (UNSTABLE)
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UsageUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
-									@JsonProperty("used") Long used,
-									@JsonProperty("size") Long size,
-									@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
+			@JsonProperty("used") Long used, @JsonProperty("size") Long size,
+			@JsonProperty("cost") Cost cost,
+			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public UsageUpdate(String sessionUpdate, Long used, Long size) {
-			this(sessionUpdate, used, size, null);
+			this(sessionUpdate, used, size, null, null);
 		}
+	}
+
+	/**
+	 * Cost information for a session (UNSTABLE)
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record Cost(@JsonProperty("amount") Double amount,
+			@JsonProperty("currency") String currency) {
 	}
 
 	// ---------------------------

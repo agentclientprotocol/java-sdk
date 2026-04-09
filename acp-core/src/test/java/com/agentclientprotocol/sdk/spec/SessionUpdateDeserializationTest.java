@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for deserializing all 9 SessionUpdate types from JSON.
+ * Tests for deserializing all SessionUpdate types from JSON.
  *
  * <p>
  * These tests verify that each SessionUpdate type can be correctly deserialized from JSON,
@@ -266,17 +266,37 @@ class SessionUpdateDeserializationTest {
 	void usageUpdateDeserialization() throws IOException {
 		String json = loadGolden("session-update-usage-update.json");
 
-		// The golden file is a full JSON-RPC notification; extract the inner update
-		com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-		String updateJson = root.get("params").get("update").toString();
-
-		AcpSchema.SessionUpdate update = deserializeSessionUpdate(updateJson);
+		AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
 
 		assertThat(update).isInstanceOf(AcpSchema.UsageUpdate.class);
 		AcpSchema.UsageUpdate usageUpdate = (AcpSchema.UsageUpdate) update;
 		assertThat(usageUpdate.sessionUpdate()).isEqualTo("usage_update");
 		assertThat(usageUpdate.used()).isEqualTo(53000L);
 		assertThat(usageUpdate.size()).isEqualTo(200000L);
+		assertThat(usageUpdate.cost()).isNull();
+	}
+
+	@Test
+	void usageUpdateWithCostDeserialization() throws IOException {
+		String json = """
+				{
+				  "sessionUpdate": "usage_update",
+				  "used": 53000,
+				  "size": 200000,
+				  "cost": {
+				    "amount": 0.42,
+				    "currency": "USD"
+				  }
+				}
+				""";
+
+		AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
+
+		assertThat(update).isInstanceOf(AcpSchema.UsageUpdate.class);
+		AcpSchema.UsageUpdate usageUpdate = (AcpSchema.UsageUpdate) update;
+		assertThat(usageUpdate.cost()).isNotNull();
+		assertThat(usageUpdate.cost().amount()).isEqualTo(0.42);
+		assertThat(usageUpdate.cost().currency()).isEqualTo("USD");
 	}
 
 	// ---------------------------
