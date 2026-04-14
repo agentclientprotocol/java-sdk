@@ -1,0 +1,4 @@
+com.agentclientprotocol.autoconfigure.client.AcpClientTransportAutoConfiguration
+com.agentclientprotocol.autoconfigure.client.AcpClientAutoConfiguration
+com.agentclientprotocol.autoconfigure.agent.AcpAgentTransportAutoConfiguration
+com.agentclientprotocol.autoconfigure.agent.AcpAgentAutoConfiguration
