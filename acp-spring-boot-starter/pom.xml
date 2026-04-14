@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springaicommunity</groupId>
         <artifactId>acp-autoconfig-parent</artifactId>
-        <version>0.11.0</version>
+        <version>0.11.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>acp-spring-boot-starter</artifactId>
