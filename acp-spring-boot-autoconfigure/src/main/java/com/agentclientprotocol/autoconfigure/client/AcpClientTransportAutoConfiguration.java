@@ -30,6 +30,7 @@ public class AcpClientTransportAutoConfiguration {
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createWebSocketTransport(properties);
 		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -42,6 +43,7 @@ public class AcpClientTransportAutoConfiguration {
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createStdioTransport(properties);
 		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -53,6 +55,7 @@ public class AcpClientTransportAutoConfiguration {
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createWebSocketTransport(properties);
 		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -64,6 +67,7 @@ public class AcpClientTransportAutoConfiguration {
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createStdioTransport(properties);
 		}
+
 	}
 
 	private static AcpClientTransport createWebSocketTransport(AcpClientProperties properties) {
@@ -79,4 +83,5 @@ public class AcpClientTransportAutoConfiguration {
 		}
 		return new StdioAcpClientTransport(builder.build());
 	}
+
 }

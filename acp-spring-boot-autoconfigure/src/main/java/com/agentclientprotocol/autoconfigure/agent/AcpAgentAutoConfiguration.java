@@ -35,14 +35,12 @@ public class AcpAgentAutoConfiguration {
 		Map<String, Object> agentBeans = applicationContext.getBeansWithAnnotation(AcpAgent.class);
 
 		if (agentBeans.isEmpty()) {
-			throw new BeanCreationException(
-					"No @AcpAgent-annotated bean found in the application context. "
-							+ "Define a Spring bean annotated with @AcpAgent to use ACP agent autoconfiguration.");
+			throw new BeanCreationException("No @AcpAgent-annotated bean found in the application context. "
+					+ "Define a Spring bean annotated with @AcpAgent to use ACP agent autoconfiguration.");
 		}
 		if (agentBeans.size() > 1) {
-			throw new BeanCreationException(
-					"Found " + agentBeans.size() + " @AcpAgent-annotated beans " + agentBeans.keySet()
-							+ ", but only one is supported per application.");
+			throw new BeanCreationException("Found " + agentBeans.size() + " @AcpAgent-annotated beans "
+					+ agentBeans.keySet() + ", but only one is supported per application.");
 		}
 
 		Object agentBean = agentBeans.values().iterator().next();
@@ -85,5 +83,7 @@ public class AcpAgentAutoConfiguration {
 		public boolean isRunning() {
 			return running;
 		}
+
 	}
+
 }

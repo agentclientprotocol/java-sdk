@@ -75,6 +75,7 @@ public class AcpClientProperties {
 		public void setStdio(StdioProperties stdio) {
 			this.stdio = stdio;
 		}
+
 	}
 
 	public static class WebSocketProperties {
@@ -98,6 +99,7 @@ public class AcpClientProperties {
 		public void setConnectTimeout(Duration connectTimeout) {
 			this.connectTimeout = connectTimeout;
 		}
+
 	}
 
 	public static class StdioProperties {
@@ -131,6 +133,7 @@ public class AcpClientProperties {
 		public void setEnv(Map<String, String> env) {
 			this.env = env;
 		}
+
 	}
 
 	public static class CapabilitiesProperties {
@@ -164,5 +167,7 @@ public class AcpClientProperties {
 		public void setTerminal(boolean terminal) {
 			this.terminal = terminal;
 		}
+
 	}
+
 }

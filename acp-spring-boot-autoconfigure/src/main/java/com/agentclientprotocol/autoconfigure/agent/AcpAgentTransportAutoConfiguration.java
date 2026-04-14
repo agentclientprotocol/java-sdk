@@ -29,5 +29,7 @@ public class AcpAgentTransportAutoConfiguration {
 		AcpAgentTransport acpAgentTransport() {
 			return new StdioAcpAgentTransport();
 		}
+
 	}
+
 }

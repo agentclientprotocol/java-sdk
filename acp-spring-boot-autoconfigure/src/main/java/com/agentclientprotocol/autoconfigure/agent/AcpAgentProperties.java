@@ -60,6 +60,7 @@ public class AcpAgentProperties {
 		public void setWebsocket(AgentWebSocketProperties websocket) {
 			this.websocket = websocket;
 		}
+
 	}
 
 	public static class AgentWebSocketProperties {
@@ -83,5 +84,7 @@ public class AcpAgentProperties {
 		public void setPath(String path) {
 			this.path = path;
 		}
+
 	}
+
 }

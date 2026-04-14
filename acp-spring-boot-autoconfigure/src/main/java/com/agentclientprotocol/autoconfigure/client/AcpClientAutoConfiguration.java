@@ -61,5 +61,7 @@ public class AcpClientAutoConfiguration {
 		public void destroy() {
 			asyncClient.closeGracefully().block();
 		}
+
 	}
+
 }
