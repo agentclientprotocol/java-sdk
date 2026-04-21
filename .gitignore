@@ -58,6 +58,9 @@ derby.log
 *.tar.gz
 *.rar
 
+### Claude Code ###
+.claude/
+
 ### Other ###
 .DS_Store
 *.swp
