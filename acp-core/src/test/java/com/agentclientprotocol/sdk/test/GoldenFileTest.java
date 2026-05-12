@@ -12,7 +12,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import io.modelcontextprotocol.json.McpJsonMapper;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class GoldenFileTest {
 
-	private final McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
+	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
 	private final ObjectMapper objectMapper = new ObjectMapper().configure(SerializationFeature.INDENT_OUTPUT, true);
 

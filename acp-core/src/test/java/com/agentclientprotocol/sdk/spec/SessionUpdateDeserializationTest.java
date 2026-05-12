@@ -8,8 +8,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SessionUpdateDeserializationTest {
 
-	private final McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
+	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
 	// ---------------------------
 	// Helper Methods

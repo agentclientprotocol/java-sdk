@@ -11,8 +11,8 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class McpServerConfigurationTest {
 
-	private final McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
+	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

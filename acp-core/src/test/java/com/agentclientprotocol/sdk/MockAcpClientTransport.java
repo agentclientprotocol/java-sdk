@@ -13,8 +13,8 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCRequest;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
@@ -157,7 +157,7 @@ public class MockAcpClientTransport implements AcpClientTransport {
 
 	@Override
 	public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
-		return McpJsonMapper.getDefault().convertValue(data, typeRef);
+		return AcpJsonMapper.createDefault().convertValue(data, typeRef);
 	}
 
 }

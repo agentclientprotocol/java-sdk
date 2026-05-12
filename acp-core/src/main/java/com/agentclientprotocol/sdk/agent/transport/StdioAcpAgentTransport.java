@@ -21,8 +21,8 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
@@ -56,7 +56,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(StdioAcpAgentTransport.class);
 
-	private final McpJsonMapper jsonMapper;
+	private final AcpJsonMapper jsonMapper;
 
 	private final InputStream inputStream;
 
@@ -87,7 +87,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * System.in and System.out for communication.
 	 */
 	public StdioAcpAgentTransport() {
-		this(McpJsonMapper.getDefault());
+		this(AcpJsonMapper.createDefault());
 	}
 
 	/**
@@ -95,7 +95,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * System.in and System.out for communication.
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
-	public StdioAcpAgentTransport(McpJsonMapper jsonMapper) {
+	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper) {
 		this(jsonMapper, System.in, System.out);
 	}
 
@@ -106,7 +106,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * @param inputStream The input stream to read messages from (client → agent)
 	 * @param outputStream The output stream to write messages to (agent → client)
 	 */
-	public StdioAcpAgentTransport(McpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream) {
+	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream) {
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(inputStream, "The InputStream can not be null");
 		Assert.notNull(outputStream, "The OutputStream can not be null");

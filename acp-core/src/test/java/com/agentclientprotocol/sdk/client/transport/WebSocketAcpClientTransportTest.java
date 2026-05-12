@@ -7,7 +7,7 @@ package com.agentclientprotocol.sdk.client.transport;
 import java.net.URI;
 import java.time.Duration;
 
-import io.modelcontextprotocol.json.McpJsonMapper;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -20,11 +20,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class WebSocketAcpClientTransportTest {
 
-	private McpJsonMapper jsonMapper;
+	private AcpJsonMapper jsonMapper;
 
 	@BeforeEach
 	void setUp() {
-		jsonMapper = McpJsonMapper.getDefault();
+		jsonMapper = AcpJsonMapper.createDefault();
 	}
 
 	@Test

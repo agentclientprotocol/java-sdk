@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.util.Assert;
@@ -53,7 +53,7 @@ import reactor.core.publisher.Mono;
  * AgentParameters params = AgentParameters.builder("gemini")
  *     .arg("--experimental-acp")
  *     .build();
- * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, McpJsonMapper.getDefault());
+ * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
  *
  * // Create client
  * AcpAsyncClient client = AcpClient.async(transport)

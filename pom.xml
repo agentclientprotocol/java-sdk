@@ -63,7 +63,7 @@
         <!-- Dependency versions -->
         <reactor.version>2023.0.12</reactor.version>
         <jackson.version>2.18.2</jackson.version>
-        <mcp-json.version>0.14.1</mcp-json.version>
+
         <slf4j.version>2.0.16</slf4j.version>
         <jetty.version>12.0.14</jetty.version>
 
@@ -113,18 +113,6 @@
                 <groupId>com.agentclientprotocol</groupId>
                 <artifactId>acp-test</artifactId>
                 <version>${project.version}</version>
-            </dependency>
-
-            <!-- MCP Java SDK JSON utilities -->
-            <dependency>
-                <groupId>io.modelcontextprotocol.sdk</groupId>
-                <artifactId>mcp-json</artifactId>
-                <version>${mcp-json.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.modelcontextprotocol.sdk</groupId>
-                <artifactId>mcp-json-jackson2</artifactId>
-                <version>${mcp-json.version}</version>
             </dependency>
 
             <!-- Logging -->

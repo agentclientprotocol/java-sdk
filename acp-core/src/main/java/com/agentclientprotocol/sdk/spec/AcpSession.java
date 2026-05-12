@@ -4,7 +4,7 @@
 
 package com.agentclientprotocol.sdk.spec;
 
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import reactor.core.publisher.Mono;
 
 /**

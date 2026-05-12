@@ -14,8 +14,8 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.websocket.api.Callback;
@@ -72,7 +72,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	/** Default path for ACP WebSocket endpoints */
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
-	private final McpJsonMapper jsonMapper;
+	private final AcpJsonMapper jsonMapper;
 
 	private final int port;
 
@@ -105,7 +105,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	 * @param port The port to listen on
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
-	public WebSocketAcpAgentTransport(int port, McpJsonMapper jsonMapper) {
+	public WebSocketAcpAgentTransport(int port, AcpJsonMapper jsonMapper) {
 		this(port, DEFAULT_ACP_PATH, jsonMapper);
 	}
 
@@ -115,7 +115,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	 * @param path The WebSocket endpoint path (e.g., "/acp")
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
-	public WebSocketAcpAgentTransport(int port, String path, McpJsonMapper jsonMapper) {
+	public WebSocketAcpAgentTransport(int port, String path, AcpJsonMapper jsonMapper) {
 		Assert.isTrue(port > 0, "Port must be positive");
 		Assert.hasText(path, "Path must not be empty");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");

@@ -7,7 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import java.util.List;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import reactor.core.publisher.Mono;
 
 /**

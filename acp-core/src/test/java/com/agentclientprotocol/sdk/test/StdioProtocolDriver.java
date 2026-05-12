@@ -12,8 +12,8 @@ import java.util.function.BiConsumer;
 import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import reactor.core.publisher.Mono;
 
 /**
@@ -48,7 +48,7 @@ public class StdioProtocolDriver implements ProtocolDriver {
 			PipedOutputStream agentOut = new PipedOutputStream();
 			PipedInputStream clientIn = new PipedInputStream(agentOut, 65536);
 
-			McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
+			AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
 			// Create transports
 			PipedClientTransport clientTransport = new PipedClientTransport(jsonMapper, clientIn, clientOut);
@@ -86,7 +86,7 @@ public class StdioProtocolDriver implements ProtocolDriver {
 	 */
 	private static class PipedClientTransport implements AcpClientTransport {
 
-		private final McpJsonMapper jsonMapper;
+		private final AcpJsonMapper jsonMapper;
 
 		private final PipedInputStream inputStream;
 
@@ -94,7 +94,7 @@ public class StdioProtocolDriver implements ProtocolDriver {
 
 		private volatile boolean isClosing = false;
 
-		PipedClientTransport(McpJsonMapper jsonMapper, PipedInputStream inputStream, PipedOutputStream outputStream) {
+		PipedClientTransport(AcpJsonMapper jsonMapper, PipedInputStream inputStream, PipedOutputStream outputStream) {
 			this.jsonMapper = jsonMapper;
 			this.inputStream = inputStream;
 			this.outputStream = outputStream;

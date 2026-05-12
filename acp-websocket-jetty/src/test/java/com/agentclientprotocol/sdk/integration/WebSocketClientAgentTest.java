@@ -16,7 +16,7 @@ import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import io.modelcontextprotocol.json.McpJsonMapper;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +44,7 @@ class WebSocketClientAgentTest {
 
 	private static final int TEST_PORT = 18080; // High port to avoid conflicts
 
-	private McpJsonMapper jsonMapper;
+	private AcpJsonMapper jsonMapper;
 
 	private WebSocketAcpAgentTransport agentTransport;
 
@@ -56,7 +56,7 @@ class WebSocketClientAgentTest {
 
 	@BeforeEach
 	void setUp() {
-		jsonMapper = McpJsonMapper.getDefault();
+		jsonMapper = AcpJsonMapper.createDefault();
 	}
 
 	@AfterEach

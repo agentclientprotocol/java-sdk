@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.9.0</version>
+    <version>0.11.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.9.0</version>
+    <version>0.11.0</version>
 </dependency>
 ```
 
@@ -48,7 +48,7 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.9.0</version>
+    <version>0.11.0</version>
 </dependency>
 ```
 
@@ -327,7 +327,7 @@ import java.net.URI;
 
 var transport = new WebSocketAcpClientTransport(
     URI.create("ws://localhost:8080/acp"),
-    McpJsonMapper.getDefault()
+    AcpJsonMapper.createDefault()
 );
 AcpSyncClient client = AcpClient.sync(transport).build();
 ```
@@ -339,7 +339,7 @@ import com.agentclientprotocol.sdk.agent.transport.WebSocketAcpAgentTransport;
 var transport = new WebSocketAcpAgentTransport(
     8080,                           // port
     "/acp",                         // path
-    McpJsonMapper.getDefault()
+    AcpJsonMapper.createDefault()
 );
 AcpAsyncAgent agent = AcpAgent.async(transport)
     // ... handlers ...
@@ -443,13 +443,14 @@ This SDK is part of the [Agent Client Protocol](https://agentclientprotocol.com/
 
 ## Roadmap
 
-### v0.9.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### v0.11.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 - Client and Agent SDKs with async/sync APIs
 - Stdio and WebSocket transports
 - Capability negotiation
 - Structured error handling
 - Full protocol compliance (all SessionUpdate types, MCP configs, `_meta` extensibility)
-- 258 tests
+- Own JSON abstraction layer (`AcpJsonMapper`) — no MCP SDK dependency
+- Pluggable JSON via `ServiceLoader` SPI
 
 ### v1.0.0 (Planned)
 - Production hardening

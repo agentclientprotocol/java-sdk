@@ -15,8 +15,8 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import io.modelcontextprotocol.json.TypeRef;
-import io.modelcontextprotocol.json.McpJsonMapper;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
@@ -58,7 +58,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	/** The agent process being communicated with */
 	private Process process;
 
-	private McpJsonMapper jsonMapper;
+	private AcpJsonMapper jsonMapper;
 
 	/** Scheduler for handling inbound messages from the agent process */
 	private Scheduler inboundScheduler;
@@ -84,7 +84,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * @param params The parameters for configuring the agent process
 	 */
 	public StdioAcpClientTransport(AgentParameters params) {
-		this(params, McpJsonMapper.getDefault());
+		this(params, AcpJsonMapper.createDefault());
 	}
 
 	/**
@@ -92,7 +92,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * @param params The parameters for configuring the agent process
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
-	public StdioAcpClientTransport(AgentParameters params, McpJsonMapper jsonMapper) {
+	public StdioAcpClientTransport(AgentParameters params, AcpJsonMapper jsonMapper) {
 		Assert.notNull(params, "The params can not be null");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 

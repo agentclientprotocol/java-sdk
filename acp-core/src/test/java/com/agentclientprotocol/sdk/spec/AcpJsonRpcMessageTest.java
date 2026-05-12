@@ -6,7 +6,7 @@ package com.agentclientprotocol.sdk.spec;
 
 import java.io.IOException;
 
-import io.modelcontextprotocol.json.McpJsonMapper;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class AcpJsonRpcMessageTest {
 
-	private final McpJsonMapper jsonMapper = McpJsonMapper.getDefault();
+	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
 	@Test
 	void deserializeJsonRpcRequest() throws IOException {

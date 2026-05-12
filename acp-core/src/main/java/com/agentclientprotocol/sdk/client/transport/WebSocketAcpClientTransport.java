@@ -19,8 +19,8 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
-import io.modelcontextprotocol.json.McpJsonMapper;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -56,7 +56,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final URI serverUri;
 
-	private final McpJsonMapper jsonMapper;
+	private final AcpJsonMapper jsonMapper;
 
 	private final HttpClient httpClient;
 
@@ -83,7 +83,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @param serverUri The WebSocket URI to connect to (e.g., "ws://localhost:8080/acp")
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
-	public WebSocketAcpClientTransport(URI serverUri, McpJsonMapper jsonMapper) {
+	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper) {
 		this(serverUri, jsonMapper, HttpClient.newBuilder()
 			.executor(Executors.newCachedThreadPool(r -> {
 				Thread t = new Thread(r, "acp-ws-client");
@@ -99,7 +99,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 * @param httpClient The HttpClient to use for WebSocket connections
 	 */
-	public WebSocketAcpClientTransport(URI serverUri, McpJsonMapper jsonMapper, HttpClient httpClient) {
+	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
 		Assert.notNull(serverUri, "The serverUri can not be null");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(httpClient, "The HttpClient can not be null");

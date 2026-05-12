@@ -19,7 +19,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.util.Assert;
-import io.modelcontextprotocol.json.TypeRef;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -58,7 +58,7 @@ import reactor.core.scheduler.Schedulers;
  * AgentParameters params = AgentParameters.builder("gemini")
  *     .arg("--experimental-acp")
  *     .build();
- * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, McpJsonMapper.getDefault());
+ * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
  *
  * // Build client
  * AcpAsyncClient client = AcpClient.async(transport)
@@ -509,7 +509,7 @@ public interface AcpClient {
 			if (!sessionUpdateConsumers.isEmpty()) {
 				notificationHandlers.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
 					AcpSchema.SessionNotification notification = transport.unmarshalFrom(params,
-							new io.modelcontextprotocol.json.TypeRef<AcpSchema.SessionNotification>() {
+							new TypeRef<AcpSchema.SessionNotification>() {
 							});
 					logger.debug("Received session update for session: {}", notification.sessionId());
 
@@ -904,7 +904,7 @@ public interface AcpClient {
 			if (!sessionUpdateConsumers.isEmpty()) {
 				notificationHandlers.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
 					AcpSchema.SessionNotification notification = transport.unmarshalFrom(params,
-							new io.modelcontextprotocol.json.TypeRef<AcpSchema.SessionNotification>() {
+							new TypeRef<AcpSchema.SessionNotification>() {
 							});
 					logger.debug("Received session update for session: {}", notification.sessionId());
 
