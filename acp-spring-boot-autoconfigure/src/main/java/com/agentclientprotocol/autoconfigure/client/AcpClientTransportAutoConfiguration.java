@@ -72,7 +72,8 @@ public class AcpClientTransportAutoConfiguration {
 
 	private static AcpClientTransport createWebSocketTransport(AcpClientProperties properties) {
 		var ws = properties.getTransport().getWebsocket();
-		return new WebSocketAcpClientTransport(ws.getUri(), io.modelcontextprotocol.json.McpJsonMapper.getDefault())
+		return new WebSocketAcpClientTransport(ws.getUri(),
+				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault())
 			.connectTimeout(ws.getConnectTimeout());
 	}
 

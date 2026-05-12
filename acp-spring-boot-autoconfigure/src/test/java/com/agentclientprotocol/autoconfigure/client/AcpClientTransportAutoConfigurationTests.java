@@ -130,7 +130,7 @@ class AcpClientTransportAutoConfigurationTests {
 		}
 
 		@Override
-		public <T> T unmarshalFrom(Object data, io.modelcontextprotocol.json.TypeRef<T> typeRef) {
+		public <T> T unmarshalFrom(Object data, com.agentclientprotocol.sdk.json.TypeRef<T> typeRef) {
 			return null;
 		}
 
