@@ -160,6 +160,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final Map<String, SseStream> sessionStreams = new ConcurrentHashMap<>();
 
+	// Session id -> shared open operation so callers reuse one GET while the stream lives.
+	private final Map<String, Mono<Void>> sessionStreamOpenOperations = new ConcurrentHashMap<>();
+
 	private volatile SseStream connectionStream;
 
 	private volatile String connectionId;
@@ -399,12 +402,15 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<Void> openSessionStream(String sessionId) {
-		if (sessionStreams.containsKey(sessionId)) {
-			return Mono.empty();
-		}
+		return sessionStreamOpenOperations.computeIfAbsent(sessionId, this::createSessionStreamOpenMono);
+	}
+
+	private Mono<Void> createSessionStreamOpenMono(String sessionId) {
 		return openSseStream(RouteScope.session(sessionId))
 			.doOnSuccess(stream -> sessionStreams.putIfAbsent(sessionId, stream))
-			.then();
+			.then()
+			.doOnError(error -> sessionStreamOpenOperations.remove(sessionId))
+			.cache();
 	}
 
 	private Mono<SseStream> openSseStream(RouteScope scope) {
@@ -612,6 +618,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private void clearState() {
 		connectionStream = null;
 		sessionStreams.clear();
+		sessionStreamOpenOperations.clear();
 		inboundRequestRoutes.clear();
 		outboundRequestRoutes.clear();
 		connectionId = null;
