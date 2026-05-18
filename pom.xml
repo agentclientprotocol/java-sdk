@@ -18,6 +18,7 @@
         <module>acp-core</module>
         <module>acp-agent-support</module>
         <module>acp-test</module>
+        <module>acp-streamable-http-jetty</module>
         <module>acp-websocket-jetty</module>
     </modules>
 
@@ -131,6 +132,21 @@
             <dependency>
                 <groupId>org.eclipse.jetty.websocket</groupId>
                 <artifactId>jetty-websocket-jetty-api</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-server</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-servlet</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.http2</groupId>
+                <artifactId>jetty-http2-server</artifactId>
                 <version>${jetty.version}</version>
             </dependency>
 
