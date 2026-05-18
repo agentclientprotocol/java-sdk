@@ -154,7 +154,10 @@ public class AcpClientSession implements AcpSession {
 		 * Client transports currently retain a compatibility path that may forward any
 		 * message emitted by this handler back onto the wire. The session handles outbound
 		 * replies explicitly via transport.sendMessage(...), so the default session handler
-		 * should consume inbound messages without re-emitting them.
+		 * should consume inbound messages without re-emitting them. The transport-level
+		 * handler type is Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>>, so returning
+		 * Mono.empty() is intentional here: the signature permits an emitted message, but
+		 * the default client session has no message to return through that path.
 		 */
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty())).transform(connectHook).subscribe();
 	}
