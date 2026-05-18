@@ -1,0 +1,130 @@
+[
+  {
+    "kind": "http_request",
+    "method": "POST",
+    "scope": "bootstrap",
+    "connectionId": null,
+    "sessionId": null,
+    "cookie": null,
+    "jsonRpc": {
+      "type": "request",
+      "id": "id-1",
+      "method": "initialize"
+    }
+  },
+  {
+    "kind": "http_response",
+    "status": 200,
+    "scope": "bootstrap",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "GET",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 200,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "POST",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": {
+      "type": "request",
+      "id": "id-2",
+      "method": "session/new"
+    }
+  },
+  {
+    "kind": "http_response",
+    "status": 202,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "sse_event",
+    "stream": "connection",
+    "sessionId": null,
+    "jsonRpc": {
+      "type": "response",
+      "id": "id-2",
+      "hasError": false
+    }
+  },
+  {
+    "kind": "http_request",
+    "method": "GET",
+    "scope": "session",
+    "connectionId": "conn-1",
+    "sessionId": "sess-wrong",
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 200,
+    "scope": "session",
+    "connectionId": "conn-1",
+    "sessionId": "sess-wrong"
+  },
+  {
+    "kind": "http_request",
+    "method": "POST",
+    "scope": "session",
+    "connectionId": "conn-1",
+    "sessionId": "sess-wrong",
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": {
+      "type": "request",
+      "id": "id-3",
+      "method": "session/prompt"
+    }
+  },
+  {
+    "kind": "http_response",
+    "status": 202,
+    "scope": "session",
+    "connectionId": "conn-1",
+    "sessionId": "sess-wrong"
+  },
+  {
+    "kind": "sse_event",
+    "stream": "connection",
+    "sessionId": null,
+    "jsonRpc": {
+      "type": "response",
+      "id": "id-3",
+      "hasError": false
+    }
+  },
+  {
+    "kind": "http_request",
+    "method": "DELETE",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 202,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  }
+]

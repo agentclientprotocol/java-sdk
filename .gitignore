@@ -57,6 +57,7 @@ derby.log
 *.zip
 *.tar.gz
 *.rar
+node_modules/
 
 ### Claude Code ###
 .claude/
@@ -68,5 +69,6 @@ hs_err_pid*
 replay_pid*
 
 ### Planning and Internal Documentation ###
-plans/
+plans/*
+!plans/STREAMABLE-HTTP-TRANSPORT.md
 learnings/

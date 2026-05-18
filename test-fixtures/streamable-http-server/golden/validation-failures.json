@@ -1,0 +1,86 @@
+[
+  {
+    "kind": "http_request",
+    "method": "POST",
+    "scope": "bootstrap",
+    "connectionId": null,
+    "sessionId": null,
+    "cookie": null,
+    "jsonRpc": {
+      "type": "request",
+      "id": "id-1",
+      "method": "initialize"
+    }
+  },
+  {
+    "kind": "http_response",
+    "status": 200,
+    "scope": "bootstrap",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "GET",
+    "scope": "bootstrap",
+    "connectionId": null,
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 400,
+    "scope": "bootstrap",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "GET",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": null,
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 401,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "GET",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 406,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  },
+  {
+    "kind": "http_request",
+    "method": "DELETE",
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null,
+    "cookie": "fixture=streamable-http",
+    "jsonRpc": null
+  },
+  {
+    "kind": "http_response",
+    "status": 202,
+    "scope": "connection",
+    "connectionId": "conn-1",
+    "sessionId": null
+  }
+]

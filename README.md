@@ -380,7 +380,7 @@ agent.start().block();  // Starts WebSocket server on port 8080
 
 | Artifact | Description |
 |----------|-------------|
-| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio and WebSocket client transports |
+| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
@@ -392,6 +392,7 @@ agent.start().block();  // Starts WebSocket server on port 8080
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
 | WebSocket | `WebSocketAcpClientTransport` | `WebSocketAcpAgentTransport` | acp-core / acp-websocket-jetty |
+| Streamable HTTP | `StreamableHttpAcpClientTransport` | — | acp-core |
 
 ---
 
