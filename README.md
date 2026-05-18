@@ -404,6 +404,17 @@ agent.start().block();  // Starts WebSocket server on port 8080
 | WebSocket | `WebSocketAcpClientTransport` | `WebSocketAcpAgentTransport` | acp-core / acp-websocket-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 
+### Streamable HTTP Demo Server
+
+Build and run a local demo ACP agent over HTTP/SSE:
+
+```bash
+./mvnw -q -pl test-fixtures/streamable-http-agent-server -am -DskipTests package
+java -jar test-fixtures/streamable-http-agent-server/target/acp-streamable-http-agent-server.jar --port 8080
+```
+
+The endpoint will be available at `http://127.0.0.1:8080/acp`.
+
 ---
 
 ## Building
