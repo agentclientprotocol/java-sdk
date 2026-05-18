@@ -1,5 +1,6 @@
 ### Maven/Gradle Builds ###
 target/
+.m2repo/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -71,4 +72,5 @@ replay_pid*
 ### Planning and Internal Documentation ###
 plans/*
 !plans/STREAMABLE-HTTP-TRANSPORT.md
+!plans/STREAMABLE-HTTP-AGENT-TRANSPORT.md
 learnings/

@@ -52,6 +52,15 @@ For WebSocket server support (agents accepting WebSocket connections):
 </dependency>
 ```
 
+For Streamable HTTP server support (agents accepting remote HTTP/SSE connections):
+```xml
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-streamable-http-jetty</artifactId>
+    <version>0.13.0-SNAPSHOT</version>
+</dependency>
+```
+
 For snapshot builds (unreleased features), add the snapshot repository and use `0.13.0-SNAPSHOT`:
 ```xml
 <repositories>
@@ -381,6 +390,7 @@ agent.start().block();  // Starts WebSocket server on port 8080
 | Artifact | Description |
 |----------|-------------|
 | [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports |
+| `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
@@ -392,7 +402,7 @@ agent.start().block();  // Starts WebSocket server on port 8080
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
 | WebSocket | `WebSocketAcpClientTransport` | `WebSocketAcpAgentTransport` | acp-core / acp-websocket-jetty |
-| Streamable HTTP | `StreamableHttpAcpClientTransport` | — | acp-core |
+| Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 
 ---
 
