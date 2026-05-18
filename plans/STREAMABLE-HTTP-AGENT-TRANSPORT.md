@@ -109,6 +109,18 @@ Covered scenarios:
 
 The Java module also keeps focused integration coverage for strict unknown-session behavior.
 
+## Demo Server
+
+Add a runnable Java demo server at:
+
+```text
+test-fixtures/streamable-http-agent-server/
+```
+
+It packages a small echo-style ACP agent into a runnable jar backed by the real
+Jetty `StreamableHttpAcpAgentTransport`, so manual testing can exercise a live
+HTTP/SSE endpoint instead of only the integration-test fixture lifecycle.
+
 ## PLAN / Follow-Up Work
 
 - extract a shared remote-core layer only after HTTP parity is proven
