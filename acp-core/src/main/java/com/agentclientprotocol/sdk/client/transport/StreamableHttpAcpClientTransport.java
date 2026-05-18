@@ -48,7 +48,7 @@ import reactor.core.publisher.Sinks;
  * JSON-RPC messages.
  * </p>
  *
- * @author Mark Pollack
+ * @author Kaiser Dandangi
  */
 public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
@@ -152,8 +152,10 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final AtomicBoolean closing = new AtomicBoolean(false);
 
+	// Client-originated request id -> where the eventual SSE response is expected.
 	private final Map<Object, OutboundRequestRoute> outboundRequestRoutes = new ConcurrentHashMap<>();
 
+	// Agent-originated request id -> HTTP scope required for the later client POST response.
 	private final Map<Object, RouteScope> inboundRequestRoutes = new ConcurrentHashMap<>();
 
 	private final Map<String, SseStream> sessionStreams = new ConcurrentHashMap<>();
