@@ -27,3 +27,19 @@ node dist/client.js --endpoint http://127.0.0.1:8080/acp --scenario happy-path
 The demo supports `initialize`, `session/new`, `session/load`, `session/prompt`,
 and `session/cancel`. Prompts containing the word `permission` also exercise the
 agent-to-client `session/request_permission` round trip.
+
+By default, the server uses a deterministic echo backend. To exercise the same
+ACP transport with a real OpenAI-backed agent through Spring AI:
+
+```bash
+export OPENAI_API_KEY=...
+# Optional; defaults to OPENAI_MODEL or gpt-4o-mini.
+export OPENAI_MODEL=gpt-4o-mini
+
+java -jar test-fixtures/streamable-http-agent-server/target/acp-streamable-http-agent-server.jar \
+  --port 8080 \
+  --backend spring-ai-openai
+```
+
+The Spring AI backend is intentionally scoped to this runnable fixture. It is not
+part of the core SDK transport implementation.

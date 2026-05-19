@@ -20,12 +20,29 @@
     <properties>
         <!-- This is a runnable fixture, not a published SDK artifact. -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <spring-ai.version>1.1.6</spring-ai.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-streamable-http-jetty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
