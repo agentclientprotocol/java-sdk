@@ -47,6 +47,12 @@ build.log
 shell.log
 derby.log
 
+### Environment Files ###
+.env
+.env.*
+**/.env
+**/.env.*
+
 ### Compiled Files ###
 *.class
 
