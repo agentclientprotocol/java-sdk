@@ -123,7 +123,16 @@ HTTP/SSE endpoint instead of only the integration-test fixture lifecycle.
 
 ## PLAN / Follow-Up Work
 
-- extract a shared remote-core layer only after HTTP parity is proven
+- extract a shared remote-core layer only after HTTP parity is proven.
+  Here, "remote-core" means the transport-independent runtime machinery that
+  both remote listener transports need: per-connection agent factory creation,
+  connection/session registries, lifecycle teardown, request/response routing
+  ledgers, timeout/error propagation, and observability hooks. The actual wire
+  adapters should remain transport-specific: WebSocket text frames stay in the
+  WebSocket module, and HTTP methods, headers, cookies, SSE parsing, and status
+  codes stay in the Streamable HTTP module. Deferring this extraction keeps the
+  first HTTP implementation close to the RFD and avoids prematurely forcing the
+  existing WebSocket behavior through an abstraction before parity is proven.
 - migrate WebSocket toward the same factory-backed listener model
 - add idle/provisional-session eviction and replay retention policies
 - revisit per-logical-session active-prompt tracking in `AcpAgentSession`
