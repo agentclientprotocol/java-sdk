@@ -43,9 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * End-to-end tests for the RFD-compliant listener-backed WebSocket transport.
+ * End-to-end tests for the WebSocket upgrade path on the Streamable HTTP transport.
  */
-class RemoteWebSocketAcpAgentTransportIntegrationTest {
+class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
@@ -54,16 +54,16 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 		AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 		AcpAgentFactory agentFactory = simpleAgentFactory();
 
-		assertThatThrownBy(() -> new RemoteWebSocketAcpAgentTransport(0, jsonMapper, agentFactory))
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(0, jsonMapper, agentFactory))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("Port");
-		assertThatThrownBy(() -> new RemoteWebSocketAcpAgentTransport(8080, "", jsonMapper, agentFactory))
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(8080, "", jsonMapper, agentFactory))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("Path");
-		assertThatThrownBy(() -> new RemoteWebSocketAcpAgentTransport(8080, null, agentFactory))
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(8080, null, agentFactory))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("JsonMapper");
-		assertThatThrownBy(() -> new RemoteWebSocketAcpAgentTransport(8080, jsonMapper, null))
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(8080, jsonMapper, null))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("agentFactory");
 	}
@@ -96,7 +96,7 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
-	void javaClientCanTalkToRemoteWebSocketServer() throws Exception {
+	void javaClientCanTalkToStreamableWebSocketUpgrade() throws Exception {
 		AtomicReference<AcpSchema.SessionNotification> receivedUpdate = new AtomicReference<>();
 
 		try (FixtureServer server = FixtureServer.start(simpleAgentFactory())) {
@@ -131,13 +131,13 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
-	void permissionRequestRoundTripsOverRemoteWebSocket() throws Exception {
+	void permissionRequestRoundTripsOverStreamableWebSocketUpgrade() throws Exception {
 		AtomicInteger permissionRequests = new AtomicInteger();
 		AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
 			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
 					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("permission-session", null, null)))
-			.promptHandler((request, context) -> context.askPermission("remote websocket edit")
+			.promptHandler((request, context) -> context.askPermission("streamable websocket edit")
 				.map(allowed -> {
 					assertThat(allowed).isTrue();
 					return AcpSchema.PromptResponse.endTurn();
@@ -237,7 +237,7 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(
 					"sess-" + sessionCounter.incrementAndGet(), null, null)))
-			.promptHandler((request, context) -> context.sendMessage("hello from remote websocket")
+			.promptHandler((request, context) -> context.sendMessage("hello from streamable websocket")
 				.thenReturn(AcpSchema.PromptResponse.endTurn()))
 			.build());
 	}
@@ -252,7 +252,7 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 		return lines;
 	}
 
-	private static void assertEventuallyNoConnections(RemoteWebSocketAcpAgentTransport transport) throws InterruptedException {
+	private static void assertEventuallyNoConnections(StreamableHttpAcpAgentTransport transport) throws InterruptedException {
 		long deadline = System.nanoTime() + TIMEOUT.toNanos();
 		while (System.nanoTime() < deadline) {
 			if (transport.activeConnectionCount() == 0) {
@@ -274,14 +274,14 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 
 	private static final class FixtureServer implements AutoCloseable {
 
-		private final RemoteWebSocketAcpAgentTransport transport;
+		private final StreamableHttpAcpAgentTransport transport;
 
-		private FixtureServer(RemoteWebSocketAcpAgentTransport transport) {
+		private FixtureServer(StreamableHttpAcpAgentTransport transport) {
 			this.transport = transport;
 		}
 
 		static FixtureServer start(AcpAgentFactory agentFactory) {
-			RemoteWebSocketAcpAgentTransport transport = new RemoteWebSocketAcpAgentTransport(
+			StreamableHttpAcpAgentTransport transport = new StreamableHttpAcpAgentTransport(
 					freePort(), AcpJsonMapper.createDefault(), agentFactory);
 			transport.start().block(TIMEOUT);
 			return new FixtureServer(transport);
@@ -295,7 +295,7 @@ class RemoteWebSocketAcpAgentTransportIntegrationTest {
 			return URI.create("ws://127.0.0.1:" + transport.getPort() + "/acp");
 		}
 
-		RemoteWebSocketAcpAgentTransport transport() {
+		StreamableHttpAcpAgentTransport transport() {
 			return transport;
 		}
 

@@ -129,6 +129,8 @@ public final class StreamableHttpAgentDemoServer {
 		server.start().block(START_TIMEOUT);
 		System.out.println("ACP Streamable HTTP demo agent listening at http://127.0.0.1:" + server.getPort()
 				+ options.path());
+		System.out.println("ACP WebSocket upgrade endpoint available at ws://127.0.0.1:" + server.getPort()
+				+ options.path());
 		System.out.println("Press Ctrl-C to stop.");
 		server.awaitTermination().block();
 	}

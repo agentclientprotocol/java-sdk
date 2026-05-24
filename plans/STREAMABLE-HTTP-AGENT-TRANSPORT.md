@@ -2,7 +2,7 @@
 
 > **Status**: Milestone one implemented  
 > **Created**: 2026-05-18  
-> **Primary goal**: Java agents can be served from a running Java web server over the Streamable HTTP transport while preserving current WebSocket behavior until parity is proven.
+> **Primary goal**: Java agents can be served from a running Java web server over the Streamable HTTP transport, including WebSocket upgrades on the same ACP endpoint.
 
 ## Goal
 
@@ -11,6 +11,7 @@ Add an agent-side Streamable HTTP transport backed by Jetty, with:
 - one fresh ACP agent runtime per accepted remote connection
 - a public `AcpAgentFactory` seam for listener-backed transports
 - RFD-oriented HTTP + SSE behavior
+- WebSocket upgrade handling on the same ACP path
 - strict and compatible routing modes
 - a fixture-driven conformance harness that exercises a real running Java listener
 
@@ -22,8 +23,8 @@ Add an agent-side Streamable HTTP transport backed by Jetty, with:
   - `AcpAgentFactory.sync(...)`
 - Add `StreamableHttpAcpAgentTransport` in a dedicated Jetty adapter module:
   - `acp-streamable-http-jetty`
-- Keep the current WebSocket single-agent API intact in this milestone.
-- PLAN: once Streamable HTTP reaches behavioral parity, migrate remote WebSocket handling toward the same factory-backed listener model.
+- Keep the current legacy WebSocket single-agent API intact in `acp-websocket-jetty`.
+- Serve the RFD-compatible remote WebSocket upgrade path from `StreamableHttpAcpAgentTransport`, matching the Rust SDK shape where one HTTP server owns POST/SSE and WebSocket upgrades.
 
 ## Runtime Model
 
@@ -56,6 +57,11 @@ StreamableHttpAcpAgentTransport
   - session updates
   - agent-originated session-scoped requests such as permission prompts
 - DELETE tears down the connection and releases transport state.
+- WebSocket upgrades:
+  - create one connection during the upgrade handshake
+  - return `Acp-Connection-Id` on the `101 Switching Protocols` response
+  - require the first client-originated JSON-RPC message on the socket to be `initialize`
+  - exchange JSON-RPC messages as text frames until the socket closes
 
 ### Routing ledgers
 
@@ -84,30 +90,19 @@ PLAN: revisit this once the protocol resolves the resume/session-load ordering c
 
 ## Test Harness
 
-Create an in-repo fixture:
-
-```text
-test-fixtures/streamable-http-client/
-```
-
-The fixture is:
-
-- TypeScript
-- HTTP-only
-- scenario-driven
-- the single owner of canonical transcript serialization
-- run against a real Java Jetty listener
+Use Java integration tests only for this branch so the PR stays focused on SDK
+transport behavior instead of adding a separate fixture harness.
 
 Covered scenarios:
 
-- happy path
+- happy path over Streamable HTTP POST + SSE
 - permission round-trip
 - session load / provisional pre-open
 - two logical sessions
 - wrong-stream response rejection
 - validation failures
-
-The Java module also keeps focused integration coverage for strict unknown-session behavior.
+- strict unknown-session behavior
+- WebSocket upgrade behavior on the same Java listener
 
 ## Demo Server
 
@@ -119,7 +114,8 @@ test-fixtures/streamable-http-agent-server/
 
 It packages a small echo-style ACP agent into a runnable jar backed by the real
 Jetty `StreamableHttpAcpAgentTransport`, so manual testing can exercise a live
-HTTP/SSE endpoint instead of only the integration-test fixture lifecycle.
+HTTP/SSE endpoint and WebSocket upgrade endpoint instead of only the
+integration-test fixture lifecycle.
 
 ## PLAN / Follow-Up Work
 
@@ -128,12 +124,12 @@ HTTP/SSE endpoint instead of only the integration-test fixture lifecycle.
   both remote listener transports need: per-connection agent factory creation,
   connection/session registries, lifecycle teardown, request/response routing
   ledgers, timeout/error propagation, and observability hooks. The actual wire
-  adapters should remain transport-specific: WebSocket text frames stay in the
-  WebSocket module, and HTTP methods, headers, cookies, SSE parsing, and status
-  codes stay in the Streamable HTTP module. Deferring this extraction keeps the
-  first HTTP implementation close to the RFD and avoids prematurely forcing the
-  existing WebSocket behavior through an abstraction before parity is proven.
-- migrate WebSocket toward the same factory-backed listener model
+  adapters should remain transport-specific: legacy WebSocket framing stays in
+  the WebSocket module, while the RFD Streamable HTTP endpoint owns HTTP
+  methods, headers, SSE parsing, status codes, and its WebSocket upgrade branch.
+  Deferring this extraction keeps the first implementation close to the RFD and
+  avoids prematurely forcing the existing legacy WebSocket behavior through an
+  abstraction before parity is proven.
 - add idle/provisional-session eviction and replay retention policies
 - revisit per-logical-session active-prompt tracking in `AcpAgentSession`
 - expose richer diagnostics / observability hooks
