@@ -15,13 +15,11 @@ Run it:
 java -jar test-fixtures/streamable-http-agent-server/target/acp-streamable-http-agent-server.jar --port 8080
 ```
 
-Then drive it with the fixture client from another shell:
+Then connect any ACP client to either endpoint printed at startup:
 
-```bash
-cd test-fixtures/streamable-http-client
-npm install
-npm run build
-node dist/client.js --endpoint http://127.0.0.1:8080/acp --scenario happy-path
+```text
+http://127.0.0.1:8080/acp  # Streamable HTTP POST + SSE
+ws://127.0.0.1:8080/acp    # WebSocket upgrade
 ```
 
 The demo supports `initialize`, `session/new`, `session/load`, `session/prompt`,

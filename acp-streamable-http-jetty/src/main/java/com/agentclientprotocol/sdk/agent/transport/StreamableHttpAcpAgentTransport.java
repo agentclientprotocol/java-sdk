@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent.transport;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -39,6 +40,15 @@ import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.websocket.api.Callback;
+import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.websocket.api.StatusCode;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketError;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketOpen;
+import org.eclipse.jetty.websocket.api.annotations.WebSocket;
+import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -48,16 +58,19 @@ import reactor.core.publisher.Sinks;
  * Listener-backed ACP Streamable HTTP transport for agents.
  *
  * <p>
- * This transport hosts a Jetty HTTP endpoint and creates one fresh agent runtime per
- * remote ACP connection through {@link AcpAgentFactory}. The accepted connection then
- * owns its own per-connection {@link RemoteAcpConnection}, while the listener remains
- * responsible only for HTTP concerns such as headers, SSE streams, and request routing.
+ * This transport hosts the ACP Streamable HTTP endpoint on Jetty, including POST/SSE
+ * request handling and WebSocket upgrades on the same path. It creates one fresh agent
+ * runtime per remote ACP connection through {@link AcpAgentFactory}. The accepted
+ * connection then owns its own per-connection {@link RemoteAcpConnection}, while the
+ * listener remains responsible only for wire-level concerns such as headers, SSE
+ * streams, WebSocket frames, and request routing.
  * </p>
  *
  * <p>
- * Streamable HTTP and the RFD-compliant remote WebSocket listener share
- * {@link RemoteAcpConnection}; this class keeps HTTP-specific routing, headers, SSE
- * stream ownership, and replay behavior local to the HTTP adapter.
+ * WebSocket support is intentionally hosted here instead of as a separate public
+ * listener so one {@code /acp} endpoint can behave like the RFD and the Rust
+ * {@code AcpHttpServer}: HTTP requests fall through to the servlet, while valid
+ * WebSocket upgrade requests are accepted by Jetty's {@link WebSocketUpgradeHandler}.
  * </p>
  *
  * @author Kaiser Dandangi
@@ -160,6 +173,8 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final ConcurrentMap<String, ConnectionState> connections = new ConcurrentHashMap<>();
 
+	private final ConcurrentMap<String, WebSocketConnectionState> webSocketConnections = new ConcurrentHashMap<>();
+
 	private final AtomicBoolean started = new AtomicBoolean(false);
 
 	private final AtomicBoolean closing = new AtomicBoolean(false);
@@ -232,6 +247,25 @@ public class StreamableHttpAcpAgentTransport {
 			ServletContextHandler context = new ServletContextHandler();
 			context.setContextPath("/");
 			context.addServlet(new ServletHolder(new AcpServlet()), path);
+
+			WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
+				container.setIdleTimeout(Duration.ofMinutes(30));
+				container.addMapping(path, (request, response, callback) -> {
+					WebSocketConnectionState connection = createWebSocketConnection();
+					try {
+						connection.start();
+						webSocketConnections.put(connection.id(), connection);
+						response.getHeaders().put(HEADER_CONNECTION_ID, connection.id());
+						return new AcpWebSocketEndpoint(connection);
+					}
+					catch (Exception e) {
+						connection.close();
+						callback.failed(e);
+						return null;
+					}
+				});
+			});
+			context.insertHandler(webSocketHandler);
 			jettyServer.setHandler(context);
 
 			jettyServer.start();
@@ -262,6 +296,8 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			connections.values().forEach(ConnectionState::close);
 			connections.clear();
+			webSocketConnections.values().forEach(WebSocketConnectionState::close);
+			webSocketConnections.clear();
 			Server currentServer = this.server;
 			if (currentServer != null) {
 				try {
@@ -283,6 +319,10 @@ public class StreamableHttpAcpAgentTransport {
 		return terminationSink.asMono();
 	}
 
+	int activeConnectionCount() {
+		return connections.size() + webSocketConnections.size();
+	}
+
 	private ConnectionState createConnection() {
 		String connectionId = UUID.randomUUID().toString();
 		ConnectionState connection = new ConnectionState(connectionId);
@@ -290,8 +330,14 @@ public class StreamableHttpAcpAgentTransport {
 		return connection;
 	}
 
-	private Optional<ConnectionState> connection(String connectionId) {
-		return Optional.ofNullable(connections.get(connectionId));
+	private WebSocketConnectionState createWebSocketConnection() {
+		String connectionId = UUID.randomUUID().toString();
+		return new WebSocketConnectionState(connectionId);
+	}
+
+	private boolean isInitializeRequest(JSONRPCMessage message) {
+		return message instanceof AcpSchema.JSONRPCRequest request
+				&& AcpSchema.METHOD_INITIALIZE.equals(request.method()) && request.id() != null;
 	}
 
 	private final class AcpServlet extends HttpServlet {
@@ -875,6 +921,142 @@ public class StreamableHttpAcpAgentTransport {
 				catch (IllegalStateException ignored) {
 				}
 			}
+		}
+
+	}
+
+	private final class WebSocketConnectionState {
+
+		private final String id;
+
+		private final RemoteAcpConnection remoteConnection;
+
+		private final AtomicBoolean initialized = new AtomicBoolean(false);
+
+		private final AtomicBoolean closed = new AtomicBoolean(false);
+
+		private volatile Session session;
+
+		WebSocketConnectionState(String id) {
+			this.id = id;
+			this.remoteConnection = new RemoteAcpConnection(id, jsonMapper, this::sendToClient);
+		}
+
+		String id() {
+			return id;
+		}
+
+		void start() {
+			this.remoteConnection.start(agentFactory).block(INITIALIZE_TIMEOUT);
+		}
+
+		void open(Session session) {
+			this.session = session;
+		}
+
+		void acceptFromClient(JSONRPCMessage message) {
+			if (!initialized.get()) {
+				// The WebSocket branch of the streamable endpoint has no POST
+				// initialize response that can create the connection first, so the first
+				// client-originated JSON-RPC message on the socket must be initialize.
+				if (!isInitializeRequest(message)) {
+					close(StatusCode.PROTOCOL, "first ACP WebSocket message must be initialize");
+					return;
+				}
+				initialized.set(true);
+			}
+			remoteConnection.acceptInbound(message);
+		}
+
+		void sendToClient(JSONRPCMessage message) {
+			try {
+				Session currentSession = this.session;
+				if (closed.get() || currentSession == null || !currentSession.isOpen()) {
+					throw new AcpConnectionException("Streamable ACP WebSocket connection is closed");
+				}
+				String payload = jsonMapper.writeValueAsString(message);
+				logger.debug("Sending streamable ACP WebSocket message: {}", payload);
+				currentSession.sendText(payload, Callback.from(() -> {
+					// Jetty requires an explicit success callback; there is no
+					// follow-up work after the frame has been accepted for writing.
+				}, error -> {
+					if (!closed.get()) {
+						remoteConnection.signalException(error);
+					}
+				}));
+			}
+			catch (Exception e) {
+				remoteConnection.signalException(e);
+				close(StatusCode.SERVER_ERROR, "failed to send ACP message");
+			}
+		}
+
+		void close() {
+			close(StatusCode.NORMAL, "server closing");
+		}
+
+		void close(int statusCode, String reason) {
+			if (!closed.compareAndSet(false, true)) {
+				return;
+			}
+			webSocketConnections.remove(id, this);
+			Session currentSession = this.session;
+			if (currentSession != null && currentSession.isOpen()) {
+				currentSession.close(statusCode, reason, Callback.NOOP);
+			}
+			remoteConnection.closeGracefully().subscribe();
+		}
+
+	}
+
+	/**
+	 * Jetty WebSocket endpoint for one WebSocket-upgraded ACP connection.
+	 */
+	@WebSocket
+	public class AcpWebSocketEndpoint {
+
+		private final WebSocketConnectionState connection;
+
+		AcpWebSocketEndpoint(WebSocketConnectionState connection) {
+			this.connection = connection;
+		}
+
+		@OnWebSocketOpen
+		public void onOpen(Session session) {
+			logger.info("Streamable ACP WebSocket client connected from {}", session.getRemoteSocketAddress());
+			connection.open(session);
+		}
+
+		@OnWebSocketMessage
+		public void onMessage(Session session, String message) {
+			logger.debug("Received streamable ACP WebSocket message: {}", message);
+
+			try {
+				JSONRPCMessage jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);
+				connection.acceptFromClient(jsonRpcMessage);
+			}
+			catch (Exception e) {
+				logger.warn("Closing streamable ACP WebSocket connection after invalid JSON-RPC frame", e);
+				connection.close(StatusCode.PROTOCOL, "invalid JSON-RPC frame");
+			}
+		}
+
+		@OnWebSocketClose
+		public void onClose(Session session, int statusCode, String reason) {
+			logger.info("Streamable ACP WebSocket client disconnected: {} - {}", statusCode, reason);
+			connection.close(statusCode, reason);
+		}
+
+		@OnWebSocketError
+		public void onError(Session session, Throwable error) {
+			if (error instanceof ClosedChannelException) {
+				logger.debug("Streamable ACP WebSocket channel closed");
+				connection.close(StatusCode.NORMAL, "WebSocket channel closed");
+				return;
+			}
+			logger.error("Streamable ACP WebSocket error", error);
+			connection.remoteConnection.signalException(error);
+			connection.close(StatusCode.SERVER_ERROR, "WebSocket error");
 		}
 
 	}
