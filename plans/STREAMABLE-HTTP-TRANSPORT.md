@@ -12,7 +12,7 @@ This first milestone is intentionally client-only:
 
 - implement `StreamableHttpAcpClientTransport`
 - preserve the existing ACP client API surface
-- prove the wire contract with an in-repo TypeScript conformance fixture
+- prove the wire contract with focused Java integration coverage
 - defer remote transport negotiation, Java server support, and reconnect/resume behavior
 
 ## Milestone-One Result
@@ -22,7 +22,7 @@ Implemented in this branch:
 - `StreamableHttpAcpClientTransport`
 - preserved public ACP client API
 - compatibility note + isolated forwarding path for the existing client handler-emission ambiguity
-- in-repo TypeScript fixture with golden transcripts
+- Java integration coverage against an in-process Streamable HTTP fixture server
 - Java unit + integration coverage for:
   - initialize bootstrap
   - cookie persistence
@@ -34,7 +34,7 @@ Implemented in this branch:
   - wrong-stream responses
   - strict-routing rejection
   - two logical sessions
-  - fixture validation failures for missing connection headers, missing cookies, and invalid SSE `Accept`
+  - validation failures for missing connection headers and invalid SSE `Accept`
 
 ## Contract Decisions
 
@@ -113,37 +113,19 @@ Implemented in this branch:
 
 ## Test Harness
 
-Create an in-repo TypeScript fixture:
-
-```text
-test-fixtures/streamable-http-server/
-```
-
-The fixture will be:
-
-- HTTP-only in the first milestone
-- strict by default
-- scenario-driven with named startup-selected scenarios
-- runnable manually and from Java integration tests
-- the single owner of canonical transcript serialization
-
-Golden transcripts will live beside the fixture:
-
-```text
-test-fixtures/streamable-http-server/golden/
-```
+Use an in-process Java Streamable HTTP fixture server for client transport tests.
+This keeps the PR focused on Java SDK transport behavior and avoids adding a
+separate conformance harness to the repository.
 
 ### Milestone-One Scenarios
 
 - initialize bootstrap
-- cookie persistence
 - connection SSE stream
 - `session/new`
 - prompt flow with session updates
 - agent → client `session/request_permission`
 - `session/load`
 - validation failures for wrong / missing headers
-- missing cookie
 - wrong-stream response
 - strict-routing rejection
 - light two-session coverage
