@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -228,13 +229,17 @@ class AcpAgentSessionTest {
 		try {
 			CountDownLatch handlersStarted = new CountDownLatch(2);
 			AtomicInteger handlerInvocations = new AtomicInteger();
+			Sinks.One<Void> session1Release = Sinks.one();
+			Sinks.One<Void> session2Release = Sinks.one();
 
 			Map<String, AcpAgentSession.RequestHandler<?>> requestHandlers = Map.of(AcpSchema.METHOD_SESSION_PROMPT,
 					params -> Mono.defer(() -> {
 						handlerInvocations.incrementAndGet();
 						handlersStarted.countDown();
-						return Mono.delay(PROMPT_RESPONSE_DELAY)
-							.map(ignored -> new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
+						String sessionId = sessionId(params);
+						Sinks.One<Void> release = SESSION_1.equals(sessionId) ? session1Release : session2Release;
+						return release.asMono()
+							.thenReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
 					}));
 
 			AcpAgentSession session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers,
@@ -261,6 +266,13 @@ class AcpAgentSessionTest {
 			assertThat(session.hasActivePrompt(SESSION_1)).isTrue();
 			assertThat(session.hasActivePrompt(SESSION_2)).isTrue();
 			assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder(SESSION_1, SESSION_2);
+
+			// Release the responses one at a time. The in-memory test transport uses a
+			// unicast sink, so simultaneous emissions from concurrent prompt handlers can
+			// fail with FAIL_NON_SERIALIZED and obscure the behavior under test.
+			session1Release.tryEmitValue(null);
+			awaitResponse(responses, "1");
+			session2Release.tryEmitValue(null);
 
 			assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
 
@@ -381,6 +393,23 @@ class AcpAgentSessionTest {
 
 	private static AcpSchema.JSONRPCResponse responseById(List<AcpSchema.JSONRPCResponse> responses, Object id) {
 		return responses.stream().filter(response -> id.equals(response.id())).findFirst().orElseThrow();
+	}
+
+	private static void awaitResponse(List<AcpSchema.JSONRPCResponse> responses, Object id) throws InterruptedException {
+		long deadline = System.nanoTime() + TIMEOUT.toNanos();
+		while (System.nanoTime() < deadline) {
+			if (responses.stream().anyMatch(response -> id.equals(response.id()))) {
+				return;
+			}
+			Thread.sleep(10);
+		}
+	}
+
+	private static String sessionId(Object params) {
+		if (params instanceof AcpSchema.PromptRequest promptRequest) {
+			return promptRequest.sessionId();
+		}
+		throw new IllegalArgumentException("Expected PromptRequest params but received " + params);
 	}
 
 	private static void allowAgentTransportSubscription() throws InterruptedException {

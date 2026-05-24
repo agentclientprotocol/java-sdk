@@ -19,15 +19,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
-import com.agentclientprotocol.sdk.agent.AcpAsyncAgent;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
-import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
@@ -54,14 +50,14 @@ import reactor.core.publisher.Sinks;
  * <p>
  * This transport hosts a Jetty HTTP endpoint and creates one fresh agent runtime per
  * remote ACP connection through {@link AcpAgentFactory}. The accepted connection then
- * owns its own per-connection {@link AcpAgentTransport}, while the listener remains
+ * owns its own per-connection {@link RemoteAcpConnection}, while the listener remains
  * responsible only for HTTP concerns such as headers, SSE streams, and request routing.
  * </p>
  *
  * <p>
- * The current implementation is intentionally HTTP-only. The shared remote transport
- * core that should eventually also back WebSocket remains a follow-up migration step so
- * the existing WebSocket behavior can be preserved until parity is proven here first.
+ * Streamable HTTP and the RFD-compliant remote WebSocket listener share
+ * {@link RemoteAcpConnection}; this class keeps HTTP-specific routing, headers, SSE
+ * stream ownership, and replay behavior local to the HTTP adapter.
  * </p>
  *
  * @author Kaiser Dandangi
@@ -458,7 +454,7 @@ public class StreamableHttpAcpAgentTransport {
 
 		private final String id;
 
-		private final ConnectionTransport transport;
+		private final RemoteAcpConnection connection;
 
 		private final OutboundStream connectionStream = new OutboundStream();
 
@@ -478,11 +474,9 @@ public class StreamableHttpAcpAgentTransport {
 
 		private volatile Object initializeRequestId;
 
-		private volatile AcpAsyncAgent agent;
-
 		ConnectionState(String id) {
 			this.id = id;
-			this.transport = new ConnectionTransport(this::routeAgentMessage);
+			this.connection = new RemoteAcpConnection(id, jsonMapper, this::routeAgentMessage);
 		}
 
 		String id() {
@@ -490,20 +484,19 @@ public class StreamableHttpAcpAgentTransport {
 		}
 
 		void start() {
-			this.agent = agentFactory.create(transport);
-			this.agent.start().block(INITIALIZE_TIMEOUT);
+			this.connection.start(agentFactory).block(INITIALIZE_TIMEOUT);
 		}
 
 		Mono<JSONRPCMessage> initialize(AcpSchema.JSONRPCRequest request) {
 			this.initializeRequestId = request.id();
-			transport.acceptInbound(request);
+			connection.acceptInbound(request);
 			return initializeResponse.asMono().doOnSuccess(ignored -> initialized.set(true));
 		}
 
 		void acceptClientPost(JSONRPCMessage message, String sessionHeader) {
 			if (message instanceof AcpSchema.JSONRPCResponse response) {
 				validateClientResponseScope(response, sessionHeader);
-				transport.acceptInbound(message);
+				connection.acceptInbound(message);
 				return;
 			}
 
@@ -515,7 +508,7 @@ public class StreamableHttpAcpAgentTransport {
 					&& resolved.requestRoute() != null) {
 				clientRequestRoutes.put(request.id(), resolved.requestRoute());
 			}
-			transport.acceptInbound(message);
+			connection.acceptInbound(message);
 		}
 
 		void openStream(HttpServletRequest request, HttpServletResponse response, String sessionId)
@@ -544,11 +537,7 @@ public class StreamableHttpAcpAgentTransport {
 		void close() {
 			connectionStream.close();
 			sessionStreams.values().forEach(OutboundStream::close);
-			transport.closeGracefully().subscribe();
-			AcpAsyncAgent currentAgent = this.agent;
-			if (currentAgent != null) {
-				currentAgent.closeGracefully().subscribe();
-			}
+			connection.closeGracefully().subscribe();
 		}
 
 		private void routeAgentMessage(JSONRPCMessage message) {
@@ -569,7 +558,7 @@ public class StreamableHttpAcpAgentTransport {
 				}
 			}
 			catch (Exception e) {
-				transport.signalException(e);
+				connection.signalException(e);
 			}
 		}
 
@@ -786,93 +775,6 @@ public class StreamableHttpAcpAgentTransport {
 		return extractSessionId(params)
 			.filter(sessionId -> !sessionId.isBlank())
 			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for method " + method));
-	}
-
-	private final class ConnectionTransport implements AcpAgentTransport {
-
-		private final Consumer<JSONRPCMessage> outboundConsumer;
-
-		private final Sinks.Many<JSONRPCMessage> inboundSink = Sinks.many().unicast().onBackpressureBuffer();
-
-		private final Sinks.One<Void> terminationSink = Sinks.one();
-
-		private final AtomicBoolean started = new AtomicBoolean(false);
-
-		private final AtomicBoolean closing = new AtomicBoolean(false);
-
-		private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
-
-		ConnectionTransport(Consumer<JSONRPCMessage> outboundConsumer) {
-			this.outboundConsumer = outboundConsumer;
-		}
-
-		@Override
-		public Mono<Void> start(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
-			Assert.notNull(handler, "The handler can not be null");
-			if (!started.compareAndSet(false, true)) {
-				return Mono.error(new IllegalStateException("Already started"));
-			}
-			inboundSink.asFlux()
-				.flatMap(message -> Mono.just(message).transform(handler))
-				.doOnNext(response -> {
-					if (response != null) {
-						outboundConsumer.accept(response);
-					}
-				})
-				.doOnError(this::signalException)
-				.subscribe();
-			return Mono.empty();
-		}
-
-		void acceptInbound(JSONRPCMessage message) {
-			if (closing.get()) {
-				throw new AcpConnectionException("Connection transport is closing");
-			}
-			Sinks.EmitResult result = inboundSink.tryEmitNext(message);
-			if (result.isFailure()) {
-				throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
-			}
-		}
-
-		void signalException(Throwable error) {
-			exceptionHandler.accept(error);
-		}
-
-		@Override
-		public Mono<Void> sendMessage(JSONRPCMessage message) {
-			return Mono.fromRunnable(() -> {
-				if (closing.get()) {
-					throw new AcpConnectionException("Connection transport is closing");
-				}
-				outboundConsumer.accept(message);
-			});
-		}
-
-		@Override
-		public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
-			return jsonMapper.convertValue(data, typeRef);
-		}
-
-		@Override
-		public Mono<Void> closeGracefully() {
-			return Mono.fromRunnable(() -> {
-				if (closing.compareAndSet(false, true)) {
-					inboundSink.tryEmitComplete();
-					terminationSink.tryEmitValue(null);
-				}
-			});
-		}
-
-		@Override
-		public void setExceptionHandler(Consumer<Throwable> handler) {
-			this.exceptionHandler = handler;
-		}
-
-		@Override
-		public Mono<Void> awaitTermination() {
-			return terminationSink.asMono();
-		}
-
 	}
 
 	private final class OutboundStream {
