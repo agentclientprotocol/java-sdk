@@ -342,7 +342,8 @@ class AcpSchemaSerializationTest {
 		// Nested _meta object as shown in spec for advertising custom capabilities
 		Map<String, Object> zedCapabilities = Map.of("workspace", true, "fileNotifications", true);
 		Map<String, Object> meta = Map.of("zed.dev", zedCapabilities);
-		AcpSchema.AgentCapabilities caps = new AcpSchema.AgentCapabilities(true, new AcpSchema.McpCapabilities(true, false),
+		AcpSchema.AgentCapabilities caps = new AcpSchema.AgentCapabilities(true, null,
+				new AcpSchema.McpCapabilities(true, false),
 				new AcpSchema.PromptCapabilities(false, true, true), meta);
 
 		String json = jsonMapper.writeValueAsString(caps);

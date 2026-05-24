@@ -10,6 +10,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
 import com.agentclientprotocol.sdk.spec.AcpSchema.McpCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptCapabilities;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SessionCapabilities;
 
 /**
  * Tracks the capabilities negotiated during the ACP initialization handshake.
@@ -62,6 +63,12 @@ public final class NegotiatedCapabilities {
 	// Agent capabilities (what agent offers to client)
 	private final boolean loadSession;
 
+	private final boolean listSessions;
+
+	private final boolean closeSession;
+
+	private final boolean resumeSession;
+
 	private final boolean imageContent;
 
 	private final boolean audioContent;
@@ -77,6 +84,9 @@ public final class NegotiatedCapabilities {
 		this.writeTextFile = builder.writeTextFile;
 		this.terminal = builder.terminal;
 		this.loadSession = builder.loadSession;
+		this.listSessions = builder.listSessions;
+		this.closeSession = builder.closeSession;
+		this.resumeSession = builder.resumeSession;
 		this.imageContent = builder.imageContent;
 		this.audioContent = builder.audioContent;
 		this.embeddedContext = builder.embeddedContext;
@@ -119,6 +129,13 @@ public final class NegotiatedCapabilities {
 
 		Builder builder = new Builder();
 		builder.loadSession(Boolean.TRUE.equals(caps.loadSession()));
+
+		SessionCapabilities sc = caps.sessionCapabilities();
+		if (sc != null) {
+			builder.listSessions(sc.list() != null);
+			builder.closeSession(sc.close() != null);
+			builder.resumeSession(sc.resume() != null);
+		}
 
 		PromptCapabilities prompt = caps.promptCapabilities();
 		if (prompt != null) {
@@ -207,6 +224,30 @@ public final class NegotiatedCapabilities {
 	}
 
 	/**
+	 * Returns true if the agent supports listing sessions.
+	 * @return true if sessionCapabilities.list was advertised
+	 */
+	public boolean supportsListSessions() {
+		return listSessions;
+	}
+
+	/**
+	 * Returns true if the agent supports closing sessions.
+	 * @return true if sessionCapabilities.close was advertised
+	 */
+	public boolean supportsCloseSession() {
+		return closeSession;
+	}
+
+	/**
+	 * Returns true if the agent supports resuming sessions.
+	 * @return true if sessionCapabilities.resume was advertised
+	 */
+	public boolean supportsResumeSession() {
+		return resumeSession;
+	}
+
+	/**
 	 * Returns true if the agent supports image content in prompts.
 	 * @return true if promptCapabilities.image was advertised
 	 */
@@ -257,6 +298,36 @@ public final class NegotiatedCapabilities {
 	}
 
 	/**
+	 * Requires list sessions capability, throwing if not supported.
+	 * @throws AcpCapabilityException if the agent doesn't support this capability
+	 */
+	public void requireListSessions() {
+		if (!listSessions) {
+			throw new AcpCapabilityException("sessionCapabilities.list");
+		}
+	}
+
+	/**
+	 * Requires close session capability, throwing if not supported.
+	 * @throws AcpCapabilityException if the agent doesn't support this capability
+	 */
+	public void requireCloseSession() {
+		if (!closeSession) {
+			throw new AcpCapabilityException("sessionCapabilities.close");
+		}
+	}
+
+	/**
+	 * Requires resume session capability, throwing if not supported.
+	 * @throws AcpCapabilityException if the agent doesn't support this capability
+	 */
+	public void requireResumeSession() {
+		if (!resumeSession) {
+			throw new AcpCapabilityException("sessionCapabilities.resume");
+		}
+	}
+
+	/**
 	 * Requires image content capability, throwing if not supported.
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
@@ -279,9 +350,10 @@ public final class NegotiatedCapabilities {
 	@Override
 	public String toString() {
 		return "NegotiatedCapabilities{" + "readTextFile=" + readTextFile + ", writeTextFile=" + writeTextFile
-				+ ", terminal=" + terminal + ", loadSession=" + loadSession + ", imageContent=" + imageContent
-				+ ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext + ", mcpHttp=" + mcpHttp
-				+ ", mcpSse=" + mcpSse + '}';
+				+ ", terminal=" + terminal + ", loadSession=" + loadSession + ", listSessions=" + listSessions
+				+ ", closeSession=" + closeSession + ", resumeSession=" + resumeSession + ", imageContent="
+				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
+				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + '}';
 	}
 
 	/**
@@ -296,6 +368,12 @@ public final class NegotiatedCapabilities {
 		private boolean terminal = false;
 
 		private boolean loadSession = false;
+
+		private boolean listSessions = false;
+
+		private boolean closeSession = false;
+
+		private boolean resumeSession = false;
 
 		private boolean imageContent = false;
 
@@ -324,6 +402,21 @@ public final class NegotiatedCapabilities {
 
 		public Builder loadSession(boolean value) {
 			this.loadSession = value;
+			return this;
+		}
+
+		public Builder listSessions(boolean value) {
+			this.listSessions = value;
+			return this;
+		}
+
+		public Builder closeSession(boolean value) {
+			this.closeSession = value;
+			return this;
+		}
+
+		public Builder resumeSession(boolean value) {
+			this.resumeSession = value;
 			return this;
 		}
 

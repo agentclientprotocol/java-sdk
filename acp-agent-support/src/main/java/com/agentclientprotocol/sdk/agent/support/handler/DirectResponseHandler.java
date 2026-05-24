@@ -6,10 +6,13 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 
@@ -33,7 +36,10 @@ public class DirectResponseHandler implements ReturnValueHandler {
 				|| LoadSessionResponse.class.isAssignableFrom(type)
 				|| PromptResponse.class.isAssignableFrom(type)
 				|| SetSessionModeResponse.class.isAssignableFrom(type)
-				|| SetSessionModelResponse.class.isAssignableFrom(type);
+				|| SetSessionModelResponse.class.isAssignableFrom(type)
+				|| ListSessionsResponse.class.isAssignableFrom(type)
+				|| CloseSessionResponse.class.isAssignableFrom(type)
+				|| ResumeSessionResponse.class.isAssignableFrom(type);
 	}
 
 	@Override

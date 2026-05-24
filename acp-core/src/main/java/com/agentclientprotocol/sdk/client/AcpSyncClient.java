@@ -250,6 +250,36 @@ public class AcpSyncClient implements AutoCloseable {
 		return this.delegate.setSessionModel(setModelRequest).block();
 	}
 
+	/**
+	 * Lists sessions known to the agent, optionally filtered by working directory.
+	 * @param listSessionsRequest the list sessions request with optional cwd filter and cursor
+	 * @return the list sessions response
+	 * @see AcpSchema#METHOD_SESSION_LIST
+	 */
+	public AcpSchema.ListSessionsResponse listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
+		return this.delegate.listSessions(listSessionsRequest).block();
+	}
+
+	/**
+	 * Closes an active session, cancelling any in-flight work.
+	 * @param closeSessionRequest the close session request with session ID
+	 * @return the close session response
+	 * @see AcpSchema#METHOD_SESSION_CLOSE
+	 */
+	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
+		return this.delegate.closeSession(closeSessionRequest).block();
+	}
+
+	/**
+	 * Resumes an existing session without replaying conversation history.
+	 * @param resumeSessionRequest the resume session request with session ID and cwd
+	 * @return the resume session response
+	 * @see AcpSchema#METHOD_SESSION_RESUME
+	 */
+	public AcpSchema.ResumeSessionResponse resumeSession(AcpSchema.ResumeSessionRequest resumeSessionRequest) {
+		return this.delegate.resumeSession(resumeSessionRequest).block();
+	}
+
 	// --------------------------
 	// Prompt Interaction
 	// --------------------------

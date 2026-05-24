@@ -27,19 +27,25 @@ import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite;
 import com.agentclientprotocol.sdk.agent.support.resolver.CancelNotificationResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CapabilitiesResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.CloseSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.InitializeRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.ListSessionsRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.LoadSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.NewSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.PromptContextResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.PromptRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.ResumeSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SessionIdResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModeRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModelRequestResolver;
 import com.agentclientprotocol.sdk.annotation.Cancel;
+import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
+import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.LoadSession;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
+import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
@@ -216,6 +222,26 @@ public class AcpAgentSupport {
 		AcpHandlerMethod setModelHandler = handlers.get("session/set_model");
 		if (setModelHandler != null) {
 			agentBuilder.setSessionModelHandler(req -> invokeHandler(setModelHandler, req, req.sessionId(), null, null));
+		}
+
+		// ListSessions handler
+		AcpHandlerMethod listSessionsHandler = handlers.get("session/list");
+		if (listSessionsHandler != null) {
+			agentBuilder.listSessionsHandler(req -> invokeHandler(listSessionsHandler, req, null, null, null));
+		}
+
+		// CloseSession handler
+		AcpHandlerMethod closeSessionHandler = handlers.get("session/close");
+		if (closeSessionHandler != null) {
+			agentBuilder.closeSessionHandler(
+					req -> invokeHandler(closeSessionHandler, req, req.sessionId(), null, null));
+		}
+
+		// ResumeSession handler
+		AcpHandlerMethod resumeSessionHandler = handlers.get("session/resume");
+		if (resumeSessionHandler != null) {
+			agentBuilder.resumeSessionHandler(
+					req -> invokeHandler(resumeSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// Cancel handler
@@ -441,6 +467,18 @@ public class AcpAgentSupport {
 					handlers.put("session/set_model", new AcpHandlerMethod(beanSupplier, method, "session/set_model"));
 					log.debug("Discovered @SetSessionModel handler: {}", method.getName());
 				}
+				if (method.isAnnotationPresent(ListSessions.class)) {
+					handlers.put("session/list", new AcpHandlerMethod(beanSupplier, method, "session/list"));
+					log.debug("Discovered @ListSessions handler: {}", method.getName());
+				}
+				if (method.isAnnotationPresent(CloseSession.class)) {
+					handlers.put("session/close", new AcpHandlerMethod(beanSupplier, method, "session/close"));
+					log.debug("Discovered @CloseSession handler: {}", method.getName());
+				}
+				if (method.isAnnotationPresent(ResumeSession.class)) {
+					handlers.put("session/resume", new AcpHandlerMethod(beanSupplier, method, "session/resume"));
+					log.debug("Discovered @ResumeSession handler: {}", method.getName());
+				}
 				if (method.isAnnotationPresent(Cancel.class)) {
 					handlers.put("session/cancel", new AcpHandlerMethod(beanSupplier, method, "session/cancel"));
 					log.debug("Discovered @Cancel handler: {}", method.getName());
@@ -457,6 +495,9 @@ public class AcpAgentSupport {
 			argumentResolvers.addResolver(new PromptRequestResolver());
 			argumentResolvers.addResolver(new SetSessionModeRequestResolver());
 			argumentResolvers.addResolver(new SetSessionModelRequestResolver());
+			argumentResolvers.addResolver(new ListSessionsRequestResolver());
+			argumentResolvers.addResolver(new CloseSessionRequestResolver());
+			argumentResolvers.addResolver(new ResumeSessionRequestResolver());
 			argumentResolvers.addResolver(new CancelNotificationResolver());
 			argumentResolvers.addResolver(new PromptContextResolver());
 			argumentResolvers.addResolver(new SessionIdResolver());

@@ -219,6 +219,36 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Functional interface for handling list sessions requests.
+	 */
+	@FunctionalInterface
+	interface ListSessionsHandler {
+
+		Mono<AcpSchema.ListSessionsResponse> handle(AcpSchema.ListSessionsRequest request);
+
+	}
+
+	/**
+	 * Functional interface for handling close session requests.
+	 */
+	@FunctionalInterface
+	interface CloseSessionHandler {
+
+		Mono<AcpSchema.CloseSessionResponse> handle(AcpSchema.CloseSessionRequest request);
+
+	}
+
+	/**
+	 * Functional interface for handling resume session requests.
+	 */
+	@FunctionalInterface
+	interface ResumeSessionHandler {
+
+		Mono<AcpSchema.ResumeSessionResponse> handle(AcpSchema.ResumeSessionRequest request);
+
+	}
+
+	/**
 	 * Functional interface for handling cancel notifications.
 	 */
 	@FunctionalInterface
@@ -335,6 +365,39 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Synchronous functional interface for handling list sessions requests.
+	 * Returns a plain value instead of Mono for use with sync agents.
+	 */
+	@FunctionalInterface
+	interface SyncListSessionsHandler {
+
+		AcpSchema.ListSessionsResponse handle(AcpSchema.ListSessionsRequest request);
+
+	}
+
+	/**
+	 * Synchronous functional interface for handling close session requests.
+	 * Returns a plain value instead of Mono for use with sync agents.
+	 */
+	@FunctionalInterface
+	interface SyncCloseSessionHandler {
+
+		AcpSchema.CloseSessionResponse handle(AcpSchema.CloseSessionRequest request);
+
+	}
+
+	/**
+	 * Synchronous functional interface for handling resume session requests.
+	 * Returns a plain value instead of Mono for use with sync agents.
+	 */
+	@FunctionalInterface
+	interface SyncResumeSessionHandler {
+
+		AcpSchema.ResumeSessionResponse handle(AcpSchema.ResumeSessionRequest request);
+
+	}
+
+	/**
 	 * Synchronous functional interface for handling cancel notifications.
 	 * Returns void instead of Mono for use with sync agents.
 	 */
@@ -367,6 +430,12 @@ public interface AcpAgent {
 		private SetSessionModeHandler setSessionModeHandler;
 
 		private SetSessionModelHandler setSessionModelHandler;
+
+		private ListSessionsHandler listSessionsHandler;
+
+		private CloseSessionHandler closeSessionHandler;
+
+		private ResumeSessionHandler resumeSessionHandler;
 
 		private CancelHandler cancelHandler;
 
@@ -457,6 +526,36 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the handler for list sessions requests.
+		 * @param handler The list sessions handler
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder listSessionsHandler(ListSessionsHandler handler) {
+			this.listSessionsHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Sets the handler for close session requests.
+		 * @param handler The close session handler
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder closeSessionHandler(CloseSessionHandler handler) {
+			this.closeSessionHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Sets the handler for resume session requests.
+		 * @param handler The resume session handler
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder resumeSessionHandler(ResumeSessionHandler handler) {
+			this.resumeSessionHandler = handler;
+			return this;
+		}
+
+		/**
 		 * Sets the handler for cancel notifications.
 		 * @param handler The cancel handler
 		 * @return This builder for chaining
@@ -473,7 +572,7 @@ public interface AcpAgent {
 		public AcpAsyncAgent build() {
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, initializeHandler, authenticateHandler,
 					newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler, setSessionModelHandler,
-					cancelHandler);
+					listSessionsHandler, closeSessionHandler, resumeSessionHandler, cancelHandler);
 		}
 
 	}
@@ -588,6 +687,36 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the synchronous handler for list sessions requests.
+		 * @param handler The sync list sessions handler (returns plain value)
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder listSessionsHandler(SyncListSessionsHandler handler) {
+			asyncBuilder.listSessionsHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
+		 * Sets the synchronous handler for close session requests.
+		 * @param handler The sync close session handler (returns plain value)
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder closeSessionHandler(SyncCloseSessionHandler handler) {
+			asyncBuilder.closeSessionHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
+		 * Sets the synchronous handler for resume session requests.
+		 * @param handler The sync resume session handler (returns plain value)
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder resumeSessionHandler(SyncResumeSessionHandler handler) {
+			asyncBuilder.resumeSessionHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
 		 * Sets the synchronous handler for cancel notifications.
 		 * @param handler The sync cancel handler (returns void)
 		 * @return This builder for chaining
@@ -662,6 +791,30 @@ public interface AcpAgent {
 		}
 
 		private static SetSessionModelHandler fromSync(SyncSetSessionModelHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static ListSessionsHandler fromSync(SyncListSessionsHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static CloseSessionHandler fromSync(SyncCloseSessionHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static ResumeSessionHandler fromSync(SyncResumeSessionHandler syncHandler) {
 			if (syncHandler == null) {
 				return null;
 			}

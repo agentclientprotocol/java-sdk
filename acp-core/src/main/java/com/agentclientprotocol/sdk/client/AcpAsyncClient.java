@@ -105,6 +105,15 @@ public class AcpAsyncClient {
 	private static final TypeRef<AcpSchema.SetSessionModelResponse> SET_SESSION_MODEL_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
+	private static final TypeRef<AcpSchema.ListSessionsResponse> LIST_SESSIONS_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<AcpSchema.CloseSessionResponse> CLOSE_SESSION_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<AcpSchema.ResumeSessionResponse> RESUME_SESSION_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
 	private static final TypeRef<AcpSchema.PromptResponse> PROMPT_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
@@ -312,6 +321,62 @@ public class AcpAsyncClient {
 				setModelRequest.sessionId());
 		return session.sendRequest(AcpSchema.METHOD_SESSION_SET_MODEL, setModelRequest,
 				SET_SESSION_MODEL_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Lists sessions known to the agent, optionally filtered by working directory.
+	 *
+	 * <p>
+	 * Results may be paginated. Use the {@code nextCursor} from the response to fetch
+	 * subsequent pages.
+	 * </p>
+	 * @param listSessionsRequest the list sessions request with optional cwd filter and cursor
+	 * @return a Mono emitting the list sessions response
+	 * @see AcpSchema#METHOD_SESSION_LIST
+	 */
+	public Mono<AcpSchema.ListSessionsResponse> listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
+		Assert.notNull(listSessionsRequest, "List sessions request must not be null");
+		logger.debug("Listing sessions");
+		return session.sendRequest(AcpSchema.METHOD_SESSION_LIST, listSessionsRequest,
+				LIST_SESSIONS_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Closes an active session, cancelling any in-flight work.
+	 *
+	 * <p>
+	 * The agent will cancel ongoing operations as if {@code session/cancel} had been
+	 * called, then free resources associated with the session.
+	 * </p>
+	 * @param closeSessionRequest the close session request with session ID
+	 * @return a Mono emitting the close session response
+	 * @see AcpSchema#METHOD_SESSION_CLOSE
+	 */
+	public Mono<AcpSchema.CloseSessionResponse> closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
+		Assert.notNull(closeSessionRequest, "Close session request must not be null");
+		logger.debug("Closing session: {}", closeSessionRequest.sessionId());
+		return session.sendRequest(AcpSchema.METHOD_SESSION_CLOSE, closeSessionRequest,
+				CLOSE_SESSION_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Resumes an existing session without replaying conversation history.
+	 *
+	 * <p>
+	 * Unlike {@link #loadSession}, this method does not replay previous messages.
+	 * It is useful for reconnecting to a still-running agent or when the client
+	 * manages history replay independently.
+	 * </p>
+	 * @param resumeSessionRequest the resume session request with session ID and cwd
+	 * @return a Mono emitting the resume session response
+	 * @see AcpSchema#METHOD_SESSION_RESUME
+	 */
+	public Mono<AcpSchema.ResumeSessionResponse> resumeSession(
+			AcpSchema.ResumeSessionRequest resumeSessionRequest) {
+		Assert.notNull(resumeSessionRequest, "Resume session request must not be null");
+		logger.debug("Resuming session: {}", resumeSessionRequest.sessionId());
+		return session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, resumeSessionRequest,
+				RESUME_SESSION_RESPONSE_TYPE_REF);
 	}
 
 	// --------------------------

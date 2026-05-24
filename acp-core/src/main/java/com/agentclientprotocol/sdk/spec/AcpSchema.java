@@ -94,6 +94,12 @@ public final class AcpSchema {
 
 	public static final String METHOD_SESSION_CANCEL = "session/cancel";
 
+	public static final String METHOD_SESSION_LIST = "session/list";
+
+	public static final String METHOD_SESSION_CLOSE = "session/close";
+
+	public static final String METHOD_SESSION_RESUME = "session/resume";
+
 	// ---------------------------
 	// Method Names (Client Methods - agent calls these)
 	// ---------------------------
@@ -412,6 +418,80 @@ public final class AcpSchema {
 	public record CancelNotification(@JsonProperty("sessionId") String sessionId) {
 	}
 
+	/**
+	 * List sessions request - lists all sessions, optionally filtered by working directory
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ListSessionsRequest(@JsonProperty("cwd") String cwd, @JsonProperty("cursor") String cursor,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ListSessionsRequest(String cwd) {
+			this(cwd, null, null);
+		}
+	}
+
+	/**
+	 * List sessions response
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ListSessionsResponse(@JsonProperty("sessions") List<SessionInfo> sessions,
+			@JsonProperty("nextCursor") String nextCursor,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ListSessionsResponse(List<SessionInfo> sessions) {
+			this(sessions, null, null);
+		}
+	}
+
+	/**
+	 * Close session request - closes a session and cancels in-flight work
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record CloseSessionRequest(@JsonProperty("sessionId") String sessionId,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public CloseSessionRequest(String sessionId) {
+			this(sessionId, null);
+		}
+	}
+
+	/**
+	 * Close session response
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record CloseSessionResponse(@JsonProperty("_meta") Map<String, Object> meta) {
+		public CloseSessionResponse() {
+			this(null);
+		}
+	}
+
+	/**
+	 * Resume session request - reconnects to existing session without replaying history
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ResumeSessionRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
+			@JsonProperty("mcpServers") List<McpServer> mcpServers,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ResumeSessionRequest(String sessionId, String cwd, List<McpServer> mcpServers) {
+			this(sessionId, cwd, mcpServers, null);
+		}
+	}
+
+	/**
+	 * Resume session response
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ResumeSessionResponse(@JsonProperty("modes") SessionModeState modes,
+			@JsonProperty("models") SessionModelState models,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ResumeSessionResponse(SessionModeState modes, SessionModelState models) {
+			this(modes, models, null);
+		}
+	}
+
 	// ---------------------------
 	// Client Methods (Agent → Client)
 	// ---------------------------
@@ -609,17 +689,28 @@ public final class AcpSchema {
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentCapabilities(@JsonProperty("loadSession") Boolean loadSession,
+			@JsonProperty("sessionCapabilities") SessionCapabilities sessionCapabilities,
 			@JsonProperty("mcpCapabilities") McpCapabilities mcpCapabilities,
 			@JsonProperty("promptCapabilities") PromptCapabilities promptCapabilities,
 			@JsonProperty("_meta") Map<String, Object> meta) {
 		public AgentCapabilities() {
-			this(false, new McpCapabilities(), new PromptCapabilities(), null);
+			this(false, null, new McpCapabilities(), new PromptCapabilities(), null);
 		}
 
 		public AgentCapabilities(Boolean loadSession, McpCapabilities mcpCapabilities,
 				PromptCapabilities promptCapabilities) {
-			this(loadSession, mcpCapabilities, promptCapabilities, null);
+			this(loadSession, null, mcpCapabilities, promptCapabilities, null);
 		}
+	}
+
+	/**
+	 * Session capabilities advertised by the agent. Presence of a non-null field
+	 * signals support for that session method.
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionCapabilities(@JsonProperty("list") Object list, @JsonProperty("close") Object close,
+			@JsonProperty("resume") Object resume) {
 	}
 
 	/**
@@ -648,6 +739,19 @@ public final class AcpSchema {
 	// ---------------------------
 	// Session Types
 	// ---------------------------
+
+	/**
+	 * Session information returned by session/list
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionInfo(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
+			@JsonProperty("title") String title, @JsonProperty("updatedAt") String updatedAt,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public SessionInfo(String sessionId, String cwd) {
+			this(sessionId, cwd, null, null, null);
+		}
+	}
 
 	/**
 	 * Session mode state

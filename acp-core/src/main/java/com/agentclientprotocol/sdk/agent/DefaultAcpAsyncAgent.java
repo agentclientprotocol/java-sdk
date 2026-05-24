@@ -52,6 +52,12 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.SetSessionModelHandler setSessionModelHandler;
 
+	private final AcpAgent.ListSessionsHandler listSessionsHandler;
+
+	private final AcpAgent.CloseSessionHandler closeSessionHandler;
+
+	private final AcpAgent.ResumeSessionHandler resumeSessionHandler;
+
 	private final AcpAgent.CancelHandler cancelHandler;
 
 	private volatile AcpAgentSession session;
@@ -65,7 +71,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			AcpAgent.InitializeHandler initializeHandler, AcpAgent.AuthenticateHandler authenticateHandler,
 			AcpAgent.NewSessionHandler newSessionHandler, AcpAgent.LoadSessionHandler loadSessionHandler,
 			AcpAgent.PromptHandler promptHandler, AcpAgent.SetSessionModeHandler setSessionModeHandler,
-			AcpAgent.SetSessionModelHandler setSessionModelHandler, AcpAgent.CancelHandler cancelHandler) {
+			AcpAgent.SetSessionModelHandler setSessionModelHandler,
+			AcpAgent.ListSessionsHandler listSessionsHandler, AcpAgent.CloseSessionHandler closeSessionHandler,
+			AcpAgent.ResumeSessionHandler resumeSessionHandler, AcpAgent.CancelHandler cancelHandler) {
 		this.transport = transport;
 		this.requestTimeout = requestTimeout;
 		this.initializeHandler = initializeHandler;
@@ -75,6 +83,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		this.promptHandler = promptHandler;
 		this.setSessionModeHandler = setSessionModeHandler;
 		this.setSessionModelHandler = setSessionModelHandler;
+		this.listSessionsHandler = listSessionsHandler;
+		this.closeSessionHandler = closeSessionHandler;
+		this.resumeSessionHandler = resumeSessionHandler;
 		this.cancelHandler = cancelHandler;
 	}
 
@@ -160,6 +171,36 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 							new TypeRef<AcpSchema.SetSessionModelRequest>() {
 							});
 					return setSessionModelHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// List sessions handler
+			if (listSessionsHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_SESSION_LIST, params -> {
+					AcpSchema.ListSessionsRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.ListSessionsRequest>() {
+							});
+					return listSessionsHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Close session handler
+			if (closeSessionHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_SESSION_CLOSE, params -> {
+					AcpSchema.CloseSessionRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.CloseSessionRequest>() {
+							});
+					return closeSessionHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Resume session handler
+			if (resumeSessionHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_SESSION_RESUME, params -> {
+					AcpSchema.ResumeSessionRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.ResumeSessionRequest>() {
+							});
+					return resumeSessionHandler.handle(request).cast(Object.class);
 				});
 			}
 

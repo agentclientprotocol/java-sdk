@@ -11,23 +11,33 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Cancel;
+import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
+import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.LoadSession;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
+import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
+import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SessionInfo;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
@@ -410,6 +420,130 @@ class AcpAgentSupportTest {
 		Thread.sleep(100);
 
 		assertThat(cancelledSessionId.get()).isEqualTo("cancel-session");
+	}
+
+	@Test
+	void listSessionsHandlerInvoked() throws Exception {
+		AtomicReference<String> requestedCwd = new AtomicReference<>();
+
+		@AcpAgent
+		class ListSessionsAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@ListSessions
+			ListSessionsResponse listSessions(ListSessionsRequest req) {
+				requestedCwd.set(req.cwd());
+				return new ListSessionsResponse(
+						List.of(new SessionInfo("session-1", "/workspace")));
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new ListSessionsAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		ListSessionsResponse resp = client.listSessions(new ListSessionsRequest("/workspace"))
+				.block(TIMEOUT);
+
+		assertThat(requestedCwd.get()).isEqualTo("/workspace");
+		assertThat(resp).isNotNull();
+		assertThat(resp.sessions()).hasSize(1);
+		assertThat(resp.sessions().get(0).sessionId()).isEqualTo("session-1");
+	}
+
+	@Test
+	void closeSessionHandlerInvoked() throws Exception {
+		AtomicReference<String> closedSessionId = new AtomicReference<>();
+
+		@AcpAgent
+		class CloseSessionAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@CloseSession
+			CloseSessionResponse closeSession(CloseSessionRequest req) {
+				closedSessionId.set(req.sessionId());
+				return new CloseSessionResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new CloseSessionAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		CloseSessionResponse resp = client.closeSession(new CloseSessionRequest("session-to-close"))
+				.block(TIMEOUT);
+
+		assertThat(closedSessionId.get()).isEqualTo("session-to-close");
+		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void resumeSessionHandlerInvoked() throws Exception {
+		AtomicReference<String> resumedSessionId = new AtomicReference<>();
+
+		@AcpAgent
+		class ResumeSessionAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@ResumeSession
+			ResumeSessionResponse resumeSession(ResumeSessionRequest req) {
+				resumedSessionId.set(req.sessionId());
+				return new ResumeSessionResponse(null, null);
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new ResumeSessionAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		ResumeSessionResponse resp = client
+				.resumeSession(new ResumeSessionRequest("existing-session", "/workspace", List.of()))
+				.block(TIMEOUT);
+
+		assertThat(resumedSessionId.get()).isEqualTo("existing-session");
+		assertThat(resp).isNotNull();
 	}
 
 	// Simple test agent
