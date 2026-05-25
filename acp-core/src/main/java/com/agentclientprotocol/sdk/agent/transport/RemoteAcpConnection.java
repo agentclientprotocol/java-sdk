@@ -154,6 +154,14 @@ public final class RemoteAcpConnection {
 
 		private final Sinks.Many<JSONRPCMessage> inboundSink = Sinks.many().unicast().onBackpressureBuffer();
 
+		/*
+		 * Streamable HTTP can deliver multiple POST requests for one ACP connection on
+		 * different server threads. Reactor unicast sinks require serialized producers,
+		 * so all transport-adapter ingress is funneled through this monitor before
+		 * emission.
+		 */
+		private final Object inboundEmitMonitor = new Object();
+
 		private final Sinks.One<Void> terminationSink = Sinks.one();
 
 		private final AtomicBoolean transportStarted = new AtomicBoolean(false);
@@ -190,9 +198,11 @@ public final class RemoteAcpConnection {
 			if (transportClosing.get()) {
 				throw new AcpConnectionException("Remote ACP connection is closing");
 			}
-			Sinks.EmitResult result = inboundSink.tryEmitNext(message);
-			if (result.isFailure()) {
-				throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
+			synchronized (inboundEmitMonitor) {
+				Sinks.EmitResult result = inboundSink.tryEmitNext(message);
+				if (result.isFailure()) {
+					throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
+				}
 			}
 		}
 
