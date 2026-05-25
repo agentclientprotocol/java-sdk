@@ -19,7 +19,6 @@
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
-        <module>test-fixtures/streamable-http-agent-server</module>
         <module>acp-websocket-jetty</module>
     </modules>
 
