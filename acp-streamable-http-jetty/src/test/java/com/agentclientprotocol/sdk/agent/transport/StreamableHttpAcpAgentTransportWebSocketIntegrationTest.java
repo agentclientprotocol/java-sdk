@@ -37,7 +37,9 @@ import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -205,6 +207,59 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 			finally {
 				firstClient.closeGracefully().block(TIMEOUT);
 				secondClient.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
+	void serializesConcurrentAgentMessagesOnOneWebSocketConnection() throws Exception {
+		AtomicInteger sessionCounter = new AtomicInteger();
+		AtomicInteger receivedUpdates = new AtomicInteger();
+		AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
+					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), List.of())))
+			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(
+					"sess-" + sessionCounter.incrementAndGet(), null, null)))
+			.promptHandler((request, context) -> Mono.delay(Duration.ofMillis(25))
+				.thenMany(Flux.range(0, 20)
+					.flatMap(i -> context.sendMessage(request.sessionId() + ": update-" + i)
+						.subscribeOn(Schedulers.parallel()), 8))
+				.then(Mono.just(AcpSchema.PromptResponse.endTurn())))
+			.build());
+
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			AcpAsyncClient client = AcpClient
+				.async(new WebSocketAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
+				.sessionUpdateConsumer(update -> {
+					receivedUpdates.incrementAndGet();
+					return Mono.empty();
+				})
+				.requestTimeout(TIMEOUT)
+				.build();
+			try {
+				client.initialize(new AcpSchema.InitializeRequest(
+						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+					.block(TIMEOUT);
+				AcpSchema.NewSessionResponse firstSession = client
+					.newSession(new AcpSchema.NewSessionRequest("/workspace/one", List.of()))
+					.block(TIMEOUT);
+				AcpSchema.NewSessionResponse secondSession = client
+					.newSession(new AcpSchema.NewSessionRequest("/workspace/two", List.of()))
+					.block(TIMEOUT);
+
+				var prompts = Mono.zip(
+						client.prompt(new AcpSchema.PromptRequest(firstSession.sessionId(),
+								List.of(new AcpSchema.TextContent("first")))),
+						client.prompt(new AcpSchema.PromptRequest(secondSession.sessionId(),
+								List.of(new AcpSchema.TextContent("second")))))
+					.block(TIMEOUT);
+
+				assertThat(prompts.getT1().stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+				assertThat(prompts.getT2().stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+				assertThat(receivedUpdates).hasValue(40);
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
 			}
 		}
 	}
