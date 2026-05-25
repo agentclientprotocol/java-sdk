@@ -935,6 +935,12 @@ public class StreamableHttpAcpAgentTransport {
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
+		private final Object outboundLock = new Object();
+
+		private final ArrayDeque<String> outboundQueue = new ArrayDeque<>();
+
+		private boolean outboundSendInProgress = false;
+
 		private volatile Session session;
 
 		WebSocketConnectionState(String id) {
@@ -970,23 +976,72 @@ public class StreamableHttpAcpAgentTransport {
 
 		void sendToClient(JSONRPCMessage message) {
 			try {
-				Session currentSession = this.session;
-				if (closed.get() || currentSession == null || !currentSession.isOpen()) {
-					throw new AcpConnectionException("Streamable ACP WebSocket connection is closed");
-				}
 				String payload = jsonMapper.writeValueAsString(message);
 				logger.debug("Sending streamable ACP WebSocket message: {}", payload);
-				currentSession.sendText(payload, Callback.from(() -> {
-					// Jetty requires an explicit success callback; there is no
-					// follow-up work after the frame has been accepted for writing.
-				}, error -> {
-					if (!closed.get()) {
-						remoteConnection.signalException(error);
-					}
-				}));
+				enqueueOutbound(payload);
 			}
 			catch (Exception e) {
 				remoteConnection.signalException(e);
+				close(StatusCode.SERVER_ERROR, "failed to send ACP message");
+			}
+		}
+
+		private void enqueueOutbound(String payload) {
+			boolean shouldDrain;
+			synchronized (outboundLock) {
+				if (closed.get()) {
+					throw new AcpConnectionException("Streamable ACP WebSocket connection is closed");
+				}
+				outboundQueue.addLast(payload);
+				shouldDrain = !outboundSendInProgress;
+				if (shouldDrain) {
+					outboundSendInProgress = true;
+				}
+			}
+			if (shouldDrain) {
+				drainOutbound();
+			}
+		}
+
+		private void drainOutbound() {
+			String payload;
+			Session currentSession;
+			synchronized (outboundLock) {
+				if (closed.get()) {
+					outboundQueue.clear();
+					outboundSendInProgress = false;
+					return;
+				}
+				payload = outboundQueue.pollFirst();
+				if (payload == null) {
+					outboundSendInProgress = false;
+					return;
+				}
+				currentSession = this.session;
+			}
+
+			if (currentSession == null || !currentSession.isOpen()) {
+				failOutbound(new AcpConnectionException("Streamable ACP WebSocket connection is closed"));
+				return;
+			}
+
+			try {
+				/*
+				 * Jetty WebSocket sessions do not allow overlapping writes. Agent messages can
+				 * be produced by concurrent prompt handlers, so this per-connection queue sends
+				 * exactly one frame at a time and advances only after Jetty completes the
+				 * callback for the previous frame.
+				 */
+				currentSession.sendText(payload, Callback.from(this::drainOutbound, this::failOutbound));
+			}
+			catch (Exception e) {
+				failOutbound(e);
+			}
+		}
+
+		private void failOutbound(Throwable error) {
+			if (!closed.get()) {
+				remoteConnection.signalException(error);
 				close(StatusCode.SERVER_ERROR, "failed to send ACP message");
 			}
 		}
@@ -998,6 +1053,10 @@ public class StreamableHttpAcpAgentTransport {
 		void close(int statusCode, String reason) {
 			if (!closed.compareAndSet(false, true)) {
 				return;
+			}
+			synchronized (outboundLock) {
+				outboundQueue.clear();
+				outboundSendInProgress = false;
 			}
 			webSocketConnections.remove(id, this);
 			Session currentSession = this.session;
