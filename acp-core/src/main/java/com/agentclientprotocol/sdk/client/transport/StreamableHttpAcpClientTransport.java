@@ -146,6 +146,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
+	/*
+	 * A streamable HTTP client may have one connection SSE reader and multiple session
+	 * SSE readers active at the same time. Reactor unicast sinks require serialized
+	 * producers, so every SSE reader emits through this monitor.
+	 */
+	private final Object inboundEmitMonitor = new Object();
+
 	private final AtomicBoolean connected = new AtomicBoolean(false);
 
 	private final AtomicBoolean initialized = new AtomicBoolean(false);
@@ -581,9 +588,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private Mono<Void> emitInbound(JSONRPCMessage message) {
 		return Mono.fromRunnable(() -> {
-			Sinks.EmitResult result = inboundSink.tryEmitNext(message);
-			if (result.isFailure()) {
-				throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
+			synchronized (inboundEmitMonitor) {
+				Sinks.EmitResult result = inboundSink.tryEmitNext(message);
+				if (result.isFailure()) {
+					throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
+				}
 			}
 		});
 	}
