@@ -387,7 +387,7 @@ agent.start().block();  // Starts WebSocket server on port 8080
 
 ```bash
 ./mvnw compile      # Compile
-./mvnw test         # Run unit tests (258 tests)
+./mvnw test         # Run tests
 ./mvnw verify       # Run unit tests + integration tests
 ./mvnw install      # Install to local Maven repository
 ```
@@ -405,7 +405,7 @@ export GEMINI_API_KEY=your_key_here
 **Test Categories:**
 | Type | Command | Count | Requirements |
 |------|---------|-------|--------------|
-| Unit tests | `./mvnw test` | 258 | None |
+| Unit tests | `./mvnw test` | 370+ | None |
 | Clean shutdown IT | `./mvnw verify` | 4 | None |
 | Gemini CLI IT | `./mvnw verify` | 5 | `GEMINI_API_KEY`, `gemini` CLI in PATH |
 
@@ -441,17 +441,37 @@ This SDK is part of the [Agent Client Protocol](https://agentclientprotocol.com/
 
 **ACP directories:** [Agents](https://agentclientprotocol.com/overview/agents) | [Clients](https://agentclientprotocol.com/overview/clients) | [Protocol spec](https://agentclientprotocol.com/protocol/overview)
 
-## Roadmap
+## Versioning
 
-### v0.11.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+This SDK tracks the [ACP protocol](https://agentclientprotocol.com/), which is evolving. We don't promise strict semver — when the protocol changes, the SDK changes. What we do commit to:
+
+- **Every breaking change is documented** in release notes. Nothing breaks silently.
+- **Deprecate before remove** where feasible.
+- **`@UnstableAcpApi`** marks protocol elements from `schema.unstable.json` — the most likely to change. But even stable APIs may change when the protocol requires it.
+
+If you need a stable target, pin to an exact version.
+
+## Releases
+
+### 0.12.0-SNAPSHOT (Latest)
+
+New stable methods: `session/list`, `session/close`, `session/resume`
+
+New unstable methods (marked `@UnstableAcpApi`): `elicitation/create`, `elicitation/complete`, `session/fork`, `session/set_config_option`
+
+```xml
+<repositories>
+    <repository>
+        <id>central-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <snapshots><enabled>true</enabled></snapshots>
+        <releases><enabled>false</enabled></releases>
+    </repository>
+</repositories>
+```
+
+### 0.11.0 (Stable — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 - Client and Agent SDKs with async/sync APIs
 - Stdio and WebSocket transports
-- Capability negotiation
-- Structured error handling
+- Capability negotiation, structured error handling
 - Full protocol compliance (all SessionUpdate types, MCP configs, `_meta` extensibility)
-- Own JSON abstraction layer (`AcpJsonMapper`) — no MCP SDK dependency
-- Pluggable JSON via `ServiceLoader` SPI
-
-### v1.0.0 (Planned)
-- Production hardening
-- Performance optimizations
