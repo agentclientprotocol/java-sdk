@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.11.0</version>
+    <version>0.12.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.11.0</version>
+    <version>0.12.0</version>
 </dependency>
 ```
 
@@ -48,8 +48,20 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.11.0</version>
+    <version>0.12.0</version>
 </dependency>
+```
+
+For snapshot builds (unreleased features), add the snapshot repository and use `0.13.0-SNAPSHOT`:
+```xml
+<repositories>
+    <repository>
+        <id>central-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <snapshots><enabled>true</enabled></snapshots>
+        <releases><enabled>false</enabled></releases>
+    </repository>
+</repositories>
 ```
 
 ---
@@ -453,24 +465,15 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.12.0-SNAPSHOT (Latest)
+### 0.12.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 New stable methods: `session/list`, `session/close`, `session/resume` ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-20-session-management))
 
 New unstable methods (marked `@UnstableAcpApi`): `elicitation/create`, `elicitation/complete` ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-31-elicitation)), `session/fork`, `session/set_config_option`
 
-```xml
-<repositories>
-    <repository>
-        <id>central-snapshots</id>
-        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
-        <snapshots><enabled>true</enabled></snapshots>
-        <releases><enabled>false</enabled></releases>
-    </repository>
-</repositories>
-```
+New `@UnstableAcpApi` annotation for protocol stability signaling (CLASS retention, aligns with JDK `@PreviewFeature`)
 
-### 0.11.0 (Stable — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.11.0
 - Client and Agent SDKs with async/sync APIs
 - Stdio and WebSocket transports
 - Capability negotiation, structured error handling
