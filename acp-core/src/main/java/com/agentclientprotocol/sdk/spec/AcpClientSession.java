@@ -148,7 +148,7 @@ public class AcpClientSession implements AcpSession {
 					return t;
 				}), "acp-timeout-" + sessionPrefix);
 
-		this.transport.connect(mono -> mono.doOnNext(this::handle)).transform(connectHook).subscribe();
+		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty())).transform(connectHook).subscribe();
 	}
 
 	private void dismissPendingResponses() {
