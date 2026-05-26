@@ -455,9 +455,9 @@ If you need a stable target, pin to an exact version.
 
 ### 0.12.0-SNAPSHOT (Latest)
 
-New stable methods: `session/list`, `session/close`, `session/resume`
+New stable methods: `session/list`, `session/close`, `session/resume` ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-20-session-management))
 
-New unstable methods (marked `@UnstableAcpApi`): `elicitation/create`, `elicitation/complete`, `session/fork`, `session/set_config_option`
+New unstable methods (marked `@UnstableAcpApi`): `elicitation/create`, `elicitation/complete` ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-31-elicitation)), `session/fork`, `session/set_config_option`
 
 ```xml
 <repositories>
