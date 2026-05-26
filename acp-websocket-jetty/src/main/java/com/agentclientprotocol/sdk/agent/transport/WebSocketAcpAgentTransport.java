@@ -174,6 +174,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			// Set up WebSocket handler
 			WebSocketUpgradeHandler wsHandler = WebSocketUpgradeHandler.from(server, container -> {
 				container.setIdleTimeout(idleTimeout);
+				container.setMaxTextMessageSize(4 * 1024 * 1024); // 4MB — agent messages can include file contents
 				container.addMapping(path, (request, response, callback) -> new AcpWebSocketEndpoint());
 			});
 			server.setHandler(wsHandler);
