@@ -148,8 +148,6 @@ public class AcpClientSession implements AcpSession {
 					return t;
 				}), "acp-timeout-" + sessionPrefix);
 
-		this.transport.setExceptionHandler(this::handleTransportException);
-
 		/*
 		 * Client transports currently retain a compatibility path that may forward any
 		 * message emitted by this handler back onto the wire. The session handles outbound
@@ -160,14 +158,6 @@ public class AcpClientSession implements AcpSession {
 		 * the default client session has no message to return through that path.
 		 */
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty())).transform(connectHook).subscribe();
-	}
-
-	private void handleTransportException(Throwable error) {
-		this.pendingResponses.forEach((id, sink) -> {
-			logger.warn("Terminating exchange for request {} after transport error", id, error);
-			sink.error(error);
-		});
-		this.pendingResponses.clear();
 	}
 
 	private void dismissPendingResponses() {
