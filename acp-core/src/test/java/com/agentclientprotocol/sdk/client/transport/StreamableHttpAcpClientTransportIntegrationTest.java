@@ -177,7 +177,6 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 			assertThatThrownBy(() -> client
 				.prompt(AcpTestFixtures.createPromptRequest(session.sessionId(), "wrong stream"))
 				.block(TIMEOUT))
-				.isInstanceOf(AcpConnectionException.class)
 				.hasMessageContaining("arrived on RouteScope");
 
 			client.closeGracefully().block(TIMEOUT);

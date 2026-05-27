@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
@@ -64,6 +65,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private static final String CONTENT_TYPE_JSON = "application/json";
 
 	private static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
+
+	private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
 
 	/**
 	 * Controls how unknown outbound request / notification methods are classified.
@@ -167,7 +170,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final Map<String, SseStream> sessionStreams = new ConcurrentHashMap<>();
 
-	// Session id -> shared open operation so callers reuse one GET while the stream lives.
+	// Session id -> shared open operation so callers reuse one GET while opening.
 	private final Map<String, Mono<Void>> sessionStreamOpenOperations = new ConcurrentHashMap<>();
 
 	private volatile SseStream connectionStream;
@@ -416,7 +419,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return openSseStream(RouteScope.session(sessionId))
 			.doOnSuccess(stream -> sessionStreams.putIfAbsent(sessionId, stream))
 			.then()
-			.doOnError(error -> sessionStreamOpenOperations.remove(sessionId))
+			.doFinally(signal -> sessionStreamOpenOperations.remove(sessionId))
 			.cache();
 	}
 
@@ -554,24 +557,19 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private Mono<Void> processInbound(RouteScope actualScope, JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
 			OutboundRequestRoute expectedRoute = outboundRequestRoutes.get(response.id());
-			if (expectedRoute != null && !Objects.equals(expectedRoute.responseScope(), actualScope)) {
-				return Mono.error(new AcpConnectionException("Response id " + response.id() + " arrived on "
-						+ actualScope + " but expected " + expectedRoute.responseScope()));
-			}
-			if (expectedRoute != null && expectedRoute.kind() == RequestKind.SESSION_NEW) {
-				AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(response.result(),
-						new TypeRef<AcpSchema.NewSessionResponse>() {
-						});
-				String sessionId = sessionResponse.sessionId();
-				if (sessionId == null || sessionId.isBlank()) {
-					return Mono.error(new AcpConnectionException("session/new response missing sessionId"));
-				}
-				return openSessionStream(sessionId)
-					.then(Mono.fromRunnable(() -> outboundRequestRoutes.remove(response.id())))
-					.then(emitInbound(message));
-			}
 			if (expectedRoute != null) {
-				outboundRequestRoutes.remove(response.id());
+				Mono<Void> processedResponse;
+				if (!Objects.equals(expectedRoute.responseScope(), actualScope)) {
+					processedResponse = emitInbound(errorResponse(response.id(), "Response id " + response.id()
+							+ " arrived on " + actualScope + " but expected " + expectedRoute.responseScope(), null));
+				}
+				else if (expectedRoute.kind() == RequestKind.SESSION_NEW) {
+					processedResponse = processNewSessionResponse(response);
+				}
+				else {
+					processedResponse = emitInbound(message);
+				}
+				return processedResponse.doFinally(signal -> outboundRequestRoutes.remove(response.id()));
 			}
 			return emitInbound(message);
 		}
@@ -584,6 +582,36 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		}
 
 		return emitInbound(message);
+	}
+
+	private Mono<Void> processNewSessionResponse(AcpSchema.JSONRPCResponse response) {
+		if (response.error() != null) {
+			return emitInbound(response);
+		}
+
+		String sessionId;
+		try {
+			AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(response.result(),
+					new TypeRef<AcpSchema.NewSessionResponse>() {
+					});
+			sessionId = sessionResponse.sessionId();
+		}
+		catch (Exception e) {
+			return emitInbound(errorResponse(response.id(), "Failed to read session/new response", e));
+		}
+		if (sessionId == null || sessionId.isBlank()) {
+			return emitInbound(errorResponse(response.id(), "session/new response missing sessionId", null));
+		}
+		return openSessionStream(sessionId)
+			.then(emitInbound(response))
+			.onErrorResume(error -> emitInbound(errorResponse(response.id(),
+					"Failed to open session SSE stream for session " + sessionId, error)));
+	}
+
+	private AcpSchema.JSONRPCResponse errorResponse(Object id, String message, Throwable error) {
+		Object data = error == null ? null : error.getMessage();
+		return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
+				new AcpSchema.JSONRPCError(AcpErrorCodes.INTERNAL_ERROR, message, data));
 	}
 
 	private Mono<Void> emitInbound(JSONRPCMessage message) {
@@ -622,6 +650,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 			return deleteRequest.doFinally(signal -> clearState());
 		});
+	}
+
+	@Override
+	public void close() {
+		closeGracefully().block(CLOSE_TIMEOUT);
 	}
 
 	private void clearState() {
@@ -722,7 +755,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			}
 			catch (Exception e) {
 				if (!closed.get() && !closing.get()) {
-					exceptionHandler.accept(e);
+					logger.warn("SSE reader stopped for {}", scope, e);
 				}
 			}
 		}
@@ -733,11 +766,16 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			}
 			try {
 				JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, dataBuffer.toString());
-				processInbound(scope, message).block(Duration.ofSeconds(30));
+				processInbound(scope, message).subscribe(v -> {
+				}, error -> {
+					if (!closed.get() && !closing.get()) {
+						logger.warn("Failed to process SSE event from {}", scope, error);
+					}
+				});
 			}
 			catch (Exception e) {
 				if (!closed.get() && !closing.get()) {
-					exceptionHandler.accept(e);
+					logger.warn("Failed to deserialize SSE event from {}", scope, e);
 				}
 			}
 		}

@@ -219,6 +219,34 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
+	void replayOverflowClosesConnectionInsteadOfDroppingMessages() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			HttpResponse<String> initialize = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Content-Type", "application/json")
+				.header("Accept", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString("""
+						{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+						"""))
+				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			String connectionId = initialize.headers().firstValue("Acp-Connection-Id").orElseThrow();
+
+			for (int i = 0; i < 1025; i++) {
+				HttpResponse<String> response = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":"new-%d","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+								""".formatted(i));
+				if (response.statusCode() == 404) {
+					break;
+				}
+				assertThat(response.statusCode()).isEqualTo(202);
+			}
+
+			assertEventuallyPostStatus(rawClient, server.endpoint(), connectionId, 404);
+		}
+	}
+
+	@Test
 	void strictModeRejectsUnknownSessionStream() throws Exception {
 		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.STRICT)) {
 			HttpResponse<Void> response = HttpClient.newHttpClient()
@@ -254,6 +282,23 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			builder.header("Acp-Session-Id", sessionId);
 		}
 		return client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+	}
+
+	private static void assertEventuallyPostStatus(HttpClient client, URI endpoint, String connectionId, int expectedStatus)
+			throws Exception {
+		long deadline = System.nanoTime() + TIMEOUT.toNanos();
+		int id = 0;
+		while (System.nanoTime() < deadline) {
+			HttpResponse<String> response = postJson(client, endpoint, connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":"overflow-probe-%d","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+							""".formatted(id++));
+			if (response.statusCode() == expectedStatus) {
+				return;
+			}
+			Thread.sleep(25);
+		}
+		throw new AssertionError("Timed out waiting for stream status " + expectedStatus);
 	}
 
 	private static final class FixtureServer implements AutoCloseable {

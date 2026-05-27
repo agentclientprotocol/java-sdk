@@ -581,9 +581,11 @@ public class StreamableHttpAcpAgentTransport {
 		}
 
 		void close() {
+			connections.remove(id, this);
 			connectionStream.close();
 			sessionStreams.values().forEach(OutboundStream::close);
-			connection.closeGracefully().subscribe();
+			connection.closeGracefully().subscribe(v -> {
+			}, error -> logger.warn("Error closing Streamable HTTP ACP connection {}", id, error));
 		}
 
 		private void routeAgentMessage(JSONRPCMessage message) {
@@ -605,6 +607,7 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			catch (Exception e) {
 				connection.signalException(e);
+				close();
 			}
 		}
 
@@ -839,7 +842,8 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			if (replayOpen) {
 				if (replay.size() == MAX_REPLAY_EVENTS) {
-					replay.removeFirst();
+					throw new AcpConnectionException(
+							"Outbound SSE replay buffer exceeded " + MAX_REPLAY_EVENTS + " events");
 				}
 				replay.addLast(payload);
 				return;
@@ -996,7 +1000,8 @@ public class StreamableHttpAcpAgentTransport {
 			if (currentSession != null && currentSession.isOpen()) {
 				currentSession.close(statusCode, reason, Callback.NOOP);
 			}
-			remoteConnection.closeGracefully().subscribe();
+			remoteConnection.closeGracefully().subscribe(v -> {
+			}, error -> logger.warn("Error closing Streamable ACP WebSocket connection {}", id, error));
 		}
 
 		private final class SerializedWebSocketSender {
