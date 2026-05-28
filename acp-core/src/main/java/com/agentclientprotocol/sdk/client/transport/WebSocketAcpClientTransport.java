@@ -166,13 +166,6 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		this.inboundSink.asFlux()
 			.flatMap(message -> Mono.just(message).transform(handler))
 			.doOnNext(response -> {
-				/*
-				 * Compatibility note:
-				 * AcpClientSession currently sends client responses explicitly through
-				 * sendMessage(...), but this transport has also historically forwarded any
-				 * message emitted by the registered handler. Keep the behavior for parity
-				 * until the client-side transport contract is clarified.
-				 */
 				if (response != null) {
 					this.outboundSink.tryEmitNext(response);
 				}
