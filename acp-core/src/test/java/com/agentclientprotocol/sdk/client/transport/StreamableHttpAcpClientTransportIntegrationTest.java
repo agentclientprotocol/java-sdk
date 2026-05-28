@@ -26,6 +26,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.AcpTestFixtures;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
@@ -111,6 +112,7 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 			assertThat(prompt.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 			assertThat(permissionRequests).hasValue(1);
 			assertThat(fixture.permissionResponseReceived()).isTrue();
+			assertThat(fixture.permissionResponseSessionHeader()).isEqualTo(session.sessionId());
 
 			client.closeGracefully().block(TIMEOUT);
 		}
@@ -221,6 +223,8 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 
 		private final AtomicBoolean permissionResponseReceived = new AtomicBoolean(false);
 
+		private final AtomicReference<String> permissionResponseSessionHeader = new AtomicReference<>();
+
 		private final AtomicBoolean sessionLoadStreamWasOpenBeforePost = new AtomicBoolean(false);
 
 		private final CompletableFuture<AcpSchema.JSONRPCResponse> permissionResponse = new CompletableFuture<>();
@@ -258,6 +262,10 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 
 		boolean permissionResponseReceived() {
 			return permissionResponseReceived.get();
+		}
+
+		String permissionResponseSessionHeader() {
+			return permissionResponseSessionHeader.get();
 		}
 
 		boolean sessionLoadStreamWasOpenBeforePost() {
@@ -316,6 +324,7 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 		private void handleAcceptedMessage(AcpSchema.JSONRPCMessage message, String sessionHeader) {
 			if (message instanceof AcpSchema.JSONRPCResponse response) {
 				permissionResponseReceived.set(true);
+				permissionResponseSessionHeader.set(sessionHeader);
 				permissionResponse.complete(response);
 				return;
 			}

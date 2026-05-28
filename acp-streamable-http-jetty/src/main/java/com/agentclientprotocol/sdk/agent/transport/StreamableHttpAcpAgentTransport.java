@@ -475,7 +475,8 @@ public class StreamableHttpAcpAgentTransport {
 	private boolean hasContentType(HttpServletRequest request, String expected) {
 		return Optional.ofNullable(request.getContentType())
 			.map(String::toLowerCase)
-			.filter(contentType -> contentType.contains(expected))
+			.map(contentType -> contentType.split(";", 2)[0].trim())
+			.filter(contentType -> contentType.equals(expected))
 			.isPresent();
 	}
 
