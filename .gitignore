@@ -77,6 +77,4 @@ replay_pid*
 
 ### Planning and Internal Documentation ###
 plans/*
-!plans/STREAMABLE-HTTP-TRANSPORT.md
-!plans/STREAMABLE-HTTP-AGENT-TRANSPORT.md
 learnings/
