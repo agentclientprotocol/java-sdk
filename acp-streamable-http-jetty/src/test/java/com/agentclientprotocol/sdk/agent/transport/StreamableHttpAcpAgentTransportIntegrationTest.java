@@ -17,8 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -153,14 +155,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	void wrongStreamClientResponseIsRejected() throws Exception {
 		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
 			HttpClient rawClient = HttpClient.newHttpClient();
-			HttpResponse<String> initialize = rawClient.send(HttpRequest.newBuilder(server.endpoint())
-				.header("Content-Type", "application/json")
-				.header("Accept", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString("""
-						{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
-						"""))
-				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-			String connectionId = initialize.headers().firstValue("Acp-Connection-Id").orElseThrow();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
 			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
 				postJson(rawClient, server.endpoint(), connectionId, null,
 						"""
@@ -194,8 +189,19 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	void validationFailuresUseHttpStatusCodes() throws Exception {
 		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
 			HttpClient rawClient = HttpClient.newHttpClient();
+			HttpResponse<String> jsonWithCharset = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Content-Type", "application/json; charset=utf-8")
+				.header("Accept", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString("""
+						{"jsonrpc":"2.0","id":"init-charset","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+						"""))
+				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			HttpResponse<String> unsupportedContentType = rawClient.send(HttpRequest.newBuilder(server.endpoint())
 				.header("Content-Type", "text/plain")
+				.POST(HttpRequest.BodyPublishers.ofString("{}"))
+				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			HttpResponse<String> invalidJsonContentType = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Content-Type", "application/jsonfoobar")
 				.POST(HttpRequest.BodyPublishers.ofString("{}"))
 				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			HttpResponse<String> batch = rawClient.send(HttpRequest.newBuilder(server.endpoint())
@@ -211,7 +217,9 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				.GET()
 				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
+			assertThat(jsonWithCharset.statusCode()).isEqualTo(200);
 			assertThat(unsupportedContentType.statusCode()).isEqualTo(415);
+			assertThat(invalidJsonContentType.statusCode()).isEqualTo(415);
 			assertThat(batch.statusCode()).isEqualTo(501);
 			assertThat(wrongAccept.statusCode()).isEqualTo(406);
 			assertThat(missingConnection.statusCode()).isEqualTo(400);
@@ -219,17 +227,167 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
+	void connectionReplayDeliversSessionNewWhenSseAttachesAfterPost() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+
+			HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":"new-replay","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+							""");
+			assertThat(accepted.statusCode()).isEqualTo(202);
+
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				AcpSchema.JSONRPCResponse response = connectionStream.nextResponse();
+				assertThat(response.id()).isEqualTo("new-replay");
+				AcpSchema.NewSessionResponse session = JSON_MAPPER.convertValue(response.result(),
+						new TypeRef<AcpSchema.NewSessionResponse>() {
+						});
+				assertThat(session.sessionId()).isEqualTo("sess-1");
+			}
+		}
+	}
+
+	@Test
+	void sessionReplayDeliversPromptEventsWhenSseAttachesAfterPost() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+
+			HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, sessionId,
+					"""
+							{"jsonrpc":"2.0","id":"prompt-replay","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"hello"}]}}
+							""".formatted(sessionId));
+			assertThat(accepted.statusCode()).isEqualTo(202);
+
+			try (SseReader sessionStream = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId)) {
+				AcpSchema.JSONRPCMessage update = sessionStream.nextMessage();
+				AcpSchema.JSONRPCResponse response = sessionStream.nextResponse();
+
+				assertThat(update).isInstanceOf(AcpSchema.JSONRPCNotification.class);
+				assertThat(((AcpSchema.JSONRPCNotification) update).method()).isEqualTo(AcpSchema.METHOD_SESSION_UPDATE);
+				assertThat(response.id()).isEqualTo("prompt-replay");
+			}
+		}
+	}
+
+	@Test
+	void concurrentPostsToSameConnectionAreBothAcceptedAndRouted() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			ExecutorService executor = Executors.newFixedThreadPool(2);
+			CountDownLatch start = new CountDownLatch(1);
+			try {
+				Future<HttpResponse<String>> first = executor.submit(() -> {
+					start.await();
+					return postJson(rawClient, server.endpoint(), connectionId, null,
+							"""
+									{"jsonrpc":"2.0","id":"new-concurrent-1","method":"session/new","params":{"cwd":"/workspace/one","mcpServers":[]}}
+									""");
+				});
+				Future<HttpResponse<String>> second = executor.submit(() -> {
+					start.await();
+					return postJson(rawClient, server.endpoint(), connectionId, null,
+							"""
+									{"jsonrpc":"2.0","id":"new-concurrent-2","method":"session/new","params":{"cwd":"/workspace/two","mcpServers":[]}}
+									""");
+				});
+
+				start.countDown();
+				assertThat(first.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).statusCode()).isEqualTo(202);
+				assertThat(second.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).statusCode()).isEqualTo(202);
+
+				try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+					assertThat(List.of(connectionStream.nextResponse().id(), connectionStream.nextResponse().id()))
+						.containsExactlyInAnyOrder("new-concurrent-1", "new-concurrent-2");
+				}
+			}
+			finally {
+				executor.shutdownNow();
+			}
+		}
+	}
+
+	@Test
+	void sessionScopedMessagesValidateSessionHeader() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+
+			HttpResponse<String> missingHeader = postJson(rawClient, server.endpoint(), connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":"prompt-missing-header","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"hello"}]}}
+							""".formatted(sessionId));
+			HttpResponse<String> mismatchedHeader = postJson(rawClient, server.endpoint(), connectionId, "other-session",
+					"""
+							{"jsonrpc":"2.0","id":"prompt-mismatched-header","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"hello"}]}}
+							""".formatted(sessionId));
+			HttpResponse<String> missingParam = postJson(rawClient, server.endpoint(), connectionId, sessionId,
+					"""
+							{"jsonrpc":"2.0","id":"prompt-missing-param","method":"session/prompt","params":{"prompt":[{"type":"text","text":"hello"}]}}
+							""");
+			HttpResponse<String> cancelMissingHeader = postJson(rawClient, server.endpoint(), connectionId, null,
+					"""
+							{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"%s"}}
+							""".formatted(sessionId));
+			HttpResponse<String> cancelMismatchedHeader = postJson(rawClient, server.endpoint(), connectionId,
+					"other-session",
+					"""
+							{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"%s"}}
+							""".formatted(sessionId));
+
+			assertThat(missingHeader.statusCode()).isEqualTo(400);
+			assertThat(mismatchedHeader.statusCode()).isEqualTo(400);
+			assertThat(missingParam.statusCode()).isEqualTo(400);
+			assertThat(cancelMissingHeader.statusCode()).isEqualTo(400);
+			assertThat(cancelMismatchedHeader.statusCode()).isEqualTo(400);
+		}
+	}
+
+	@Test
+	void deleteClosesSseAndRemovesConnection() throws Exception {
+		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> deleted = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+					.header("Acp-Connection-Id", connectionId)
+					.DELETE()
+					.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+				assertThat(deleted.statusCode()).isEqualTo(202);
+				assertThat(connectionStream.awaitClosed()).isTrue();
+
+				HttpResponse<String> postAfterDelete = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":"new-after-delete","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+								""");
+				HttpResponse<Void> getAfterDelete = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+					.header("Accept", "text/event-stream")
+					.header("Acp-Connection-Id", connectionId)
+					.GET()
+					.build(), HttpResponse.BodyHandlers.discarding());
+				HttpResponse<Void> deleteAfterDelete = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+					.header("Acp-Connection-Id", connectionId)
+					.DELETE()
+					.build(), HttpResponse.BodyHandlers.discarding());
+
+				assertThat(postAfterDelete.statusCode()).isEqualTo(404);
+				assertThat(getAfterDelete.statusCode()).isEqualTo(404);
+				assertThat(deleteAfterDelete.statusCode()).isEqualTo(404);
+			}
+		}
+	}
+
+	@Test
 	void replayOverflowClosesConnectionInsteadOfDroppingMessages() throws Exception {
 		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
 			HttpClient rawClient = HttpClient.newHttpClient();
-			HttpResponse<String> initialize = rawClient.send(HttpRequest.newBuilder(server.endpoint())
-				.header("Content-Type", "application/json")
-				.header("Accept", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString("""
-						{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
-						"""))
-				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-			String connectionId = initialize.headers().firstValue("Acp-Connection-Id").orElseThrow();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
 
 			for (int i = 0; i < 1025; i++) {
 				HttpResponse<String> response = postJson(rawClient, server.endpoint(), connectionId, null,
@@ -268,6 +426,33 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 			assertThat(response.statusCode()).isEqualTo(200);
 			assertThat(unknownSession.statusCode()).isEqualTo(404);
+		}
+	}
+
+	private static String initializeRaw(HttpClient client, URI endpoint) throws Exception {
+		HttpResponse<String> initialize = client.send(HttpRequest.newBuilder(endpoint)
+			.header("Content-Type", "application/json")
+			.header("Accept", "application/json")
+			.POST(HttpRequest.BodyPublishers.ofString("""
+					{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+					"""))
+			.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		assertThat(initialize.statusCode()).isEqualTo(200);
+		return initialize.headers().firstValue("Acp-Connection-Id").orElseThrow();
+	}
+
+	private static String createSession(HttpClient client, URI endpoint, String connectionId) throws Exception {
+		try (SseReader connectionStream = SseReader.open(client, endpoint, connectionId, null)) {
+			HttpResponse<String> accepted = postJson(client, endpoint, connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":"new-helper","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+							""");
+			assertThat(accepted.statusCode()).isEqualTo(202);
+			AcpSchema.JSONRPCResponse response = connectionStream.nextResponse();
+			AcpSchema.NewSessionResponse session = JSON_MAPPER.convertValue(response.result(),
+					new TypeRef<AcpSchema.NewSessionResponse>() {
+					});
+			return session.sessionId();
 		}
 	}
 
@@ -352,6 +537,8 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 		private final BlockingQueue<AcpSchema.JSONRPCMessage> messages = new LinkedBlockingQueue<>();
 
+		private final CountDownLatch closed = new CountDownLatch(1);
+
 		private final InputStream body;
 
 		private final ExecutorService executor;
@@ -387,10 +574,14 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			return (AcpSchema.JSONRPCRequest) nextMessage();
 		}
 
-		private AcpSchema.JSONRPCMessage nextMessage() throws Exception {
+		AcpSchema.JSONRPCMessage nextMessage() throws Exception {
 			AcpSchema.JSONRPCMessage message = messages.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 			assertThat(message).isNotNull();
 			return message;
+		}
+
+		boolean awaitClosed() throws InterruptedException {
+			return closed.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 		}
 
 		private void readLoop() {
@@ -408,6 +599,9 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				}
 			}
 			catch (Exception ignored) {
+			}
+			finally {
+				closed.countDown();
 			}
 		}
 

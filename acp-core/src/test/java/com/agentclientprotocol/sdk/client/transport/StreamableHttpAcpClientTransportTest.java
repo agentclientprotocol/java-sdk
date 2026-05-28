@@ -18,7 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -289,8 +293,152 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	@Test
+	void concurrentSessionSseEventsAreSerializedIntoInboundSink() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		Map<String, PipedOutputStream> sessionWriters = new ConcurrentHashMap<>();
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method())
+					&& request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"),
+						initializeResponse));
+			}
+			if ("GET".equals(request.method())
+					&& request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+			}
+			if ("GET".equals(request.method())) {
+				String sessionId = request.headers().firstValue("Acp-Session-Id").orElseThrow();
+				try {
+					PipedInputStream sessionBody = new PipedInputStream(16 * 1024);
+					PipedOutputStream writer = new PipedOutputStream(sessionBody);
+					sessionWriters.put(sessionId, writer);
+					return CompletableFuture.completedFuture(
+							response(200, Map.of("Content-Type", "text/event-stream"), sessionBody));
+				}
+				catch (Exception e) {
+					CompletableFuture<HttpResponse<InputStream>> failed = new CompletableFuture<>();
+					failed.completeExceptionally(e);
+					return failed;
+				}
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+			awaitResponse(inboundMessages, "init-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_LOAD, "load-1",
+					new AcpSchema.LoadSessionRequest("sess-1", "/workspace/one", List.of())))
+				.block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_LOAD, "load-2",
+					new AcpSchema.LoadSessionRequest("sess-2", "/workspace/two", List.of())))
+				.block();
+
+			Future<?> first = executor.submit(() -> {
+				writeSessionUpdates(sessionWriters.get("sess-1"), "sess-1", 50);
+				return null;
+			});
+			Future<?> second = executor.submit(() -> {
+				writeSessionUpdates(sessionWriters.get("sess-2"), "sess-2", 50);
+				return null;
+			});
+			first.get(1, TimeUnit.SECONDS);
+			second.get(1, TimeUnit.SECONDS);
+
+			awaitNotifications(inboundMessages, 100);
+		}
+		finally {
+			sessionWriters.values().forEach(writer -> {
+				try {
+					writer.close();
+				}
+				catch (Exception ignored) {
+				}
+			});
+			executor.shutdownNow();
+			transport.close();
+		}
+	}
+
+	@Test
+	void malformedSseEventDoesNotStopConnectionReader() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method())
+					&& request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"),
+						initializeResponse));
+			}
+			if ("GET".equals(request.method())
+					&& request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+			awaitResponse(inboundMessages, "init-1");
+
+			writeRawSse(connectionStreamWriter, "{ nope");
+			transport.sendMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "ping-1",
+					"extension/ping", Map.of()))
+				.block();
+			writeSse(connectionStreamWriter, AcpTestFixtures.createJsonRpcResponse("ping-1", Map.of()));
+
+			assertThat(awaitResponse(inboundMessages, "ping-1")).isNotNull();
+		}
+		finally {
+			connectionStreamWriter.close();
+			transport.close();
+		}
+	}
+
+	private void writeSessionUpdates(PipedOutputStream writer, String sessionId, int count) throws Exception {
+		for (int i = 0; i < count; i++) {
+			writeSse(writer, new AcpSchema.JSONRPCNotification(AcpSchema.METHOD_SESSION_UPDATE,
+					new AcpSchema.SessionNotification(sessionId,
+							new AcpSchema.AgentMessageChunk("agent_message_chunk",
+									new AcpSchema.TextContent(sessionId + "-" + i)))));
+		}
+	}
+
 	private void writeSse(PipedOutputStream writer, AcpSchema.JSONRPCMessage message) throws Exception {
 		writer.write(("data: " + jsonMapper.writeValueAsString(message) + "\n\n").getBytes(StandardCharsets.UTF_8));
+		writer.flush();
+	}
+
+	private void writeRawSse(PipedOutputStream writer, String data) throws Exception {
+		writer.write(("data: " + data + "\n\n").getBytes(StandardCharsets.UTF_8));
 		writer.flush();
 	}
 
@@ -304,6 +452,22 @@ class StreamableHttpAcpClientTransportTest {
 			}
 		}
 		throw new AssertionError("Timed out waiting for response " + id);
+	}
+
+	private void awaitNotifications(BlockingQueue<AcpSchema.JSONRPCMessage> messages, int expected) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+		int count = 0;
+		while (System.nanoTime() < deadline) {
+			AcpSchema.JSONRPCMessage message = messages.poll(50, TimeUnit.MILLISECONDS);
+			if (message instanceof AcpSchema.JSONRPCNotification notification
+					&& AcpSchema.METHOD_SESSION_UPDATE.equals(notification.method())) {
+				count++;
+				if (count == expected) {
+					return;
+				}
+			}
+		}
+		throw new AssertionError("Timed out waiting for " + expected + " notifications; received " + count);
 	}
 
 	private InputStream emptyBody() {
