@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
@@ -178,11 +179,11 @@ class AcpAgentSessionTest {
 			Thread.sleep(100);
 
 			// Manually set active prompt to simulate an in-progress prompt
-			// We use reflection to access the activePrompt field for testing
-			java.lang.reflect.Field activePromptField = AcpAgentSession.class.getDeclaredField("activePrompt");
-			activePromptField.setAccessible(true);
+			// We use reflection to access the activePrompts field for testing
+			java.lang.reflect.Field activePromptsField = AcpAgentSession.class.getDeclaredField("activePrompts");
+			activePromptsField.setAccessible(true);
 			@SuppressWarnings("unchecked")
-			AtomicReference<Object> activePromptRef = (AtomicReference<Object>) activePromptField.get(session);
+			ConcurrentHashMap<String, Object> activePromptsRef = (ConcurrentHashMap<String, Object>) activePromptsField.get(session);
 
 			// Create an ActivePrompt instance using reflection
 			Class<?> activePromptClass = Class.forName(
@@ -191,7 +192,7 @@ class AcpAgentSessionTest {
 					Object.class);
 			constructor.setAccessible(true);
 			Object activePrompt = constructor.newInstance("session-1", "existing-request-id");
-			activePromptRef.set(activePrompt);
+			activePromptsRef.put("session-1", activePrompt);
 
 			// Verify active prompt is set
 			assertThat(session.hasActivePrompt()).isTrue();
@@ -246,10 +247,10 @@ class AcpAgentSessionTest {
 			assertThat(session.getActivePromptSessionId()).isNull();
 
 			// Manually set active prompt using reflection to test the getter methods
-			java.lang.reflect.Field activePromptField = AcpAgentSession.class.getDeclaredField("activePrompt");
-			activePromptField.setAccessible(true);
+			java.lang.reflect.Field activePromptsField = AcpAgentSession.class.getDeclaredField("activePrompts");
+			activePromptsField.setAccessible(true);
 			@SuppressWarnings("unchecked")
-			AtomicReference<Object> activePromptRef = (AtomicReference<Object>) activePromptField.get(session);
+			ConcurrentHashMap<String, Object> activePromptsRef = (ConcurrentHashMap<String, Object>) activePromptsField.get(session);
 
 			// Create an ActivePrompt instance using reflection
 			Class<?> activePromptClass = Class.forName(
@@ -258,14 +259,14 @@ class AcpAgentSessionTest {
 					Object.class);
 			constructor.setAccessible(true);
 			Object activePrompt = constructor.newInstance("session-1", "request-1");
-			activePromptRef.set(activePrompt);
+			activePromptsRef.put("session-1", activePrompt);
 
 			// Now there should be an active prompt
 			assertThat(session.hasActivePrompt()).isTrue();
 			assertThat(session.getActivePromptSessionId()).isEqualTo("session-1");
 
 			// Clear active prompt
-			activePromptRef.set(null);
+			activePromptsRef.clear();
 
 			// Active prompt should be cleared
 			assertThat(session.hasActivePrompt()).isFalse();

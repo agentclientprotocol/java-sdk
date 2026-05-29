@@ -10,7 +10,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
@@ -78,13 +77,14 @@ public class AcpAgentSession implements AcpSession {
 	private final AtomicLong requestCounter = new AtomicLong(0);
 
 	/**
-	 * Active prompt tracking for single-turn enforcement.
-	 * Only ONE prompt can be active at a time per ACP session.
+	 * Active prompt tracking for single-turn enforcement per session.
+	 * Only ONE prompt can be active at a time per ACP logical session,
+	 * but different sessions can run prompts concurrently.
 	 */
-	private final AtomicReference<ActivePrompt> activePrompt = new AtomicReference<>(null);
+	private final ConcurrentHashMap<String, ActivePrompt> activePrompts = new ConcurrentHashMap<>();
 
 	/**
-	 * Represents an active prompt session for single-turn enforcement.
+	 * Represents an active prompt for single-turn enforcement.
 	 */
 	private record ActivePrompt(String sessionId, Object requestId) {
 	}
@@ -229,27 +229,25 @@ public class AcpAgentSession implements AcpSession {
 						new AcpSchema.JSONRPCError(-32601, error.message(), error.data())));
 			}
 
-			// Single-turn enforcement for session/prompt requests
+			// Per-session single-turn enforcement for prompt requests.
+			// Different sessions can run prompts concurrently; only reject
+			// when the same session already has an active prompt.
 			if (AcpSchema.METHOD_SESSION_PROMPT.equals(request.method())) {
-				// Extract sessionId from params
 				String sessionId = extractSessionId(request.params());
 				ActivePrompt newPrompt = new ActivePrompt(sessionId, request.id());
 
-				// Try to set as active prompt - fails if another prompt is active
-				if (!activePrompt.compareAndSet(null, newPrompt)) {
-					ActivePrompt current = activePrompt.get();
-					logger.warn("Rejected concurrent prompt request. Active prompt: sessionId={}, requestId={}",
-							current != null ? current.sessionId() : "unknown",
-							current != null ? current.requestId() : "unknown");
+				ActivePrompt existing = activePrompts.putIfAbsent(sessionId, newPrompt);
+				if (existing != null) {
+					logger.warn("Rejected concurrent prompt request for same session. Active prompt: sessionId={}, requestId={}",
+							existing.sessionId(), existing.requestId());
 					return Mono.just(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-							new AcpSchema.JSONRPCError(-32000, "There is already an active prompt execution", null)));
+							new AcpSchema.JSONRPCError(-32000, "There is already an active prompt execution for this session", null)));
 				}
 
-				// Execute handler and clear active prompt when done
 				return handler.handle(request.params())
 					.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null))
 					.doFinally(signal -> {
-						activePrompt.compareAndSet(newPrompt, null);
+						activePrompts.remove(sessionId, newPrompt);
 						logger.debug("Prompt completed with signal: {}", signal);
 					});
 			}
@@ -289,9 +287,7 @@ public class AcpAgentSession implements AcpSession {
 			// Handle cancel notification specially
 			if (AcpSchema.METHOD_SESSION_CANCEL.equals(notification.method())) {
 				String sessionId = extractSessionId(notification.params());
-				ActivePrompt current = activePrompt.get();
-				if (current != null && sessionId.equals(current.sessionId())) {
-					activePrompt.compareAndSet(current, null);
+				if (activePrompts.remove(sessionId) != null) {
 					logger.debug("Cancelled active prompt for session: {}", sessionId);
 				}
 			}
@@ -369,18 +365,18 @@ public class AcpAgentSession implements AcpSession {
 
 	/**
 	 * Checks if there is an active prompt being processed.
-	 * @return true if a prompt is currently active
+	 * @return true if any prompt is currently active
 	 */
 	public boolean hasActivePrompt() {
-		return activePrompt.get() != null;
+		return !activePrompts.isEmpty();
 	}
 
 	/**
-	 * Gets the session ID of the active prompt, if any.
-	 * @return the session ID or null if no prompt is active
+	 * Gets the session ID of an active prompt, if any.
+	 * @return a session ID with an active prompt, or null if none are active
 	 */
 	public String getActivePromptSessionId() {
-		ActivePrompt current = activePrompt.get();
+		ActivePrompt current = activePrompts.values().stream().findFirst().orElse(null);
 		return current != null ? current.sessionId() : null;
 	}
 
@@ -391,7 +387,7 @@ public class AcpAgentSession implements AcpSession {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
-			activePrompt.set(null);
+			activePrompts.clear();
 			dismissPendingResponses();
 			timeoutScheduler.dispose();
 		}).then(this.transport.closeGracefully());
@@ -402,7 +398,7 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	@Override
 	public void close() {
-		activePrompt.set(null);
+		activePrompts.clear();
 		dismissPendingResponses();
 		timeoutScheduler.dispose();
 		transport.close();
