@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.agentclientprotocol</groupId>
+        <artifactId>acp-java-sdk</artifactId>
+        <version>0.13.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>acp-streamable-http-jetty</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ACP Streamable HTTP Jetty</name>
+    <description>Streamable HTTP agent transport using Jetty for listener-backed remote agents</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.ee10</groupId>
+            <artifactId>jetty-ee10-servlet</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.http2</groupId>
+            <artifactId>jetty-http2-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.websocket</groupId>
+            <artifactId>jetty-websocket-jetty-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty.websocket</groupId>
+            <artifactId>jetty-websocket-jetty-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
