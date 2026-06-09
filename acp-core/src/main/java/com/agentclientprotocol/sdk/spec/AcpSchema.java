@@ -632,7 +632,6 @@ public final class AcpSchema {
 	/**
 	 * Set session config option request - changes a configuration value
 	 */
-	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionRequest(@JsonProperty("sessionId") String sessionId,
@@ -658,7 +657,6 @@ public final class AcpSchema {
 	/**
 	 * Set session config option response - returns full config state
 	 */
-	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionResponse(
@@ -1233,14 +1231,14 @@ public final class AcpSchema {
 	}
 
 	// ---------------------------
-	// Session Config Types (UNSTABLE)
+	// Session Config Types
+	// (session/set_config_option is stable; the "boolean" variant remains an unstable extension)
 	// ---------------------------
 
 	/**
 	 * Session config option - a configurable setting exposed by the agent.
-	 * Discriminated by type: "select" or "boolean".
+	 * Discriminated by type: "select" (stable) or "boolean" (unstable extension).
 	 */
-	@UnstableAcpApi
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 	@JsonSubTypes({ @JsonSubTypes.Type(value = SessionConfigSelect.class, name = "select"),
 			@JsonSubTypes.Type(value = SessionConfigBoolean.class, name = "boolean") })
@@ -1251,7 +1249,6 @@ public final class AcpSchema {
 	/**
 	 * Select-type config option - a dropdown with named values.
 	 */
-	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelect(@JsonProperty("type") String type, @JsonProperty("id") String id,
@@ -1268,6 +1265,9 @@ public final class AcpSchema {
 
 	/**
 	 * Boolean-type config option - a toggle.
+	 *
+	 * <p>Unstable: the stable schema only defines the {@code select} config option variant;
+	 * {@code boolean} is an SDK extension that may change.
 	 */
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -1285,7 +1285,6 @@ public final class AcpSchema {
 	/**
 	 * A selectable option within a select-type config option.
 	 */
-	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelectOption(@JsonProperty("value") String value,
@@ -1299,7 +1298,6 @@ public final class AcpSchema {
 	/**
 	 * Config option update - pushed by agent via session/update notification.
 	 */
-	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ConfigOptionUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,

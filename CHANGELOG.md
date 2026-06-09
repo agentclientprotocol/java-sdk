@@ -21,6 +21,14 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
 - `sessionCapabilities.delete` and `sessionCapabilities.additionalDirectories`, surfaced via
   `NegotiatedCapabilities` (`supports*`/`require*`).
 
+### Changed
+
+- Promoted the session config-option API to stable: removed `@UnstableAcpApi` from
+  `SetSessionConfigOptionRequest`/`SetSessionConfigOptionResponse`, `SessionConfigOption`,
+  `SessionConfigSelect`, `SessionConfigSelectOption`, `ConfigOptionUpdate`, and `@SetSessionConfigOption`
+  — `session/set_config_option` and `session/set_mode` are now in the stable ACP schema. The
+  `boolean` config-option variant (`SessionConfigBoolean`) remains an unstable SDK extension.
+
 ### Deprecated
 
 - The session-model API — `session/set_model` (`setSessionModel`, `@SetSessionModel`, handler),

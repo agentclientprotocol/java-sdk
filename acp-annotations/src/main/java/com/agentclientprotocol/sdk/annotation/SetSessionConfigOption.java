@@ -20,7 +20,6 @@ import java.lang.annotation.Target;
  * @since 0.12.0
  * @see AcpAgent
  */
-@UnstableAcpApi
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
