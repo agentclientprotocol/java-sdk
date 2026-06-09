@@ -143,6 +143,16 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Functional interface for handling logout requests.
+	 */
+	@FunctionalInterface
+	interface LogoutHandler {
+
+		Mono<AcpSchema.LogoutResponse> handle(AcpSchema.LogoutRequest request);
+
+	}
+
+	/**
 	 * Functional interface for handling new session requests.
 	 */
 	@FunctionalInterface
@@ -239,6 +249,16 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Functional interface for handling delete session requests.
+	 */
+	@FunctionalInterface
+	interface DeleteSessionHandler {
+
+		Mono<AcpSchema.DeleteSessionResponse> handle(AcpSchema.DeleteSessionRequest request);
+
+	}
+
+	/**
 	 * Functional interface for handling resume session requests.
 	 */
 	@FunctionalInterface
@@ -301,6 +321,17 @@ public interface AcpAgent {
 	interface SyncAuthenticateHandler {
 
 		AcpSchema.AuthenticateResponse handle(AcpSchema.AuthenticateRequest request);
+
+	}
+
+	/**
+	 * Synchronous functional interface for handling logout requests.
+	 * Returns a plain value instead of Mono for use with sync agents.
+	 */
+	@FunctionalInterface
+	interface SyncLogoutHandler {
+
+		AcpSchema.LogoutResponse handle(AcpSchema.LogoutRequest request);
 
 	}
 
@@ -407,6 +438,17 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Synchronous functional interface for handling delete session requests.
+	 * Returns a plain value instead of Mono for use with sync agents.
+	 */
+	@FunctionalInterface
+	interface SyncDeleteSessionHandler {
+
+		AcpSchema.DeleteSessionResponse handle(AcpSchema.DeleteSessionRequest request);
+
+	}
+
+	/**
 	 * Synchronous functional interface for handling resume session requests.
 	 * Returns a plain value instead of Mono for use with sync agents.
 	 */
@@ -461,6 +503,8 @@ public interface AcpAgent {
 
 		private AuthenticateHandler authenticateHandler;
 
+		private LogoutHandler logoutHandler;
+
 		private NewSessionHandler newSessionHandler;
 
 		private LoadSessionHandler loadSessionHandler;
@@ -474,6 +518,8 @@ public interface AcpAgent {
 		private ListSessionsHandler listSessionsHandler;
 
 		private CloseSessionHandler closeSessionHandler;
+
+		private DeleteSessionHandler deleteSessionHandler;
 
 		private ResumeSessionHandler resumeSessionHandler;
 
@@ -516,6 +562,16 @@ public interface AcpAgent {
 		 */
 		public AsyncAgentBuilder authenticateHandler(AuthenticateHandler handler) {
 			this.authenticateHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Sets the handler for logout requests.
+		 * @param handler The logout handler
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder logoutHandler(LogoutHandler handler) {
+			this.logoutHandler = handler;
 			return this;
 		}
 
@@ -590,6 +646,16 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the handler for delete session requests.
+		 * @param handler The delete session handler
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder deleteSessionHandler(DeleteSessionHandler handler) {
+			this.deleteSessionHandler = handler;
+			return this;
+		}
+
+		/**
 		 * Sets the handler for resume session requests.
 		 * @param handler The resume session handler
 		 * @return This builder for chaining
@@ -635,9 +701,9 @@ public interface AcpAgent {
 		 */
 		public AcpAsyncAgent build() {
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, initializeHandler, authenticateHandler,
-					newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler, setSessionModelHandler,
-					listSessionsHandler, closeSessionHandler, resumeSessionHandler, forkSessionHandler,
-					setSessionConfigOptionHandler, cancelHandler);
+					logoutHandler, newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler,
+					setSessionModelHandler, listSessionsHandler, closeSessionHandler, deleteSessionHandler,
+					resumeSessionHandler, forkSessionHandler, setSessionConfigOptionHandler, cancelHandler);
 		}
 
 	}
@@ -698,6 +764,16 @@ public interface AcpAgent {
 		 */
 		public SyncAgentBuilder authenticateHandler(SyncAuthenticateHandler handler) {
 			asyncBuilder.authenticateHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
+		 * Sets the synchronous handler for logout requests.
+		 * @param handler The sync logout handler (returns plain value)
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder logoutHandler(SyncLogoutHandler handler) {
+			asyncBuilder.logoutHandler(fromSync(handler));
 			return this;
 		}
 
@@ -772,6 +848,16 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the synchronous handler for delete session requests.
+		 * @param handler The sync delete session handler (returns plain value)
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder deleteSessionHandler(SyncDeleteSessionHandler handler) {
+			asyncBuilder.deleteSessionHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
 		 * Sets the synchronous handler for resume session requests.
 		 * @param handler The sync resume session handler (returns plain value)
 		 * @return This builder for chaining
@@ -823,6 +909,14 @@ public interface AcpAgent {
 		}
 
 		private static AuthenticateHandler fromSync(SyncAuthenticateHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static LogoutHandler fromSync(SyncLogoutHandler syncHandler) {
 			if (syncHandler == null) {
 				return null;
 			}
@@ -882,6 +976,14 @@ public interface AcpAgent {
 		}
 
 		private static CloseSessionHandler fromSync(SyncCloseSessionHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static DeleteSessionHandler fromSync(SyncDeleteSessionHandler syncHandler) {
 			if (syncHandler == null) {
 				return null;
 			}

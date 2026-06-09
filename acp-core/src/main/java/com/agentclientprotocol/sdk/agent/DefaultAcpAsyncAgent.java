@@ -42,6 +42,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.AuthenticateHandler authenticateHandler;
 
+	private final AcpAgent.LogoutHandler logoutHandler;
+
 	private final AcpAgent.NewSessionHandler newSessionHandler;
 
 	private final AcpAgent.LoadSessionHandler loadSessionHandler;
@@ -55,6 +57,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	private final AcpAgent.ListSessionsHandler listSessionsHandler;
 
 	private final AcpAgent.CloseSessionHandler closeSessionHandler;
+
+	private final AcpAgent.DeleteSessionHandler deleteSessionHandler;
 
 	private final AcpAgent.ResumeSessionHandler resumeSessionHandler;
 
@@ -73,10 +77,12 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout,
 			AcpAgent.InitializeHandler initializeHandler, AcpAgent.AuthenticateHandler authenticateHandler,
-			AcpAgent.NewSessionHandler newSessionHandler, AcpAgent.LoadSessionHandler loadSessionHandler,
+			AcpAgent.LogoutHandler logoutHandler, AcpAgent.NewSessionHandler newSessionHandler,
+			AcpAgent.LoadSessionHandler loadSessionHandler,
 			AcpAgent.PromptHandler promptHandler, AcpAgent.SetSessionModeHandler setSessionModeHandler,
 			AcpAgent.SetSessionModelHandler setSessionModelHandler,
 			AcpAgent.ListSessionsHandler listSessionsHandler, AcpAgent.CloseSessionHandler closeSessionHandler,
+			AcpAgent.DeleteSessionHandler deleteSessionHandler,
 			AcpAgent.ResumeSessionHandler resumeSessionHandler, AcpAgent.ForkSessionHandler forkSessionHandler,
 			AcpAgent.SetSessionConfigOptionHandler setSessionConfigOptionHandler,
 			AcpAgent.CancelHandler cancelHandler) {
@@ -84,6 +90,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		this.requestTimeout = requestTimeout;
 		this.initializeHandler = initializeHandler;
 		this.authenticateHandler = authenticateHandler;
+		this.logoutHandler = logoutHandler;
 		this.newSessionHandler = newSessionHandler;
 		this.loadSessionHandler = loadSessionHandler;
 		this.promptHandler = promptHandler;
@@ -91,6 +98,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		this.setSessionModelHandler = setSessionModelHandler;
 		this.listSessionsHandler = listSessionsHandler;
 		this.closeSessionHandler = closeSessionHandler;
+		this.deleteSessionHandler = deleteSessionHandler;
 		this.resumeSessionHandler = resumeSessionHandler;
 		this.forkSessionHandler = forkSessionHandler;
 		this.setSessionConfigOptionHandler = setSessionConfigOptionHandler;
@@ -126,6 +134,16 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 							new TypeRef<AcpSchema.AuthenticateRequest>() {
 							});
 					return authenticateHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Logout handler
+			if (logoutHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_LOGOUT, params -> {
+					AcpSchema.LogoutRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.LogoutRequest>() {
+							});
+					return logoutHandler.handle(request).cast(Object.class);
 				});
 			}
 
@@ -199,6 +217,16 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 							new TypeRef<AcpSchema.CloseSessionRequest>() {
 							});
 					return closeSessionHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Delete session handler
+			if (deleteSessionHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_SESSION_DELETE, params -> {
+					AcpSchema.DeleteSessionRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.DeleteSessionRequest>() {
+							});
+					return deleteSessionHandler.handle(request).cast(Object.class);
 				});
 			}
 

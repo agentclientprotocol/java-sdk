@@ -12,9 +12,11 @@ import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
+import com.agentclientprotocol.sdk.annotation.DeleteSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
 import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.LoadSession;
+import com.agentclientprotocol.sdk.annotation.Logout;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.ResumeSession;
@@ -25,11 +27,15 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.LogoutRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.LogoutResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -502,6 +508,85 @@ class AcpAgentSupportTest {
 				.block(TIMEOUT);
 
 		assertThat(closedSessionId.get()).isEqualTo("session-to-close");
+		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void logoutHandlerInvoked() throws Exception {
+		AtomicReference<Boolean> loggedOut = new AtomicReference<>(false);
+
+		@AcpAgent
+		class LogoutAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@Logout
+			LogoutResponse logout(LogoutRequest req) {
+				loggedOut.set(true);
+				return new LogoutResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new LogoutAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		LogoutResponse resp = client.logout(new LogoutRequest()).block(TIMEOUT);
+
+		assertThat(loggedOut.get()).isTrue();
+		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void deleteSessionHandlerInvoked() throws Exception {
+		AtomicReference<String> deletedSessionId = new AtomicReference<>();
+
+		@AcpAgent
+		class DeleteSessionAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@DeleteSession
+			DeleteSessionResponse deleteSession(DeleteSessionRequest req) {
+				deletedSessionId.set(req.sessionId());
+				return new DeleteSessionResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new DeleteSessionAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		DeleteSessionResponse resp = client.deleteSession(new DeleteSessionRequest("session-to-delete"))
+				.block(TIMEOUT);
+
+		assertThat(deletedSessionId.get()).isEqualTo("session-to-delete");
 		assertThat(resp).isNotNull();
 	}
 

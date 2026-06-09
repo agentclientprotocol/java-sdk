@@ -111,6 +111,12 @@ public class AcpAsyncClient {
 	private static final TypeRef<AcpSchema.CloseSessionResponse> CLOSE_SESSION_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
+	private static final TypeRef<AcpSchema.DeleteSessionResponse> DELETE_SESSION_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<AcpSchema.LogoutResponse> LOGOUT_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
 	private static final TypeRef<AcpSchema.ResumeSessionResponse> RESUME_SESSION_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
@@ -255,6 +261,23 @@ public class AcpAsyncClient {
 		return session.sendRequest(AcpSchema.METHOD_AUTHENTICATE, authenticateRequest, AUTHENTICATE_RESPONSE_TYPE_REF);
 	}
 
+	/**
+	 * Logs out of the agent, clearing any stored credentials.
+	 *
+	 * <p>
+	 * Terminates the current authenticated session. After logout, the client must
+	 * authenticate again before performing operations that require authentication.
+	 * </p>
+	 * @param logoutRequest the logout request
+	 * @return a Mono emitting the logout response
+	 * @see AcpSchema#METHOD_LOGOUT
+	 */
+	public Mono<AcpSchema.LogoutResponse> logout(AcpSchema.LogoutRequest logoutRequest) {
+		Assert.notNull(logoutRequest, "Logout request must not be null");
+		logger.debug("Logging out");
+		return session.sendRequest(AcpSchema.METHOD_LOGOUT, logoutRequest, LOGOUT_RESPONSE_TYPE_REF);
+	}
+
 	// --------------------------
 	// Session Management
 	// --------------------------
@@ -363,6 +386,26 @@ public class AcpAsyncClient {
 		logger.debug("Closing session: {}", closeSessionRequest.sessionId());
 		return session.sendRequest(AcpSchema.METHOD_SESSION_CLOSE, closeSessionRequest,
 				CLOSE_SESSION_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Permanently deletes a stored session.
+	 *
+	 * <p>
+	 * Unlike {@link #closeSession}, which frees resources for an active session, this
+	 * removes the session from the agent's storage entirely so it no longer appears in
+	 * {@code session/list}. Only available if the agent advertises the
+	 * {@code sessionCapabilities.delete} capability.
+	 * </p>
+	 * @param deleteSessionRequest the delete session request with session ID
+	 * @return a Mono emitting the delete session response
+	 * @see AcpSchema#METHOD_SESSION_DELETE
+	 */
+	public Mono<AcpSchema.DeleteSessionResponse> deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
+		Assert.notNull(deleteSessionRequest, "Delete session request must not be null");
+		logger.debug("Deleting session: {}", deleteSessionRequest.sessionId());
+		return session.sendRequest(AcpSchema.METHOD_SESSION_DELETE, deleteSessionRequest,
+				DELETE_SESSION_RESPONSE_TYPE_REF);
 	}
 
 	/**

@@ -187,6 +187,16 @@ public class AcpSyncClient implements AutoCloseable {
 		return this.delegate.authenticate(authenticateRequest).block();
 	}
 
+	/**
+	 * Logs out of the agent, clearing any stored credentials.
+	 * @param logoutRequest the logout request
+	 * @return the logout response
+	 * @see AcpSchema#METHOD_LOGOUT
+	 */
+	public AcpSchema.LogoutResponse logout(AcpSchema.LogoutRequest logoutRequest) {
+		return this.delegate.logout(logoutRequest).block();
+	}
+
 	// --------------------------
 	// Session Management
 	// --------------------------
@@ -268,6 +278,16 @@ public class AcpSyncClient implements AutoCloseable {
 	 */
 	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
 		return this.delegate.closeSession(closeSessionRequest).block();
+	}
+
+	/**
+	 * Permanently deletes a stored session.
+	 * @param deleteSessionRequest the delete session request with session ID
+	 * @return the delete session response
+	 * @see AcpSchema#METHOD_SESSION_DELETE
+	 */
+	public AcpSchema.DeleteSessionResponse deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
+		return this.delegate.deleteSession(deleteSessionRequest).block();
 	}
 
 	/**

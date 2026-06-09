@@ -83,6 +83,8 @@ public final class AcpSchema {
 
 	public static final String METHOD_AUTHENTICATE = "authenticate";
 
+	public static final String METHOD_LOGOUT = "logout";
+
 	public static final String METHOD_SESSION_NEW = "session/new";
 
 	public static final String METHOD_SESSION_LOAD = "session/load";
@@ -98,6 +100,8 @@ public final class AcpSchema {
 	public static final String METHOD_SESSION_LIST = "session/list";
 
 	public static final String METHOD_SESSION_CLOSE = "session/close";
+
+	public static final String METHOD_SESSION_DELETE = "session/delete";
 
 	public static final String METHOD_SESSION_RESUME = "session/resume";
 
@@ -264,6 +268,29 @@ public final class AcpSchema {
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthenticateResponse() {
+	}
+
+	/**
+	 * Logout request - clears stored credentials, terminating the current
+	 * authenticated session.
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record LogoutRequest(@JsonProperty("_meta") Map<String, Object> meta) {
+		public LogoutRequest() {
+			this(null);
+		}
+	}
+
+	/**
+	 * Logout response
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record LogoutResponse(@JsonProperty("_meta") Map<String, Object> meta) {
+		public LogoutResponse() {
+			this(null);
+		}
 	}
 
 	/**
@@ -482,6 +509,32 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CloseSessionResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public CloseSessionResponse() {
+			this(null);
+		}
+	}
+
+	/**
+	 * Delete session request - permanently deletes a stored session.
+	 *
+	 * <p>Only available if the agent advertises the {@code sessionCapabilities.delete}
+	 * capability.
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record DeleteSessionRequest(@JsonProperty("sessionId") String sessionId,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public DeleteSessionRequest(String sessionId) {
+			this(sessionId, null);
+		}
+	}
+
+	/**
+	 * Delete session response
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record DeleteSessionResponse(@JsonProperty("_meta") Map<String, Object> meta) {
+		public DeleteSessionResponse() {
 			this(null);
 		}
 	}

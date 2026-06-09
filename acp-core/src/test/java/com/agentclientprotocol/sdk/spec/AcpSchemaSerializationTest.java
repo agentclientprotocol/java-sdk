@@ -430,6 +430,35 @@ class AcpSchemaSerializationTest {
 		assertThat(deserialized.additionalDirectories()).containsExactly("/extra");
 	}
 
+	@Test
+	void logoutRequestResponseSerialization() throws IOException {
+		String reqJson = jsonMapper.writeValueAsString(new AcpSchema.LogoutRequest());
+		AcpSchema.LogoutRequest req = jsonMapper.readValue(reqJson, new TypeRef<AcpSchema.LogoutRequest>() {
+		});
+		assertThat(req).isNotNull();
+
+		String respJson = jsonMapper.writeValueAsString(new AcpSchema.LogoutResponse());
+		AcpSchema.LogoutResponse resp = jsonMapper.readValue(respJson, new TypeRef<AcpSchema.LogoutResponse>() {
+		});
+		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void deleteSessionRequestResponseSerialization() throws IOException {
+		String reqJson = jsonMapper.writeValueAsString(new AcpSchema.DeleteSessionRequest("session-9"));
+		assertThat(reqJson).contains("\"sessionId\":\"session-9\"");
+		AcpSchema.DeleteSessionRequest req = jsonMapper.readValue(reqJson,
+				new TypeRef<AcpSchema.DeleteSessionRequest>() {
+				});
+		assertThat(req.sessionId()).isEqualTo("session-9");
+
+		String respJson = jsonMapper.writeValueAsString(new AcpSchema.DeleteSessionResponse());
+		AcpSchema.DeleteSessionResponse resp = jsonMapper.readValue(respJson,
+				new TypeRef<AcpSchema.DeleteSessionResponse>() {
+				});
+		assertThat(resp).isNotNull();
+	}
+
 	// ---------------------------
 	// Elicitation Serialization
 	// ---------------------------

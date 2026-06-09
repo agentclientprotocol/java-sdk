@@ -28,10 +28,12 @@ import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverCompos
 import com.agentclientprotocol.sdk.agent.support.resolver.CancelNotificationResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CapabilitiesResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CloseSessionRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.DeleteSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ForkSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.InitializeRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ListSessionsRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.LoadSessionRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.LogoutRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.NewSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.PromptContextResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.PromptRequestResolver;
@@ -42,10 +44,12 @@ import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModeRequestR
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModelRequestResolver;
 import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
+import com.agentclientprotocol.sdk.annotation.DeleteSession;
 import com.agentclientprotocol.sdk.annotation.ForkSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
 import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.LoadSession;
+import com.agentclientprotocol.sdk.annotation.Logout;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.ResumeSession;
@@ -201,6 +205,12 @@ public class AcpAgentSupport {
 					java.util.UUID.randomUUID().toString(), null, null));
 		}
 
+		// Logout handler
+		AcpHandlerMethod logoutHandler = handlers.get("logout");
+		if (logoutHandler != null) {
+			agentBuilder.logoutHandler(req -> invokeHandler(logoutHandler, req, null, null, null));
+		}
+
 		// LoadSession handler
 		AcpHandlerMethod loadSessionHandler = handlers.get("session/load");
 		if (loadSessionHandler != null) {
@@ -239,6 +249,13 @@ public class AcpAgentSupport {
 		if (closeSessionHandler != null) {
 			agentBuilder.closeSessionHandler(
 					req -> invokeHandler(closeSessionHandler, req, req.sessionId(), null, null));
+		}
+
+		// DeleteSession handler
+		AcpHandlerMethod deleteSessionHandler = handlers.get("session/delete");
+		if (deleteSessionHandler != null) {
+			agentBuilder.deleteSessionHandler(
+					req -> invokeHandler(deleteSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// ResumeSession handler
@@ -465,6 +482,10 @@ public class AcpAgentSupport {
 					handlers.put("initialize", new AcpHandlerMethod(beanSupplier, method, "initialize"));
 					log.debug("Discovered @Initialize handler: {}", method.getName());
 				}
+				if (method.isAnnotationPresent(Logout.class)) {
+					handlers.put("logout", new AcpHandlerMethod(beanSupplier, method, "logout"));
+					log.debug("Discovered @Logout handler: {}", method.getName());
+				}
 				if (method.isAnnotationPresent(NewSession.class)) {
 					handlers.put("session/new", new AcpHandlerMethod(beanSupplier, method, "session/new"));
 					log.debug("Discovered @NewSession handler: {}", method.getName());
@@ -493,6 +514,10 @@ public class AcpAgentSupport {
 					handlers.put("session/close", new AcpHandlerMethod(beanSupplier, method, "session/close"));
 					log.debug("Discovered @CloseSession handler: {}", method.getName());
 				}
+				if (method.isAnnotationPresent(DeleteSession.class)) {
+					handlers.put("session/delete", new AcpHandlerMethod(beanSupplier, method, "session/delete"));
+					log.debug("Discovered @DeleteSession handler: {}", method.getName());
+				}
 				if (method.isAnnotationPresent(ResumeSession.class)) {
 					handlers.put("session/resume", new AcpHandlerMethod(beanSupplier, method, "session/resume"));
 					log.debug("Discovered @ResumeSession handler: {}", method.getName());
@@ -517,6 +542,7 @@ public class AcpAgentSupport {
 			// Built-in resolvers (order matters - first match wins)
 			// Custom resolvers added via builder go first
 			argumentResolvers.addResolver(new InitializeRequestResolver());
+			argumentResolvers.addResolver(new LogoutRequestResolver());
 			argumentResolvers.addResolver(new NewSessionRequestResolver());
 			argumentResolvers.addResolver(new LoadSessionRequestResolver());
 			argumentResolvers.addResolver(new PromptRequestResolver());
@@ -524,6 +550,7 @@ public class AcpAgentSupport {
 			argumentResolvers.addResolver(new SetSessionModelRequestResolver());
 			argumentResolvers.addResolver(new ListSessionsRequestResolver());
 			argumentResolvers.addResolver(new CloseSessionRequestResolver());
+			argumentResolvers.addResolver(new DeleteSessionRequestResolver());
 			argumentResolvers.addResolver(new ResumeSessionRequestResolver());
 			argumentResolvers.addResolver(new ForkSessionRequestResolver());
 			argumentResolvers.addResolver(new SetSessionConfigOptionRequestResolver());
