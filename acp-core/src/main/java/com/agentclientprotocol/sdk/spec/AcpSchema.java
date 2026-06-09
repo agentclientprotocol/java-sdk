@@ -143,6 +143,13 @@ public final class AcpSchema {
 
 	public static final String METHOD_ELICITATION_COMPLETE = "elicitation/complete";
 
+	// Provider configuration (UNSTABLE)
+	public static final String METHOD_PROVIDERS_LIST = "providers/list";
+
+	public static final String METHOD_PROVIDERS_SET = "providers/set";
+
+	public static final String METHOD_PROVIDERS_DISABLE = "providers/disable";
+
 	// ---------------------------
 	// JSON-RPC Message Types
 	// ---------------------------
@@ -1112,14 +1119,20 @@ public final class AcpSchema {
 			@JsonProperty("sessionCapabilities") SessionCapabilities sessionCapabilities,
 			@JsonProperty("mcpCapabilities") McpCapabilities mcpCapabilities,
 			@JsonProperty("promptCapabilities") PromptCapabilities promptCapabilities,
+			@UnstableAcpApi @JsonProperty("providers") ProvidersCapabilities providers,
 			@JsonProperty("_meta") Map<String, Object> meta) {
 		public AgentCapabilities() {
-			this(false, null, new McpCapabilities(), new PromptCapabilities(), null);
+			this(false, null, new McpCapabilities(), new PromptCapabilities(), null, null);
 		}
 
 		public AgentCapabilities(Boolean loadSession, McpCapabilities mcpCapabilities,
 				PromptCapabilities promptCapabilities) {
-			this(loadSession, null, mcpCapabilities, promptCapabilities, null);
+			this(loadSession, null, mcpCapabilities, promptCapabilities, null, null);
+		}
+
+		public AgentCapabilities(Boolean loadSession, SessionCapabilities sessionCapabilities,
+				McpCapabilities mcpCapabilities, PromptCapabilities promptCapabilities, Map<String, Object> meta) {
+			this(loadSession, sessionCapabilities, mcpCapabilities, promptCapabilities, null, meta);
 		}
 	}
 
@@ -1305,6 +1318,144 @@ public final class AcpSchema {
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public ConfigOptionUpdate(String sessionUpdate, List<SessionConfigOption> configOptions) {
 			this(sessionUpdate, configOptions, null);
+		}
+	}
+
+	// ---------------------------
+	// Provider Types (UNSTABLE)
+	// ---------------------------
+
+	/**
+	 * Provider configuration capabilities advertised by the agent. Presence (a non-null
+	 * value, including {@code {}}) signals that the agent supports the {@code providers/*}
+	 * methods.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ProvidersCapabilities(@JsonProperty("_meta") Map<String, Object> meta) {
+		public ProvidersCapabilities() {
+			this((Map<String, Object>) null);
+		}
+	}
+
+	/**
+	 * The current effective (non-secret) routing config for a provider.
+	 *
+	 * <p>{@code apiType} is a well-known {@code LlmProtocol} identifier (for example
+	 * {@code "anthropic"}, {@code "openai"}, {@code "azure"}, {@code "vertex"},
+	 * {@code "bedrock"}) or a custom string.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ProviderCurrentConfig(@JsonProperty("apiType") String apiType,
+			@JsonProperty("baseUrl") String baseUrl) {
+	}
+
+	/**
+	 * Describes a configurable provider returned by {@code providers/list}.
+	 *
+	 * @param id provider identifier, for example {@code "main"} or {@code "openai"}
+	 * @param supported supported {@code LlmProtocol} identifiers for this provider
+	 * @param required whether this provider is mandatory and cannot be disabled
+	 * @param current current effective non-secret routing config, or {@code null}
+	 * @param meta reserved metadata
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ProviderInfo(@JsonProperty("id") String id, @JsonProperty("supported") List<String> supported,
+			@JsonProperty("required") Boolean required, @JsonProperty("current") ProviderCurrentConfig current,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ProviderInfo(String id, List<String> supported, Boolean required, ProviderCurrentConfig current) {
+			this(id, supported, required, current, null);
+		}
+	}
+
+	/**
+	 * Request for {@code providers/list} - lists configurable providers.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ListProvidersRequest(@JsonProperty("_meta") Map<String, Object> meta) {
+		public ListProvidersRequest() {
+			this((Map<String, Object>) null);
+		}
+	}
+
+	/**
+	 * Response to {@code providers/list}.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ListProvidersResponse(@JsonProperty("providers") List<ProviderInfo> providers,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public ListProvidersResponse(List<ProviderInfo> providers) {
+			this(providers, null);
+		}
+	}
+
+	/**
+	 * Request for {@code providers/set} - configures a provider.
+	 *
+	 * @param id provider id to configure
+	 * @param apiType protocol type for this provider (an {@code LlmProtocol} identifier)
+	 * @param baseUrl base URL for requests sent through this provider
+	 * @param headers full headers map for this provider (may include authorization), or {@code null}
+	 * @param meta reserved metadata
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SetProviderRequest(@JsonProperty("id") String id, @JsonProperty("apiType") String apiType,
+			@JsonProperty("baseUrl") String baseUrl, @JsonProperty("headers") Map<String, String> headers,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public SetProviderRequest(String id, String apiType, String baseUrl) {
+			this(id, apiType, baseUrl, null, null);
+		}
+
+		public SetProviderRequest(String id, String apiType, String baseUrl, Map<String, String> headers) {
+			this(id, apiType, baseUrl, headers, null);
+		}
+	}
+
+	/**
+	 * Response to {@code providers/set}.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SetProviderResponse(@JsonProperty("_meta") Map<String, Object> meta) {
+		public SetProviderResponse() {
+			this((Map<String, Object>) null);
+		}
+	}
+
+	/**
+	 * Request for {@code providers/disable} - disables a provider by id.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record DisableProviderRequest(@JsonProperty("id") String id,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public DisableProviderRequest(String id) {
+			this(id, null);
+		}
+	}
+
+	/**
+	 * Response to {@code providers/disable}.
+	 */
+	@UnstableAcpApi
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record DisableProviderResponse(@JsonProperty("_meta") Map<String, Object> meta) {
+		public DisableProviderResponse() {
+			this((Map<String, Object>) null);
 		}
 	}
 

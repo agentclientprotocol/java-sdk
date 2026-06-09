@@ -67,6 +67,12 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.SetSessionConfigOptionHandler setSessionConfigOptionHandler;
 
+	private final AcpAgent.ListProvidersHandler listProvidersHandler;
+
+	private final AcpAgent.SetProviderHandler setProviderHandler;
+
+	private final AcpAgent.DisableProviderHandler disableProviderHandler;
+
 	private final AcpAgent.CancelHandler cancelHandler;
 
 	private volatile AcpAgentSession session;
@@ -87,6 +93,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			AcpAgent.DeleteSessionHandler deleteSessionHandler,
 			AcpAgent.ResumeSessionHandler resumeSessionHandler, AcpAgent.ForkSessionHandler forkSessionHandler,
 			AcpAgent.SetSessionConfigOptionHandler setSessionConfigOptionHandler,
+			AcpAgent.ListProvidersHandler listProvidersHandler, AcpAgent.SetProviderHandler setProviderHandler,
+			AcpAgent.DisableProviderHandler disableProviderHandler,
 			AcpAgent.CancelHandler cancelHandler) {
 		this.transport = transport;
 		this.requestTimeout = requestTimeout;
@@ -104,6 +112,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		this.resumeSessionHandler = resumeSessionHandler;
 		this.forkSessionHandler = forkSessionHandler;
 		this.setSessionConfigOptionHandler = setSessionConfigOptionHandler;
+		this.listProvidersHandler = listProvidersHandler;
+		this.setProviderHandler = setProviderHandler;
+		this.disableProviderHandler = disableProviderHandler;
 		this.cancelHandler = cancelHandler;
 	}
 
@@ -260,6 +271,36 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 							new TypeRef<AcpSchema.SetSessionConfigOptionRequest>() {
 							});
 					return setSessionConfigOptionHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// List providers handler (unstable)
+			if (listProvidersHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_LIST, params -> {
+					AcpSchema.ListProvidersRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.ListProvidersRequest>() {
+							});
+					return listProvidersHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Set provider handler (unstable)
+			if (setProviderHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_SET, params -> {
+					AcpSchema.SetProviderRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.SetProviderRequest>() {
+							});
+					return setProviderHandler.handle(request).cast(Object.class);
+				});
+			}
+
+			// Disable provider handler (unstable)
+			if (disableProviderHandler != null) {
+				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_DISABLE, params -> {
+					AcpSchema.DisableProviderRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.DisableProviderRequest>() {
+							});
+					return disableProviderHandler.handle(request).cast(Object.class);
 				});
 			}
 

@@ -8,14 +8,17 @@ import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ForkSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListProvidersResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LogoutResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
@@ -48,7 +51,10 @@ public class DirectResponseHandler implements ReturnValueHandler {
 				|| DeleteSessionResponse.class.isAssignableFrom(type)
 				|| ResumeSessionResponse.class.isAssignableFrom(type)
 				|| ForkSessionResponse.class.isAssignableFrom(type)
-				|| SetSessionConfigOptionResponse.class.isAssignableFrom(type);
+				|| SetSessionConfigOptionResponse.class.isAssignableFrom(type)
+				|| ListProvidersResponse.class.isAssignableFrom(type)
+				|| SetProviderResponse.class.isAssignableFrom(type)
+				|| DisableProviderResponse.class.isAssignableFrom(type);
 	}
 
 	@Override

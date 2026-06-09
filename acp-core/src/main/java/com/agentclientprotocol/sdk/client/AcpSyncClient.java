@@ -327,6 +327,40 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	// --------------------------
+	// Provider Configuration (UNSTABLE)
+	// --------------------------
+
+	/**
+	 * Lists the providers the agent can route to (UNSTABLE).
+	 * @param request the list providers request
+	 * @return the list of configurable providers
+	 * @see AcpSchema#METHOD_PROVIDERS_LIST
+	 */
+	public AcpSchema.ListProvidersResponse listProviders(AcpSchema.ListProvidersRequest request) {
+		return this.delegate.listProviders(request).block();
+	}
+
+	/**
+	 * Configures a provider's routing (UNSTABLE).
+	 * @param request the set provider request
+	 * @return the response
+	 * @see AcpSchema#METHOD_PROVIDERS_SET
+	 */
+	public AcpSchema.SetProviderResponse setProvider(AcpSchema.SetProviderRequest request) {
+		return this.delegate.setProvider(request).block();
+	}
+
+	/**
+	 * Disables a provider by id (UNSTABLE).
+	 * @param request the disable provider request
+	 * @return the response
+	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
+	 */
+	public AcpSchema.DisableProviderResponse disableProvider(AcpSchema.DisableProviderRequest request) {
+		return this.delegate.disableProvider(request).block();
+	}
+
+	// --------------------------
 	// Prompt Interaction
 	// --------------------------
 

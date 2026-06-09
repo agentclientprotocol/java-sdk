@@ -178,6 +178,25 @@ class NegotiatedCapabilitiesTest {
 	}
 
 	@Test
+	void fromAgentExtractsProvidersCapability() {
+		AcpSchema.AgentCapabilities agentCaps = new AcpSchema.AgentCapabilities(true, null,
+				new AcpSchema.McpCapabilities(), new AcpSchema.PromptCapabilities(),
+				new AcpSchema.ProvidersCapabilities(), null);
+
+		NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(agentCaps);
+
+		assertThat(caps.supportsProviders()).isTrue();
+	}
+
+	@Test
+	void requireProvidersThrowsWhenNotSupported() {
+		NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(null);
+
+		assertThatThrownBy(caps::requireProviders).isInstanceOf(AcpCapabilityException.class)
+			.hasMessageContaining("providers");
+	}
+
+	@Test
 	void requireDeleteSessionThrowsWhenNotSupported() {
 		NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(null);
 

@@ -20,6 +20,11 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
 - Per-chunk `messageId` on `AgentMessageChunk`, `AgentThoughtChunk`, `UserMessageChunk`, plus
   `sendMessage(text, messageId)` / `sendThought(text, messageId)` convenience overloads on
   `PromptContext` and `SyncPromptContext`.
+- **Provider configuration methods** (`providers/list`, `providers/set`, `providers/disable`),
+  marked `@UnstableAcpApi`: client methods `listProviders`/`setProvider`/`disableProvider`, agent
+  handlers + `@ListProviders`/`@SetProvider`/`@DisableProvider`, the `ProviderInfo` /
+  `ProviderCurrentConfig` / `ProvidersCapabilities` types, and a `providers` capability on
+  `AgentCapabilities` surfaced via `NegotiatedCapabilities.supportsProviders()`.
 - `sessionCapabilities.delete` and `sessionCapabilities.additionalDirectories`, surfaced via
   `NegotiatedCapabilities` (`supports*`/`require*`).
 

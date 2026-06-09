@@ -461,6 +461,45 @@ class AcpSchemaSerializationTest {
 		assertThat(resp).isNotNull();
 	}
 
+	@Test
+	void listProvidersResponseSerialization() throws IOException {
+		AcpSchema.ProviderInfo provider = new AcpSchema.ProviderInfo("openai", List.of("openai", "azure"), false,
+				new AcpSchema.ProviderCurrentConfig("openai", "https://api.openai.com/v1"));
+		AcpSchema.ListProvidersResponse response = new AcpSchema.ListProvidersResponse(List.of(provider));
+
+		String json = jsonMapper.writeValueAsString(response);
+		assertThat(json).contains("\"providers\"").contains("\"openai\"").contains("\"baseUrl\"");
+
+		AcpSchema.ListProvidersResponse deserialized = jsonMapper.readValue(json,
+				new TypeRef<AcpSchema.ListProvidersResponse>() {
+				});
+
+		assertThat(deserialized.providers()).hasSize(1);
+		AcpSchema.ProviderInfo p = deserialized.providers().get(0);
+		assertThat(p.id()).isEqualTo("openai");
+		assertThat(p.supported()).containsExactly("openai", "azure");
+		assertThat(p.required()).isFalse();
+		assertThat(p.current().baseUrl()).isEqualTo("https://api.openai.com/v1");
+	}
+
+	@Test
+	void setProviderRequestSerialization() throws IOException {
+		AcpSchema.SetProviderRequest request = new AcpSchema.SetProviderRequest("main", "anthropic",
+				"https://api.anthropic.com", Map.of("x-api-version", "2026-01-01"));
+
+		String json = jsonMapper.writeValueAsString(request);
+		assertThat(json).contains("\"id\":\"main\"").contains("\"apiType\":\"anthropic\"").contains("\"headers\"");
+
+		AcpSchema.SetProviderRequest deserialized = jsonMapper.readValue(json,
+				new TypeRef<AcpSchema.SetProviderRequest>() {
+				});
+
+		assertThat(deserialized.id()).isEqualTo("main");
+		assertThat(deserialized.apiType()).isEqualTo("anthropic");
+		assertThat(deserialized.baseUrl()).isEqualTo("https://api.anthropic.com");
+		assertThat(deserialized.headers()).containsEntry("x-api-version", "2026-01-01");
+	}
+
 	// ---------------------------
 	// Elicitation Serialization
 	// ---------------------------

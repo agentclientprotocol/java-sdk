@@ -83,6 +83,8 @@ public final class NegotiatedCapabilities {
 
 	private final boolean forkSession;
 
+	private final boolean providers;
+
 	private final boolean imageContent;
 
 	private final boolean audioContent;
@@ -107,6 +109,7 @@ public final class NegotiatedCapabilities {
 		this.deleteSession = builder.deleteSession;
 		this.additionalDirectories = builder.additionalDirectories;
 		this.forkSession = builder.forkSession;
+		this.providers = builder.providers;
 		this.imageContent = builder.imageContent;
 		this.audioContent = builder.audioContent;
 		this.embeddedContext = builder.embeddedContext;
@@ -166,6 +169,8 @@ public final class NegotiatedCapabilities {
 			builder.additionalDirectories(sc.additionalDirectories() != null);
 			builder.forkSession(sc.fork() != null);
 		}
+
+		builder.providers(caps.providers() != null);
 
 		PromptCapabilities prompt = caps.promptCapabilities();
 		if (prompt != null) {
@@ -337,6 +342,14 @@ public final class NegotiatedCapabilities {
 	}
 
 	/**
+	 * Returns true if the agent supports the {@code providers/*} configuration methods.
+	 * @return true if {@code providers} capability was advertised
+	 */
+	public boolean supportsProviders() {
+		return providers;
+	}
+
+	/**
 	 * Returns true if the agent supports image content in prompts.
 	 * @return true if promptCapabilities.image was advertised
 	 */
@@ -443,6 +456,16 @@ public final class NegotiatedCapabilities {
 	}
 
 	/**
+	 * Requires provider configuration capability, throwing if not supported.
+	 * @throws AcpCapabilityException if the agent doesn't support the {@code providers/*} methods
+	 */
+	public void requireProviders() {
+		if (!providers) {
+			throw new AcpCapabilityException("providers");
+		}
+	}
+
+	/**
 	 * Requires image content capability, throwing if not supported.
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
@@ -470,7 +493,7 @@ public final class NegotiatedCapabilities {
 				+ ", listSessions=" + listSessions
 				+ ", closeSession=" + closeSession + ", resumeSession=" + resumeSession + ", deleteSession="
 				+ deleteSession + ", additionalDirectories=" + additionalDirectories + ", forkSession="
-				+ forkSession + ", imageContent="
+				+ forkSession + ", providers=" + providers + ", imageContent="
 				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
 				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + '}';
 	}
@@ -505,6 +528,8 @@ public final class NegotiatedCapabilities {
 		private boolean additionalDirectories = false;
 
 		private boolean forkSession = false;
+
+		private boolean providers = false;
 
 		private boolean imageContent = false;
 
@@ -578,6 +603,11 @@ public final class NegotiatedCapabilities {
 
 		public Builder forkSession(boolean value) {
 			this.forkSession = value;
+			return this;
+		}
+
+		public Builder providers(boolean value) {
+			this.providers = value;
 			return this;
 		}
 

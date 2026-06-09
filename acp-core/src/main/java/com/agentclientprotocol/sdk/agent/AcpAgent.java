@@ -297,6 +297,39 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Functional interface for handling {@code providers/list} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface ListProvidersHandler {
+
+		Mono<AcpSchema.ListProvidersResponse> handle(AcpSchema.ListProvidersRequest request);
+
+	}
+
+	/**
+	 * Functional interface for handling {@code providers/set} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface SetProviderHandler {
+
+		Mono<AcpSchema.SetProviderResponse> handle(AcpSchema.SetProviderRequest request);
+
+	}
+
+	/**
+	 * Functional interface for handling {@code providers/disable} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface DisableProviderHandler {
+
+		Mono<AcpSchema.DisableProviderResponse> handle(AcpSchema.DisableProviderRequest request);
+
+	}
+
+	/**
 	 * Functional interface for handling cancel notifications.
 	 */
 	@FunctionalInterface
@@ -495,6 +528,39 @@ public interface AcpAgent {
 	}
 
 	/**
+	 * Synchronous functional interface for handling {@code providers/list} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface SyncListProvidersHandler {
+
+		AcpSchema.ListProvidersResponse handle(AcpSchema.ListProvidersRequest request);
+
+	}
+
+	/**
+	 * Synchronous functional interface for handling {@code providers/set} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface SyncSetProviderHandler {
+
+		AcpSchema.SetProviderResponse handle(AcpSchema.SetProviderRequest request);
+
+	}
+
+	/**
+	 * Synchronous functional interface for handling {@code providers/disable} requests (UNSTABLE).
+	 */
+	@UnstableAcpApi
+	@FunctionalInterface
+	interface SyncDisableProviderHandler {
+
+		AcpSchema.DisableProviderResponse handle(AcpSchema.DisableProviderRequest request);
+
+	}
+
+	/**
 	 * Synchronous functional interface for handling cancel notifications.
 	 * Returns void instead of Mono for use with sync agents.
 	 */
@@ -542,6 +608,12 @@ public interface AcpAgent {
 		private ForkSessionHandler forkSessionHandler;
 
 		private SetSessionConfigOptionHandler setSessionConfigOptionHandler;
+
+		private ListProvidersHandler listProvidersHandler;
+
+		private SetProviderHandler setProviderHandler;
+
+		private DisableProviderHandler disableProviderHandler;
 
 		private CancelHandler cancelHandler;
 
@@ -706,6 +778,39 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the handler for {@code providers/list} requests (UNSTABLE).
+		 * @param handler The list providers handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder listProvidersHandler(ListProvidersHandler handler) {
+			this.listProvidersHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code providers/set} requests (UNSTABLE).
+		 * @param handler The set provider handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder setProviderHandler(SetProviderHandler handler) {
+			this.setProviderHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code providers/disable} requests (UNSTABLE).
+		 * @param handler The disable provider handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder disableProviderHandler(DisableProviderHandler handler) {
+			this.disableProviderHandler = handler;
+			return this;
+		}
+
+		/**
 		 * Sets the handler for cancel notifications.
 		 * @param handler The cancel handler
 		 * @return This builder for chaining
@@ -723,7 +828,8 @@ public interface AcpAgent {
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, initializeHandler, authenticateHandler,
 					logoutHandler, newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler,
 					setSessionModelHandler, listSessionsHandler, closeSessionHandler, deleteSessionHandler,
-					resumeSessionHandler, forkSessionHandler, setSessionConfigOptionHandler, cancelHandler);
+					resumeSessionHandler, forkSessionHandler, setSessionConfigOptionHandler, listProvidersHandler,
+					setProviderHandler, disableProviderHandler, cancelHandler);
 		}
 
 	}
@@ -903,6 +1009,39 @@ public interface AcpAgent {
 		}
 
 		/**
+		 * Sets the synchronous handler for {@code providers/list} requests (UNSTABLE).
+		 * @param handler The sync list providers handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder listProvidersHandler(SyncListProvidersHandler handler) {
+			asyncBuilder.listProvidersHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
+		 * Sets the synchronous handler for {@code providers/set} requests (UNSTABLE).
+		 * @param handler The sync set provider handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder setProviderHandler(SyncSetProviderHandler handler) {
+			asyncBuilder.setProviderHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
+		 * Sets the synchronous handler for {@code providers/disable} requests (UNSTABLE).
+		 * @param handler The sync disable provider handler
+		 * @return This builder for chaining
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder disableProviderHandler(SyncDisableProviderHandler handler) {
+			asyncBuilder.disableProviderHandler(fromSync(handler));
+			return this;
+		}
+
+		/**
 		 * Sets the synchronous handler for cancel notifications.
 		 * @param handler The sync cancel handler (returns void)
 		 * @return This builder for chaining
@@ -1035,6 +1174,30 @@ public interface AcpAgent {
 		}
 
 		private static SetSessionConfigOptionHandler fromSync(SyncSetSessionConfigOptionHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static ListProvidersHandler fromSync(SyncListProvidersHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static SetProviderHandler fromSync(SyncSetProviderHandler syncHandler) {
+			if (syncHandler == null) {
+				return null;
+			}
+			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		}
+
+		private static DisableProviderHandler fromSync(SyncDisableProviderHandler syncHandler) {
 			if (syncHandler == null) {
 				return null;
 			}

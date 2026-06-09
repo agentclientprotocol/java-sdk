@@ -127,6 +127,15 @@ public class AcpAsyncClient {
 	private static final TypeRef<AcpSchema.SetSessionConfigOptionResponse> SET_SESSION_CONFIG_OPTION_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
+	private static final TypeRef<AcpSchema.ListProvidersResponse> LIST_PROVIDERS_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<AcpSchema.SetProviderResponse> SET_PROVIDER_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<AcpSchema.DisableProviderResponse> DISABLE_PROVIDER_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
 	private static final TypeRef<AcpSchema.PromptResponse> PROMPT_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
@@ -459,6 +468,48 @@ public class AcpAsyncClient {
 		logger.debug("Setting config option {} for session: {}", request.configId(), request.sessionId());
 		return session.sendRequest(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, request,
 				SET_SESSION_CONFIG_OPTION_RESPONSE_TYPE_REF);
+	}
+
+	// --------------------------
+	// Provider Configuration (UNSTABLE)
+	// --------------------------
+
+	/**
+	 * Lists the providers the agent can route to (UNSTABLE).
+	 *
+	 * <p>Only available if the agent advertises the {@code providers} capability.
+	 * @param request the list providers request
+	 * @return a Mono emitting the list of configurable providers
+	 * @see AcpSchema#METHOD_PROVIDERS_LIST
+	 */
+	public Mono<AcpSchema.ListProvidersResponse> listProviders(AcpSchema.ListProvidersRequest request) {
+		Assert.notNull(request, "List providers request must not be null");
+		logger.debug("Listing providers");
+		return session.sendRequest(AcpSchema.METHOD_PROVIDERS_LIST, request, LIST_PROVIDERS_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Configures a provider's routing (protocol, base URL, headers) (UNSTABLE).
+	 * @param request the set provider request
+	 * @return a Mono emitting the response
+	 * @see AcpSchema#METHOD_PROVIDERS_SET
+	 */
+	public Mono<AcpSchema.SetProviderResponse> setProvider(AcpSchema.SetProviderRequest request) {
+		Assert.notNull(request, "Set provider request must not be null");
+		logger.debug("Setting provider: {}", request.id());
+		return session.sendRequest(AcpSchema.METHOD_PROVIDERS_SET, request, SET_PROVIDER_RESPONSE_TYPE_REF);
+	}
+
+	/**
+	 * Disables a provider by id (UNSTABLE).
+	 * @param request the disable provider request
+	 * @return a Mono emitting the response
+	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
+	 */
+	public Mono<AcpSchema.DisableProviderResponse> disableProvider(AcpSchema.DisableProviderRequest request) {
+		Assert.notNull(request, "Disable provider request must not be null");
+		logger.debug("Disabling provider: {}", request.id());
+		return session.sendRequest(AcpSchema.METHOD_PROVIDERS_DISABLE, request, DISABLE_PROVIDER_RESPONSE_TYPE_REF);
 	}
 
 	// --------------------------

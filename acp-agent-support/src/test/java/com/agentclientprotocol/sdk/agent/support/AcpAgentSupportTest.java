@@ -14,10 +14,12 @@ import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
+import com.agentclientprotocol.sdk.annotation.ListProviders;
 import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.LoadSession;
 import com.agentclientprotocol.sdk.annotation.Logout;
 import com.agentclientprotocol.sdk.annotation.NewSession;
+import com.agentclientprotocol.sdk.annotation.SetProvider;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
@@ -31,6 +33,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListProvidersRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ListProvidersResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ListSessionsResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionRequest;
@@ -41,9 +45,12 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ProviderInfo;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SessionInfo;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
@@ -588,6 +595,87 @@ class AcpAgentSupportTest {
 				.block(TIMEOUT);
 
 		assertThat(deletedSessionId.get()).isEqualTo("session-to-delete");
+		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void listProvidersHandlerInvoked() throws Exception {
+		@AcpAgent
+		class ListProvidersAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@ListProviders
+			ListProvidersResponse listProviders(ListProvidersRequest req) {
+				return new ListProvidersResponse(List.of(new ProviderInfo("openai", List.of("openai"), false, null)));
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new ListProvidersAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		ListProvidersResponse resp = client.listProviders(new ListProvidersRequest()).block(TIMEOUT);
+
+		assertThat(resp).isNotNull();
+		assertThat(resp.providers()).hasSize(1);
+		assertThat(resp.providers().get(0).id()).isEqualTo("openai");
+	}
+
+	@Test
+	void setProviderHandlerInvoked() throws Exception {
+		AtomicReference<String> configuredId = new AtomicReference<>();
+		AtomicReference<String> configuredBaseUrl = new AtomicReference<>();
+
+		@AcpAgent
+		class SetProviderAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@SetProvider
+			SetProviderResponse setProvider(SetProviderRequest req) {
+				configuredId.set(req.id());
+				configuredBaseUrl.set(req.baseUrl());
+				return new SetProviderResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new SetProviderAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		SetProviderResponse resp = client
+				.setProvider(new SetProviderRequest("main", "anthropic", "https://api.anthropic.com"))
+				.block(TIMEOUT);
+
+		assertThat(configuredId.get()).isEqualTo("main");
+		assertThat(configuredBaseUrl.get()).isEqualTo("https://api.anthropic.com");
 		assertThat(resp).isNotNull();
 	}
 
