@@ -102,6 +102,7 @@ public class AcpAsyncClient {
 	private static final TypeRef<AcpSchema.SetSessionModeResponse> SET_SESSION_MODE_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
+	@SuppressWarnings("removal")
 	private static final TypeRef<AcpSchema.SetSessionModelResponse> SET_SESSION_MODEL_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
@@ -343,7 +344,12 @@ public class AcpAsyncClient {
 	 * @param setModelRequest the set model request with session ID and desired model
 	 * @return a Mono emitting the response confirming the model change
 	 * @see AcpSchema#METHOD_SESSION_SET_MODEL
+	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
+	 * (June 2026). Use {@link #setSessionConfigOption} with a {@code "model"} category config
+	 * option instead. Slated for removal.
 	 */
+	@Deprecated(forRemoval = true)
+	@SuppressWarnings("removal")
 	public Mono<AcpSchema.SetSessionModelResponse> setSessionModel(AcpSchema.SetSessionModelRequest setModelRequest) {
 		Assert.notNull(setModelRequest, "Set session model request must not be null");
 		logger.debug("Setting session model: {} for session: {}", setModelRequest.modelId(),

@@ -33,6 +33,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 public class DirectResponseHandler implements ReturnValueHandler {
 
 	@Override
+	@SuppressWarnings("removal") // recognizes the deprecated-for-removal SetSessionModelResponse
 	public boolean supportsReturnType(AcpMethodParameter returnType) {
 		Class<?> type = returnType.getParameterType();
 		return InitializeResponse.class.isAssignableFrom(type)

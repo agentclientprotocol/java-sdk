@@ -13,7 +13,11 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
  *
  * @author Mark Pollack
  * @since 1.0.0
+ * @deprecated The {@code session/set_model} method was removed from the ACP spec
+ * (June 2026). Slated for removal along with the rest of the session-model API.
  */
+@Deprecated(forRemoval = true)
+@SuppressWarnings("removal")
 public class SetSessionModelRequestResolver implements ArgumentResolver {
 
 	@Override

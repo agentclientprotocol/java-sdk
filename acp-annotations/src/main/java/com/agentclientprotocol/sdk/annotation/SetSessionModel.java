@@ -42,7 +42,13 @@ import java.lang.annotation.Target;
  * @since 1.0.0
  * @see AcpAgent
  * @see SetSessionMode
+ * @deprecated The {@code session/set_model} method was removed from the ACP spec
+ * (June 2026). Expose model selection through {@code session/set_config_option} with a
+ * config option whose {@code category} is {@code "model"} instead (handled with
+ * {@link SetSessionConfigOption}). Slated for removal.
  */
+@Deprecated(forRemoval = true)
+@UnstableAcpApi
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

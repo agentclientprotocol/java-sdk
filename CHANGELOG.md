@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
+
+### Added
+
+- `logout` method (`AcpAsyncClient`/`AcpSyncClient.logout`, `@Logout`, agent handler) — clears
+  stored credentials.
+- `session/delete` method (`deleteSession`, `@DeleteSession`, agent handler) — permanently deletes a
+  stored session; gated on the `sessionCapabilities.delete` capability.
+- `additionalDirectories` on `session/new`, `session/load`, `session/resume`, `session/fork` requests
+  and on `SessionInfo` — extra workspace roots beyond `cwd`.
+- Per-chunk `messageId` on `AgentMessageChunk`, `AgentThoughtChunk`, `UserMessageChunk`.
+- `sessionCapabilities.delete` and `sessionCapabilities.additionalDirectories`, surfaced via
+  `NegotiatedCapabilities` (`supports*`/`require*`).
+
+### Deprecated
+
+- The session-model API — `session/set_model` (`setSessionModel`, `@SetSessionModel`, handler),
+  `SetSessionModelRequest`/`SetSessionModelResponse`, `SessionModelState`, `ModelInfo`, and the
+  `models` field on the new/load/resume/fork session responses — is deprecated for removal. The spec
+  removed it (June 2026, v0.13.5); expose model selection through `session/set_config_option` with a
+  config option whose `category` is `"model"` instead. Scheduled for removal in a future release.
+
 ## [0.9.0] - 2026-02-XX
 
 ### Added

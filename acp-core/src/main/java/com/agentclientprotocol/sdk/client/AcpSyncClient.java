@@ -255,7 +255,12 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @param setModelRequest the set model request with session ID and desired model
 	 * @return the response confirming the model change
 	 * @see AcpSchema#METHOD_SESSION_SET_MODEL
+	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
+	 * (June 2026). Use {@link #setSessionConfigOption} with a {@code "model"} category config
+	 * option instead. Slated for removal.
 	 */
+	@Deprecated(forRemoval = true)
+	@SuppressWarnings("removal")
 	public AcpSchema.SetSessionModelResponse setSessionModel(AcpSchema.SetSessionModelRequest setModelRequest) {
 		return this.delegate.setSessionModel(setModelRequest).block();
 	}

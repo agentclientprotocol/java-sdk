@@ -339,6 +339,7 @@ class AcpAgentSupportTest {
 	}
 
 	@Test
+	@SuppressWarnings("removal") // exercises the deprecated-for-removal session/set_model handler
 	void setSessionModelHandlerInvoked() throws Exception {
 		AtomicReference<String> receivedModelId = new AtomicReference<>();
 

@@ -111,6 +111,7 @@ public class AcpTestFixtures {
 	 * Creates a NewSessionResponse with test session ID.
 	 * @return NewSessionResponse with default test session
 	 */
+	@SuppressWarnings("removal")
 	public static AcpSchema.NewSessionResponse createNewSessionResponse() {
 		return new AcpSchema.NewSessionResponse("test-session-id", createSessionModeState(),
 				createSessionModelState());
@@ -121,6 +122,7 @@ public class AcpTestFixtures {
 	 * @param sessionId the session ID
 	 * @return NewSessionResponse with specified session ID
 	 */
+	@SuppressWarnings("removal")
 	public static AcpSchema.NewSessionResponse createNewSessionResponse(String sessionId) {
 		return new AcpSchema.NewSessionResponse(sessionId, createSessionModeState(), createSessionModelState());
 	}
@@ -137,6 +139,7 @@ public class AcpTestFixtures {
 	 * Creates a LoadSessionResponse with default session state.
 	 * @return LoadSessionResponse with test data
 	 */
+	@SuppressWarnings("removal")
 	public static AcpSchema.LoadSessionResponse createLoadSessionResponse() {
 		return new AcpSchema.LoadSessionResponse(createSessionModeState(), createSessionModelState());
 	}
@@ -239,6 +242,7 @@ public class AcpTestFixtures {
 	 * Creates a SessionModelState with test model.
 	 * @return SessionModelState with default model
 	 */
+	@SuppressWarnings("removal")
 	public static AcpSchema.SessionModelState createSessionModelState() {
 		AcpSchema.ModelInfo model = new AcpSchema.ModelInfo("test-model", "Test Model", "Test model description");
 		return new AcpSchema.SessionModelState("test-model", List.of(model));

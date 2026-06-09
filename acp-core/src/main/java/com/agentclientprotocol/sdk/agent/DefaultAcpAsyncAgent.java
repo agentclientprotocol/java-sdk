@@ -52,6 +52,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.SetSessionModeHandler setSessionModeHandler;
 
+	@SuppressWarnings("removal")
 	private final AcpAgent.SetSessionModelHandler setSessionModelHandler;
 
 	private final AcpAgent.ListSessionsHandler listSessionsHandler;
@@ -75,6 +76,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	 */
 	private final AtomicReference<NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
+	@SuppressWarnings("removal") // accepts the deprecated-for-removal SetSessionModelHandler
 	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout,
 			AcpAgent.InitializeHandler initializeHandler, AcpAgent.AuthenticateHandler authenticateHandler,
 			AcpAgent.LogoutHandler logoutHandler, AcpAgent.NewSessionHandler newSessionHandler,
@@ -106,6 +108,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	}
 
 	@Override
+	@SuppressWarnings("removal") // registers the deprecated-for-removal session/set_model handler
 	public Mono<Void> start() {
 		return Mono.fromRunnable(() -> {
 			logger.info("Starting ACP async agent");

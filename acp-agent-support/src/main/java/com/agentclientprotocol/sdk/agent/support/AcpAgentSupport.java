@@ -183,6 +183,7 @@ public class AcpAgentSupport {
 		return agent;
 	}
 
+	@SuppressWarnings("removal") // wires the deprecated-for-removal session/set_model handler
 	private void wireHandlers(AcpAgent.SyncAgentBuilder agentBuilder) {
 		// Initialize handler
 		AcpHandlerMethod initHandler = handlers.get("initialize");
@@ -470,6 +471,7 @@ public class AcpAgentSupport {
 			return new AcpAgentSupport(this);
 		}
 
+		@SuppressWarnings("removal") // discovers the deprecated-for-removal @SetSessionModel
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> beanSupplier) {
 			if (!agentClass.isAnnotationPresent(
 					com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
@@ -538,6 +540,7 @@ public class AcpAgentSupport {
 			}
 		}
 
+		@SuppressWarnings("removal") // registers the deprecated-for-removal SetSessionModelRequestResolver
 		private void addDefaultResolvers() {
 			// Built-in resolvers (order matters - first match wins)
 			// Custom resolvers added via builder go first

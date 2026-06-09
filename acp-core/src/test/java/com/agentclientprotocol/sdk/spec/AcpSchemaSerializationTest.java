@@ -76,6 +76,7 @@ class AcpSchemaSerializationTest {
 	}
 
 	@Test
+	@SuppressWarnings("removal") // asserts on the deprecated-for-removal models field
 	void newSessionResponseSerialization() throws IOException {
 		AcpSchema.NewSessionResponse response = AcpTestFixtures.createNewSessionResponse();
 
@@ -271,6 +272,7 @@ class AcpSchemaSerializationTest {
 	}
 
 	@Test
+	@SuppressWarnings("removal") // exercises the deprecated-for-removal SessionModelState
 	void sessionModelStateSerialization() throws IOException {
 		AcpSchema.SessionModelState state = AcpTestFixtures.createSessionModelState();
 
