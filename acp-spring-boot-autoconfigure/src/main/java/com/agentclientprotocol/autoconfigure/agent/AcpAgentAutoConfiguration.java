@@ -28,16 +28,16 @@ public class AcpAgentAutoConfiguration {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpAgentAutoConfiguration.class);
 
+	// Back off for client-only applications: only start an agent lifecycle when the
+	// application actually defines an @AcpAgent bean. The acp-spring-boot-starter serves
+	// both clients and agents, so a client app legitimately has no @AcpAgent bean.
 	@Bean
+	@ConditionalOnBean(annotation = AcpAgent.class)
 	AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
 			AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
 
 		Map<String, Object> agentBeans = applicationContext.getBeansWithAnnotation(AcpAgent.class);
 
-		if (agentBeans.isEmpty()) {
-			throw new BeanCreationException("No @AcpAgent-annotated bean found in the application context. "
-					+ "Define a Spring bean annotated with @AcpAgent to use ACP agent autoconfiguration.");
-		}
 		if (agentBeans.size() > 1) {
 			throw new BeanCreationException("Found " + agentBeans.size() + " @AcpAgent-annotated beans "
 					+ agentBeans.keySet() + ", but only one is supported per application.");

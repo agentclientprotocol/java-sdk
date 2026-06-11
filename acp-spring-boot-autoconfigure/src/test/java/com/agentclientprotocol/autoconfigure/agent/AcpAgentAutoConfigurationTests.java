@@ -35,11 +35,11 @@ class AcpAgentAutoConfigurationTests {
 
 	@Test
 	void noAgentLifecycleWithoutAgentBean() {
+		// Client-only app: the agent autoconfiguration must back off, not fail the
+		// context.
 		this.runner.run(context -> {
-			assertThat(context).hasFailed();
-			assertThat(context.getStartupFailure()).rootCause()
-				.isInstanceOf(BeanCreationException.class)
-				.hasMessageContaining("No @AcpAgent-annotated bean found");
+			assertThat(context).hasNotFailed();
+			assertThat(context).doesNotHaveBean("acpAgentLifecycle");
 		});
 	}
 
