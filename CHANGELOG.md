@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.14.0] - 2026-06-11
 
-Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
+Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the never-published
+0.13.0 (its content ships here).
 
 ### Added
 
@@ -35,6 +36,8 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
   `SessionConfigSelect`, `SessionConfigSelectOption`, `ConfigOptionUpdate`, and `@SetSessionConfigOption`
   — `session/set_config_option` and `session/set_mode` are now in the stable ACP schema. The
   `boolean` config-option variant (`SessionConfigBoolean`) remains an unstable SDK extension.
+- Aligned Jackson to 2.21.2 (matches the agentworks-bom managed set / Spring Boot's jackson-bom).
+- WebSocket transport maximum message size increased to 4 MB.
 
 ### Deprecated
 
@@ -43,6 +46,10 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026).
   `models` field on the new/load/resume/fork session responses — is deprecated for removal. The spec
   removed it (June 2026, v0.13.5); expose model selection through `session/set_config_option` with a
   config option whose `category` is `"model"` instead. Scheduled for removal in a future release.
+
+### Fixed
+
+- WebSocket client transport no longer echoes agent requests back to the agent.
 
 ## [0.9.0] - 2026-02-XX
 

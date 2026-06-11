@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.12.0</version>
+    <version>0.14.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.12.0</version>
+    <version>0.14.0</version>
 </dependency>
 ```
 
@@ -48,11 +48,11 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.12.0</version>
+    <version>0.14.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.13.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.15.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -465,7 +465,17 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.12.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.14.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the never-published 0.13.0.
+
+New stable methods: `logout`, `session/delete`; the session config-option API (`session/set_config_option`, `session/set_mode`) is promoted to stable.
+
+New unstable methods (marked `@UnstableAcpApi`): provider configuration — `providers/list`, `providers/set`, `providers/disable`.
+
+Also: `additionalDirectories` workspace roots on session requests; per-chunk `messageId` on streamed chunks with `sendMessage`/`sendThought` overloads. The session-model API (`session/set_model`) is deprecated for removal — use `session/set_config_option` with a `"model"` category instead. Jackson aligned to 2.21.2; WebSocket max message size raised to 4 MB.
+
+### 0.12.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 New stable methods: `session/list`, `session/close`, `session/resume` ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-20-session-management))
 
