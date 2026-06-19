@@ -5,7 +5,11 @@
 package com.agentclientprotocol.sdk.spec;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
@@ -296,6 +300,37 @@ class AcpClientSessionTest {
 				Function.identity());
 
 		StepVerifier.create(session.closeGracefully()).verifyComplete();
+	}
+
+	@Test
+	void testNotificationOrderPreservedWithAsyncHandler() throws InterruptedException {
+		// Notification i gets a delay of (5 - i) * 30ms so that without serialization
+		// later notifications would complete first, reversing the observed order.
+		int count = 5;
+		List<Integer> processedOrder = new CopyOnWriteArrayList<>();
+		CountDownLatch latch = new CountDownLatch(count);
+
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(),
+				Map.of(TEST_NOTIFICATION, params -> {
+					int index = (int) ((Map<?, ?>) params).get("index");
+					long delayMs = (count - index) * 30L;
+					return Mono.delay(Duration.ofMillis(delayMs)).then(Mono.fromRunnable(() -> {
+						processedOrder.add(index);
+						latch.countDown();
+					}));
+				}),
+				Function.identity());
+
+		for (int i = 0; i < count; i++) {
+			transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(
+					AcpSchema.JSONRPC_VERSION, TEST_NOTIFICATION, Map.of("index", i)));
+		}
+
+		assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+		assertThat(processedOrder).containsExactly(0, 1, 2, 3, 4);
+
+		session.close();
 	}
 
 	@Test

@@ -11,8 +11,10 @@ import com.agentclientprotocol.sdk.util.Assert;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
+import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.util.Map;
@@ -77,6 +79,12 @@ public class AcpClientSession implements AcpSession {
 
 	/** Atomic counter for generating unique request IDs */
 	private final AtomicLong requestCounter = new AtomicLong(0);
+
+	/** Sink for serializing notification delivery in arrival order */
+	private final Sinks.Many<AcpSchema.JSONRPCNotification> notificationSink;
+
+	/** Subscription draining the notification sink via concatMap */
+	private final Disposable notificationSubscription;
 
 	/**
 	 * Functional interface for handling incoming JSON-RPC requests. Implementations
@@ -148,6 +156,17 @@ public class AcpClientSession implements AcpSession {
 					return t;
 				}), "acp-timeout-" + sessionPrefix);
 
+		// Serialize notification delivery: concatMap ensures each notification's Mono
+		// completes before the next one starts, preserving arrival order even when
+		// handlers do async work.
+		this.notificationSink = Sinks.many().unicast().onBackpressureBuffer();
+		this.notificationSubscription = this.notificationSink.asFlux()
+			.concatMap(notification -> handleIncomingNotification(notification).onErrorComplete(t -> {
+				logger.error("Error handling notification: {}", t.getMessage());
+				return true;
+			}))
+			.subscribe();
+
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty())).transform(connectHook).subscribe();
 	}
 
@@ -203,10 +222,10 @@ public class AcpClientSession implements AcpSession {
 		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
 			logger.debug("Received notification: {}", notification);
 			logger.trace("Incoming notification method='{}' params={}", notification.method(), notification.params());
-			handleIncomingNotification(notification).onErrorComplete(t -> {
-				logger.error("Error handling notification: {}", t.getMessage());
-				return true;
-			}).subscribe();
+			Sinks.EmitResult result = notificationSink.tryEmitNext(notification);
+			if (result.isFailure()) {
+				logger.warn("Failed to enqueue notification for serial processing: {}", result);
+			}
 		}
 		else {
 			logger.warn("Received unknown message type: {}", message);
@@ -352,6 +371,8 @@ public class AcpClientSession implements AcpSession {
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
 			dismissPendingResponses();
+			notificationSink.tryEmitComplete();
+			notificationSubscription.dispose();
 			timeoutScheduler.dispose();
 		});
 	}
@@ -362,6 +383,8 @@ public class AcpClientSession implements AcpSession {
 	@Override
 	public void close() {
 		dismissPendingResponses();
+		notificationSink.tryEmitComplete();
+		notificationSubscription.dispose();
 		timeoutScheduler.dispose();
 	}
 
