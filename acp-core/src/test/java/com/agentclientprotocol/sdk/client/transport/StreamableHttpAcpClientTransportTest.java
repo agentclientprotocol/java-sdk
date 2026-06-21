@@ -86,32 +86,8 @@ class StreamableHttpAcpClientTransportTest {
 	}
 
 	@Test
-	void routingModeIsConfigurable() {
-		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
-				URI.create("https://localhost:8443/acp"), jsonMapper)
-			.routingMode(StreamableHttpAcpClientTransport.RoutingMode.STRICT);
-
-		assertThat(transport).isNotNull();
-	}
-
-	@Test
 	void defaultAcpPathIsCorrect() {
 		assertThat(StreamableHttpAcpClientTransport.DEFAULT_ACP_PATH).isEqualTo("/acp");
-	}
-
-	@Test
-	void strictRoutingRejectsUnknownOutboundMethods() {
-		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
-				URI.create("https://localhost:8443/acp"), jsonMapper)
-			.routingMode(StreamableHttpAcpClientTransport.RoutingMode.STRICT);
-
-		transport.connect(message -> Mono.empty()).block();
-
-		assertThatThrownBy(() -> transport
-			.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "extension/custom",
-					Map.of("sessionId", "session-1")))
-			.block())
-			.hasMessageContaining("No explicit routing rule for outbound method extension/custom");
 	}
 
 	@Test

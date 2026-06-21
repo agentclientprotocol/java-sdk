@@ -93,25 +93,6 @@ public class StreamableHttpAcpAgentTransport {
 
 	private static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
-	/**
-	 * Controls whether unknown message methods may fall back to shape-based routing.
-	 */
-	public enum RoutingMode {
-
-		/**
-		 * Prefer explicit ACP routing and fall back to session-id shape inference for
-		 * extension methods. Also permits provisional session streams before
-		 * {@code session/load} so the currently ambiguous resume flow can work.
-		 */
-		COMPATIBLE,
-
-		/**
-		 * Require explicit routing rules and reject unknown session streams.
-		 */
-		STRICT
-
-	}
-
 	private enum ScopeKind {
 
 		CONNECTION,
@@ -181,8 +162,6 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
-	private volatile RoutingMode routingMode = RoutingMode.COMPATIBLE;
-
 	private volatile Server server;
 
 	private volatile ServerConnector connector;
@@ -214,17 +193,6 @@ public class StreamableHttpAcpAgentTransport {
 		this.path = path;
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
-	}
-
-	/**
-	 * Sets the routing mode used by the listener.
-	 * @param routingMode routing mode to use
-	 * @return this transport
-	 */
-	public StreamableHttpAcpAgentTransport routingMode(RoutingMode routingMode) {
-		Assert.notNull(routingMode, "The routingMode can not be null");
-		this.routingMode = routingMode;
-		return this;
 	}
 
 	/**
@@ -667,9 +635,6 @@ public class StreamableHttpAcpAgentTransport {
 					return RouteScope.session(requireSessionId(params, method));
 				default:
 					Optional<String> sessionId = extractSessionId(params);
-					if (routingMode == RoutingMode.STRICT) {
-						throw new AcpConnectionException("No explicit routing rule for outbound method " + method);
-					}
 					return sessionId.map(RouteScope::session).orElseGet(RouteScope::connection);
 			}
 		}
@@ -714,9 +679,6 @@ public class StreamableHttpAcpAgentTransport {
 					break;
 				default:
 					Optional<String> sessionId = extractSessionId(params);
-					if (routingMode == RoutingMode.STRICT) {
-						throw new AcpConnectionException("No explicit routing rule for inbound method " + method);
-					}
 					if (sessionId.isPresent()) {
 						requestScope = requireSessionScope(method, params, sessionHeader);
 					}
@@ -746,9 +708,6 @@ public class StreamableHttpAcpAgentTransport {
 			SessionState current = sessions.get(sessionId);
 			if (route != null && route.kind() == RequestKind.SESSION_LOAD) {
 				if (current == null) {
-					if (routingMode == RoutingMode.STRICT) {
-						throw new UnknownSessionException("Unknown session " + sessionId);
-					}
 					sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
 					sessionStream(sessionId);
 				}
@@ -776,15 +735,11 @@ public class StreamableHttpAcpAgentTransport {
 		private OutboundStream openSessionStream(String sessionId) {
 			SessionState current = sessions.get(sessionId);
 			if (current == null) {
-				if (routingMode == RoutingMode.STRICT) {
-					throw new UnknownSessionException("Unknown session " + sessionId);
-				}
 				/*
 				 * RFD gap:
 				 * The current text says unknown session-scoped GET requests return 404,
 				 * but its resume flow also asks clients to open a session stream before
-				 * sending session/load. Compatible mode keeps a provisional stream so
-				 * practical resume can work while strict mode preserves the literal rule.
+				 * sending session/load. Keep a provisional stream so practical resume can work.
 				 */
 				sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
 			}

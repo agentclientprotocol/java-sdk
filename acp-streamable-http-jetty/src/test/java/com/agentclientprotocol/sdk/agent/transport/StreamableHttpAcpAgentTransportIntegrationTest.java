@@ -49,7 +49,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void javaClientCanTalkToRunningJavaServer() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			AcpAsyncClient client = AcpClient
 				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
 				.requestTimeout(TIMEOUT)
@@ -73,7 +73,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void permissionRequestRoundTripsOverSessionStream() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			AtomicInteger permissionRequests = new AtomicInteger();
 			AcpAsyncClient client = AcpClient
 				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
@@ -103,7 +103,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void compatibleModeAllowsSessionLoadPreopen() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			AcpAsyncClient client = AcpClient
 				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
 				.requestTimeout(TIMEOUT)
@@ -122,7 +122,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void supportsTwoLogicalSessions() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			AcpAsyncClient client = AcpClient
 				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
 				.requestTimeout(TIMEOUT)
@@ -153,7 +153,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void wrongStreamClientResponseIsRejected() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
@@ -187,7 +187,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void validationFailuresUseHttpStatusCodes() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			HttpResponse<String> jsonWithCharset = rawClient.send(HttpRequest.newBuilder(server.endpoint())
 				.header("Content-Type", "application/json; charset=utf-8")
@@ -228,7 +228,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void connectionReplayDeliversSessionNewWhenSseAttachesAfterPost() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 
@@ -251,7 +251,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void sessionReplayDeliversPromptEventsWhenSseAttachesAfterPost() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
@@ -275,7 +275,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void concurrentPostsToSameConnectionAreBothAcceptedAndRouted() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 			ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -313,7 +313,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void sessionScopedMessagesValidateSessionHeader() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
@@ -350,7 +350,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void deleteClosesSseAndRemovesConnection() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
@@ -385,7 +385,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 	@Test
 	void replayOverflowClosesConnectionInsteadOfDroppingMessages() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.COMPATIBLE)) {
+		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
 
@@ -401,31 +401,6 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			}
 
 			assertEventuallyPostStatus(rawClient, server.endpoint(), connectionId, 404);
-		}
-	}
-
-	@Test
-	void strictModeRejectsUnknownSessionStream() throws Exception {
-		try (FixtureServer server = FixtureServer.start(StreamableHttpAcpAgentTransport.RoutingMode.STRICT)) {
-			HttpResponse<Void> response = HttpClient.newHttpClient()
-				.send(HttpRequest.newBuilder(server.endpoint())
-					.header("Content-Type", "application/json")
-					.header("Accept", "application/json")
-					.POST(HttpRequest.BodyPublishers.ofString("""
-							{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
-							"""))
-					.build(), HttpResponse.BodyHandlers.discarding());
-			String connectionId = response.headers().firstValue("Acp-Connection-Id").orElseThrow();
-			HttpResponse<Void> unknownSession = HttpClient.newHttpClient()
-				.send(HttpRequest.newBuilder(server.endpoint())
-					.header("Accept", "text/event-stream")
-					.header("Acp-Connection-Id", connectionId)
-					.header("Acp-Session-Id", "unknown")
-					.GET()
-					.build(), HttpResponse.BodyHandlers.discarding());
-
-			assertThat(response.statusCode()).isEqualTo(200);
-			assertThat(unknownSession.statusCode()).isEqualTo(404);
 		}
 	}
 
@@ -494,7 +469,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			this.transport = transport;
 		}
 
-		static FixtureServer start(StreamableHttpAcpAgentTransport.RoutingMode routingMode) throws Exception {
+		static FixtureServer start() throws Exception {
 			AtomicInteger sessionCounter = new AtomicInteger();
 			AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
 				.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
@@ -511,7 +486,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				})
 				.build());
 			StreamableHttpAcpAgentTransport transport = new StreamableHttpAcpAgentTransport(
-					freePort(), AcpJsonMapper.createDefault(), agentFactory).routingMode(routingMode);
+					freePort(), AcpJsonMapper.createDefault(), agentFactory);
 			transport.start().block(TIMEOUT);
 			return new FixtureServer(transport);
 		}

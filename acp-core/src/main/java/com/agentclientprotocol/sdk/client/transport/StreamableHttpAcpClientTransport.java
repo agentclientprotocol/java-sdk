@@ -68,25 +68,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
 
-	/**
-	 * Controls how unknown outbound request / notification methods are classified.
-	 */
-	public enum RoutingMode {
-
-		/**
-		 * Prefer explicit ACP routing, but fall back to session-id shape inference for
-		 * unknown methods so clients can remain forward-compatible with extensions.
-		 */
-		COMPATIBLE,
-
-		/**
-		 * Require every outbound request / notification method to have an explicit routing
-		 * rule.
-		 */
-		STRICT
-
-	}
-
 	private enum ScopeKind {
 
 		BOOTSTRAP,
@@ -177,8 +158,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private volatile String connectionId;
 
-	private volatile RoutingMode routingMode = RoutingMode.COMPATIBLE;
-
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	/**
@@ -243,17 +222,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return new HttpClientBundle(client, executor);
 	}
 
-	/**
-	 * Sets the routing mode for outbound request / notification classification.
-	 * @param routingMode routing mode to apply
-	 * @return this transport
-	 */
-	public StreamableHttpAcpClientTransport routingMode(RoutingMode routingMode) {
-		Assert.notNull(routingMode, "The routingMode can not be null");
-		this.routingMode = routingMode;
-		return this;
-	}
-
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		Assert.notNull(handler, "The handler can not be null");
@@ -268,23 +236,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private void handleIncomingMessages(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		this.inboundSink.asFlux()
 			.flatMap(message -> Mono.just(message).transform(handler))
-			.doOnNext(this::forwardHandlerEmissionForCompatibility)
 			.subscribe();
-	}
-
-	private void forwardHandlerEmissionForCompatibility(JSONRPCMessage emittedMessage) {
-		/*
-		 * Compatibility note:
-		 * WebSocketAcpClientTransport currently forwards any message emitted by the
-		 * registered client handler back onto the transport. AcpClientSession also sends
-		 * client responses explicitly via sendMessage(...), so the client-side contract is
-		 * still ambiguous. Preserve parity for now and keep this path isolated so it can be
-		 * removed cheaply if the client transport contract is later made receive-only.
-		 */
-		if (emittedMessage != null && !closing.get()) {
-			routeAndPost(emittedMessage).subscribe(v -> {
-			}, exceptionHandler);
-		}
 	}
 
 	@Override
@@ -518,9 +470,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				break;
 			default:
 				Optional<String> sessionId = extractSessionId(params);
-				if (routingMode == RoutingMode.STRICT) {
-					throw new AcpConnectionException("No explicit routing rule for outbound method " + method);
-				}
 				if (sessionId.isPresent()) {
 					logger.warn("Falling back to inferred session routing for unknown method '{}'", method);
 					requestScope = RouteScope.session(sessionId.get());
