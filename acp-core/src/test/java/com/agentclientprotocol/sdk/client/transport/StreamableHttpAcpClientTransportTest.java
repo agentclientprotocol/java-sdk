@@ -92,6 +92,35 @@ class StreamableHttpAcpClientTransportTest {
 	}
 
 	@Test
+	void initializeRejectsNonResponseBody() throws Exception {
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper,
+				initializeHttpClient(new AcpSchema.JSONRPCNotification("session/update", Map.of())));
+		transport.setExceptionHandler(error -> {
+		});
+
+		assertThatThrownBy(() -> transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE,
+				"init-1", AcpTestFixtures.createInitializeRequest())).block())
+			.isInstanceOf(AcpConnectionException.class)
+			.hasMessage("ACP initialize response was not a JSON-RPC response");
+	}
+
+	@Test
+	void initializeRejectsResponseWithDifferentId() throws Exception {
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper,
+				initializeHttpClient(AcpTestFixtures.createJsonRpcResponse("wrong-id",
+						AcpTestFixtures.createInitializeResponse())));
+		transport.setExceptionHandler(error -> {
+		});
+
+		assertThatThrownBy(() -> transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE,
+				"init-1", AcpTestFixtures.createInitializeRequest())).block())
+			.isInstanceOf(AcpConnectionException.class)
+			.hasMessage("ACP initialize response id did not match initialize request");
+	}
+
+	@Test
 	void concurrentSessionLoadsReuseInFlightSessionStreamOpen() throws Exception {
 		HttpClient httpClient = mock(HttpClient.class);
 		AtomicInteger sessionGetCount = new AtomicInteger();
@@ -570,6 +599,15 @@ class StreamableHttpAcpClientTransportTest {
 
 	private InputStream emptyBody() {
 		return new ByteArrayInputStream(new byte[0]);
+	}
+
+	private HttpClient initializeHttpClient(AcpSchema.JSONRPCMessage initializeResponse) throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		String body = jsonMapper.writeValueAsString(initializeResponse);
+		HttpResponse<Object> response = response(200,
+				Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), body);
+		when(httpClient.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(response));
+		return httpClient;
 	}
 
 	private <T> HttpResponse<T> response(int statusCode, Map<String, String> headers, T body) {
