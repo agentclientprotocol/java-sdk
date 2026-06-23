@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -926,6 +927,13 @@ public class StreamableHttpAcpAgentTransport {
 					return;
 				}
 				initialized.set(true);
+			}
+			else if (message instanceof AcpSchema.JSONRPCRequest request
+					&& AcpSchema.METHOD_INITIALIZE.equals(request.method())) {
+				sendToClient(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
+						new AcpSchema.JSONRPCError(AcpErrorCodes.INVALID_REQUEST,
+								"Initialize not allowed on existing connection", null)));
+				return;
 			}
 			remoteConnection.acceptInbound(message);
 		}

@@ -24,6 +24,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -285,6 +287,44 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		}
 	}
 
+	@Test
+	void rejectsDuplicateInitializeWithoutForwardingItToTheAgent() throws Exception {
+		AtomicInteger initializeCalls = new AtomicInteger();
+		AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> {
+				initializeCalls.incrementAndGet();
+				return Mono.just(new AcpSchema.InitializeResponse(AcpSchema.LATEST_PROTOCOL_VERSION,
+						new AcpSchema.AgentCapabilities(true, null, null), List.of()));
+			})
+			.build());
+
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			MessageRecordingListener listener = new MessageRecordingListener();
+			WebSocket webSocket = HttpClient.newHttpClient()
+				.newWebSocketBuilder()
+				.connectTimeout(TIMEOUT)
+				.buildAsync(server.endpoint(), listener)
+				.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+
+			assertThat(listener.openLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+			webSocket.sendText("""
+					{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+					""", true).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			assertThat(readJsonRpcMessage(listener)).isInstanceOf(AcpSchema.JSONRPCResponse.class);
+
+			webSocket.sendText("""
+					{"jsonrpc":"2.0","id":"init-2","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+					""", true).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+
+			AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) readJsonRpcMessage(listener);
+			assertThat(response.id()).isEqualTo("init-2");
+			assertThat(response.error()).isNotNull();
+			assertThat(response.error().code()).isEqualTo(-32600);
+			assertThat(response.error().message()).isEqualTo("Initialize not allowed on existing connection");
+			assertThat(initializeCalls).hasValue(1);
+		}
+	}
+
 	private static AcpAgentFactory simpleAgentFactory() {
 		AtomicInteger sessionCounter = new AtomicInteger();
 		return AcpAgentFactory.async(transport -> AcpAgent.async(transport)
@@ -316,6 +356,12 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 			Thread.sleep(25);
 		}
 		assertThat(transport.activeConnectionCount()).isEqualTo(0);
+	}
+
+	private static AcpSchema.JSONRPCMessage readJsonRpcMessage(MessageRecordingListener listener) throws Exception {
+		String message = listener.messages.poll(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+		assertThat(message).isNotNull();
+		return AcpSchema.deserializeJsonRpcMessage(AcpJsonMapper.createDefault(), message);
 	}
 
 	private static int freePort() {
@@ -391,6 +437,27 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		@Override
 		public void onError(WebSocket webSocket, Throwable error) {
 			closeLatch.countDown();
+		}
+
+	}
+
+	private static final class MessageRecordingListener implements WebSocket.Listener {
+
+		private final CountDownLatch openLatch = new CountDownLatch(1);
+
+		private final BlockingQueue<String> messages = new LinkedBlockingQueue<>();
+
+		@Override
+		public void onOpen(WebSocket webSocket) {
+			openLatch.countDown();
+			webSocket.request(1);
+		}
+
+		@Override
+		public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+			messages.add(data.toString());
+			webSocket.request(1);
+			return CompletableFuture.completedFuture(null);
 		}
 
 	}
