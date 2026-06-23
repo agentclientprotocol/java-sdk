@@ -57,6 +57,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * Listener-backed ACP Streamable HTTP transport for agents.
@@ -96,6 +97,9 @@ public class StreamableHttpAcpAgentTransport {
 	private static final int MAX_REPLAY_EVENTS = 1024;
 
 	private static final int MAX_PENDING_SSE_EVENTS = 1024;
+
+	// Commits the SSE response when there are no replay events, without emitting an ACP message.
+	private static final byte[] SSE_OPEN_COMMENT = ": connected\n\n".getBytes(StandardCharsets.UTF_8);
 
 	private static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
@@ -308,9 +312,7 @@ public class StreamableHttpAcpAgentTransport {
 
 	private ConnectionState createConnection() {
 		String connectionId = UUID.randomUUID().toString();
-		ConnectionState connection = new ConnectionState(connectionId);
-		connection.start();
-		return connection;
+		return new ConnectionState(connectionId);
 	}
 
 	private WebSocketConnectionState createWebSocketConnection() {
@@ -430,9 +432,47 @@ public class StreamableHttpAcpAgentTransport {
 			}
 
 			ConnectionState connection = createConnection();
+			AsyncContext asyncContext = request.startAsync();
+			asyncContext.setTimeout(INITIALIZE_TIMEOUT.toMillis());
+			AtomicBoolean completed = new AtomicBoolean(false);
+			asyncContext.addListener(new AsyncListener() {
+
+				@Override
+				public void onComplete(AsyncEvent event) {
+				}
+
+				@Override
+				public void onTimeout(AsyncEvent event) {
+					completeInitializeFailure(asyncContext, response, connection, completed);
+				}
+
+				@Override
+				public void onError(AsyncEvent event) {
+					completeInitializeFailure(asyncContext, response, connection, completed);
+				}
+
+				@Override
+				public void onStartAsync(AsyncEvent event) {
+					event.getAsyncContext().addListener(this);
+				}
+
+			});
+
+			connection.start()
+				.then(Mono.defer(() -> connection.initialize(initializeRequest)))
+				.timeout(INITIALIZE_TIMEOUT)
+				.subscribeOn(Schedulers.boundedElastic())
+				.subscribe(initializeResponse -> completeInitializeSuccess(asyncContext, response, connection,
+						completed, initializeResponse),
+					error -> completeInitializeFailure(asyncContext, response, connection, completed));
+		}
+
+		private void completeInitializeSuccess(AsyncContext asyncContext, HttpServletResponse response,
+				ConnectionState connection, AtomicBoolean completed, JSONRPCMessage initializeResponse) {
+			if (!completed.compareAndSet(false, true)) {
+				return;
+			}
 			try {
-				JSONRPCMessage initializeResponse = connection.initialize(initializeRequest)
-					.block(INITIALIZE_TIMEOUT);
 				if (!(initializeResponse instanceof AcpSchema.JSONRPCResponse)) {
 					throw new AcpConnectionException("initialize did not produce a JSON-RPC response");
 				}
@@ -443,8 +483,43 @@ public class StreamableHttpAcpAgentTransport {
 				response.getWriter().write(jsonMapper.writeValueAsString(initializeResponse));
 			}
 			catch (Exception e) {
+				connections.remove(connection.id(), connection);
 				connection.close();
+				try {
+					writeText(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
+				}
+				catch (IOException writeError) {
+					logger.warn("Failed to write Streamable HTTP initialize failure", writeError);
+				}
+			}
+			finally {
+				completeAsyncContext(asyncContext);
+			}
+		}
+
+		private void completeInitializeFailure(AsyncContext asyncContext, HttpServletResponse response,
+				ConnectionState connection, AtomicBoolean completed) {
+			if (!completed.compareAndSet(false, true)) {
+				return;
+			}
+			connections.remove(connection.id(), connection);
+			connection.close();
+			try {
 				writeText(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
+			}
+			catch (IOException writeError) {
+				logger.warn("Failed to write Streamable HTTP initialize failure", writeError);
+			}
+			finally {
+				completeAsyncContext(asyncContext);
+			}
+		}
+
+		private void completeAsyncContext(AsyncContext asyncContext) {
+			try {
+				asyncContext.complete();
+			}
+			catch (IllegalStateException ignored) {
 			}
 		}
 
@@ -513,8 +588,8 @@ public class StreamableHttpAcpAgentTransport {
 			return id;
 		}
 
-		void start() {
-			this.connection.start(agentFactory).block(INITIALIZE_TIMEOUT);
+		Mono<Void> start() {
+			return this.connection.start(agentFactory);
 		}
 
 		Mono<JSONRPCMessage> initialize(AcpSchema.JSONRPCRequest request) {
@@ -869,14 +944,17 @@ public class StreamableHttpAcpAgentTransport {
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
+		private boolean flushPending;
+
 		SseSubscriber(OutboundStream parent, AsyncContext asyncContext, HttpServletResponse response) throws IOException {
 			this.parent = parent;
 			this.asyncContext = asyncContext;
 			this.output = response.getOutputStream();
 		}
 
-		void start() {
+		synchronized void start() {
 			asyncContext.addListener(this);
+			pendingEvents.addLast(SSE_OPEN_COMMENT);
 			output.setWriteListener(this);
 		}
 
@@ -895,16 +973,26 @@ public class StreamableHttpAcpAgentTransport {
 
 		synchronized void drain() {
 			try {
+				flushIfReady();
 				while (!closed.get() && output.isReady()) {
 					byte[] event = pendingEvents.pollFirst();
 					if (event == null) {
-						return;
+						break;
 					}
 					output.write(event);
+					flushPending = true;
 				}
+				flushIfReady();
 			}
-			catch (IOException e) {
+			catch (IOException | IllegalStateException e) {
 				close();
+			}
+		}
+
+		private void flushIfReady() throws IOException {
+			if (flushPending && output.isReady()) {
+				output.flush();
+				flushPending = false;
 			}
 		}
 
