@@ -384,6 +384,48 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
+	void concurrentSseOpenAndDeleteDoesNotLeaveStreamOpen() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			ExecutorService executor = Executors.newFixedThreadPool(2);
+			CountDownLatch start = new CountDownLatch(1);
+			try {
+				Future<HttpResponse<InputStream>> openStream = executor.submit(() -> {
+					start.await();
+					return rawClient.send(HttpRequest.newBuilder(server.endpoint())
+						.header("Accept", "text/event-stream")
+						.header("Acp-Connection-Id", connectionId)
+						.GET()
+						.build(), HttpResponse.BodyHandlers.ofInputStream());
+				});
+				Future<HttpResponse<Void>> delete = executor.submit(() -> {
+					start.await();
+					return rawClient.send(HttpRequest.newBuilder(server.endpoint())
+						.header("Acp-Connection-Id", connectionId)
+						.DELETE()
+						.build(), HttpResponse.BodyHandlers.discarding());
+				});
+
+				start.countDown();
+				HttpResponse<InputStream> streamResponse = openStream.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+				assertThat(delete.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).statusCode()).isEqualTo(202);
+				assertThat(streamResponse.statusCode()).isIn(200, 404);
+				if (streamResponse.statusCode() == 200) {
+					try (InputStream body = streamResponse.body()) {
+						Future<Integer> endOfStream = executor.submit((java.util.concurrent.Callable<Integer>) body::read);
+						assertThat(endOfStream.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(-1);
+					}
+				}
+				assertEventuallyPostStatus(rawClient, server.endpoint(), connectionId, 404);
+			}
+			finally {
+				executor.shutdownNow();
+			}
+		}
+	}
+
+	@Test
 	void replayOverflowClosesConnectionInsteadOfDroppingMessages() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();

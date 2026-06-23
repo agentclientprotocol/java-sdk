@@ -5,7 +5,6 @@
 package com.agentclientprotocol.sdk.agent.transport;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -30,7 +29,11 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import jakarta.servlet.AsyncContext;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -91,6 +94,8 @@ public class StreamableHttpAcpAgentTransport {
 	private static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
 	private static final int MAX_REPLAY_EVENTS = 1024;
+
+	private static final int MAX_PENDING_SSE_EVENTS = 1024;
 
 	private static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
@@ -827,6 +832,7 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
 			subscribers.add(subscriber);
+			subscriber.start();
 			if (replayOpen) {
 				for (String payload : new ArrayList<>(replay)) {
 					subscriber.send(payload);
@@ -834,61 +840,110 @@ public class StreamableHttpAcpAgentTransport {
 				replay.clear();
 				replayOpen = false;
 			}
-			subscriber.flush();
+			subscriber.drain();
 		}
 
 		void remove(SseSubscriber subscriber) {
 			subscribers.remove(subscriber);
 		}
 
-		void close() {
+		synchronized void close() {
 			if (closed.compareAndSet(false, true)) {
 				subscribers.forEach(SseSubscriber::close);
 				subscribers.clear();
-				synchronized (this) {
-					replay.clear();
-				}
+				replay.clear();
 			}
 		}
 
 	}
 
-	private final class SseSubscriber {
+	private final class SseSubscriber implements AsyncListener, WriteListener {
 
 		private final OutboundStream parent;
 
 		private final AsyncContext asyncContext;
 
-		private final PrintWriter writer;
+		private final ServletOutputStream output;
+
+		private final ArrayDeque<byte[]> pendingEvents = new ArrayDeque<>();
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
 		SseSubscriber(OutboundStream parent, AsyncContext asyncContext, HttpServletResponse response) throws IOException {
 			this.parent = parent;
 			this.asyncContext = asyncContext;
-			this.writer = response.getWriter();
+			this.output = response.getOutputStream();
+		}
+
+		void start() {
+			asyncContext.addListener(this);
+			output.setWriteListener(this);
 		}
 
 		synchronized void send(String payload) {
 			if (closed.get()) {
 				return;
 			}
-			writer.write("data: ");
-			writer.write(payload);
-			writer.write("\n\n");
-			writer.flush();
-			if (writer.checkError()) {
+			if (pendingEvents.size() == MAX_PENDING_SSE_EVENTS) {
+				logger.warn("Closing backpressured SSE subscriber after {} pending events", MAX_PENDING_SSE_EVENTS);
+				close();
+				return;
+			}
+			pendingEvents.addLast(("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8));
+			drain();
+		}
+
+		synchronized void drain() {
+			try {
+				while (!closed.get() && output.isReady()) {
+					byte[] event = pendingEvents.pollFirst();
+					if (event == null) {
+						return;
+					}
+					output.write(event);
+				}
+			}
+			catch (IOException e) {
 				close();
 			}
 		}
 
-		synchronized void flush() {
-			writer.flush();
+		@Override
+		public void onWritePossible() {
+			drain();
+		}
+
+		@Override
+		public void onError(Throwable error) {
+			close();
+		}
+
+		@Override
+		public void onComplete(AsyncEvent event) {
+			close();
+		}
+
+		@Override
+		public void onTimeout(AsyncEvent event) {
+			close();
+		}
+
+		@Override
+		public void onError(AsyncEvent event) {
+			close();
+		}
+
+		@Override
+		public void onStartAsync(AsyncEvent event) {
+			event.getAsyncContext().addListener(this);
 		}
 
 		void close() {
 			if (closed.compareAndSet(false, true)) {
 				parent.remove(this);
+				synchronized (this) {
+					pendingEvents.clear();
+				}
 				try {
 					asyncContext.complete();
 				}
