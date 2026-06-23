@@ -48,6 +48,56 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	private static final AcpJsonMapper JSON_MAPPER = AcpJsonMapper.createDefault();
 
 	@Test
+	void delayedInitializePublishesConnectionOnlyAfterSuccess() throws Exception {
+		CountDownLatch initializeEntered = new CountDownLatch(1);
+		AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> Mono.defer(() -> {
+				initializeEntered.countDown();
+				return Mono.delay(Duration.ofMillis(250)).thenReturn(new AcpSchema.InitializeResponse(
+						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), null));
+			}))
+			.build());
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			var initialize = rawClient.sendAsync(HttpRequest.newBuilder(server.endpoint())
+				.header("Content-Type", "application/json")
+				.header("Accept", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString("""
+						{"jsonrpc":"2.0","id":"init-delayed","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+						"""))
+				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+			assertThat(initializeEntered.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+			assertThat(server.transport.activeConnectionCount()).isZero();
+
+			HttpResponse<String> response = initialize.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			assertThat(response.statusCode()).isEqualTo(200);
+			assertThat(response.headers().firstValue("Acp-Connection-Id")).isPresent();
+			assertThat(server.transport.activeConnectionCount()).isEqualTo(1);
+		}
+	}
+
+	@Test
+	void failedInitializeDoesNotPublishConnection() throws Exception {
+		AcpAgentFactory agentFactory = transport -> {
+			throw new IllegalStateException("agent creation failed");
+		};
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			HttpResponse<String> response = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Content-Type", "application/json")
+				.header("Accept", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString("""
+						{"jsonrpc":"2.0","id":"init-failed","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+						"""))
+				.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+			assertThat(response.statusCode()).isEqualTo(500);
+			assertThat(server.transport.activeConnectionCount()).isZero();
+		}
+	}
+
+	@Test
 	void javaClientCanTalkToRunningJavaServer() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			AcpAsyncClient client = AcpClient
@@ -527,6 +577,10 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 						.thenReturn(AcpSchema.PromptResponse.endTurn());
 				})
 				.build());
+			return start(agentFactory);
+		}
+
+		static FixtureServer start(AcpAgentFactory agentFactory) throws Exception {
 			StreamableHttpAcpAgentTransport transport = new StreamableHttpAcpAgentTransport(
 					freePort(), AcpJsonMapper.createDefault(), agentFactory);
 			transport.start().block(TIMEOUT);
