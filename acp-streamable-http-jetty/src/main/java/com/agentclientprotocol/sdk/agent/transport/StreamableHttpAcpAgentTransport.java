@@ -259,25 +259,34 @@ public class StreamableHttpAcpAgentTransport {
 	 * @return a mono that completes when shutdown finishes
 	 */
 	public Mono<Void> closeGracefully() {
-		return Mono.fromRunnable(() -> {
+		return Mono.defer(() -> {
 			if (!closing.compareAndSet(false, true)) {
-				return;
+				return Mono.<Void>empty();
 			}
-			connections.values().forEach(ConnectionState::close);
+			List<Mono<Void>> connectionClosures = new ArrayList<>();
+			connections.values().forEach(connection -> connectionClosures.add(connection.closeGracefully()));
 			connections.clear();
-			webSocketConnections.values().forEach(WebSocketConnectionState::close);
+			webSocketConnections.values().forEach(connection -> connectionClosures.add(connection.closeGracefully()));
 			webSocketConnections.clear();
-			Server currentServer = this.server;
-			if (currentServer != null) {
-				try {
-					currentServer.stop();
-				}
-				catch (Exception e) {
-					throw new AcpConnectionException("Failed to stop Streamable HTTP listener", e);
-				}
-			}
-			terminationSink.tryEmitValue(null);
+
+			return Mono.whenDelayError(connectionClosures)
+				.then(Mono.<Void>fromRunnable(this::stopServer))
+				.doOnSuccess(ignored -> {
+					terminationSink.tryEmitValue(null);
+				});
 		});
+	}
+
+	private void stopServer() {
+		Server currentServer = this.server;
+		if (currentServer != null) {
+			try {
+				currentServer.stop();
+			}
+			catch (Exception e) {
+				throw new AcpConnectionException("Failed to stop Streamable HTTP listener", e);
+			}
+		}
 	}
 
 	/**
@@ -550,11 +559,15 @@ public class StreamableHttpAcpAgentTransport {
 			stream.subscribe(asyncContext, response);
 		}
 
-		void close() {
+		Mono<Void> closeGracefully() {
 			connections.remove(id, this);
 			connectionStream.close();
 			sessionStreams.values().forEach(OutboundStream::close);
-			connection.closeGracefully().subscribe(v -> {
+			return connection.closeGracefully();
+		}
+
+		void close() {
+			closeGracefully().subscribe(v -> {
 			}, error -> logger.warn("Error closing Streamable HTTP ACP connection {}", id, error));
 		}
 
@@ -950,13 +963,13 @@ public class StreamableHttpAcpAgentTransport {
 			}
 		}
 
-		void close() {
-			close(StatusCode.NORMAL, "server closing");
+		Mono<Void> closeGracefully() {
+			return closeGracefully(StatusCode.NORMAL, "server closing");
 		}
 
-		void close(int statusCode, String reason) {
+		private Mono<Void> closeGracefully(int statusCode, String reason) {
 			if (!closed.compareAndSet(false, true)) {
-				return;
+				return Mono.empty();
 			}
 			outboundSender.close();
 			webSocketConnections.remove(id, this);
@@ -964,7 +977,16 @@ public class StreamableHttpAcpAgentTransport {
 			if (currentSession != null && currentSession.isOpen()) {
 				currentSession.close(statusCode, reason, Callback.NOOP);
 			}
-			remoteConnection.closeGracefully().subscribe(v -> {
+			return remoteConnection.closeGracefully();
+		}
+
+		void close() {
+			closeGracefully().subscribe(v -> {
+			}, error -> logger.warn("Error closing Streamable ACP WebSocket connection {}", id, error));
+		}
+
+		void close(int statusCode, String reason) {
+			closeGracefully(statusCode, reason).subscribe(v -> {
 			}, error -> logger.warn("Error closing Streamable ACP WebSocket connection {}", id, error));
 		}
 

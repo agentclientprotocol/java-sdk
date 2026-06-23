@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.agent.AcpAsyncAgent;
+import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
@@ -41,6 +43,7 @@ import org.eclipse.jetty.websocket.api.StatusCode;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -325,6 +328,30 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		}
 	}
 
+	@Test
+	void listenerShutdownWaitsForWebSocketAgentShutdown() throws Exception {
+		Sinks.One<Void> allowAgentShutdown = Sinks.one();
+		CountDownLatch agentShutdownStarted = new CountDownLatch(1);
+		AcpAgentFactory agentFactory = transport -> new BlockingCloseAgent(allowAgentShutdown, agentShutdownStarted);
+
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			MessageRecordingListener listener = new MessageRecordingListener();
+			HttpClient.newHttpClient()
+				.newWebSocketBuilder()
+				.connectTimeout(TIMEOUT)
+				.buildAsync(server.endpoint(), listener)
+				.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			assertThat(listener.openLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+
+			CompletableFuture<Void> shutdown = server.transport().closeGracefully().toFuture();
+			assertThat(agentShutdownStarted.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+			assertThat(shutdown).isNotDone();
+
+			allowAgentShutdown.tryEmitEmpty();
+			shutdown.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+		}
+	}
+
 	private static AcpAgentFactory simpleAgentFactory() {
 		AtomicInteger sessionCounter = new AtomicInteger();
 		return AcpAgentFactory.async(transport -> AcpAgent.async(transport)
@@ -458,6 +485,105 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 			messages.add(data.toString());
 			webSocket.request(1);
 			return CompletableFuture.completedFuture(null);
+		}
+
+	}
+
+	private static final class BlockingCloseAgent implements AcpAsyncAgent {
+
+		private final Sinks.One<Void> allowShutdown;
+
+		private final CountDownLatch shutdownStarted;
+
+		BlockingCloseAgent(Sinks.One<Void> allowShutdown, CountDownLatch shutdownStarted) {
+			this.allowShutdown = allowShutdown;
+			this.shutdownStarted = shutdownStarted;
+		}
+
+		@Override
+		public Mono<Void> start() {
+			return Mono.empty();
+		}
+
+		@Override
+		public Mono<Void> awaitTermination() {
+			return Mono.never();
+		}
+
+		@Override
+		public NegotiatedCapabilities getClientCapabilities() {
+			return null;
+		}
+
+		@Override
+		public Mono<Void> sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.RequestPermissionResponse> requestPermission(AcpSchema.RequestPermissionRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.WriteTextFileResponse> writeTextFile(AcpSchema.WriteTextFileRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.CreateTerminalResponse> createTerminal(AcpSchema.CreateTerminalRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.WaitForTerminalExitResponse> waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<AcpSchema.CreateElicitationResponse> createElicitation(AcpSchema.CreateElicitationRequest request) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<Void> closeGracefully() {
+			return Mono.defer(() -> {
+				shutdownStarted.countDown();
+				return allowShutdown.asMono();
+			});
+		}
+
+		@Override
+		public void close() {
+		}
+
+		private static <T> Mono<T> unsupported() {
+			return Mono.error(new UnsupportedOperationException());
 		}
 
 	}
