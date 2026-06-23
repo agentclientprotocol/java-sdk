@@ -20,8 +20,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -129,6 +134,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final ExecutorService sseExecutor;
 
+	private final int maxSseStreams;
+
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
 	/*
@@ -168,7 +175,18 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	 * @param jsonMapper JSON mapper used for message serialization
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper) {
-		this(endpointUri, jsonMapper, createDefaultHttpClient());
+		this(endpointUri, jsonMapper, StreamableHttpAcpClientTransportOptions.defaults());
+	}
+
+	/**
+	 * Creates a new Streamable HTTP client transport with explicit resource limits.
+	 * @param endpointUri the remote ACP endpoint URI
+	 * @param jsonMapper JSON mapper used for message serialization
+	 * @param options resource limits for this transport
+	 */
+	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper,
+			StreamableHttpAcpClientTransportOptions options) {
+		this(endpointUri, jsonMapper, createDefaultHttpClient(options), options);
 	}
 
 	/**
@@ -180,14 +198,29 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	 * @param httpClient HTTP client to use for requests
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
-		this(endpointUri, jsonMapper, new HttpClientBundle(httpClient, null));
+		this(endpointUri, jsonMapper, httpClient, StreamableHttpAcpClientTransportOptions.defaults());
 	}
 
-	private StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClientBundle bundle) {
+	/**
+	 * Creates a new Streamable HTTP client transport with a caller-provided HTTP client and
+	 * explicit resource limits.
+	 * @param endpointUri the remote ACP endpoint URI
+	 * @param jsonMapper JSON mapper used for message serialization
+	 * @param httpClient HTTP client to use for requests
+	 * @param options resource limits for this transport
+	 */
+	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClient httpClient,
+			StreamableHttpAcpClientTransportOptions options) {
+		this(endpointUri, jsonMapper, new HttpClientBundle(httpClient, null), options);
+	}
+
+	private StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClientBundle bundle,
+			StreamableHttpAcpClientTransportOptions options) {
 		Assert.notNull(endpointUri, "The endpointUri can not be null");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(bundle, "The HttpClient bundle can not be null");
 		Assert.notNull(bundle.httpClient(), "The HttpClient can not be null");
+		Assert.notNull(options, "The transport options can not be null");
 		Assert.isTrue("http".equalsIgnoreCase(endpointUri.getScheme())
 				|| "https".equalsIgnoreCase(endpointUri.getScheme()),
 				"The endpointUri must use http or https");
@@ -196,31 +229,38 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		this.jsonMapper = jsonMapper;
 		this.httpClient = bundle.httpClient();
 		this.ownedHttpExecutor = bundle.ownedExecutor();
-		this.httpSignalExecutor = Executors.newCachedThreadPool(r -> {
-			Thread t = new Thread(r, "acp-streamable-http-signal");
-			t.setDaemon(true);
-			return t;
-		});
-		this.sseExecutor = Executors.newCachedThreadPool(r -> {
-			Thread t = new Thread(r, "acp-streamable-http-sse");
-			t.setDaemon(true);
-			return t;
-		});
+		this.httpSignalExecutor = boundedExecutor(options.httpSignalThreads(), options.httpQueueCapacity(),
+				"acp-streamable-http-signal");
+		this.maxSseStreams = options.maxSseStreams();
+		this.sseExecutor = new ThreadPoolExecutor(options.maxSseStreams(), options.maxSseStreams(), 0,
+				TimeUnit.MILLISECONDS, new SynchronousQueue<>(), daemonThreadFactory("acp-streamable-http-sse"),
+				new ThreadPoolExecutor.AbortPolicy());
 		this.inboundSink = Sinks.many().unicast().onBackpressureBuffer();
 	}
 
-	private static HttpClientBundle createDefaultHttpClient() {
-		ExecutorService executor = Executors.newCachedThreadPool(r -> {
-			Thread t = new Thread(r, "acp-streamable-http-client");
-			t.setDaemon(true);
-			return t;
-		});
+	private static HttpClientBundle createDefaultHttpClient(StreamableHttpAcpClientTransportOptions options) {
+		Assert.notNull(options, "The transport options can not be null");
+		ExecutorService executor = boundedExecutor(options.httpWorkerThreads(), options.httpQueueCapacity(),
+				"acp-streamable-http-client");
 		HttpClient client = HttpClient.newBuilder()
 			.version(HttpClient.Version.HTTP_2)
 			.cookieHandler(new CookieManager())
 			.executor(executor)
 			.build();
 		return new HttpClientBundle(client, executor);
+	}
+
+	private static ExecutorService boundedExecutor(int threads, int queueCapacity, String threadName) {
+		return new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
+				new ArrayBlockingQueue<>(queueCapacity), daemonThreadFactory(threadName), new ThreadPoolExecutor.AbortPolicy());
+	}
+
+	private static ThreadFactory daemonThreadFactory(String threadName) {
+		return runnable -> {
+			Thread thread = new Thread(runnable, threadName);
+			thread.setDaemon(true);
+			return thread;
+		};
 	}
 
 	@Override
@@ -719,7 +759,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		}
 
 		void start() {
-			this.readerTask = sseExecutor.submit(this::readLoop);
+			try {
+				this.readerTask = sseExecutor.submit(this::readLoop);
+			}
+			catch (RejectedExecutionException e) {
+				close();
+				throw new AcpConnectionException("Maximum active SSE streams exceeded: " + maxSseStreams, e);
+			}
 		}
 
 		void close() {

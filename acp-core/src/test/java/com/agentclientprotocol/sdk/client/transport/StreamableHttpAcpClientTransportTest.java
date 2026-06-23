@@ -87,6 +87,87 @@ class StreamableHttpAcpClientTransportTest {
 	}
 
 	@Test
+	void transportOptionsHaveBoundedDefaults() {
+		StreamableHttpAcpClientTransportOptions options = StreamableHttpAcpClientTransportOptions.defaults();
+
+		assertThat(options.maxSseStreams()).isEqualTo(64);
+		assertThat(options.httpWorkerThreads()).isEqualTo(8);
+		assertThat(options.httpSignalThreads()).isEqualTo(4);
+		assertThat(options.httpQueueCapacity()).isEqualTo(256);
+	}
+
+	@Test
+	void transportOptionsBuilderOverridesDefaults() {
+		StreamableHttpAcpClientTransportOptions options = StreamableHttpAcpClientTransportOptions.builder()
+			.maxSseStreams(16)
+			.httpQueueCapacity(32)
+			.build();
+
+		assertThat(options.maxSseStreams()).isEqualTo(16);
+		assertThat(options.httpWorkerThreads()).isEqualTo(8);
+		assertThat(options.httpSignalThreads()).isEqualTo(4);
+		assertThat(options.httpQueueCapacity()).isEqualTo(32);
+	}
+
+	@Test
+	void transportOptionsRejectNonPositiveLimits() {
+		assertThatThrownBy(() -> new StreamableHttpAcpClientTransportOptions(0, 8, 4, 256))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("maxSseStreams");
+		assertThatThrownBy(() -> new StreamableHttpAcpClientTransportOptions(64, 0, 4, 256))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("httpWorkerThreads");
+	}
+
+	@Test
+	void rejectsSessionStreamWhenConfiguredSseLimitIsReached() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method()) && request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient,
+				new StreamableHttpAcpClientTransportOptions(1, 1, 1, 1));
+		try {
+			transport.setExceptionHandler(error -> {
+			});
+			transport.connect(message -> Mono.empty()).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+
+			assertThatThrownBy(() -> transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(
+					AcpSchema.METHOD_SESSION_LOAD, "load-1",
+					new AcpSchema.LoadSessionRequest("sess-1", "/workspace", List.of())))
+				.block())
+				.isInstanceOf(AcpConnectionException.class)
+				.hasMessage("Maximum active SSE streams exceeded: 1");
+		}
+		finally {
+			transport.close();
+			connectionStreamWriter.close();
+		}
+	}
+
+	@Test
 	void defaultAcpPathIsCorrect() {
 		assertThat(StreamableHttpAcpClientTransport.DEFAULT_ACP_PATH).isEqualTo("/acp");
 	}
