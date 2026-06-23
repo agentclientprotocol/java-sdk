@@ -282,10 +282,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 					return Mono.error(new AcpConnectionException(
 							"Expected " + CONTENT_TYPE_JSON + " initialize response, got " + contentType));
 				}
-				this.connectionId = response.headers()
-					.firstValue(HEADER_CONNECTION_ID)
-					.orElseThrow(() -> new AcpConnectionException(
-							"Initialize response missing " + HEADER_CONNECTION_ID));
 				JSONRPCMessage responseMessage;
 				try {
 					responseMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, response.body());
@@ -293,6 +289,17 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				catch (Exception e) {
 					return Mono.error(new AcpConnectionException("Failed to deserialize initialize response", e));
 				}
+				if (!(responseMessage instanceof AcpSchema.JSONRPCResponse initializeResponse)) {
+					return Mono.error(new AcpConnectionException("ACP initialize response was not a JSON-RPC response"));
+				}
+				if (!Objects.equals(request.id(), initializeResponse.id())) {
+					return Mono.error(
+							new AcpConnectionException("ACP initialize response id did not match initialize request"));
+				}
+				this.connectionId = response.headers()
+					.firstValue(HEADER_CONNECTION_ID)
+					.orElseThrow(() -> new AcpConnectionException(
+							"Initialize response missing " + HEADER_CONNECTION_ID));
 				return openConnectionStream().then(emitInbound(responseMessage));
 			})
 			.doOnError(error -> {
