@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -324,8 +325,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return openSessionStream(resolved.scope().sessionId());
 		}
 		if (resolved.scope().isSession() && !sessionStreams.containsKey(resolved.scope().sessionId())) {
-			return Mono.error(new AcpConnectionException(
-					"No open session stream for session " + resolved.scope().sessionId()));
+			return openSessionStream(resolved.scope().sessionId());
 		}
 		return Mono.empty();
 	}
@@ -360,7 +360,10 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<Void> openConnectionStream() {
-		return openSseStream(RouteScope.connection()).doOnSuccess(stream -> this.connectionStream = stream).then();
+		return openSseStream(RouteScope.connection()).doOnSuccess(stream -> {
+			this.connectionStream = stream;
+			stream.start();
+		}).then();
 	}
 
 	private Mono<Void> openSessionStream(String sessionId) {
@@ -368,11 +371,22 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<Void> createSessionStreamOpenMono(String sessionId) {
-		return openSseStream(RouteScope.session(sessionId))
-			.doOnSuccess(stream -> sessionStreams.putIfAbsent(sessionId, stream))
+		AtomicReference<Mono<Void>> operation = new AtomicReference<>();
+		Mono<Void> openOperation = openSseStream(RouteScope.session(sessionId))
+			.doOnSuccess(stream -> {
+				SseStream existing = sessionStreams.putIfAbsent(sessionId, stream);
+				if (existing == null) {
+					stream.start();
+				}
+				else {
+					stream.close();
+				}
+			})
 			.then()
-			.doFinally(signal -> sessionStreamOpenOperations.remove(sessionId))
+			.doFinally(signal -> sessionStreamOpenOperations.remove(sessionId, operation.get()))
 			.cache();
+		operation.set(openOperation);
+		return openOperation;
 	}
 
 	private Mono<SseStream> openSseStream(RouteScope scope) {
@@ -391,9 +405,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 					return Mono.error(new AcpConnectionException(
 							"Expected " + CONTENT_TYPE_EVENT_STREAM + " response, got " + contentType));
 				}
-				SseStream stream = new SseStream(scope, response.body());
-				stream.start();
-				return Mono.just(stream);
+				return Mono.just(new SseStream(scope, response.body()));
 			});
 	}
 
@@ -577,7 +589,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
-			closing.set(true);
+			if (!closing.compareAndSet(false, true)) {
+				return Mono.empty();
+			}
 			Optional.ofNullable(connectionStream).ifPresent(SseStream::close);
 			sessionStreams.values().forEach(SseStream::close);
 
@@ -607,6 +621,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private void clearState() {
+		Optional.ofNullable(connectionStream).ifPresent(SseStream::close);
+		sessionStreams.values().forEach(SseStream::close);
 		connectionStream = null;
 		sessionStreams.clear();
 		sessionStreamOpenOperations.clear();
@@ -619,6 +635,41 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		if (ownedHttpExecutor != null) {
 			ownedHttpExecutor.shutdownNow();
 		}
+	}
+
+	private void handleUnexpectedSseClosure(SseStream stream, Throwable error) {
+		if (closing.get()) {
+			return;
+		}
+
+		RouteScope scope = stream.scope;
+		if (!scope.isSession()) {
+			terminateAfterSseFailure(error);
+			return;
+		}
+
+		if (hasPendingResponseFor(scope)) {
+			terminateAfterSseFailure(error);
+			return;
+		}
+
+		if (sessionStreams.remove(scope.sessionId(), stream)) {
+			sessionStreamOpenOperations.remove(scope.sessionId());
+			logger.info("Session SSE stream closed; it will be reopened before the next session request: {}", scope);
+		}
+	}
+
+	private boolean hasPendingResponseFor(RouteScope scope) {
+		return outboundRequestRoutes.values().stream()
+			.anyMatch(route -> Objects.equals(route.responseScope(), scope));
+	}
+
+	private void terminateAfterSseFailure(Throwable error) {
+		if (!closing.compareAndSet(false, true)) {
+			return;
+		}
+		clearState();
+		exceptionHandler.accept(error);
 	}
 
 	@Override
@@ -703,8 +754,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				}
 			}
 			catch (Exception e) {
-				if (!closed.get() && !closing.get()) {
-					logger.warn("SSE reader stopped for {}", scope, e);
+				if (!closed.get()) {
+					handleUnexpectedSseClosure(this, e);
 				}
 			}
 		}
