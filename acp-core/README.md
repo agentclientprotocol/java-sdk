@@ -24,5 +24,5 @@ Core implementation of the Agent Client Protocol for Java. Provides client and a
 
 ## Documentation
 
-- [API Reference](https://springaicommunity.mintlify.app/acp-java-sdk/reference/java)
-- [Tutorial](https://springaicommunity.mintlify.app/acp-java-sdk/tutorial)
+- [API Reference](https://lab.pollack.ai/docs/acp-java-sdk/reference/java)
+- [Tutorial](https://lab.pollack.ai/docs/acp-java-sdk/tutorial)

@@ -1,6 +1,6 @@
 # ACP Java SDK
 
-> **Documentation**: https://springaicommunity.mintlify.app/acp-java-sdk | [API Reference](https://springaicommunity.mintlify.app/acp-java-sdk/reference/java) | [Tutorial](https://springaicommunity.mintlify.app/acp-java-sdk/tutorial)
+> **Documentation**: https://lab.pollack.ai/docs/acp-java-sdk | [API Reference](https://lab.pollack.ai/docs/acp-java-sdk/reference/java) | [Tutorial](https://lab.pollack.ai/docs/acp-java-sdk/tutorial)
 
 Pure Java implementation of the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) specification for building both clients and agents.
 

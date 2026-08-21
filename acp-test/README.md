@@ -38,4 +38,4 @@ AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
 
 ## Documentation
 
-- [Module 16: In-Memory Testing](https://springaicommunity.mintlify.app/acp-java-sdk/tutorial/16-in-memory-testing)
+- [Module 16: In-Memory Testing](https://lab.pollack.ai/docs/acp-java-sdk/tutorial/16-in-memory-testing)

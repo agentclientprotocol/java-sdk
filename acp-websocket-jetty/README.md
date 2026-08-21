@@ -24,4 +24,4 @@ Use WebSocket transport when the agent runs as a long-lived server process that 
 
 ## Documentation
 
-- [API Reference — Transports](https://springaicommunity.mintlify.app/acp-java-sdk/reference/java#transports)
+- [API Reference — Transports](https://lab.pollack.ai/docs/acp-java-sdk/reference/java#transports)

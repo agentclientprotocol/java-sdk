@@ -28,5 +28,5 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 
 ## Documentation
 
-- [Annotation-based Agent API](https://springaicommunity.mintlify.app/acp-java-sdk/reference/java#annotation-based-api)
-- [Tutorial](https://springaicommunity.mintlify.app/acp-java-sdk/tutorial)
+- [Annotation-based Agent API](https://lab.pollack.ai/docs/acp-java-sdk/reference/java#annotation-based-api)
+- [Tutorial](https://lab.pollack.ai/docs/acp-java-sdk/tutorial)
