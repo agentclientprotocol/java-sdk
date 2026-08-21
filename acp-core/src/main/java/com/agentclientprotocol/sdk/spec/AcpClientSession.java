@@ -228,7 +228,20 @@ public class AcpClientSession implements AcpSession {
 			logger.trace("Incoming notification method='{}' params={}", notification.method(), notification.params());
 			Sinks.EmitResult result = notificationSink.tryEmitNext(notification);
 			if (result.isFailure()) {
-				logger.warn("Failed to enqueue notification for serial processing: {}", result);
+				if (result == Sinks.EmitResult.FAIL_TERMINATED || result == Sinks.EmitResult.FAIL_CANCELLED) {
+					// The session is shutting down. Refusing newly arriving notifications
+					// is the intended behaviour: a graceful shutdown stops accepting new
+					// work and drains what is already queued, and JSON-RPC notifications
+					// carry no delivery guarantee by design.
+					logger.debug("Session is closing; dropping notification method='{}' ({})", notification.method(),
+							result);
+				}
+				else {
+					// Overflow, no subscriber, or concurrent (non-serialized) emission:
+					// protocol traffic lost on a live session, which is never expected.
+					logger.error("Dropped notification method='{}': sink emission failed with {}",
+							notification.method(), result);
+				}
 			}
 		}
 		else {
