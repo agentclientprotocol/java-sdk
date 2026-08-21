@@ -334,6 +334,31 @@ class AcpClientSessionTest {
 	}
 
 	@Test
+	void testGracefulCloseDrainsQueuedNotifications() {
+		// Notifications queued behind an async handler must be delivered by a graceful
+		// close, not discarded when the drain subscription is disposed.
+		int count = 10;
+		List<Integer> processedOrder = new CopyOnWriteArrayList<>();
+
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(),
+				Map.of(TEST_NOTIFICATION, params -> {
+					int index = (int) ((Map<?, ?>) params).get("index");
+					return Mono.delay(Duration.ofMillis(20)).doOnNext(t -> processedOrder.add(index)).then();
+				}),
+				Function.identity());
+
+		for (int i = 0; i < count; i++) {
+			transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(
+					AcpSchema.JSONRPC_VERSION, TEST_NOTIFICATION, Map.of("index", i)));
+		}
+
+		session.closeGracefully().block();
+
+		assertThat(processedOrder).containsExactly(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+	}
+
+	@Test
 	void testConcurrentRequests() {
 		var transport = new MockAcpClientTransport();
 		var session = new AcpClientSession(TIMEOUT, transport, Map.of(),

@@ -86,6 +86,9 @@ public class AcpClientSession implements AcpSession {
 	/** Subscription draining the notification sink via concatMap */
 	private final Disposable notificationSubscription;
 
+	/** Completes when the notification drain terminates; awaited by {@link #closeGracefully()} */
+	private final Sinks.Empty<Void> notificationDrainTerminated = Sinks.empty();
+
 	/**
 	 * Functional interface for handling incoming JSON-RPC requests. Implementations
 	 * should process the request parameters and return a response.
@@ -165,6 +168,7 @@ public class AcpClientSession implements AcpSession {
 				logger.error("Error handling notification: {}", t.getMessage());
 				return true;
 			}))
+			.doFinally(signal -> this.notificationDrainTerminated.tryEmitEmpty())
 			.subscribe();
 
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty())).transform(connectHook).subscribe();
@@ -369,12 +373,19 @@ public class AcpClientSession implements AcpSession {
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
-		return Mono.fromRunnable(() -> {
+		return Mono.<Void>fromRunnable(() -> {
 			dismissPendingResponses();
 			notificationSink.tryEmitComplete();
-			notificationSubscription.dispose();
-			timeoutScheduler.dispose();
-		});
+		})
+			// Wait for queued notifications to drain before tearing the session down;
+			// disposing immediately would discard them. Bounded so a handler that never
+			// completes cannot hang graceful close.
+			.then(this.notificationDrainTerminated.asMono()
+				.timeout(this.requestTimeout, Mono.empty(), this.timeoutScheduler))
+			.doFinally(signal -> {
+				notificationSubscription.dispose();
+				timeoutScheduler.dispose();
+			});
 	}
 
 	/**
