@@ -159,6 +159,22 @@
     </dependencyManagement>
 
     <build>
+        <resources>
+            <!-- Module's own resources -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- Ship LICENSE and NOTICE inside every artifact (Apache-2.0 section 4) -->
+            <resource>
+                <directory>${maven.multiModuleProjectDirectory}</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>NOTICE</include>
+                </includes>
+            </resource>
+        </resources>
+
         <plugins>
             <!-- Java compiler -->
             <plugin>
@@ -310,16 +326,4 @@
         </snapshotRepository>
     </distributionManagement>
 
-    <repositories>
-        <repository>
-            <id>maven-central</id>
-            <url>https://repo.maven.apache.org/maven2/</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-        </repository>
-    </repositories>
 </project>
