@@ -1,5 +1,6 @@
 ### Maven/Gradle Builds ###
 target/
+.m2repo/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -46,6 +47,12 @@ build.log
 shell.log
 derby.log
 
+### Environment Files ###
+.env
+.env.*
+**/.env
+**/.env.*
+
 ### Compiled Files ###
 *.class
 
@@ -57,6 +64,7 @@ derby.log
 *.zip
 *.tar.gz
 *.rar
+node_modules/
 
 ### Claude Code ###
 .claude/
@@ -68,5 +76,5 @@ hs_err_pid*
 replay_pid*
 
 ### Planning and Internal Documentation ###
-plans/
+plans/*
 learnings/

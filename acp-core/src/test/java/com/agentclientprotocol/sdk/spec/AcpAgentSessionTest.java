@@ -5,16 +5,18 @@
 package com.agentclientprotocol.sdk.spec;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,6 +27,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AcpAgentSessionTest {
 
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
+
+	private static final Duration PROMPT_RESPONSE_DELAY = Duration.ofMillis(250);
+
+	private static final long AGENT_TRANSPORT_SUBSCRIPTION_DELAY_MILLIS = 100;
+
+	private static final long CLIENT_TRANSPORT_SUBSCRIPTION_DELAY_MILLIS = 50;
+
+	private static final int ACTIVE_PROMPT_ERROR_CODE = -32000;
+
+	private static final String SESSION_1 = "session-1";
+
+	private static final String SESSION_2 = "session-2";
 
 	@Test
 	void constructorValidatesArguments() {
@@ -59,8 +73,7 @@ class AcpAgentSessionTest {
 
 			new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers, Map.of());
 
-			// Allow transport to start
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
 			// Send a request from the client side
 			CountDownLatch latch = new CountDownLatch(1);
@@ -74,7 +87,7 @@ class AcpAgentSessionTest {
 				latch.countDown();
 			}).then(Mono.empty())).subscribe();
 
-			Thread.sleep(50);
+			allowClientTransportSubscription();
 			transportPair.clientTransport().sendMessage(request).block(TIMEOUT);
 
 			assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
@@ -96,7 +109,7 @@ class AcpAgentSessionTest {
 			// Create session with no handlers
 			new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
 
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
 			// Send a request for unknown method
 			CountDownLatch latch = new CountDownLatch(1);
@@ -110,7 +123,7 @@ class AcpAgentSessionTest {
 				latch.countDown();
 			}).then(Mono.empty())).subscribe();
 
-			Thread.sleep(50);
+			allowClientTransportSubscription();
 			transportPair.clientTransport().sendMessage(request).block(TIMEOUT);
 
 			assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
@@ -140,14 +153,14 @@ class AcpAgentSessionTest {
 
 			new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), notificationHandlers);
 
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
 			// Send a notification from client
 			AcpSchema.JSONRPCNotification notification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
-					AcpSchema.METHOD_SESSION_CANCEL, new AcpSchema.CancelNotification("session-1"));
+					AcpSchema.METHOD_SESSION_CANCEL, new AcpSchema.CancelNotification(SESSION_1));
 
 			transportPair.clientTransport().connect(mono -> mono.then(Mono.empty())).subscribe();
-			Thread.sleep(50);
+			allowClientTransportSubscription();
 			transportPair.clientTransport().sendMessage(notification).block(TIMEOUT);
 
 			assertThat(notificationLatch.await(5, TimeUnit.SECONDS)).isTrue();
@@ -159,70 +172,115 @@ class AcpAgentSessionTest {
 	}
 
 	@Test
-	void singleTurnEnforcementRejectsConcurrentPrompts() throws Exception {
+	void singleTurnEnforcementRejectsConcurrentPromptsForSameSession() throws Exception {
 		var transportPair = InMemoryTransportPair.create();
 		try {
-			// Create a handler that uses a Mono.delay to simulate async processing
-			AtomicReference<CountDownLatch> promptCanProceedRef = new AtomicReference<>(new CountDownLatch(1));
+			CountDownLatch handlerStarted = new CountDownLatch(1);
+			AtomicInteger handlerInvocations = new AtomicInteger();
 
 			Map<String, AcpAgentSession.RequestHandler<?>> requestHandlers = Map.of(AcpSchema.METHOD_SESSION_PROMPT,
 					params -> Mono.defer(() -> {
-						// First call gets blocked, second call should be rejected before getting here
-						return Mono.delay(Duration.ofMillis(100))
+						handlerInvocations.incrementAndGet();
+						handlerStarted.countDown();
+						return Mono.delay(PROMPT_RESPONSE_DELAY)
 							.map(ignored -> new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
 					}));
 
 			AcpAgentSession session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers,
 					Map.of());
 
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
-			// Manually set active prompt to simulate an in-progress prompt
-			// We use reflection to access the activePrompt field for testing
-			java.lang.reflect.Field activePromptField = AcpAgentSession.class.getDeclaredField("activePrompt");
-			activePromptField.setAccessible(true);
-			@SuppressWarnings("unchecked")
-			AtomicReference<Object> activePromptRef = (AtomicReference<Object>) activePromptField.get(session);
-
-			// Create an ActivePrompt instance using reflection
-			Class<?> activePromptClass = Class.forName(
-					"com.agentclientprotocol.sdk.spec.AcpAgentSession$ActivePrompt");
-			java.lang.reflect.Constructor<?> constructor = activePromptClass.getDeclaredConstructor(String.class,
-					Object.class);
-			constructor.setAccessible(true);
-			Object activePrompt = constructor.newInstance("session-1", "existing-request-id");
-			activePromptRef.set(activePrompt);
-
-			// Verify active prompt is set
-			assertThat(session.hasActivePrompt()).isTrue();
-
-			// Set up client to receive response
-			CountDownLatch responseLatch = new CountDownLatch(1);
-			AtomicReference<AcpSchema.JSONRPCResponse> response = new AtomicReference<>();
+			CountDownLatch responseLatch = new CountDownLatch(2);
+			List<AcpSchema.JSONRPCResponse> responses = new CopyOnWriteArrayList<>();
 
 			transportPair.clientTransport().connect(mono -> mono.doOnNext(msg -> {
-				response.set((AcpSchema.JSONRPCResponse) msg);
+				if (msg instanceof AcpSchema.JSONRPCResponse response) {
+					responses.add(response);
+				}
 				responseLatch.countDown();
 			}).then(Mono.empty())).subscribe();
 
-			Thread.sleep(50);
+			allowClientTransportSubscription();
 
-			// Send prompt request while another is "active"
-			Map<String, Object> params = new HashMap<>();
-			params.put("sessionId", "session-1");
-			params.put("prompt", List.of(new AcpSchema.TextContent("Hello")));
-			AcpSchema.JSONRPCRequest request = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "1",
-					AcpSchema.METHOD_SESSION_PROMPT, params);
-			transportPair.clientTransport().sendMessage(request).block(TIMEOUT);
+			transportPair.clientTransport().sendMessage(promptRequest("1", SESSION_1, "first")).block(TIMEOUT);
+			assertThat(handlerStarted.await(5, TimeUnit.SECONDS)).isTrue();
+			assertThat(session.hasActivePrompt(SESSION_1)).isTrue();
 
-			// Wait for response
+			transportPair.clientTransport().sendMessage(promptRequest("2", SESSION_1, "second")).block(TIMEOUT);
+
 			assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
 
-			// Should be rejected with error
-			assertThat(response.get()).isNotNull();
-			assertThat(response.get().error()).isNotNull();
-			assertThat(response.get().error().code()).isEqualTo(-32000);
-			assertThat(response.get().error().message()).contains("already an active prompt");
+			AcpSchema.JSONRPCResponse rejectedResponse = responseById(responses, "2");
+			assertThat(rejectedResponse.error()).isNotNull();
+			assertThat(rejectedResponse.error().code()).isEqualTo(ACTIVE_PROMPT_ERROR_CODE);
+			assertThat(rejectedResponse.error().message()).contains("already an active prompt");
+			assertThat(handlerInvocations.get()).isEqualTo(1);
+			assertThat(session.hasActivePrompt()).isFalse();
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	@Test
+	void singleTurnEnforcementAllowsConcurrentPromptsForDifferentSessions() throws Exception {
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			CountDownLatch handlersStarted = new CountDownLatch(2);
+			AtomicInteger handlerInvocations = new AtomicInteger();
+			Sinks.One<Void> session1Release = Sinks.one();
+			Sinks.One<Void> session2Release = Sinks.one();
+
+			Map<String, AcpAgentSession.RequestHandler<?>> requestHandlers = Map.of(AcpSchema.METHOD_SESSION_PROMPT,
+					params -> Mono.defer(() -> {
+						handlerInvocations.incrementAndGet();
+						handlersStarted.countDown();
+						String sessionId = sessionId(params);
+						Sinks.One<Void> release = SESSION_1.equals(sessionId) ? session1Release : session2Release;
+						return release.asMono()
+							.thenReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
+					}));
+
+			AcpAgentSession session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers,
+					Map.of());
+
+			allowAgentTransportSubscription();
+
+			CountDownLatch responseLatch = new CountDownLatch(2);
+			List<AcpSchema.JSONRPCResponse> responses = new CopyOnWriteArrayList<>();
+
+			transportPair.clientTransport().connect(mono -> mono.doOnNext(msg -> {
+				if (msg instanceof AcpSchema.JSONRPCResponse response) {
+					responses.add(response);
+				}
+				responseLatch.countDown();
+			}).then(Mono.empty())).subscribe();
+
+			allowClientTransportSubscription();
+
+			transportPair.clientTransport().sendMessage(promptRequest("1", SESSION_1, "first")).block(TIMEOUT);
+			transportPair.clientTransport().sendMessage(promptRequest("2", SESSION_2, "second")).block(TIMEOUT);
+
+			assertThat(handlersStarted.await(5, TimeUnit.SECONDS)).isTrue();
+			assertThat(session.hasActivePrompt(SESSION_1)).isTrue();
+			assertThat(session.hasActivePrompt(SESSION_2)).isTrue();
+			assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder(SESSION_1, SESSION_2);
+
+			// Release the responses one at a time. The in-memory test transport uses a
+			// unicast sink, so simultaneous emissions from concurrent prompt handlers can
+			// fail with FAIL_NON_SERIALIZED and obscure the behavior under test.
+			session1Release.tryEmitValue(null);
+			awaitResponse(responses, "1");
+			session2Release.tryEmitValue(null);
+
+			assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
+
+			assertThat(responseById(responses, "1").error()).isNull();
+			assertThat(responseById(responses, "2").error()).isNull();
+			assertThat(handlerInvocations.get()).isEqualTo(2);
+			assertThat(session.hasActivePrompt()).isFalse();
+			assertThat(session.getActivePromptSessionIds()).isEmpty();
 		}
 		finally {
 			transportPair.closeGracefully().block(TIMEOUT);
@@ -233,42 +291,43 @@ class AcpAgentSessionTest {
 	void hasActivePromptReturnsCorrectState() throws Exception {
 		var transportPair = InMemoryTransportPair.create();
 		try {
+			CountDownLatch handlerStarted = new CountDownLatch(1);
+
 			Map<String, AcpAgentSession.RequestHandler<?>> requestHandlers = Map.of(AcpSchema.METHOD_SESSION_PROMPT,
-					params -> Mono.just(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN)));
+					params -> Mono.defer(() -> {
+						handlerStarted.countDown();
+						return Mono.delay(PROMPT_RESPONSE_DELAY)
+							.map(ignored -> new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
+					}));
 
 			AcpAgentSession session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers,
 					Map.of());
 
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
-			// Initially no active prompt
 			assertThat(session.hasActivePrompt()).isFalse();
+			assertThat(session.hasActivePrompt(SESSION_1)).isFalse();
 			assertThat(session.getActivePromptSessionId()).isNull();
+			assertThat(session.getActivePromptSessionIds()).isEmpty();
 
-			// Manually set active prompt using reflection to test the getter methods
-			java.lang.reflect.Field activePromptField = AcpAgentSession.class.getDeclaredField("activePrompt");
-			activePromptField.setAccessible(true);
-			@SuppressWarnings("unchecked")
-			AtomicReference<Object> activePromptRef = (AtomicReference<Object>) activePromptField.get(session);
+			CountDownLatch responseLatch = new CountDownLatch(1);
+			transportPair.clientTransport().connect(mono -> mono.doOnNext(msg -> responseLatch.countDown())
+				.then(Mono.empty())).subscribe();
 
-			// Create an ActivePrompt instance using reflection
-			Class<?> activePromptClass = Class.forName(
-					"com.agentclientprotocol.sdk.spec.AcpAgentSession$ActivePrompt");
-			java.lang.reflect.Constructor<?> constructor = activePromptClass.getDeclaredConstructor(String.class,
-					Object.class);
-			constructor.setAccessible(true);
-			Object activePrompt = constructor.newInstance("session-1", "request-1");
-			activePromptRef.set(activePrompt);
+			allowClientTransportSubscription();
+			transportPair.clientTransport().sendMessage(promptRequest("1", SESSION_1, "hello")).block(TIMEOUT);
 
-			// Now there should be an active prompt
+			assertThat(handlerStarted.await(5, TimeUnit.SECONDS)).isTrue();
 			assertThat(session.hasActivePrompt()).isTrue();
-			assertThat(session.getActivePromptSessionId()).isEqualTo("session-1");
+			assertThat(session.hasActivePrompt(SESSION_1)).isTrue();
+			assertThat(session.getActivePromptSessionIds()).containsExactly(SESSION_1);
+			assertThat(session.getActivePromptSessionId()).isEqualTo(SESSION_1);
 
-			// Clear active prompt
-			activePromptRef.set(null);
+			assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
 
-			// Active prompt should be cleared
 			assertThat(session.hasActivePrompt()).isFalse();
+			assertThat(session.hasActivePrompt(SESSION_1)).isFalse();
+			assertThat(session.getActivePromptSessionIds()).isEmpty();
 			assertThat(session.getActivePromptSessionId()).isNull();
 		}
 		finally {
@@ -282,7 +341,7 @@ class AcpAgentSessionTest {
 
 		AcpAgentSession session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
 
-		Thread.sleep(100);
+		allowAgentTransportSubscription();
 
 		// Should complete without error
 		session.closeGracefully().block(TIMEOUT);
@@ -299,7 +358,7 @@ class AcpAgentSessionTest {
 
 			new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), requestHandlers, Map.of());
 
-			Thread.sleep(100);
+			allowAgentTransportSubscription();
 
 			CountDownLatch latch = new CountDownLatch(1);
 			AtomicReference<AcpSchema.JSONRPCMessage> response = new AtomicReference<>();
@@ -312,7 +371,7 @@ class AcpAgentSessionTest {
 				latch.countDown();
 			}).then(Mono.empty())).subscribe();
 
-			Thread.sleep(50);
+			allowClientTransportSubscription();
 			transportPair.clientTransport().sendMessage(request).block(TIMEOUT);
 
 			assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
@@ -325,6 +384,45 @@ class AcpAgentSessionTest {
 		finally {
 			transportPair.closeGracefully().block(TIMEOUT);
 		}
+	}
+
+	private static AcpSchema.JSONRPCRequest promptRequest(String id, String sessionId, String text) {
+		return new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, id, AcpSchema.METHOD_SESSION_PROMPT,
+				new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(text))));
+	}
+
+	private static AcpSchema.JSONRPCResponse responseById(List<AcpSchema.JSONRPCResponse> responses, Object id) {
+		return responses.stream().filter(response -> id.equals(response.id())).findFirst().orElseThrow();
+	}
+
+	private static void awaitResponse(List<AcpSchema.JSONRPCResponse> responses, Object id) throws InterruptedException {
+		long deadline = System.nanoTime() + TIMEOUT.toNanos();
+		while (System.nanoTime() < deadline) {
+			if (responses.stream().anyMatch(response -> id.equals(response.id()))) {
+				return;
+			}
+			Thread.sleep(10);
+		}
+	}
+
+	private static String sessionId(Object params) {
+		if (params instanceof AcpSchema.PromptRequest promptRequest) {
+			return promptRequest.sessionId();
+		}
+		throw new IllegalArgumentException("Expected PromptRequest params but received " + params);
+	}
+
+	private static void allowAgentTransportSubscription() throws InterruptedException {
+		// AcpAgentSession subscribes to the in-memory transport in its constructor.
+		// subscribe() is asynchronous, so give the unicast sink subscriber a short
+		// window to attach before the test sends client messages.
+		Thread.sleep(AGENT_TRANSPORT_SUBSCRIPTION_DELAY_MILLIS);
+	}
+
+	private static void allowClientTransportSubscription() throws InterruptedException {
+		// clientTransport.connect(...).subscribe() also attaches asynchronously. Without
+		// this small wait, an immediate agent response can race the test subscriber.
+		Thread.sleep(CLIENT_TRANSPORT_SUBSCRIPTION_DELAY_MILLIS);
 	}
 
 }
