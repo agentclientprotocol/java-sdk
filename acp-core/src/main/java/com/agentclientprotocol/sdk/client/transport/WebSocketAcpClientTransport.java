@@ -183,7 +183,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 				if (message != null && !isClosing.get() && webSocket != null) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
-						logger.debug("Sending WebSocket message: {}", jsonMessage);
+						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
 						webSocket.sendText(jsonMessage, true).join();
 					}
 					catch (Exception e) {
@@ -260,7 +260,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 				String message = messageBuffer.toString();
 				messageBuffer.setLength(0);
 
-				logger.debug("Received WebSocket message: {}", message);
+				logger.debug("Received WebSocket message ({} characters)", message.length());
 
 				try {
 					JSONRPCMessage jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);

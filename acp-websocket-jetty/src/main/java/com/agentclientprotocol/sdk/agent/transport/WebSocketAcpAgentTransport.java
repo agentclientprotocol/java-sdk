@@ -209,7 +209,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 				if (message != null && !isClosing.get() && clientSession != null && clientSession.isOpen()) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
-						logger.debug("Sending WebSocket message: {}", jsonMessage);
+						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
 						clientSession.sendText(jsonMessage, Callback.NOOP);
 					}
 					catch (Exception e) {
@@ -287,7 +287,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 		@OnWebSocketMessage
 		public void onMessage(Session session, String message) {
-			logger.debug("Received WebSocket message: {}", message);
+			logger.debug("Received WebSocket message ({} characters)", message.length());
 
 			try {
 				JSONRPCMessage jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);
