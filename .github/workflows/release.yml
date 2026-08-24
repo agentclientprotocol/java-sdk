@@ -68,10 +68,15 @@ jobs:
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Create Git tag
+      - name: Commit release version
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Release ${{ inputs.version }}"
+
+      - name: Create Git tag
+        run: |
           git tag -a v${{ inputs.version }} -m "Release v${{ inputs.version }}"
           git push origin v${{ inputs.version }}
 
