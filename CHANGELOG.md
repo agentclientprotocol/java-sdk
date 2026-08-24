@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-24
+
+Maintenance dependency and release-tooling refresh. No protocol or public API changes: the ACP
+surface remains identical to 0.15.0.
+
+### Security
+
+- Jackson 2.21.5 → **2.22.2**, Jetty 12.0.37 → **12.1.12**, and Reactor 3.6.12 → **3.8.7**.
+- SLF4J, Logback, JUnit 5, Mockito, Maven build plugins, Central publishing, JaCoCo, and the optional
+  OWASP dependency-check profile move to their current compatible stable releases.
+
+### Changed
+
+- README installation examples now point to 0.16.0 and retain 0.15.0 in the release history.
+
 ## [0.15.0] - 2026-08-21
 
 Correctness and supply-chain hygiene. No protocol or public API changes: the ACP surface is
@@ -175,4 +190,5 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the n
 - SLF4J 2.0.16
 
 [0.9.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.9.0
+[0.16.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.0
 [0.15.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.15.0

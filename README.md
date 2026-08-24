@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.14.0</version>
+    <version>0.16.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.14.0</version>
+    <version>0.16.0</version>
 </dependency>
 ```
 
@@ -48,11 +48,11 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.14.0</version>
+    <version>0.16.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.15.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.17.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -465,7 +465,20 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.14.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.16.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Maintenance release preserving the 0.15 protocol and public API surface while advancing Reactor to
+3.8.7, Jackson to 2.22.2, Jetty to 12.1.12, and the compatible stable test and release toolchain.
+It includes the notification-ordering, graceful-drain, dependency-security, license, and integration
+test corrections delivered in 0.15.0.
+
+### 0.15.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Correctness and supply-chain hygiene with no protocol or public API changes. Incoming notifications
+are delivered in order, graceful close drains queued notifications, integration tests execute, and
+published artifacts carry the verbatim Apache 2.0 license and notice.
+
+### 0.14.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the never-published 0.13.0.
 
