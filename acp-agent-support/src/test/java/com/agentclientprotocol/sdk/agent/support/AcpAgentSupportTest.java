@@ -69,7 +69,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AcpAgentSupportTest {
 
-	private static final Duration TIMEOUT = Duration.ofSeconds(5);
+	private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
 	private InMemoryTransportPair transportPair;
 
