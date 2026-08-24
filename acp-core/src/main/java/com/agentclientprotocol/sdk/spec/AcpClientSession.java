@@ -184,7 +184,7 @@ public class AcpClientSession implements AcpSession {
 
 	private void handle(AcpSchema.JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			logger.debug("Received response: {}", response);
+			logger.debug("Received response for id {}", response.id());
 			if (response.id() != null) {
 				var sink = pendingResponses.remove(response.id());
 				if (sink == null) {
@@ -202,7 +202,7 @@ public class AcpClientSession implements AcpSession {
 			}
 		}
 		else if (message instanceof AcpSchema.JSONRPCRequest request) {
-			logger.debug("Received request: {}", request);
+			logger.debug("Received request method={} id={}", request.method(), request.id());
 			logger.trace("Incoming request method='{}' id={}", request.method(), request.id());
 			handleIncomingRequest(request).onErrorResume(error -> {
 				// Preserve error codes from AcpProtocolException, wrap others in INTERNAL_ERROR
@@ -224,7 +224,7 @@ public class AcpClientSession implements AcpSession {
 			}).subscribe();
 		}
 		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
-			logger.debug("Received notification: {}", notification);
+			logger.debug("Received notification method={}", notification.method());
 			logger.trace("Incoming notification method='{}' params={}", notification.method(), notification.params());
 			Sinks.EmitResult result = notificationSink.tryEmitNext(notification);
 			if (result.isFailure()) {

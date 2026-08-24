@@ -185,7 +185,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 							break;
 						}
 
-						logger.debug("Received JSON message: {}", line);
+						logger.debug("Received JSON message ({} characters)", line.length());
 
 						try {
 							JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, line);
@@ -241,7 +241,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 							outputStream.write("\n".getBytes(StandardCharsets.UTF_8));
 							outputStream.flush();
 						}
-						logger.debug("Sent JSON message: {}", jsonMessage);
+						logger.debug("Sent JSON message ({} characters)", jsonMessage.length());
 						sink.next(message);
 					}
 					catch (IOException e) {

@@ -57,7 +57,7 @@ public final class AcpSchema {
 	public static JSONRPCMessage deserializeJsonRpcMessage(AcpJsonMapper jsonMapper, String jsonText)
 			throws IOException {
 
-		logger.debug("Received JSON message: {}", jsonText);
+		logger.debug("Received JSON message ({} characters)", jsonText.length());
 
 		var map = jsonMapper.readValue(jsonText, MAP_TYPE_REF);
 
