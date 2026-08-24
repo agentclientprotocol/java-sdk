@@ -64,7 +64,7 @@
         <reactor.version>2025.0.7</reactor.version>
         <jackson.version>2.22.2</jackson.version>
 
-        <slf4j.version>2.0.17</slf4j.version>
+        <slf4j.version>2.0.18</slf4j.version>
         <jetty.version>12.1.12</jetty.version>
 
         <!-- Test dependency versions -->
