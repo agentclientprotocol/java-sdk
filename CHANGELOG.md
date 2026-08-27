@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Duplicate discriminator on the wire.** Every polymorphic type declared its discriminator twice —
+  once as Jackson's `@JsonTypeInfo` property on the interface and again as an explicit
+  `@JsonProperty` record component — so both wrote it. `new TextContent("hello")` serialised to
+  `{"type":"text","type":"text","text":"hello"}`, and every `session/prompt` the SDK sent carried a
+  duplicate JSON key. Jackson-based peers accept duplicates and take the last, which is why this
+  went unnoticed; a strict parser rejects the message outright. The discriminator components are now
+  `Access.WRITE_ONLY` with `visible = true` on the type info, so the type id is written exactly once
+  and is still populated on deserialization — previously it deserialised to `null`. 27 records
+  across 6 hierarchies. No API change: every constructor and accessor is unchanged.
+
 ## [0.16.0] - 2026-08-24
 
 Maintenance dependency and release-tooling refresh. No protocol or public API changes: the ACP

@@ -939,7 +939,7 @@ public final class AcpSchema {
 	 * Elicitation property schema - defines a single form field.
 	 */
 	@UnstableAcpApi
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = StringPropertySchema.class, name = "string"),
 			@JsonSubTypes.Type(value = NumberPropertySchema.class, name = "number"),
 			@JsonSubTypes.Type(value = IntegerPropertySchema.class, name = "integer"),
@@ -955,11 +955,12 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record StringPropertySchema(@JsonProperty("type") String type, @JsonProperty("title") String title,
-			@JsonProperty("description") String description, @JsonProperty("default") String defaultValue,
-			@JsonProperty("minLength") Integer minLength, @JsonProperty("maxLength") Integer maxLength,
-			@JsonProperty("pattern") String pattern, @JsonProperty("format") String format,
-			@JsonProperty("enum") List<String> enumValues,
+	public record StringPropertySchema(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("title") String title, @JsonProperty("description") String description,
+			@JsonProperty("default") String defaultValue, @JsonProperty("minLength") Integer minLength,
+			@JsonProperty("maxLength") Integer maxLength, @JsonProperty("pattern") String pattern,
+			@JsonProperty("format") String format, @JsonProperty("enum") List<String> enumValues,
 			@JsonProperty("oneOf") List<EnumOption> oneOf) implements ElicitationPropertySchema {
 
 		public static StringPropertySchema text(String title) {
@@ -977,9 +978,10 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record NumberPropertySchema(@JsonProperty("type") String type, @JsonProperty("title") String title,
-			@JsonProperty("description") String description, @JsonProperty("default") Double defaultValue,
-			@JsonProperty("minimum") Double minimum,
+	public record NumberPropertySchema(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("title") String title, @JsonProperty("description") String description,
+			@JsonProperty("default") Double defaultValue, @JsonProperty("minimum") Double minimum,
 			@JsonProperty("maximum") Double maximum) implements ElicitationPropertySchema {
 	}
 
@@ -989,9 +991,10 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record IntegerPropertySchema(@JsonProperty("type") String type, @JsonProperty("title") String title,
-			@JsonProperty("description") String description, @JsonProperty("default") Long defaultValue,
-			@JsonProperty("minimum") Long minimum,
+	public record IntegerPropertySchema(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("title") String title, @JsonProperty("description") String description,
+			@JsonProperty("default") Long defaultValue, @JsonProperty("minimum") Long minimum,
 			@JsonProperty("maximum") Long maximum) implements ElicitationPropertySchema {
 	}
 
@@ -1001,8 +1004,9 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record BooleanPropertySchema(@JsonProperty("type") String type, @JsonProperty("title") String title,
-			@JsonProperty("description") String description,
+	public record BooleanPropertySchema(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("title") String title, @JsonProperty("description") String description,
 			@JsonProperty("default") Boolean defaultValue) implements ElicitationPropertySchema {
 	}
 
@@ -1012,9 +1016,11 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record MultiSelectPropertySchema(@JsonProperty("type") String type, @JsonProperty("title") String title,
-			@JsonProperty("description") String description, @JsonProperty("default") List<String> defaultValues,
-			@JsonProperty("items") MultiSelectItems items, @JsonProperty("minItems") Long minItems,
+	public record MultiSelectPropertySchema(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("title") String title, @JsonProperty("description") String description,
+			@JsonProperty("default") List<String> defaultValues, @JsonProperty("items") MultiSelectItems items,
+			@JsonProperty("minItems") Long minItems,
 			@JsonProperty("maxItems") Long maxItems) implements ElicitationPropertySchema {
 	}
 
@@ -1252,7 +1258,7 @@ public final class AcpSchema {
 	 * Session config option - a configurable setting exposed by the agent.
 	 * Discriminated by type: "select" (stable) or "boolean" (unstable extension).
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = SessionConfigSelect.class, name = "select"),
 			@JsonSubTypes.Type(value = SessionConfigBoolean.class, name = "boolean") })
 	public interface SessionConfigOption {
@@ -1264,9 +1270,10 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SessionConfigSelect(@JsonProperty("type") String type, @JsonProperty("id") String id,
-			@JsonProperty("name") String name, @JsonProperty("description") String description,
-			@JsonProperty("category") String category,
+	public record SessionConfigSelect(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("id") String id, @JsonProperty("name") String name,
+			@JsonProperty("description") String description, @JsonProperty("category") String category,
 			@JsonProperty("currentValue") String currentValue,
 			@JsonProperty("options") List<SessionConfigSelectOption> options,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionConfigOption {
@@ -1285,9 +1292,10 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SessionConfigBoolean(@JsonProperty("type") String type, @JsonProperty("id") String id,
-			@JsonProperty("name") String name, @JsonProperty("description") String description,
-			@JsonProperty("category") String category,
+	public record SessionConfigBoolean(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("id") String id, @JsonProperty("name") String name,
+			@JsonProperty("description") String description, @JsonProperty("category") String category,
 			@JsonProperty("currentValue") Boolean currentValue,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionConfigOption {
 		public SessionConfigBoolean(String id, String name, Boolean currentValue) {
@@ -1313,7 +1321,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ConfigOptionUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record ConfigOptionUpdate(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("configOptions") List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public ConfigOptionUpdate(String sessionUpdate, List<SessionConfigOption> configOptions) {
@@ -1466,7 +1475,7 @@ public final class AcpSchema {
 	/**
 	 * Content block - base type for all content
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = TextContent.class, name = "text"),
 			@JsonSubTypes.Type(value = ImageContent.class, name = "image"),
 			@JsonSubTypes.Type(value = AudioContent.class, name = "audio"),
@@ -1481,8 +1490,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record TextContent(@JsonProperty("type") String type, @JsonProperty("text") String text,
-			@JsonProperty("annotations") Annotations annotations,
+	public record TextContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("text") String text, @JsonProperty("annotations") Annotations annotations,
 			@JsonProperty("_meta") Map<String, Object> meta) implements ContentBlock {
 		public TextContent(String text) {
 			this("text", text, null, null);
@@ -1494,9 +1503,9 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ImageContent(@JsonProperty("type") String type, @JsonProperty("data") String data,
-			@JsonProperty("mimeType") String mimeType, @JsonProperty("uri") String uri,
-			@JsonProperty("annotations") Annotations annotations,
+	public record ImageContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
+			@JsonProperty("uri") String uri, @JsonProperty("annotations") Annotations annotations,
 			@JsonProperty("_meta") Map<String, Object> meta) implements ContentBlock {
 	}
 
@@ -1505,8 +1514,9 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AudioContent(@JsonProperty("type") String type, @JsonProperty("data") String data,
-			@JsonProperty("mimeType") String mimeType, @JsonProperty("annotations") Annotations annotations,
+	public record AudioContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
+			@JsonProperty("annotations") Annotations annotations,
 			@JsonProperty("_meta") Map<String, Object> meta) implements ContentBlock {
 	}
 
@@ -1515,8 +1525,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ResourceLink(@JsonProperty("type") String type, @JsonProperty("name") String name,
-			@JsonProperty("uri") String uri, @JsonProperty("title") String title,
+	public record ResourceLink(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("name") String name, @JsonProperty("uri") String uri, @JsonProperty("title") String title,
 			@JsonProperty("description") String description, @JsonProperty("mimeType") String mimeType,
 			@JsonProperty("size") Long size, @JsonProperty("annotations") Annotations annotations,
 			@JsonProperty("_meta") Map<String, Object> meta) implements ContentBlock {
@@ -1527,7 +1537,7 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record Resource(@JsonProperty("type") String type,
+	public record Resource(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("resource") EmbeddedResourceResource resource,
 			@JsonProperty("annotations") Annotations annotations,
 			@JsonProperty("_meta") Map<String, Object> meta) implements ContentBlock {
@@ -1597,7 +1607,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record UserMessageChunk(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record UserMessageChunk(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") String messageId,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public UserMessageChunk(String sessionUpdate, ContentBlock content) {
@@ -1614,7 +1625,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AgentMessageChunk(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record AgentMessageChunk(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") String messageId,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public AgentMessageChunk(String sessionUpdate, ContentBlock content) {
@@ -1631,7 +1643,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AgentThoughtChunk(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record AgentThoughtChunk(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") String messageId,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public AgentThoughtChunk(String sessionUpdate, ContentBlock content) {
@@ -1648,7 +1661,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCall(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record ToolCall(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") String title,
 			@JsonProperty("kind") ToolKind kind, @JsonProperty("status") ToolCallStatus status,
 			@JsonProperty("content") List<ToolCallContent> content,
@@ -1674,7 +1688,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallUpdateNotification(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record ToolCallUpdateNotification(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") String title,
 			@JsonProperty("kind") ToolKind kind, @JsonProperty("status") ToolCallStatus status,
 			@JsonProperty("content") List<ToolCallContent> content,
@@ -1688,7 +1703,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record Plan(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record Plan(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("entries") List<PlanEntry> entries,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public Plan(String sessionUpdate, List<PlanEntry> entries) {
@@ -1701,7 +1717,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AvailableCommandsUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record AvailableCommandsUpdate(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("availableCommands") List<AvailableCommand> availableCommands,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public AvailableCommandsUpdate(String sessionUpdate, List<AvailableCommand> availableCommands) {
@@ -1714,7 +1731,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record CurrentModeUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
+	public record CurrentModeUpdate(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
 			@JsonProperty("currentModeId") String currentModeId,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public CurrentModeUpdate(String sessionUpdate, String currentModeId) {
@@ -1727,9 +1745,9 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record UsageUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
-			@JsonProperty("used") Long used, @JsonProperty("size") Long size,
-			@JsonProperty("cost") Cost cost,
+	public record UsageUpdate(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("used") Long used, @JsonProperty("size") Long size, @JsonProperty("cost") Cost cost,
 			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 		public UsageUpdate(String sessionUpdate, Long used, Long size) {
 			this(sessionUpdate, used, size, null, null);
@@ -1752,7 +1770,7 @@ public final class AcpSchema {
 	/**
 	 * Tool call content
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = ToolCallContentBlock.class, name = "content"),
 			@JsonSubTypes.Type(value = ToolCallDiff.class, name = "diff"),
 			@JsonSubTypes.Type(value = ToolCallTerminal.class, name = "terminal") })
@@ -1765,7 +1783,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallContentBlock(@JsonProperty("type") String type,
+	public record ToolCallContentBlock(
+			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("content") ContentBlock content) implements ToolCallContent {
 	}
 
@@ -1774,8 +1793,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallDiff(@JsonProperty("type") String type, @JsonProperty("path") String path,
-			@JsonProperty("oldText") String oldText,
+	public record ToolCallDiff(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("path") String path, @JsonProperty("oldText") String oldText,
 			@JsonProperty("newText") String newText) implements ToolCallContent {
 	}
 
@@ -1784,7 +1803,7 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallTerminal(@JsonProperty("type") String type,
+	public record ToolCallTerminal(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("terminalId") String terminalId) implements ToolCallContent {
 	}
 
@@ -2004,7 +2023,7 @@ public final class AcpSchema {
 	/**
 	 * Request permission outcome
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "outcome")
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "outcome", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = PermissionCancelled.class, name = "cancelled"),
 			@JsonSubTypes.Type(value = PermissionSelected.class, name = "selected") })
 	public interface RequestPermissionOutcome {
@@ -2016,7 +2035,9 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record PermissionCancelled(@JsonProperty("outcome") String outcome) implements RequestPermissionOutcome {
+	public record PermissionCancelled(
+			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome)
+			implements RequestPermissionOutcome {
 		public PermissionCancelled() {
 			this("cancelled");
 		}
@@ -2027,7 +2048,8 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record PermissionSelected(@JsonProperty("outcome") String outcome,
+	public record PermissionSelected(
+			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome,
 			@JsonProperty("optionId") String optionId) implements RequestPermissionOutcome {
 		public PermissionSelected(String optionId) {
 			this("selected", optionId);
