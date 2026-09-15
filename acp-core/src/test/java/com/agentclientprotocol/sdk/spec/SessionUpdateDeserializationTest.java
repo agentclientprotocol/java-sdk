@@ -259,6 +259,24 @@ class SessionUpdateDeserializationTest {
 	}
 
 	// ---------------------------
+	// SessionInfoUpdate Tests
+	// ---------------------------
+
+	@Test
+	void sessionInfoUpdateDeserialization() throws IOException {
+		String json = loadGolden("session-update-session-info.json");
+
+		AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
+
+		assertThat(update).isInstanceOf(AcpSchema.SessionInfoUpdate.class);
+		AcpSchema.SessionInfoUpdate sessionInfoUpdate = (AcpSchema.SessionInfoUpdate) update;
+		assertThat(sessionInfoUpdate.sessionUpdate()).isEqualTo("session_info_update");
+		assertThat(sessionInfoUpdate.title()).isEqualTo("Investigate ACP session metadata");
+		assertThat(sessionInfoUpdate.updatedAt()).isEqualTo("2026-03-09T12:34:56.789Z");
+		assertThat(sessionInfoUpdate.meta()).containsEntry("source", "test-agent").containsEntry("sequence", 1);
+	}
+
+	// ---------------------------
 	// UsageUpdate Tests
 	// ---------------------------
 

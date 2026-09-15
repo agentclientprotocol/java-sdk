@@ -1596,6 +1596,7 @@ public final class AcpSchema {
 			@JsonSubTypes.Type(value = Plan.class, name = "plan"),
 			@JsonSubTypes.Type(value = AvailableCommandsUpdate.class, name = "available_commands_update"),
 			@JsonSubTypes.Type(value = CurrentModeUpdate.class, name = "current_mode_update"),
+			@JsonSubTypes.Type(value = SessionInfoUpdate.class, name = "session_info_update"),
 			@JsonSubTypes.Type(value = UsageUpdate.class, name = "usage_update"),
 			@JsonSubTypes.Type(value = ConfigOptionUpdate.class, name = "config_option_update") })
 	public interface SessionUpdate {
@@ -1738,6 +1739,17 @@ public final class AcpSchema {
 		public CurrentModeUpdate(String sessionUpdate, String currentModeId) {
 			this(sessionUpdate, currentModeId, null);
 		}
+	}
+
+	/**
+	 * Session information update - title, last activity timestamp, and custom metadata.
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionInfoUpdate(
+			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("title") String title, @JsonProperty("updatedAt") String updatedAt,
+			@JsonProperty("_meta") Map<String, Object> meta) implements SessionUpdate {
 	}
 
 	/**

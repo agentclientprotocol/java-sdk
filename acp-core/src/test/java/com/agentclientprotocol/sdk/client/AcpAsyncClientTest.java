@@ -254,7 +254,7 @@ class AcpAsyncClientTest {
 	}
 
 	@Test
-	void testSessionUpdateNotificationHandling() {
+	void testSessionInfoUpdateNotificationHandling() {
 		Sinks.One<AcpSchema.SessionNotification> receivedNotification = Sinks.one();
 
 		var transport = new MockAcpClientTransport();
@@ -266,18 +266,22 @@ class AcpAsyncClientTest {
 			})
 			.build();
 
-		// Simulate incoming session update notification
-		AcpSchema.SessionNotification sessionUpdate = new AcpSchema.SessionNotification("session-123",
-				new AcpSchema.UserMessageChunk("userMessage", new AcpSchema.TextContent("Hello")));
+		Map<String, Object> params = Map.of("sessionId", "session-123", "update",
+				Map.of("sessionUpdate", "session_info_update", "title", "Investigate ACP session metadata", "updatedAt",
+						"2026-03-09T12:34:56.789Z", "_meta", Map.of("source", "test-agent")));
 		AcpSchema.JSONRPCNotification notification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
-				AcpSchema.METHOD_SESSION_UPDATE, sessionUpdate);
+				AcpSchema.METHOD_SESSION_UPDATE, params);
 
 		transport.simulateIncomingMessage(notification);
 
-		// Verify the consumer received the notification
 		AcpSchema.SessionNotification received = receivedNotification.asMono().block(Duration.ofSeconds(1));
 		assertThat(received).isNotNull();
 		assertThat(received.sessionId()).isEqualTo("session-123");
+		assertThat(received.update()).isInstanceOf(AcpSchema.SessionInfoUpdate.class);
+		AcpSchema.SessionInfoUpdate sessionInfoUpdate = (AcpSchema.SessionInfoUpdate) received.update();
+		assertThat(sessionInfoUpdate.title()).isEqualTo("Investigate ACP session metadata");
+		assertThat(sessionInfoUpdate.updatedAt()).isEqualTo("2026-03-09T12:34:56.789Z");
+		assertThat(sessionInfoUpdate.meta()).containsEntry("source", "test-agent");
 
 		client.close();
 	}
