@@ -136,6 +136,51 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 	}
 
 	@Test
+	void resumeSessionAcceptsConnectionResponseAndThenPromptsOnSessionStream() throws Exception {
+		try (FixtureServer fixture = FixtureServer.start()) {
+			AcpAsyncClient client = newClient(fixture.endpoint()).build();
+			try {
+				client.initialize().block(TIMEOUT);
+				AcpSchema.ResumeSessionResponse response = client
+					.resumeSession(new AcpSchema.ResumeSessionRequest("sess-resume", "/workspace", List.of()))
+					.block(TIMEOUT);
+
+				assertThat(response).isNotNull();
+				assertThat(fixture.sessionResumeStreamWasOpenBeforePost()).isTrue();
+				assertThat(fixture.sessionResumeSessionHeader()).isEqualTo("sess-resume");
+
+				AcpSchema.PromptResponse prompt = client
+					.prompt(AcpTestFixtures.createPromptRequest("sess-resume", "hello"))
+					.block(TIMEOUT);
+				assertThat(prompt.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
+	void resumeSessionRejectsResponseOnSessionStream() throws Exception {
+		try (FixtureServer fixture = FixtureServer.start()) {
+			fixture.routeResumeResponsesOnSessionStream();
+			AcpAsyncClient client = newClient(fixture.endpoint()).build();
+			try {
+				client.initialize().block(TIMEOUT);
+
+				assertThatThrownBy(() -> client
+					.resumeSession(new AcpSchema.ResumeSessionRequest("sess-resume", "/workspace", List.of()))
+					.block(TIMEOUT))
+					.hasMessageContaining("arrived on RouteScope[kind=SESSION, sessionId=sess-resume]")
+					.hasMessageContaining("expected RouteScope[kind=CONNECTION, sessionId=null]");
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
 	void supportsTwoConcurrentLogicalSessions() throws Exception {
 		try (FixtureServer fixture = FixtureServer.start()) {
 			AcpAsyncClient client = newClient(fixture.endpoint()).build();
@@ -221,11 +266,17 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 
 		private final AtomicBoolean routePromptResponsesOnConnectionStream = new AtomicBoolean(false);
 
+		private final AtomicBoolean routeResumeResponsesOnSessionStream = new AtomicBoolean(false);
+
 		private final AtomicBoolean permissionResponseReceived = new AtomicBoolean(false);
 
 		private final AtomicReference<String> permissionResponseSessionHeader = new AtomicReference<>();
 
 		private final AtomicBoolean sessionLoadStreamWasOpenBeforePost = new AtomicBoolean(false);
+
+		private final AtomicBoolean sessionResumeStreamWasOpenBeforePost = new AtomicBoolean(false);
+
+		private final AtomicReference<String> sessionResumeSessionHeader = new AtomicReference<>();
 
 		private final CompletableFuture<AcpSchema.JSONRPCResponse> permissionResponse = new CompletableFuture<>();
 
@@ -272,12 +323,24 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 			return sessionLoadStreamWasOpenBeforePost.get();
 		}
 
+		boolean sessionResumeStreamWasOpenBeforePost() {
+			return sessionResumeStreamWasOpenBeforePost.get();
+		}
+
+		String sessionResumeSessionHeader() {
+			return sessionResumeSessionHeader.get();
+		}
+
 		void omitConnectionIdOnInitialize() {
 			omitConnectionIdOnInitialize.set(true);
 		}
 
 		void routePromptResponsesOnConnectionStream() {
 			routePromptResponsesOnConnectionStream.set(true);
+		}
+
+		void routeResumeResponsesOnSessionStream() {
+			routeResumeResponsesOnSessionStream.set(true);
 		}
 
 		private void handle(HttpExchange exchange) throws IOException {
@@ -342,6 +405,13 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 					String sessionId = sessionId(request.params());
 					sessionLoadStreamWasOpenBeforePost.set(sessionStreamOpened(sessionId));
 					send(CONNECTION_STREAM, response(request.id(), new AcpSchema.LoadSessionResponse(null, null)));
+				}
+				case AcpSchema.METHOD_SESSION_RESUME -> {
+					String sessionId = sessionId(request.params());
+					sessionResumeStreamWasOpenBeforePost.set(sessionStreamOpened(sessionId));
+					sessionResumeSessionHeader.set(sessionHeader);
+					String responseStream = routeResumeResponsesOnSessionStream.get() ? sessionKey(sessionId) : CONNECTION_STREAM;
+					send(responseStream, response(request.id(), new AcpSchema.ResumeSessionResponse(null, null)));
 				}
 				case AcpSchema.METHOD_SESSION_PROMPT -> handlePrompt(request, sessionHeader);
 				default -> send(CONNECTION_STREAM, response(request.id(), Map.of()));

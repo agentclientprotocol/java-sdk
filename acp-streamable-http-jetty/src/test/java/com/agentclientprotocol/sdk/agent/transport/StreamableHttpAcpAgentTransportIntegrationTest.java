@@ -171,6 +171,55 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
+	void resumeSessionUsesConnectionResponseForKnownSession() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			AcpAsyncClient client = AcpClient
+				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
+				.requestTimeout(TIMEOUT)
+				.build();
+			try {
+				client.initialize().block(TIMEOUT);
+				AcpSchema.NewSessionResponse session = client
+					.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of(), null))
+					.block(TIMEOUT);
+
+				AcpSchema.ResumeSessionResponse response = client
+					.resumeSession(new AcpSchema.ResumeSessionRequest(session.sessionId(), "/workspace", List.of()))
+					.block(TIMEOUT);
+				assertThat(response).isNotNull();
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
+	void resumeSessionPreopensStreamAndAllowsPromptAfterAttachment() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			AcpAsyncClient client = AcpClient
+				.async(new StreamableHttpAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
+				.requestTimeout(TIMEOUT)
+				.build();
+			try {
+				client.initialize().block(TIMEOUT);
+				AcpSchema.ResumeSessionResponse response = client
+					.resumeSession(new AcpSchema.ResumeSessionRequest("sess-resume", "/workspace", List.of()))
+					.block(TIMEOUT);
+				assertThat(response).isNotNull();
+
+				AcpSchema.PromptResponse prompt = client
+					.prompt(new AcpSchema.PromptRequest("sess-resume", List.of(new AcpSchema.TextContent("hello")), null))
+					.block(TIMEOUT);
+				assertThat(prompt.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
 	void supportsTwoLogicalSessions() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			AcpAsyncClient client = AcpClient
@@ -569,6 +618,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(
 						"sess-" + sessionCounter.incrementAndGet(), null, null)))
 				.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, null)))
+				.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, null)))
 				.promptHandler((request, context) -> {
 					Mono<Void> work = request.text().contains("permission")
 							? context.askPermission("fixture permission").then()

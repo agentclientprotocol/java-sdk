@@ -516,6 +516,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				responseScope = RouteScope.connection();
 				break;
 			case AcpSchema.METHOD_SESSION_LOAD:
+			case AcpSchema.METHOD_SESSION_RESUME:
 				requestScope = RouteScope.session(requireSessionId(params, method));
 				requestKind = RequestKind.SESSION_LOAD;
 				responseScope = RouteScope.connection();
