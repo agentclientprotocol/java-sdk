@@ -904,7 +904,10 @@ public class StreamableHttpAcpAgentTransport {
 
 		synchronized void subscribe(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
 			if (closed.get()) {
-				throw new IOException("SSE stream is closed");
+				// DELETE may close the connection after GET has started async processing.
+				// Complete that request instead of leaving its response open indefinitely.
+				asyncContext.complete();
+				return;
 			}
 			SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
 			subscribers.add(subscriber);

@@ -33,6 +33,7 @@ import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTrans
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
@@ -482,7 +483,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
-	@Test
+	@RepeatedTest(10)
 	void concurrentSseOpenAndDeleteDoesNotLeaveStreamOpen() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
@@ -512,8 +513,19 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				assertThat(streamResponse.statusCode()).isIn(200, 404);
 				if (streamResponse.statusCode() == 200) {
 					try (InputStream body = streamResponse.body()) {
-						Future<Integer> endOfStream = executor.submit((java.util.concurrent.Callable<Integer>) body::read);
-						assertThat(endOfStream.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isEqualTo(-1);
+						Future<byte[]> remainingBody = executor.submit(() -> {
+							try {
+								return body.readAllBytes();
+							}
+							catch (IOException error) {
+								// HTTP/2 can cancel the deleted stream instead of ending it with EOF.
+								assertThat(error.getCause()).isInstanceOf(IOException.class)
+									.hasMessage("Received RST_STREAM: Stream cancelled");
+								return new byte[0];
+							}
+						});
+						assertThat(new String(remainingBody.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS),
+								StandardCharsets.UTF_8)).isIn("", ": connected\n\n");
 					}
 				}
 				assertEventuallyPostStatus(rawClient, server.endpoint(), connectionId, 404);
