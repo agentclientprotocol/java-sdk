@@ -216,6 +216,7 @@ class AcpAgentSessionTest {
 			assertThat(rejectedResponse.error().code()).isEqualTo(ACTIVE_PROMPT_ERROR_CODE);
 			assertThat(rejectedResponse.error().message()).contains("already an active prompt");
 			assertThat(handlerInvocations.get()).isEqualTo(1);
+			awaitPromptCleanup(session);
 			assertThat(session.hasActivePrompt()).isFalse();
 		}
 		finally {
@@ -279,6 +280,7 @@ class AcpAgentSessionTest {
 			assertThat(responseById(responses, "1").error()).isNull();
 			assertThat(responseById(responses, "2").error()).isNull();
 			assertThat(handlerInvocations.get()).isEqualTo(2);
+			awaitPromptCleanup(session);
 			assertThat(session.hasActivePrompt()).isFalse();
 			assertThat(session.getActivePromptSessionIds()).isEmpty();
 		}
@@ -325,6 +327,7 @@ class AcpAgentSessionTest {
 
 			assertThat(responseLatch.await(5, TimeUnit.SECONDS)).isTrue();
 
+			awaitPromptCleanup(session);
 			assertThat(session.hasActivePrompt()).isFalse();
 			assertThat(session.hasActivePrompt(SESSION_1)).isFalse();
 			assertThat(session.getActivePromptSessionIds()).isEmpty();
@@ -393,6 +396,15 @@ class AcpAgentSessionTest {
 
 	private static AcpSchema.JSONRPCResponse responseById(List<AcpSchema.JSONRPCResponse> responses, Object id) {
 		return responses.stream().filter(response -> id.equals(response.id())).findFirst().orElseThrow();
+	}
+
+	private static void awaitPromptCleanup(AcpAgentSession session) {
+		// A response is emitted before doFinally removes the completed prompt.
+		Mono.delay(Duration.ofMillis(10))
+			.repeat()
+			.filter(ignored -> !session.hasActivePrompt())
+			.next()
+			.block(TIMEOUT);
 	}
 
 	private static void awaitResponse(List<AcpSchema.JSONRPCResponse> responses, Object id) throws InterruptedException {
