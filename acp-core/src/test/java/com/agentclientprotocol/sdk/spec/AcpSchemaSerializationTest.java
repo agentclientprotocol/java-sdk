@@ -113,6 +113,42 @@ class AcpSchemaSerializationTest {
 		assertThat(deserialized.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 	}
 
+	@Test
+	void cancelNotificationPreservesMetadata() throws IOException {
+		String json = """
+				{"sessionId":"sess-1","_meta":{"alta":{"sessionGroupAri":"ari:cloud:identity::user/test"}}}
+				""";
+		AcpSchema.CancelNotification notification = jsonMapper.readValue(json,
+				new TypeRef<AcpSchema.CancelNotification>() {
+				});
+
+		String serialized = jsonMapper.writeValueAsString(notification);
+
+		assertThat(notification.sessionId()).isEqualTo("sess-1");
+		assertThat(serialized).contains("\"_meta\":", "\"sessionGroupAri\":\"ari:cloud:identity::user/test\"");
+	}
+
+	@Test
+	void legacyCancelNotificationOmitsMetadata() throws IOException {
+		String json = jsonMapper.writeValueAsString(new AcpSchema.CancelNotification("sess-1"));
+
+		assertThat(json).isEqualTo("{\"sessionId\":\"sess-1\"}");
+	}
+
+	@Test
+	void cancelNotificationCanIncludeMetadata() throws IOException {
+		Map<String, Object> metadata = Map.of("alta", Map.of("sessionGroupAri", "ari:cloud:identity::user/test"));
+		AcpSchema.CancelNotification notification = new AcpSchema.CancelNotification("sess-1", metadata);
+
+		String json = jsonMapper.writeValueAsString(notification);
+		AcpSchema.CancelNotification deserialized = jsonMapper.readValue(json,
+				new TypeRef<AcpSchema.CancelNotification>() {
+				});
+
+		assertThat(deserialized.sessionId()).isEqualTo("sess-1");
+		assertThat(deserialized.meta()).isEqualTo(metadata);
+	}
+
 	// ---------------------------
 	// Capabilities Serialization
 	// ---------------------------

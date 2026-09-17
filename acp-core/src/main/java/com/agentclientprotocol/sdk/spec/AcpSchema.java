@@ -489,7 +489,11 @@ public final class AcpSchema {
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record CancelNotification(@JsonProperty("sessionId") String sessionId) {
+	public record CancelNotification(@JsonProperty("sessionId") String sessionId,
+			@JsonProperty("_meta") Map<String, Object> meta) {
+		public CancelNotification(String sessionId) {
+			this(sessionId, null);
+		}
 	}
 
 	/**
