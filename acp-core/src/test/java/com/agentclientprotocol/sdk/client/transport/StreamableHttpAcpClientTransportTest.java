@@ -627,6 +627,118 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	/**
+	 * Builds a mocked HttpClient that answers initialize, hands out the given connection
+	 * stream body, and one piped body per session GET (recorded in {@code sessionWriters}).
+	 */
+	private HttpClient twoStreamHttpClient(PipedInputStream connectionStreamBody,
+			Map<String, PipedOutputStream> sessionWriters) {
+		HttpClient httpClient = mock(HttpClient.class);
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method()) && request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			if ("GET".equals(request.method())) {
+				String sessionId = request.headers().firstValue("Acp-Session-Id").orElseThrow();
+				PipedInputStream sessionBody = new PipedInputStream(16 * 1024);
+				sessionWriters.put(sessionId, new PipedOutputStream(sessionBody));
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), sessionBody));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+		return httpClient;
+	}
+
+	/**
+	 * The Rust server answers session/load on the session stream; the RFD and TypeScript
+	 * use the connection stream. The reply is ours by id, so it is delivered either way.
+	 */
+	@Test
+	void loadSessionResponseArrivingOnTheSessionStreamIsDelivered() throws Exception {
+		Map<String, PipedOutputStream> sessionWriters = new ConcurrentHashMap<>();
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, twoStreamHttpClient(connectionStreamBody, sessionWriters));
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest())).block();
+			awaitResponse(inboundMessages, "init-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_LOAD, "load-1",
+					new AcpSchema.LoadSessionRequest("sess-1", "/workspace", List.of()))).block();
+			writeSse(sessionWriters.get("sess-1"), new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "load-1",
+					new AcpSchema.LoadSessionResponse(null, null), null));
+
+			AcpSchema.JSONRPCResponse response = awaitResponse(inboundMessages, "load-1");
+			assertThat(response.error()).as("delivered although it arrived on the session stream").isNull();
+		}
+		finally {
+			connectionStreamWriter.close();
+			sessionWriters.values().forEach(writer -> {
+				try {
+					writer.close();
+				}
+				catch (Exception ignored) {
+				}
+			});
+			transport.close();
+		}
+	}
+
+	@Test
+	void promptResponseArrivingOnTheConnectionStreamIsDelivered() throws Exception {
+		Map<String, PipedOutputStream> sessionWriters = new ConcurrentHashMap<>();
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, twoStreamHttpClient(connectionStreamBody, sessionWriters));
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest())).block();
+			awaitResponse(inboundMessages, "init-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_NEW, "new-1",
+					AcpTestFixtures.createNewSessionRequest("/workspace"))).block();
+			writeSse(connectionStreamWriter, new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "new-1",
+					new AcpSchema.NewSessionResponse("sess-1", null, null), null));
+			awaitResponse(inboundMessages, "new-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_PROMPT, "prompt-1",
+					new AcpSchema.PromptRequest("sess-1", List.of(new AcpSchema.TextContent("hello"))))).block();
+			// The wrong stream, deliberately.
+			writeSse(connectionStreamWriter, new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "prompt-1",
+					AcpSchema.PromptResponse.endTurn(), null));
+
+			AcpSchema.JSONRPCResponse response = awaitResponse(inboundMessages, "prompt-1");
+			assertThat(response.error()).as("delivered although it arrived on the connection stream").isNull();
+		}
+		finally {
+			connectionStreamWriter.close();
+			sessionWriters.values().forEach(writer -> {
+				try {
+					writer.close();
+				}
+				catch (Exception ignored) {
+				}
+			});
+			transport.close();
+		}
+	}
+
 	private void awaitSessionSseClosure() throws InterruptedException {
 		Thread.sleep(100);
 	}
