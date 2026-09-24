@@ -27,6 +27,7 @@ import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
@@ -462,7 +463,7 @@ public class StreamableHttpAcpAgentTransport {
 
 			connection.start()
 				.then(Mono.defer(() -> connection.initialize(initializeRequest)))
-				.timeout(INITIALIZE_TIMEOUT)
+				.timeout(INITIALIZE_TIMEOUT, AcpSchedulers.timeouts())
 				// Runs on the servlet thread: the request is already async, agent creation
 				// is cheap, and the handler runs on the agent's own scheduler. The SDK does
 				// not use the global boundedElastic scheduler.
