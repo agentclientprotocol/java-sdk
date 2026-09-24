@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connect or start failure instead of dropping it: construction throws `IllegalStateException` when
   the transport refuses synchronously, and every later request fails immediately with the cause.
 
+- **Second prompt on a session could be rejected or hang under CPU contention (#14).** The agent
+  released its single-turn prompt lock in `doFinally`, *after* the response had already reached the
+  client. On a starved machine (`taskset -c 0`, busy CI runners) the client's next prompt arrived
+  before that release and was rejected with `-32000 There is already an active prompt execution`;
+  the rejection's emission then collided with the still-running response emission on the same sink
+  (`FAIL_NON_SERIALIZED`), which the shipped transports silently dropped and the in-memory test
+  transport turned into a fatal error for the agent, so `AcpSyncClient.prompt` waited out the full
+  `requestTimeout`. The lock is now released before the response is published, on the success and
+  error paths alike, and a handler that throws before returning its `Mono` no longer holds the lock
+  forever. Response emission in `StdioAcpAgentTransport`, `WebSocketAcpClientTransport`,
+  `WebSocketAcpAgentTransport` and `InMemoryTransportPair` is serialised the way `sendMessage`
+  already was, and a failed emission in the in-memory pair no longer terminates the agent. The
+  reporter's repro is now a test, and CI runs the contention tests pinned to one CPU. Reported by
+  @krickert.
+- The agent session now reads `sessionId` from typed `PromptRequest`/`CancelNotification` params as
+  well as from maps, so in-process transports get the right lock owner in logs and cancel matching.
+
 ### Added
 
 - `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.

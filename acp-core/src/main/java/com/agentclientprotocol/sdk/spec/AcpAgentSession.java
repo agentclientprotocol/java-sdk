@@ -275,25 +275,50 @@ public class AcpAgentSession implements AcpSession {
 							new AcpSchema.JSONRPCError(-32000, "There is already an active prompt execution", null)));
 				}
 
-				// Execute handler and clear active prompt when done
-				return handler.handle(request.params())
+				// The prompt response ends the turn (ACP semantics), so the lock is released
+				// *before* the response is handed downstream to the transport. Releasing in
+				// doFinally instead ran after the response had already reached the client;
+				// under CPU contention the client's next prompt then arrived before the
+				// release and was rejected with -32000 (#14). doOnNext and doOnError run before
+				// the signal propagates, and a Mono emits at most once, so the release is
+				// ordered before publication on every path; doFinally covers cancellation.
+				// Mono.defer keeps a handler that throws synchronously from holding the lock
+				// forever: the throw becomes an error signal that passes through the release.
+				return Mono.defer(() -> handler.handle(request.params()))
 					.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null))
-					.doFinally(signal -> {
-						activePrompt.compareAndSet(newPrompt, null);
-						logger.debug("Prompt completed with signal: {}", signal);
-					});
+					.doOnNext(response -> releasePrompt(newPrompt, "response"))
+					.doOnError(error -> releasePrompt(newPrompt, "error"))
+					.doFinally(signal -> releasePrompt(newPrompt, signal.toString()));
 			}
 
-			return handler.handle(request.params())
+			return Mono.defer(() -> handler.handle(request.params()))
 				.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
 		});
 	}
 
 	/**
-	 * Extracts the sessionId from request parameters.
+	 * Releases the single-turn lock if {@code prompt} still holds it. Idempotent: the
+	 * release is attempted on the response, on an error and on the terminal signal, and
+	 * only the first attempt does anything.
 	 */
-	@SuppressWarnings("unchecked")
+	private void releasePrompt(ActivePrompt prompt, String reason) {
+		if (activePrompt.compareAndSet(prompt, null)) {
+			logger.debug("Prompt lock released for sessionId={} requestId={} ({})", prompt.sessionId(),
+					prompt.requestId(), reason);
+		}
+	}
+
+	/**
+	 * Extracts the sessionId from request parameters, which arrive as a {@code Map} from
+	 * the JSON transports and as the typed record from in-process transports.
+	 */
 	private String extractSessionId(Object params) {
+		if (params instanceof AcpSchema.PromptRequest promptRequest) {
+			return promptRequest.sessionId() != null ? promptRequest.sessionId() : "unknown";
+		}
+		if (params instanceof AcpSchema.CancelNotification cancelNotification) {
+			return cancelNotification.sessionId() != null ? cancelNotification.sessionId() : "unknown";
+		}
 		if (params instanceof Map<?, ?> map) {
 			Object sessionId = map.get("sessionId");
 			return sessionId != null ? sessionId.toString() : "unknown";
