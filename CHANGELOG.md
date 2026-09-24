@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-28
+
+Wire-format correction. No public API change: every constructor and accessor is unchanged, and the
+ACP surface is identical to 0.16.1.
+
 ### Fixed
 
 - **Duplicate discriminator on the wire.** Every polymorphic type declared its discriminator twice —
@@ -18,6 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Access.WRITE_ONLY` with `visible = true` on the type info, so the type id is written exactly once
   and is still populated on deserialization — previously it deserialised to `null`. 27 records
   across 6 hierarchies. No API change: every constructor and accessor is unchanged.
+
+## [0.16.1] - 2026-08-24
+
+Release-tooling patch. No protocol, dependency-closure or public API changes beyond a SLF4J patch
+bump: the ACP surface is identical to 0.16.0.
+
+### Build
+
+- **Consumer-scoped SBOMs.** Every module artifact now publishes a CycloneDX 1.6 SBOM (classifier
+  `cyclonedx`) rooted at that module and covering its compile and runtime scope only, so a
+  consumer's dependency closure can be checked against what the artifact actually ships.
+- The release workflow commits the release version bump before tagging, so each `vX.Y.Z` tag now
+  points at a commit whose POMs carry that version.
+
+### Changed
+
+- SLF4J 2.0.17 → **2.0.18**.
 
 ## [0.16.0] - 2026-08-24
 
@@ -204,5 +226,7 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the n
 - SLF4J 2.0.16
 
 [0.9.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.9.0
+[0.17.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.17.0
+[0.16.1]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.1
 [0.16.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.0
 [0.15.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.15.0
