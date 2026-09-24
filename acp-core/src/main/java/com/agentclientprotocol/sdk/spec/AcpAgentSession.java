@@ -173,7 +173,7 @@ public class AcpAgentSession implements AcpSession {
 		this.startFailure = error;
 		logger.error("ACP agent transport failed to start; every request on this session will fail: {}",
 				error.getMessage());
-		dismissPendingResponses();
+		dismissPendingResponses(error);
 	}
 
 	private static IllegalStateException notStarted(Throwable cause) {
@@ -181,9 +181,13 @@ public class AcpAgentSession implements AcpSession {
 	}
 
 	private void dismissPendingResponses() {
+		dismissPendingResponses(null);
+	}
+
+	private void dismissPendingResponses(Throwable cause) {
 		this.pendingResponses.forEach((id, sink) -> {
 			logger.warn("Abruptly terminating exchange for request {}", id);
-			sink.error(new RuntimeException("ACP session with client terminated"));
+			sink.error(new RuntimeException("ACP session with client terminated", cause));
 		});
 		this.pendingResponses.clear();
 	}
@@ -361,6 +365,14 @@ public class AcpAgentSession implements AcpSession {
 			}
 			logger.debug("Sending request for method {} with id {}", method, requestId);
 			this.pendingResponses.put(requestId, pendingResponseSink);
+			// Re-check after registering: a failure recorded between the check above and the
+			// put may already have dismissed the map without seeing this request.
+			Throwable lateFailure = this.startFailure;
+			if (lateFailure != null) {
+				this.pendingResponses.remove(requestId);
+				pendingResponseSink.error(notStarted(lateFailure));
+				return;
+			}
 			AcpSchema.JSONRPCRequest jsonrpcRequest = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
 					method, requestParams);
 			this.transport.sendMessage(jsonrpcRequest).contextWrite(ctx).subscribe(v -> {
@@ -393,9 +405,15 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	@Override
 	public Mono<Void> sendNotification(String method, Object params) {
-		AcpSchema.JSONRPCNotification jsonrpcNotification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
-				method, params);
-		return this.transport.sendMessage(jsonrpcNotification);
+		return Mono.defer(() -> {
+			Throwable failure = this.startFailure;
+			if (failure != null) {
+				return Mono.error(notStarted(failure));
+			}
+			AcpSchema.JSONRPCNotification jsonrpcNotification = new AcpSchema.JSONRPCNotification(
+					AcpSchema.JSONRPC_VERSION, method, params);
+			return this.transport.sendMessage(jsonrpcNotification);
+		});
 	}
 
 	/**

@@ -218,4 +218,21 @@ class StdioAcpClientTransportTest {
 		}
 	}
 
+	@Test
+	void resubscribingTheSameConnectPublisherIsRejected() {
+		String javaBinary = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(
+				AgentParameters.builder(javaBinary).arg("-version").build());
+		try {
+			var connect = transport.connect(mono -> mono);
+			connect.block();
+
+			assertThatThrownBy(connect::block).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("already connected");
+		}
+		finally {
+			transport.closeGracefully().block();
+		}
+	}
+
 }
