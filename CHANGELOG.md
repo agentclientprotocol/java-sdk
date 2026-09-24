@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, on plain `http://` and
+`https://`, plus the fixes found reviewing it. Two behaviour changes need attention when upgrading:
+building a second client on an already-connected transport now fails at construction, and
+`JacksonAcpJsonMapper` built from a bare `new ObjectMapper()` is now strict about unknown fields.
+
 ### Added
 
 - **Streamable HTTP transport** (RFD
@@ -16,8 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   / `Acp-Session-Id` headers, `DELETE` to close); the new module **`acp-streamable-http-jetty`** provides
   `StreamableHttpAcpAgentTransport`, a Jetty listener that serves HTTP/SSE and a WebSocket upgrade on the
   same path and hosts one agent per remote connection through `AcpAgentFactory` and `RemoteAcpConnection`.
-  Header names and path match the TypeScript and Rust SDKs.
+  Header names and path match the TypeScript and Rust SDKs. Each SSE stream is a mailbox: events sent
+  while no subscriber is attached, or not yet written to one that went away, are delivered in order
+  when the client reopens it. Closing a connection (`DELETE`) cancels its in-flight prompts.
+- **Limits and keep-alive for the HTTP agent transport** (`StreamableHttpAcpAgentTransportOptions`): POST bodies
+  are capped (16 MiB by default, 413 beyond), the WebSocket send queue and the number of provisional
+  `session/load` streams per connection are bounded, a failed `session/load` leaves no provisional state,
+  the SSE mailbox and per-subscriber queue limits are configurable, attached streams get a `: keep-alive`
+  comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
+  from a subscriber the server may not yet know is dead instead of fanning out duplicates.
+- **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
+  deployment. Over cleartext the JDK client only offers the h2c upgrade on a request without a body, so
+  `initialize`, a POST, went out on HTTP/1.1. `StreamableHttpAcpClientTransport` now sends a bodiless
+  OPTIONS first on `http://` endpoints, and every request, streams included, runs on HTTP/2.
+- **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
+  never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
+  pending requests at once with the cause, and every later request, instead of waiting out the request
+  timeout.
 - `CancelNotification` carries `_meta`.
+- `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
 
 ### Changed
 
@@ -25,11 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per transport connection; over HTTP one connection carries many sessions, so it is now keyed by
   `sessionId` (`hasActivePrompt(sessionId)`, `getActivePromptSessionIds()`), matching the Kotlin SDK.
   Stdio and WebSocket agents, which see one session per connection, behave as before. (#7, #9)
+- **Unknown-field policy moved from the schema to the mapper (#10).** Every schema record carried
+  `@JsonIgnoreProperties(ignoreUnknown = true)`, which made the SDK tolerate fields it does not know
+  (deliberate: the spec adds fields between releases and a newer agent must keep working) but also
+  defeated any consumer's strict `ObjectMapper`, since a class-level annotation wins over
+  `FAIL_ON_UNKNOWN_PROPERTIES`. The annotations are gone. The default mapper,
+  `JacksonAcpJsonMapper.defaultObjectMapper()`, is lenient and logs each ignored property at DEBUG
+  so spec drift is observable; a consumer who passes a strict mapper to `JacksonAcpJsonMapper` now
+  gets strict behaviour. **If you construct `JacksonAcpJsonMapper` with a bare `new ObjectMapper()`,
+  you now get Jackson's default, which fails on unknown fields**: start from
+  `defaultObjectMapper()` instead. Unknown fields are not routed into `_meta`, which has its own
+  spec-defined meaning. Reported by @KallivdH.
+- **One shared timeout scheduler.** Every `AcpClientSession` and `AcpAgentSession` created its own
+  scheduled thread pool for request timeouts; over the Streamable HTTP transport, which hosts one agent
+  session per remote connection, that was one idle thread per connection. Timeouts now run on a single
+  library-owned daemon timer (`AcpSchedulers.timeouts()`).
+- The scheduler-hygiene test (`SchedulerBestPracticesTest`) now scans every module's production sources,
+  not only `acp-core`.
 
 ### Fixed
 
-- `WebSocketAcpAgentTransport` read its client session field twice around a null check while the
-  socket's `onClose` could clear it, an occasional `NullPointerException` on close.
 - **A second client on an already-connected transport now fails at construction.** A transport
   instance carries exactly one session. `StdioAcpClientTransport.connect()` had no once-only guard
   (the WebSocket and agent transports did), so a second `AcpClient.async(transport)` or
@@ -42,7 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stdio transport refuses a second `connect()`, and `AcpClientSession` / `AcpAgentSession` surface a
   connect or start failure instead of dropping it: construction throws `IllegalStateException` when
   the transport refuses synchronously, and every later request fails immediately with the cause.
-
 - **Second prompt on a session could be rejected or hang under CPU contention (#14).** The agent
   released its single-turn prompt lock in `doFinally`, *after* the response had already reached the
   client. On a starved machine (`taskset -c 0`, busy CI runners) the client's next prompt arrived
@@ -57,46 +93,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already was, and a failed emission in the in-memory pair no longer terminates the agent. The
   reporter's repro is now a test, and CI runs the contention tests pinned to one CPU. Reported by
   @krickert.
-- **Streamable HTTP agent transport hardening** (`StreamableHttpAcpAgentTransportOptions`): POST bodies
-  are capped (16 MiB by default, 413 beyond), the WebSocket send queue and the number of provisional
-  `session/load` streams per connection are bounded, a failed `session/load` leaves no provisional state,
-  the SSE mailbox and per-subscriber queue limits are configurable, attached streams get a `: keep-alive`
-  comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
-  from a subscriber the server may not yet know is dead instead of fanning out duplicates.
-- **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
-  deployment. Over cleartext the JDK client only offers the h2c upgrade on a request without a body, so
-  `initialize`, a POST, went out on HTTP/1.1. `StreamableHttpAcpClientTransport` now sends a bodiless
-  OPTIONS first on `http://` endpoints, and every request, streams included, runs on HTTP/2.
-- **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
-  never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
-  pending requests at once with the cause, and every later request, instead of waiting out the request
-  timeout.
-- **One shared timeout scheduler.** Every `AcpClientSession` and `AcpAgentSession` created its own
-  scheduled thread pool for request timeouts; over the Streamable HTTP transport, which hosts one agent
-  session per remote connection, that was one idle thread per connection. Timeouts now run on a single
-  library-owned daemon timer (`AcpSchedulers.timeouts()`).
-- The scheduler-hygiene test (`SchedulerBestPracticesTest`) now scans every module's production sources,
-  not only `acp-core`.
+- `WebSocketAcpAgentTransport` read its client session field twice around a null check while the
+  socket's `onClose` could clear it, an occasional `NullPointerException` on close.
 - The agent session now reads `sessionId` from typed `PromptRequest`/`CancelNotification` params as
   well as from maps, so in-process transports get the right lock owner in logs and cancel matching.
-
-### Changed
-
-- **Unknown-field policy moved from the schema to the mapper (#10).** Every schema record carried
-  `@JsonIgnoreProperties(ignoreUnknown = true)`, which made the SDK tolerate fields it does not know
-  (deliberate: the spec adds fields between releases and a newer agent must keep working) but also
-  defeated any consumer's strict `ObjectMapper`, since a class-level annotation wins over
-  `FAIL_ON_UNKNOWN_PROPERTIES`. The annotations are gone. The default mapper,
-  `JacksonAcpJsonMapper.defaultObjectMapper()`, is lenient and logs each ignored property at DEBUG
-  so spec drift is observable; a consumer who passes a strict mapper to `JacksonAcpJsonMapper` now
-  gets strict behaviour. **If you construct `JacksonAcpJsonMapper` with a bare `new ObjectMapper()`,
-  you now get Jackson's default, which fails on unknown fields**: start from
-  `defaultObjectMapper()` instead. Unknown fields are not routed into `_meta`, which has its own
-  spec-defined meaning. Reported by @KallivdH.
-
-### Added
-
-- `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
 
 ## [0.17.0] - 2026-08-28
 

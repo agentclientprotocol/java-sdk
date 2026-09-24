@@ -106,7 +106,7 @@ final class StreamableHttpWebSocketConnection {
 	void sendToClient(JSONRPCMessage message) {
 		try {
 			String payload = jsonMapper.writeValueAsString(message);
-			logger.debug("Sending streamable ACP WebSocket message: {}", payload);
+			logger.debug("Sending streamable ACP WebSocket message ({} characters)", payload.length());
 			outboundSender.send(payload);
 		}
 		catch (Exception e) {
@@ -258,7 +258,7 @@ final class StreamableHttpWebSocketConnection {
 
 		@OnWebSocketMessage
 		public void onMessage(Session session, String message) {
-			logger.debug("Received streamable ACP WebSocket message: {}", message);
+			logger.debug("Received streamable ACP WebSocket message ({} characters)", message.length());
 
 			try {
 				JSONRPCMessage jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);
