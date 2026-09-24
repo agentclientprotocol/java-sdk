@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A second client on an already-connected transport now fails at construction.** A transport
+  instance carries exactly one session. `StdioAcpClientTransport.connect()` had no once-only guard
+  (the WebSocket and agent transports did), so a second `AcpClient.async(transport)` or
+  `AcpClient.sync(transport)` on the same instance subscribed the transport's unicast inbound sink a
+  second time — logged and dropped as `Sinks.many().unicast() sinks only allow a single
+  Subscriber` — and then started a second agent process, whose owner could never receive a
+  response: its first request timed out after the full `requestTimeout`. That is the Spring Boot
+  autoconfiguration failure reported in June 2026 (both an `AcpAsyncClient` and an `AcpSyncClient`
+  bean built from one transport bean); it never depended on the Reactor or Boot version. Now the
+  stdio transport refuses a second `connect()`, and `AcpClientSession` / `AcpAgentSession` surface a
+  connect or start failure instead of dropping it: construction throws `IllegalStateException` when
+  the transport refuses synchronously, and every later request fails immediately with the cause.
+
+### Added
+
+- `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
+
 ## [0.17.0] - 2026-08-28
 
 Wire-format correction. No public API change: every constructor and accessor is unchanged, and the

@@ -195,4 +195,27 @@ class StdioAcpClientTransportTest {
 		assertThat(result.authMethods()).isInstanceOf(List.class).isEmpty();
 	}
 
+	/**
+	 * A transport instance carries exactly one session: a second {@code connect()} must be
+	 * refused before it touches the unicast sinks or starts a second process. Before the
+	 * guard, the second call subscribed the inbound sink again (logged and dropped as
+	 * {@code Sinks.many().unicast() sinks only allow a single Subscriber}) and then
+	 * started a second agent process anyway.
+	 */
+	@Test
+	void secondConnectIsRejectedBeforeTouchingTheSinks() {
+		String javaBinary = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(
+				AgentParameters.builder(javaBinary).arg("-version").build());
+		try {
+			transport.connect(mono -> mono).block();
+
+			assertThatThrownBy(() -> transport.connect(mono -> mono).block()).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("already connected");
+		}
+		finally {
+			transport.closeGracefully().block();
+		}
+	}
+
 }

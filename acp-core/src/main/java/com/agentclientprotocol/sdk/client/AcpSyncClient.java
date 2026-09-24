@@ -76,11 +76,18 @@ public class AcpSyncClient implements AutoCloseable {
 	private final AcpAsyncClient delegate;
 
 	/**
-	 * Creates a new AcpSyncClient with the given async delegate.
+	 * Creates a synchronous facade over an existing asynchronous client.
+	 *
+	 * <p>
+	 * Both clients share the one session and the one transport connection behind
+	 * {@code delegate}: use this when an application needs both APIs, because a transport
+	 * instance carries exactly one session, and building a second client on an
+	 * already-connected transport fails. Closing either client closes the shared session.
+	 * </p>
 	 * @param delegate the asynchronous client on top of which this synchronous client
 	 * provides a blocking API
 	 */
-	AcpSyncClient(AcpAsyncClient delegate) {
+	public AcpSyncClient(AcpAsyncClient delegate) {
 		Assert.notNull(delegate, "Delegate must not be null");
 		this.delegate = delegate;
 	}

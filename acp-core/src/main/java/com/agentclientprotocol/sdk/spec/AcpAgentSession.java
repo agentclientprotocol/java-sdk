@@ -84,6 +84,12 @@ public class AcpAgentSession implements AcpSession {
 	private final AtomicReference<ActivePrompt> activePrompt = new AtomicReference<>(null);
 
 	/**
+	 * Set when the transport's {@code start()} fails (already started, port in use, ...).
+	 * Requests to the client are then failed immediately with the cause.
+	 */
+	private volatile Throwable startFailure;
+
+	/**
 	 * Represents an active prompt session for single-turn enforcement.
 	 */
 	private record ActivePrompt(String sessionId, Object requestId) {
@@ -151,7 +157,27 @@ public class AcpAgentSession implements AcpSession {
 					return t;
 				}), "acp-agent-timeout-" + sessionPrefix);
 
-		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe();
+		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe(v -> {
+		}, this::onStartFailure);
+
+		// A transport that refuses synchronously (every transport does when asked to start
+		// twice) fails construction rather than handing back a session that can never talk.
+		Throwable failure = this.startFailure;
+		if (failure != null) {
+			this.timeoutScheduler.dispose();
+			throw notStarted(failure);
+		}
+	}
+
+	private void onStartFailure(Throwable error) {
+		this.startFailure = error;
+		logger.error("ACP agent transport failed to start; every request on this session will fail: {}",
+				error.getMessage());
+		dismissPendingResponses();
+	}
+
+	private static IllegalStateException notStarted(Throwable cause) {
+		return new IllegalStateException("ACP agent transport is not started: " + cause.getMessage(), cause);
 	}
 
 	private void dismissPendingResponses() {
@@ -328,6 +354,11 @@ public class AcpAgentSession implements AcpSession {
 		String requestId = this.generateRequestId();
 
 		return Mono.deferContextual(ctx -> Mono.<AcpSchema.JSONRPCResponse>create(pendingResponseSink -> {
+			Throwable failure = this.startFailure;
+			if (failure != null) {
+				pendingResponseSink.error(notStarted(failure));
+				return;
+			}
 			logger.debug("Sending request for method {} with id {}", method, requestId);
 			this.pendingResponses.put(requestId, pendingResponseSink);
 			AcpSchema.JSONRPCRequest jsonrpcRequest = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,

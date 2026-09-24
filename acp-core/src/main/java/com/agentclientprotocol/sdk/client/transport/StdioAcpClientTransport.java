@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -76,6 +77,13 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	private volatile boolean isClosing = false;
 
+	/**
+	 * A transport instance carries exactly one session. {@link #connect} subscribes the
+	 * unicast inbound and outbound sinks and starts the agent process; a second call would
+	 * subscribe them again and start a second process, so it is refused up front.
+	 */
+	private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
 	// visible for tests
 	private Consumer<String> stdErrorHandler = error -> logger.info("STDERR Message received: {}", error);
 
@@ -135,6 +143,11 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
+		if (!isConnected.compareAndSet(false, true)) {
+			return Mono.error(new IllegalStateException("StdioAcpClientTransport is already connected. "
+					+ "A transport instance carries exactly one session and cannot be reused: build one client per "
+					+ "transport, or share one AcpAsyncClient by wrapping it with new AcpSyncClient(asyncClient)."));
+		}
 		return Mono.<Void>fromRunnable(() -> {
 			logger.info("ACP agent starting.");
 			handleIncomingMessages(handler);
