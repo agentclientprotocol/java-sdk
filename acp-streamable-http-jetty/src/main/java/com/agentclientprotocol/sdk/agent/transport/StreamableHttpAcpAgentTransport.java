@@ -4,32 +4,18 @@
 
 package com.agentclientprotocol.sdk.agent.transport;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
-import com.agentclientprotocol.sdk.agent.transport.StreamableHttpConnection.UnknownSessionException;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
-import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
-import jakarta.servlet.AsyncContext;
-import jakarta.servlet.AsyncEvent;
-import jakarta.servlet.AsyncListener;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
@@ -66,6 +52,15 @@ import reactor.core.publisher.Sinks;
  * WebSocket upgrade requests are accepted by Jetty's {@link WebSocketUpgradeHandler}.
  * </p>
  *
+ * <p>
+ * The wire work is split across package collaborators: {@link StreamableHttpAcpServlet}
+ * (POST/GET/DELETE), {@link StreamableHttpConnection} (one POST/SSE connection and its
+ * scope routing), {@link SseOutboundStream} (mailbox and SSE subscriber),
+ * {@link StreamableHttpWebSocketConnection} (one upgraded connection) and
+ * {@link StreamableHttpRouting} (method-to-stream rules). This class owns the Jetty
+ * server, the connection registries, keep-alive and shutdown.
+ * </p>
+ *
  * @author Kaiser Dandangi
  */
 public class StreamableHttpAcpAgentTransport {
@@ -77,8 +72,6 @@ public class StreamableHttpAcpAgentTransport {
 	static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
 
 	static final String HEADER_SESSION_ID = "Acp-Session-Id";
-
-	private static final String CONTENT_TYPE_JSON = "application/json";
 
 	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
@@ -102,7 +95,8 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final ConcurrentMap<String, StreamableHttpConnection> connections = new ConcurrentHashMap<>();
 
-	private final ConcurrentMap<String, StreamableHttpWebSocketConnection> webSocketConnections = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, StreamableHttpWebSocketConnection> webSocketConnections =
+			new ConcurrentHashMap<>();
 
 	private final AtomicBoolean started = new AtomicBoolean(false);
 
@@ -179,7 +173,8 @@ public class StreamableHttpAcpAgentTransport {
 
 			ServletContextHandler context = new ServletContextHandler();
 			context.setContextPath("/");
-			context.addServlet(new ServletHolder(new AcpServlet()), path);
+			context.addServlet(new ServletHolder(
+					new StreamableHttpAcpServlet(jsonMapper, options, connections, this::createConnection)), path);
 
 			WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
 				container.setIdleTimeout(Duration.ofMinutes(30));
@@ -301,246 +296,6 @@ public class StreamableHttpAcpAgentTransport {
 		String connectionId = UUID.randomUUID().toString();
 		return new StreamableHttpWebSocketConnection(connectionId, jsonMapper, agentFactory, options,
 				connection -> webSocketConnections.remove(connection.id(), connection));
-	}
-
-	private final class AcpServlet extends HttpServlet {
-
-		@Override
-		protected void doPost(HttpServletRequest request, HttpServletResponse response)
-				throws ServletException, IOException {
-			if (!hasContentType(request, CONTENT_TYPE_JSON)) {
-				writeText(response, HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE,
-						"Content-Type must be application/json");
-				return;
-			}
-
-			long declaredLength = request.getContentLengthLong();
-			if (declaredLength > options.maxPostBodyBytes()) {
-				writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
-						"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
-				return;
-			}
-			byte[] bodyBytes = request.getInputStream().readNBytes((int) Math.min(Integer.MAX_VALUE,
-					options.maxPostBodyBytes() + 1));
-			if (bodyBytes.length > options.maxPostBodyBytes()) {
-				writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
-						"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
-				return;
-			}
-			String body = new String(bodyBytes, StandardCharsets.UTF_8);
-			if (body.stripLeading().startsWith("[")) {
-				writeText(response, HttpServletResponse.SC_NOT_IMPLEMENTED, "JSON-RPC batches are not supported");
-				return;
-			}
-
-			JSONRPCMessage message;
-			try {
-				message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, body);
-			}
-			catch (Exception e) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST, "Invalid JSON-RPC");
-				return;
-			}
-
-			if (StreamableHttpRouting.isInitialize(message)) {
-				handleInitialize(request, response, (AcpSchema.JSONRPCRequest) message);
-				return;
-			}
-
-			String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-			if (connectionId == null) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-				return;
-			}
-			StreamableHttpConnection connection = connections.get(connectionId);
-			if (connection == null) {
-				response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-				return;
-			}
-
-			try {
-				connection.acceptClientPost(message, header(request, HEADER_SESSION_ID).orElse(null));
-				response.setStatus(HttpServletResponse.SC_ACCEPTED);
-			}
-			catch (UnknownSessionException e) {
-				writeText(response, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-			}
-			catch (AcpConnectionException | IllegalArgumentException e) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
-			}
-		}
-
-		@Override
-		protected void doGet(HttpServletRequest request, HttpServletResponse response)
-				throws ServletException, IOException {
-			if (!accepts(request, CONTENT_TYPE_EVENT_STREAM)) {
-				writeText(response, HttpServletResponse.SC_NOT_ACCEPTABLE, "client must accept text/event-stream");
-				return;
-			}
-
-			String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-			if (connectionId == null) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-				return;
-			}
-			StreamableHttpConnection connection = connections.get(connectionId);
-			if (connection == null) {
-				response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-				return;
-			}
-
-			try {
-				connection.openStream(request, response, header(request, HEADER_SESSION_ID).orElse(null));
-			}
-			catch (UnknownSessionException e) {
-				writeText(response, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-			}
-		}
-
-		@Override
-		protected void doDelete(HttpServletRequest request, HttpServletResponse response)
-				throws ServletException, IOException {
-			String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-			if (connectionId == null) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-				return;
-			}
-			StreamableHttpConnection connection = connections.remove(connectionId);
-			if (connection == null) {
-				response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-				return;
-			}
-			connection.close();
-			response.setStatus(HttpServletResponse.SC_ACCEPTED);
-		}
-
-		private void handleInitialize(HttpServletRequest request, HttpServletResponse response,
-				AcpSchema.JSONRPCRequest initializeRequest) throws IOException {
-			if (header(request, HEADER_CONNECTION_ID).isPresent()) {
-				writeText(response, HttpServletResponse.SC_BAD_REQUEST,
-						"initialize must not include " + HEADER_CONNECTION_ID);
-				return;
-			}
-
-			StreamableHttpConnection connection = createConnection();
-			AsyncContext asyncContext = request.startAsync();
-			asyncContext.setTimeout(INITIALIZE_TIMEOUT.toMillis());
-			AtomicBoolean completed = new AtomicBoolean(false);
-			asyncContext.addListener(new AsyncListener() {
-
-				@Override
-				public void onComplete(AsyncEvent event) {
-				}
-
-				@Override
-				public void onTimeout(AsyncEvent event) {
-					completeInitializeFailure(asyncContext, response, connection, completed);
-				}
-
-				@Override
-				public void onError(AsyncEvent event) {
-					completeInitializeFailure(asyncContext, response, connection, completed);
-				}
-
-				@Override
-				public void onStartAsync(AsyncEvent event) {
-					event.getAsyncContext().addListener(this);
-				}
-
-			});
-
-			connection.start()
-				.then(Mono.defer(() -> connection.initialize(initializeRequest)))
-				.timeout(INITIALIZE_TIMEOUT, AcpSchedulers.timeouts())
-				// Runs on the servlet thread: the request is already async, agent creation
-				// is cheap, and the handler runs on the agent's own scheduler. The SDK does
-				// not use the global boundedElastic scheduler.
-				.subscribe(initializeResponse -> completeInitializeSuccess(asyncContext, response, connection,
-						completed, initializeResponse),
-					error -> completeInitializeFailure(asyncContext, response, connection, completed));
-		}
-
-		private void completeInitializeSuccess(AsyncContext asyncContext, HttpServletResponse response,
-				StreamableHttpConnection connection, AtomicBoolean completed, JSONRPCMessage initializeResponse) {
-			if (!completed.compareAndSet(false, true)) {
-				return;
-			}
-			try {
-				if (!(initializeResponse instanceof AcpSchema.JSONRPCResponse)) {
-					throw new AcpConnectionException("initialize did not produce a JSON-RPC response");
-				}
-				connections.put(connection.id(), connection);
-				response.setStatus(HttpServletResponse.SC_OK);
-				response.setContentType(CONTENT_TYPE_JSON);
-				response.setHeader(HEADER_CONNECTION_ID, connection.id());
-				response.getWriter().write(jsonMapper.writeValueAsString(initializeResponse));
-			}
-			catch (Exception e) {
-				connections.remove(connection.id(), connection);
-				connection.close();
-				try {
-					writeText(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
-				}
-				catch (IOException writeError) {
-					logger.warn("Failed to write Streamable HTTP initialize failure", writeError);
-				}
-			}
-			finally {
-				completeAsyncContext(asyncContext);
-			}
-		}
-
-		private void completeInitializeFailure(AsyncContext asyncContext, HttpServletResponse response,
-				StreamableHttpConnection connection, AtomicBoolean completed) {
-			if (!completed.compareAndSet(false, true)) {
-				return;
-			}
-			connections.remove(connection.id(), connection);
-			connection.close();
-			try {
-				writeText(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
-			}
-			catch (IOException writeError) {
-				logger.warn("Failed to write Streamable HTTP initialize failure", writeError);
-			}
-			finally {
-				completeAsyncContext(asyncContext);
-			}
-		}
-
-		private void completeAsyncContext(AsyncContext asyncContext) {
-			try {
-				asyncContext.complete();
-			}
-			catch (IllegalStateException ignored) {
-			}
-		}
-
-	}
-
-	private boolean hasContentType(HttpServletRequest request, String expected) {
-		return Optional.ofNullable(request.getContentType())
-			.map(String::toLowerCase)
-			.map(contentType -> contentType.split(";", 2)[0].trim())
-			.filter(contentType -> contentType.equals(expected))
-			.isPresent();
-	}
-
-	private boolean accepts(HttpServletRequest request, String expected) {
-		return Optional.ofNullable(request.getHeader("Accept"))
-			.map(String::toLowerCase)
-			.filter(accept -> accept.contains(expected))
-			.isPresent();
-	}
-
-	private Optional<String> header(HttpServletRequest request, String name) {
-		return Optional.ofNullable(request.getHeader(name)).filter(value -> !value.isBlank());
-	}
-
-	private void writeText(HttpServletResponse response, int status, String body) throws IOException {
-		response.setStatus(status);
-		response.setContentType("text/plain");
-		response.getWriter().write(body);
 	}
 
 }

@@ -27,6 +27,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.INITIALIZE_TIMEOUT;
+
 /**
  * One remote ACP connection upgraded to WebSocket on the Streamable HTTP endpoint: its
  * agent runtime, the initialize-first rule, and a serialized, bounded frame sender.
@@ -73,7 +75,7 @@ final class StreamableHttpWebSocketConnection {
 	}
 
 	void start() {
-		this.remoteConnection.start(agentFactory).block(StreamableHttpAcpAgentTransport.INITIALIZE_TIMEOUT);
+		this.remoteConnection.start(agentFactory).block(INITIALIZE_TIMEOUT);
 	}
 
 	void open(Session session) {

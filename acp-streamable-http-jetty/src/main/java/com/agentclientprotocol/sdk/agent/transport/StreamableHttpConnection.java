@@ -29,6 +29,10 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.CONTENT_TYPE_EVENT_STREAM;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_CONNECTION_ID;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_SESSION_ID;
+
 /**
  * One remote ACP connection over Streamable HTTP (POST/SSE): its agent runtime, its
  * connection stream and session streams, the sessions it knows (including provisional
@@ -131,11 +135,11 @@ final class StreamableHttpConnection {
 		}
 
 		response.setStatus(HttpServletResponse.SC_OK);
-		response.setContentType(StreamableHttpAcpAgentTransport.CONTENT_TYPE_EVENT_STREAM);
+		response.setContentType(CONTENT_TYPE_EVENT_STREAM);
 		response.setHeader("Cache-Control", "no-cache");
-		response.setHeader(StreamableHttpAcpAgentTransport.HEADER_CONNECTION_ID, id);
+		response.setHeader(HEADER_CONNECTION_ID, id);
 		if (scope.isSession()) {
-			response.setHeader(StreamableHttpAcpAgentTransport.HEADER_SESSION_ID, scope.sessionId());
+			response.setHeader(HEADER_SESSION_ID, scope.sessionId());
 		}
 		AsyncContext asyncContext = request.startAsync();
 		asyncContext.setTimeout(0);
