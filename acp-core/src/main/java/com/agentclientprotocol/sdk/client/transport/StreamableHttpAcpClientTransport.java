@@ -169,6 +169,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
+	private final Sinks.One<Void> terminationSink = Sinks.one();
+
 	/**
 	 * Creates a new Streamable HTTP client transport using a default JDK {@link HttpClient}
 	 * configured with an internal {@link CookieManager}.
@@ -654,6 +656,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			if (!closing.compareAndSet(false, true)) {
 				return Mono.empty();
 			}
+			terminationSink.tryEmitEmpty();
 			Optional.ofNullable(connectionStream).ifPresent(SseStream::close);
 			sessionStreams.values().forEach(SseStream::close);
 
@@ -732,6 +735,12 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		}
 		clearState();
 		exceptionHandler.accept(error);
+		terminationSink.tryEmitError(error);
+	}
+
+	@Override
+	public Mono<Void> awaitTermination() {
+		return terminationSink.asMono();
 	}
 
 	@Override

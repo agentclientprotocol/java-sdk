@@ -97,6 +97,9 @@ public class AcpClientSession implements AcpSession {
 	 */
 	private volatile Throwable connectFailure;
 
+	/** Set once this session starts closing itself, so a transport termination it caused is not reported. */
+	private volatile boolean closing;
+
 	/**
 	 * Functional interface for handling incoming JSON-RPC requests. Implementations
 	 * should process the request parameters and return a response.
@@ -188,6 +191,26 @@ public class AcpClientSession implements AcpSession {
 			this.notificationSubscription.dispose();
 			throw notConnected(failure);
 		}
+
+		// When the transport later terminates (peer gone, stream failed for good), pending
+		// requests fail at once with the cause instead of waiting out the request timeout.
+		this.transport.awaitTermination().subscribe(v -> {
+		}, this::onTransportTerminated, () -> onTransportTerminated(null));
+	}
+
+	private void onTransportTerminated(Throwable cause) {
+		if (this.closing) {
+			return;
+		}
+		Throwable failure = cause != null ? cause : new IllegalStateException("ACP client transport terminated");
+		this.connectFailure = failure;
+		if (cause != null) {
+			logger.warn("ACP client transport terminated: {}", cause.getMessage());
+		}
+		else {
+			logger.debug("ACP client transport terminated by the peer");
+		}
+		dismissPendingResponses(failure);
 	}
 
 	private void onConnectFailure(Throwable error) {
@@ -437,6 +460,7 @@ public class AcpClientSession implements AcpSession {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.<Void>fromRunnable(() -> {
+			this.closing = true;
 			dismissPendingResponses();
 			notificationSink.tryEmitComplete();
 		})
@@ -455,6 +479,7 @@ public class AcpClientSession implements AcpSession {
 	 */
 	@Override
 	public void close() {
+		this.closing = true;
 		dismissPendingResponses();
 		notificationSink.tryEmitComplete();
 		notificationSubscription.dispose();

@@ -66,6 +66,8 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.One<Void> connectionReady = Sinks.one();
 
+	private final Sinks.One<Void> terminationSink = Sinks.one();
+
 	private WebSocket webSocket;
 
 	private Scheduler outboundScheduler;
@@ -220,6 +222,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
 			outboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 		}).then(Mono.defer(() -> {
 			if (webSocket != null) {
 				return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")
@@ -240,6 +243,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	@Override
 	public void setExceptionHandler(Consumer<Throwable> handler) {
 		this.exceptionHandler = handler;
+	}
+
+	@Override
+	public Mono<Void> awaitTermination() {
+		return terminationSink.asMono();
 	}
 
 	@Override
@@ -295,6 +303,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			logger.info("WebSocket connection closed: {} - {}", statusCode, reason);
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -303,9 +312,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			if (!isClosing.get()) {
 				logger.error("WebSocket error", error);
 				exceptionHandler.accept(error);
+				terminationSink.tryEmitError(error);
 			}
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 		}
 
 	}

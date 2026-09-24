@@ -43,4 +43,16 @@ public interface AcpClientTransport extends AcpTransport {
 	default void setExceptionHandler(Consumer<Throwable> handler) {
 	}
 
+	/**
+	 * Completes when this transport can no longer deliver messages: the peer closed the
+	 * connection, the transport failed for good, or it was closed locally. Errors with the
+	 * cause when it failed. The session uses it to fail pending requests at once instead
+	 * of waiting out the request timeout. The default never completes, which is the
+	 * behaviour of transports that do not report termination.
+	 * @return a Mono that terminates when the transport does
+	 */
+	default Mono<Void> awaitTermination() {
+		return Mono.never();
+	}
+
 }

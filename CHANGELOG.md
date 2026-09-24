@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `WebSocketAcpAgentTransport` read its client session field twice around a null check while the
+  socket's `onClose` could clear it, an occasional `NullPointerException` on close.
 - **A second client on an already-connected transport now fails at construction.** A transport
   instance carries exactly one session. `StdioAcpClientTransport.connect()` had no once-only guard
   (the WebSocket and agent transports did), so a second `AcpClient.async(transport)` or
@@ -55,6 +57,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already was, and a failed emission in the in-memory pair no longer terminates the agent. The
   reporter's repro is now a test, and CI runs the contention tests pinned to one CPU. Reported by
   @krickert.
+- **Streamable HTTP agent transport hardening** (`StreamableHttpAcpAgentTransportOptions`): POST bodies
+  are capped (16 MiB by default, 413 beyond), the WebSocket send queue and the number of provisional
+  `session/load` streams per connection are bounded, a failed `session/load` leaves no provisional state,
+  the SSE mailbox and per-subscriber queue limits are configurable, attached streams get a `: keep-alive`
+  comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
+  from a subscriber the server may not yet know is dead instead of fanning out duplicates.
+- **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
+  never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
+  pending requests at once with the cause, and every later request, instead of waiting out the request
+  timeout.
 - **One shared timeout scheduler.** Every `AcpClientSession` and `AcpAgentSession` created its own
   scheduled thread pool for request timeouts; over the Streamable HTTP transport, which hosts one agent
   session per remote connection, that was one idle thread per connection. Timeouts now run on a single
