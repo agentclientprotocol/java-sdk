@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -20,7 +21,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -159,13 +159,8 @@ public class AcpClientSession implements AcpSession {
 		logger.debug("AcpClientSession created with {} notification handlers: {}",
 				notificationHandlers.size(), notificationHandlers.keySet());
 
-		// Create per-session timeout scheduler with daemon thread
-		this.timeoutScheduler = Schedulers.fromExecutorService(
-				Executors.newScheduledThreadPool(1, r -> {
-					Thread t = new Thread(r, "acp-timeout-" + sessionPrefix);
-					t.setDaemon(true);
-					return t;
-				}), "acp-timeout-" + sessionPrefix);
+		// One shared daemon timer for every session in the JVM (see AcpSchedulers).
+		this.timeoutScheduler = AcpSchedulers.timeouts();
 
 		// Serialize notification delivery: concatMap ensures each notification's Mono
 		// completes before the next one starts, preserving arrival order even when
@@ -191,7 +186,6 @@ public class AcpClientSession implements AcpSession {
 		if (failure != null) {
 			this.notificationSink.tryEmitComplete();
 			this.notificationSubscription.dispose();
-			this.timeoutScheduler.dispose();
 			throw notConnected(failure);
 		}
 	}
@@ -453,7 +447,6 @@ public class AcpClientSession implements AcpSession {
 				.timeout(this.requestTimeout, Mono.empty(), this.timeoutScheduler))
 			.doFinally(signal -> {
 				notificationSubscription.dispose();
-				timeoutScheduler.dispose();
 			});
 	}
 
@@ -465,7 +458,6 @@ public class AcpClientSession implements AcpSession {
 		dismissPendingResponses();
 		notificationSink.tryEmitComplete();
 		notificationSubscription.dispose();
-		timeoutScheduler.dispose();
 	}
 
 	/**

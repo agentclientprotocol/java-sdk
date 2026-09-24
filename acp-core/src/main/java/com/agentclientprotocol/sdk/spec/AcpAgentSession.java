@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 import reactor.core.scheduler.Scheduler;
@@ -17,6 +16,7 @@ import reactor.core.scheduler.Schedulers;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.slf4j.Logger;
@@ -156,13 +156,8 @@ public class AcpAgentSession implements AcpSession {
 		this.requestHandlers.putAll(requestHandlers);
 		this.notificationHandlers.putAll(notificationHandlers);
 
-		// Create per-session timeout scheduler with daemon thread
-		this.timeoutScheduler = Schedulers.fromExecutorService(
-				Executors.newScheduledThreadPool(1, r -> {
-					Thread t = new Thread(r, "acp-agent-timeout-" + sessionPrefix);
-					t.setDaemon(true);
-					return t;
-				}), "acp-agent-timeout-" + sessionPrefix);
+		// One shared daemon timer for every session in the JVM (see AcpSchedulers).
+		this.timeoutScheduler = AcpSchedulers.timeouts();
 
 		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe(v -> {
 		}, this::onStartFailure);
@@ -171,7 +166,6 @@ public class AcpAgentSession implements AcpSession {
 		// twice) fails construction rather than handing back a session that can never talk.
 		Throwable failure = this.startFailure;
 		if (failure != null) {
-			this.timeoutScheduler.dispose();
 			throw notStarted(failure);
 		}
 	}
@@ -496,7 +490,6 @@ public class AcpAgentSession implements AcpSession {
 		return Mono.fromRunnable(() -> {
 			activePrompts.clear();
 			dismissPendingResponses();
-			timeoutScheduler.dispose();
 		}).then(this.transport.closeGracefully());
 	}
 
@@ -507,7 +500,6 @@ public class AcpAgentSession implements AcpSession {
 	public void close() {
 		activePrompts.clear();
 		dismissPendingResponses();
-		timeoutScheduler.dispose();
 		transport.close();
 	}
 

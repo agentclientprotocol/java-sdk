@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already was, and a failed emission in the in-memory pair no longer terminates the agent. The
   reporter's repro is now a test, and CI runs the contention tests pinned to one CPU. Reported by
   @krickert.
+- **One shared timeout scheduler.** Every `AcpClientSession` and `AcpAgentSession` created its own
+  scheduled thread pool for request timeouts; over the Streamable HTTP transport, which hosts one agent
+  session per remote connection, that was one idle thread per connection. Timeouts now run on a single
+  library-owned daemon timer (`AcpSchedulers.timeouts()`).
+- The scheduler-hygiene test (`SchedulerBestPracticesTest`) now scans every module's production sources,
+  not only `acp-core`.
 - The agent session now reads `sessionId` from typed `PromptRequest`/`CancelNotification` params as
   well as from maps, so in-process transports get the right lock owner in logs and cancel matching.
 
