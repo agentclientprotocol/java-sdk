@@ -9,6 +9,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A second client on an already-connected transport now fails at construction.** A transport
+  instance carries exactly one session. `StdioAcpClientTransport.connect()` had no once-only guard
+  (the WebSocket and agent transports did), so a second `AcpClient.async(transport)` or
+  `AcpClient.sync(transport)` on the same instance subscribed the transport's unicast inbound sink a
+  second time — logged and dropped as `Sinks.many().unicast() sinks only allow a single
+  Subscriber` — and then started a second agent process, whose owner could never receive a
+  response: its first request timed out after the full `requestTimeout`. That is the Spring Boot
+  autoconfiguration failure reported in June 2026 (both an `AcpAsyncClient` and an `AcpSyncClient`
+  bean built from one transport bean); it never depended on the Reactor or Boot version. Now the
+  stdio transport refuses a second `connect()`, and `AcpClientSession` / `AcpAgentSession` surface a
+  connect or start failure instead of dropping it: construction throws `IllegalStateException` when
+  the transport refuses synchronously, and every later request fails immediately with the cause.
+
+- **Second prompt on a session could be rejected or hang under CPU contention (#14).** The agent
+  released its single-turn prompt lock in `doFinally`, *after* the response had already reached the
+  client. On a starved machine (`taskset -c 0`, busy CI runners) the client's next prompt arrived
+  before that release and was rejected with `-32000 There is already an active prompt execution`;
+  the rejection's emission then collided with the still-running response emission on the same sink
+  (`FAIL_NON_SERIALIZED`), which the shipped transports silently dropped and the in-memory test
+  transport turned into a fatal error for the agent, so `AcpSyncClient.prompt` waited out the full
+  `requestTimeout`. The lock is now released before the response is published, on the success and
+  error paths alike, and a handler that throws before returning its `Mono` no longer holds the lock
+  forever. Response emission in `StdioAcpAgentTransport`, `WebSocketAcpClientTransport`,
+  `WebSocketAcpAgentTransport` and `InMemoryTransportPair` is serialised the way `sendMessage`
+  already was, and a failed emission in the in-memory pair no longer terminates the agent. The
+  reporter's repro is now a test, and CI runs the contention tests pinned to one CPU. Reported by
+  @krickert.
+- The agent session now reads `sessionId` from typed `PromptRequest`/`CancelNotification` params as
+  well as from maps, so in-process transports get the right lock owner in logs and cancel matching.
+
+### Changed
+
+- **Unknown-field policy moved from the schema to the mapper (#10).** Every schema record carried
+  `@JsonIgnoreProperties(ignoreUnknown = true)`, which made the SDK tolerate fields it does not know
+  (deliberate: the spec adds fields between releases and a newer agent must keep working) but also
+  defeated any consumer's strict `ObjectMapper`, since a class-level annotation wins over
+  `FAIL_ON_UNKNOWN_PROPERTIES`. The annotations are gone. The default mapper,
+  `JacksonAcpJsonMapper.defaultObjectMapper()`, is lenient and logs each ignored property at DEBUG
+  so spec drift is observable; a consumer who passes a strict mapper to `JacksonAcpJsonMapper` now
+  gets strict behaviour. **If you construct `JacksonAcpJsonMapper` with a bare `new ObjectMapper()`,
+  you now get Jackson's default, which fails on unknown fields**: start from
+  `defaultObjectMapper()` instead. Unknown fields are not routed into `_meta`, which has its own
+  spec-defined meaning. Reported by @KallivdH.
+
+### Added
+
+- `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
+
+## [0.17.0] - 2026-08-28
+
+Wire-format correction. No public API change: every constructor and accessor is unchanged, and the
+ACP surface is identical to 0.16.1.
+
+### Fixed
+
 - **Duplicate discriminator on the wire.** Every polymorphic type declared its discriminator twice —
   once as Jackson's `@JsonTypeInfo` property on the interface and again as an explicit
   `@JsonProperty` record component — so both wrote it. `new TextContent("hello")` serialised to
@@ -18,6 +73,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Access.WRITE_ONLY` with `visible = true` on the type info, so the type id is written exactly once
   and is still populated on deserialization — previously it deserialised to `null`. 27 records
   across 6 hierarchies. No API change: every constructor and accessor is unchanged.
+
+## [0.16.1] - 2026-08-24
+
+Release-tooling patch. No protocol, dependency-closure or public API changes beyond a SLF4J patch
+bump: the ACP surface is identical to 0.16.0.
+
+### Build
+
+- **Consumer-scoped SBOMs.** Every module artifact now publishes a CycloneDX 1.6 SBOM (classifier
+  `cyclonedx`) rooted at that module and covering its compile and runtime scope only, so a
+  consumer's dependency closure can be checked against what the artifact actually ships.
+- The release workflow commits the release version bump before tagging, so each `vX.Y.Z` tag now
+  points at a commit whose POMs carry that version.
+
+### Changed
+
+- SLF4J 2.0.17 → **2.0.18**.
 
 ## [0.16.0] - 2026-08-24
 
@@ -204,5 +276,7 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the n
 - SLF4J 2.0.16
 
 [0.9.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.9.0
+[0.17.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.17.0
+[0.16.1]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.1
 [0.16.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.0
 [0.15.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.15.0

@@ -167,7 +167,15 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			.flatMap(message -> Mono.just(message).transform(handler))
 			.doOnNext(response -> {
 				if (response != null) {
-					this.outboundSink.tryEmitNext(response);
+					// Responses are emitted from the inbound thread while sendMessage emits
+					// from user threads on the same sink; both must go through the serialising
+					// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
+					try {
+						this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+					}
+					catch (Sinks.EmissionException e) {
+						logger.error("Dropped response {}: {}", response, e.getReason());
+					}
 				}
 			})
 			.doOnTerminate(() -> {

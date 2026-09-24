@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.16.0</version>
+    <version>0.17.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.16.0</version>
+    <version>0.17.0</version>
 </dependency>
 ```
 
@@ -48,7 +48,7 @@ For WebSocket server support (agents accepting WebSocket connections):
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.16.0</version>
+    <version>0.17.0</version>
 </dependency>
 ```
 
@@ -476,7 +476,18 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.16.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.17.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Wire-format correction with no API change: every polymorphic discriminator (`type`, `sessionUpdate`,
+`outcome`) was written twice, which Jackson-based peers tolerated and strict parsers rejected. It is
+now written exactly once and still populated on deserialization.
+
+### 0.16.1 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Release-tooling patch preserving the 0.16 protocol and public API surface: every artifact ships a
+consumer-scoped CycloneDX SBOM, and release tags point at commits carrying the released version.
+
+### 0.16.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Maintenance release preserving the 0.15 protocol and public API surface while advancing Reactor to
 3.8.7, Jackson to 2.22.2, Jetty to 12.1.12, and the compatible stable test and release toolchain.

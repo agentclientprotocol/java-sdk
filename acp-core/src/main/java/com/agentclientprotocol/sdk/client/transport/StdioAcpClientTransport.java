@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -76,6 +77,13 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	private volatile boolean isClosing = false;
 
+	/**
+	 * A transport instance carries exactly one session. {@link #connect} subscribes the
+	 * unicast inbound and outbound sinks and starts the agent process; a second call would
+	 * subscribe them again and start a second process, so it is refused up front.
+	 */
+	private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
 	// visible for tests
 	private Consumer<String> stdErrorHandler = error -> logger.info("STDERR Message received: {}", error);
 
@@ -135,39 +143,49 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
-		return Mono.<Void>fromRunnable(() -> {
-			logger.info("ACP agent starting.");
-			handleIncomingMessages(handler);
-			handleIncomingErrors();
-
-			// Prepare command and environment
-			List<String> fullCommand = new ArrayList<>();
-			fullCommand.add(params.getCommand());
-			fullCommand.addAll(params.getArgs());
-
-			ProcessBuilder processBuilder = this.getProcessBuilder();
-			processBuilder.command(fullCommand);
-			processBuilder.environment().putAll(params.getEnv());
-
-			// Start the process
-			try {
-				this.process = processBuilder.start();
+		// The guard runs at subscribe time, not at assembly, so a connect publisher that is
+		// subscribed twice is refused the second time and one that is never subscribed does
+		// not consume the connection.
+		return Mono.defer(() -> {
+			if (!isConnected.compareAndSet(false, true)) {
+				return Mono.error(new IllegalStateException("StdioAcpClientTransport is already connected. "
+						+ "A transport instance carries exactly one session and cannot be reused: build one client per "
+						+ "transport, or share one AcpAsyncClient by wrapping it with new AcpSyncClient(asyncClient)."));
 			}
-			catch (IOException e) {
-				throw new RuntimeException("Failed to start process with command: " + fullCommand, e);
-			}
+			return Mono.<Void>fromRunnable(() -> {
+				logger.info("ACP agent starting.");
+				handleIncomingMessages(handler);
+				handleIncomingErrors();
 
-			// Validate process streams
-			if (this.process.getInputStream() == null || process.getOutputStream() == null) {
-				this.process.destroy();
-				throw new RuntimeException("Process input or output stream is null");
-			}
+				// Prepare command and environment
+				List<String> fullCommand = new ArrayList<>();
+				fullCommand.add(params.getCommand());
+				fullCommand.addAll(params.getArgs());
 
-			// Start threads
-			startInboundProcessing();
-			startOutboundProcessing();
-			startErrorProcessing();
-			logger.info("ACP agent started");
+				ProcessBuilder processBuilder = this.getProcessBuilder();
+				processBuilder.command(fullCommand);
+				processBuilder.environment().putAll(params.getEnv());
+
+				// Start the process
+				try {
+					this.process = processBuilder.start();
+				}
+				catch (IOException e) {
+					throw new RuntimeException("Failed to start process with command: " + fullCommand, e);
+				}
+
+				// Validate process streams
+				if (this.process.getInputStream() == null || process.getOutputStream() == null) {
+					this.process.destroy();
+					throw new RuntimeException("Process input or output stream is null");
+				}
+
+				// Start threads
+				startInboundProcessing();
+				startOutboundProcessing();
+				startErrorProcessing();
+				logger.info("ACP agent started");
+			});
 		});
 	}
 
