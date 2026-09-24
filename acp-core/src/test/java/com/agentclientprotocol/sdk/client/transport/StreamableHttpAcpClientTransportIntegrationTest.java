@@ -160,19 +160,23 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 		}
 	}
 
+	/**
+	 * Peers differ on which stream carries a session/resume reply (the Rust server uses the
+	 * session stream, TypeScript the connection stream). The reply is ours by id, so it is
+	 * delivered either way.
+	 */
 	@Test
-	void resumeSessionRejectsResponseOnSessionStream() throws Exception {
+	void resumeSessionAcceptsResponseOnSessionStream() throws Exception {
 		try (FixtureServer fixture = FixtureServer.start()) {
 			fixture.routeResumeResponsesOnSessionStream();
 			AcpAsyncClient client = newClient(fixture.endpoint()).build();
 			try {
 				client.initialize().block(TIMEOUT);
 
-				assertThatThrownBy(() -> client
+				AcpSchema.ResumeSessionResponse resumed = client
 					.resumeSession(new AcpSchema.ResumeSessionRequest("sess-resume", "/workspace", List.of()))
-					.block(TIMEOUT))
-					.hasMessageContaining("arrived on RouteScope[kind=SESSION, sessionId=sess-resume]")
-					.hasMessageContaining("expected RouteScope[kind=CONNECTION, sessionId=null]");
+					.block(TIMEOUT);
+				assertThat(resumed).isNotNull();
 			}
 			finally {
 				client.closeGracefully().block(TIMEOUT);
@@ -211,7 +215,7 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 	}
 
 	@Test
-	void wrongStreamResponseFailsPendingExchange() throws Exception {
+	void wrongStreamResponseIsStillDelivered() throws Exception {
 		try (FixtureServer fixture = FixtureServer.start()) {
 			fixture.routePromptResponsesOnConnectionStream();
 			AcpAsyncClient client = newClient(fixture.endpoint()).build();
@@ -221,10 +225,11 @@ class StreamableHttpAcpClientTransportIntegrationTest {
 				.newSession(AcpTestFixtures.createNewSessionRequest("/workspace"))
 				.block(TIMEOUT);
 
-			assertThatThrownBy(() -> client
+			AcpSchema.PromptResponse prompt = client
 				.prompt(AcpTestFixtures.createPromptRequest(session.sessionId(), "wrong stream"))
-				.block(TIMEOUT))
-				.hasMessageContaining("arrived on RouteScope");
+				.block(TIMEOUT);
+			assertThat(prompt.stopReason()).as("a reply on an unexpected stream is delivered, with a warning")
+				.isEqualTo(AcpSchema.StopReason.END_TURN);
 
 			client.closeGracefully().block(TIMEOUT);
 		}
