@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the SSE mailbox and per-subscriber queue limits are configurable, attached streams get a `: keep-alive`
   comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
   from a subscriber the server may not yet know is dead instead of fanning out duplicates.
+- **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
+  deployment. Over cleartext the JDK client only offers the h2c upgrade on a request without a body, so
+  `initialize`, a POST, went out on HTTP/1.1. `StreamableHttpAcpClientTransport` now sends a bodiless
+  OPTIONS first on `http://` endpoints, and every request, streams included, runs on HTTP/2.
 - **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
   never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
   pending requests at once with the cause, and every later request, instead of waiting out the request

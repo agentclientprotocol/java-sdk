@@ -210,6 +210,132 @@ class StreamableHttpClientServerIntegrationTest {
 		}
 	}
 
+	/**
+	 * Localhost over plain {@code http://} is a first-class deployment (no TLS), and the RFD
+	 * requires HTTP/2: every request the SDK client makes, initialize, the POSTs and the
+	 * long-lived SSE GETs, must run on HTTP/2 over cleartext.
+	 */
+	@Test
+	void sdkClientUsesHttp2ForEveryRequestOverCleartextHttp() throws Exception {
+		StreamableHttpAcpAgentTransport server = startServer(StreamableHttpAcpAgentTransportOptions.defaults());
+		RecordingHttpClient http = new RecordingHttpClient(
+				HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build());
+		AcpAsyncClient client = AcpClient
+			.async(new StreamableHttpAcpClientTransport(endpoint(server), AcpJsonMapper.createDefault(), http))
+			.requestTimeout(TIMEOUT)
+			.build();
+		try {
+			client.initialize().block(TIMEOUT);
+			AcpSchema.NewSessionResponse session = client
+				.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
+				.block(TIMEOUT);
+			client.prompt(new AcpSchema.PromptRequest(session.sessionId(), List.of(new AcpSchema.TextContent("hi"))))
+				.block(TIMEOUT);
+
+			assertThat(endpoint(server).getScheme()).isEqualTo("http");
+			assertThat(http.versions()).as("request methods seen: " + http.methods()).isNotEmpty();
+			assertThat(http.methods()).contains("POST", "GET");
+			assertThat(http.versions()).as("every response, including SSE streams").containsOnly(HttpClient.Version.HTTP_2);
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			server.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	/** Delegates to a real client and records the method and negotiated version of every response. */
+	private static final class RecordingHttpClient extends HttpClient {
+
+		private final HttpClient delegate;
+
+		private final List<HttpClient.Version> versions = new CopyOnWriteArrayList<>();
+
+		private final List<String> methods = new CopyOnWriteArrayList<>();
+
+		RecordingHttpClient(HttpClient delegate) {
+			this.delegate = delegate;
+		}
+
+		List<HttpClient.Version> versions() {
+			return versions;
+		}
+
+		List<String> methods() {
+			return methods;
+		}
+
+		private <T> HttpResponse<T> record(HttpRequest request, HttpResponse<T> response) {
+			methods.add(request.method());
+			versions.add(response.version());
+			return response;
+		}
+
+		@Override
+		public java.util.Optional<java.net.CookieHandler> cookieHandler() {
+			return delegate.cookieHandler();
+		}
+
+		@Override
+		public java.util.Optional<Duration> connectTimeout() {
+			return delegate.connectTimeout();
+		}
+
+		@Override
+		public Redirect followRedirects() {
+			return delegate.followRedirects();
+		}
+
+		@Override
+		public java.util.Optional<java.net.ProxySelector> proxy() {
+			return delegate.proxy();
+		}
+
+		@Override
+		public javax.net.ssl.SSLContext sslContext() {
+			return delegate.sslContext();
+		}
+
+		@Override
+		public javax.net.ssl.SSLParameters sslParameters() {
+			return delegate.sslParameters();
+		}
+
+		@Override
+		public java.util.Optional<java.net.Authenticator> authenticator() {
+			return delegate.authenticator();
+		}
+
+		@Override
+		public Version version() {
+			return delegate.version();
+		}
+
+		@Override
+		public java.util.Optional<java.util.concurrent.Executor> executor() {
+			return delegate.executor();
+		}
+
+		@Override
+		public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> handler)
+				throws IOException, InterruptedException {
+			return record(request, delegate.send(request, handler));
+		}
+
+		@Override
+		public <T> java.util.concurrent.CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
+				HttpResponse.BodyHandler<T> handler) {
+			return delegate.sendAsync(request, handler).thenApply(response -> record(request, response));
+		}
+
+		@Override
+		public <T> java.util.concurrent.CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request,
+				HttpResponse.BodyHandler<T> handler, HttpResponse.PushPromiseHandler<T> pushPromiseHandler) {
+			return delegate.sendAsync(request, handler, pushPromiseHandler)
+				.thenApply(response -> record(request, response));
+		}
+
+	}
+
 	/** An agent factory that fails must fail the WebSocket upgrade, not leave a half-open connection. */
 	@Test
 	void webSocketUpgradeFailsCleanlyWhenTheAgentFactoryThrows() throws Exception {

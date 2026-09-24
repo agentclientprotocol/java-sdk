@@ -298,6 +298,30 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return routeAndPost(message);
 	}
 
+	/**
+	 * The transport requires HTTP/2 (RFD). Over {@code https} ALPN negotiates it on the first
+	 * request. Over cleartext {@code http} the JDK client only offers the h2c upgrade on a
+	 * request without a body, and {@code initialize} is a POST, so without this the whole
+	 * connection would stay on HTTP/1.1. A bodiless OPTIONS first upgrades the connection;
+	 * every later request, the POSTs and the SSE GETs, reuses it over HTTP/2. A failed probe
+	 * is ignored: initialize then proceeds and reports any real problem itself.
+	 */
+	private Mono<Void> upgradeCleartextToHttp2() {
+		if (!"http".equalsIgnoreCase(endpointUri.getScheme()) || httpClient.version() != HttpClient.Version.HTTP_2) {
+			return Mono.empty();
+		}
+		HttpRequest probe = HttpRequest.newBuilder(endpointUri)
+			.method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+			.build();
+		return sendAsync(probe, HttpResponse.BodyHandlers.discarding())
+			.doOnNext(response -> logger.debug("Cleartext probe to {} negotiated {}", endpointUri, response.version()))
+			.then()
+			.onErrorResume(error -> {
+				logger.debug("Cleartext HTTP/2 probe to {} failed: {}", endpointUri, error.getMessage());
+				return Mono.empty();
+			});
+	}
+
 	private Mono<Void> initialize(AcpSchema.JSONRPCRequest request) {
 		if (!initialized.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Transport is already initialized"));
@@ -314,7 +338,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return Mono.error(new AcpConnectionException("Failed to serialize initialize request", e));
 		}
 
-		return sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString())
+		return upgradeCleartextToHttp2()
+			.then(sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString()))
 			.flatMap(response -> {
 				if (response.statusCode() != 200) {
 					return Mono.error(new AcpConnectionException(
