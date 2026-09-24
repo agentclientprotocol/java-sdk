@@ -214,11 +214,12 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 		this.outboundSink.asFlux()
 			.publishOn(outboundScheduler)
 			.subscribe(message -> {
-				if (message != null && !isClosing.get() && clientSession != null && clientSession.isOpen()) {
+				Session currentSession = clientSession;
+				if (message != null && !isClosing.get() && currentSession != null && currentSession.isOpen()) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
 						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
-						clientSession.sendText(jsonMessage, Callback.NOOP);
+						currentSession.sendText(jsonMessage, Callback.NOOP);
 					}
 					catch (Exception e) {
 						if (!isClosing.get()) {
@@ -247,8 +248,9 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			inboundSink.tryEmitComplete();
 			outboundSink.tryEmitComplete();
 		}).then(Mono.fromCallable(() -> {
-			if (clientSession != null && clientSession.isOpen()) {
-				clientSession.close();
+			Session currentSession = clientSession;
+			if (currentSession != null && currentSession.isOpen()) {
+				currentSession.close();
 			}
 			if (server != null) {
 				server.stop();
