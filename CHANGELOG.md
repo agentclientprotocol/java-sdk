@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Streamable HTTP transport** (RFD
+  [streamable-http-websocket-transport](https://agentclientprotocol.com/rfds/streamable-http-websocket-transport)),
+  by @kamikaz1k (#7). `StreamableHttpAcpClientTransport` in `acp-core` talks to a remote agent over
+  HTTP POST with SSE response streams (one connection stream plus one stream per session, `Acp-Connection-Id`
+  / `Acp-Session-Id` headers, `DELETE` to close); the new module **`acp-streamable-http-jetty`** provides
+  `StreamableHttpAcpAgentTransport`, a Jetty listener that serves HTTP/SSE and a WebSocket upgrade on the
+  same path and hosts one agent per remote connection through `AcpAgentFactory` and `RemoteAcpConnection`.
+  Header names and path match the TypeScript and Rust SDKs.
+- `CancelNotification` carries `_meta`.
+
+### Changed
+
+- **Single-turn enforcement is per logical session.** `AcpAgentSession` keyed its active-prompt lock
+  per transport connection; over HTTP one connection carries many sessions, so it is now keyed by
+  `sessionId` (`hasActivePrompt(sessionId)`, `getActivePromptSessionIds()`), matching the Kotlin SDK.
+  Stdio and WebSocket agents, which see one session per connection, behave as before. (#7, #9)
+
 ### Fixed
 
 - **A second client on an already-connected transport now fails at construction.** A transport

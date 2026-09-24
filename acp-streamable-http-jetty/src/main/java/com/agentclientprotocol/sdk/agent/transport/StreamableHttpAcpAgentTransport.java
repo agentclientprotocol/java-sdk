@@ -57,7 +57,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Listener-backed ACP Streamable HTTP transport for agents.
@@ -116,6 +115,8 @@ public class StreamableHttpAcpAgentTransport {
 		INITIALIZE,
 
 		SESSION_NEW,
+
+		SESSION_FORK,
 
 		SESSION_LOAD,
 
@@ -210,11 +211,12 @@ public class StreamableHttpAcpAgentTransport {
 	 * @return a mono that completes when the listener is ready
 	 */
 	public Mono<Void> start() {
-		if (!started.compareAndSet(false, true)) {
-			return Mono.error(new IllegalStateException("Already started"));
-		}
-
 		return Mono.fromCallable(() -> {
+			// Guard at subscribe time: a start publisher subscribed twice is refused the
+			// second time instead of starting a second Jetty server.
+			if (!started.compareAndSet(false, true)) {
+				throw new IllegalStateException("Already started");
+			}
 			Server jettyServer = new Server();
 			HttpConfiguration httpConfig = new HttpConfiguration();
 			ServerConnector jettyConnector = new ServerConnector(jettyServer,
@@ -461,7 +463,9 @@ public class StreamableHttpAcpAgentTransport {
 			connection.start()
 				.then(Mono.defer(() -> connection.initialize(initializeRequest)))
 				.timeout(INITIALIZE_TIMEOUT)
-				.subscribeOn(Schedulers.boundedElastic())
+				// Runs on the servlet thread: the request is already async, agent creation
+				// is cheap, and the handler runs on the agent's own scheduler. The SDK does
+				// not use the global boundedElastic scheduler.
 				.subscribe(initializeResponse -> completeInitializeSuccess(asyncContext, response, connection,
 						completed, initializeResponse),
 					error -> completeInitializeFailure(asyncContext, response, connection, completed));
@@ -682,7 +686,9 @@ public class StreamableHttpAcpAgentTransport {
 							response.id());
 					return RouteScope.connection();
 				}
-				if (route.kind() == RequestKind.SESSION_NEW && response.error() == null) {
+				if ((route.kind() == RequestKind.SESSION_NEW || route.kind() == RequestKind.SESSION_FORK)
+						&& response.error() == null) {
+					// Both replies carry the id of a session that now exists on this connection.
 					String sessionId = extractSessionIdFromNewSessionResponse(response);
 					markSessionKnown(sessionId);
 				}
@@ -764,6 +770,12 @@ public class StreamableHttpAcpAgentTransport {
 					requestScope = requireSessionScope(method, params, sessionHeader);
 					kind = RequestKind.SESSION_LOAD;
 					responseScope = RouteScope.connection();
+					break;
+				case AcpSchema.METHOD_SESSION_FORK:
+					// Scoped to the parent session; the reply names the forked session.
+					requestScope = requireSessionScope(method, params, sessionHeader);
+					kind = RequestKind.SESSION_FORK;
+					responseScope = requestScope;
 					break;
 				case AcpSchema.METHOD_SESSION_PROMPT:
 				case AcpSchema.METHOD_SESSION_SET_MODE:
@@ -885,13 +897,17 @@ public class StreamableHttpAcpAgentTransport {
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
-		private boolean replayOpen = true;
-
+		/*
+		 * A mailbox, as in the Rust and TypeScript servers: whenever no subscriber is
+		 * attached (before the first GET, or after the client's stream dropped and before
+		 * it reopens) events are retained, bounded, and delivered on the next attach. A
+		 * dropped stream must not lose an accepted prompt's result.
+		 */
 		synchronized void push(String payload) {
 			if (closed.get()) {
 				return;
 			}
-			if (replayOpen) {
+			if (subscribers.isEmpty()) {
 				if (replay.size() == MAX_REPLAY_EVENTS) {
 					throw new AcpConnectionException(
 							"Outbound SSE replay buffer exceeded " + MAX_REPLAY_EVENTS + " events");
@@ -912,13 +928,10 @@ public class StreamableHttpAcpAgentTransport {
 			SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
 			subscribers.add(subscriber);
 			subscriber.start();
-			if (replayOpen) {
-				for (String payload : new ArrayList<>(replay)) {
-					subscriber.send(payload);
-				}
-				replay.clear();
-				replayOpen = false;
+			for (String payload : new ArrayList<>(replay)) {
+				subscriber.send(payload);
 			}
+			replay.clear();
 			subscriber.drain();
 		}
 

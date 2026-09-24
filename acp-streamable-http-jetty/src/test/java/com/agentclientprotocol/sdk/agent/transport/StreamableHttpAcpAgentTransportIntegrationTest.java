@@ -557,6 +557,111 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	@Test
+	void deleteCancelsAnActivePrompt() throws Exception {
+		CountDownLatch promptStarted = new CountDownLatch(1);
+		CountDownLatch promptCancelled = new CountDownLatch(1);
+		AcpAgentFactory factory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
+					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(), null)))
+			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("sess-cancel", null, null)))
+			.promptHandler((request, context) -> Mono.<AcpSchema.PromptResponse>never()
+				.doOnSubscribe(subscription -> promptStarted.countDown())
+				.doOnCancel(promptCancelled::countDown))
+			.build());
+		try (FixtureServer server = FixtureServer.start(factory)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+
+			HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, sessionId,
+					"""
+							{"jsonrpc":"2.0","id":"prompt-cancel","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"work"}]}}
+							""".formatted(sessionId));
+			assertThat(accepted.statusCode()).isEqualTo(202);
+			assertThat(promptStarted.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+
+			HttpResponse<Void> deleted = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Acp-Connection-Id", connectionId)
+				.DELETE()
+				.build(), HttpResponse.BodyHandlers.discarding());
+			assertThat(deleted.statusCode()).isEqualTo(202);
+
+			assertThat(promptCancelled.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
+				.as("DELETE must cancel the in-flight prompt handler")
+				.isTrue();
+		}
+	}
+
+	@Test
+	void forkedSessionIsUsable() throws Exception {
+		AcpAgentFactory factory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
+					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(), null)))
+			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("sess-parent", null, null)))
+			.forkSessionHandler(request -> Mono.just(new AcpSchema.ForkSessionResponse("sess-forked", null, null)))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
+			.build());
+		try (FixtureServer server = FixtureServer.start(factory)) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String parent = createSession(rawClient, server.endpoint(), connectionId);
+
+			String forked;
+			try (SseReader parentStream = SseReader.open(rawClient, server.endpoint(), connectionId, parent)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, parent,
+						"""
+								{"jsonrpc":"2.0","id":"fork-1","method":"session/fork","params":{"sessionId":"%s","cwd":"/workspace","mcpServers":[]}}
+								""".formatted(parent));
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse response = parentStream.nextResponse();
+				assertThat(response.error()).isNull();
+				forked = JSON_MAPPER.convertValue(response.result(), new TypeRef<AcpSchema.ForkSessionResponse>() {
+				}).sessionId();
+			}
+			assertThat(forked).isEqualTo("sess-forked");
+
+			try (SseReader forkedStream = SseReader.open(rawClient, server.endpoint(), connectionId, forked)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, forked,
+						"""
+								{"jsonrpc":"2.0","id":"prompt-forked","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"hello"}]}}
+								""".formatted(forked));
+				assertThat(accepted.statusCode()).as("a forked session is a known session").isEqualTo(202);
+				assertThat(forkedStream.nextResponse().id()).isEqualTo("prompt-forked");
+			}
+		}
+	}
+
+	@Test
+	void eventsSentWhileTheSessionStreamIsDownAreDeliveredWhenItReopens() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+
+			try (SseReader first = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId)) {
+				postJson(rawClient, server.endpoint(), connectionId, sessionId,
+						"""
+								{"jsonrpc":"2.0","id":"prompt-a","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"a"}]}}
+								""".formatted(sessionId));
+				first.nextMessage();
+				assertThat(first.nextResponse().id()).isEqualTo("prompt-a");
+			}
+			// The stream is gone (proxy timeout, network blip). The agent keeps answering.
+			HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, sessionId,
+					"""
+							{"jsonrpc":"2.0","id":"prompt-b","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"b"}]}}
+							""".formatted(sessionId));
+			assertThat(accepted.statusCode()).isEqualTo(202);
+
+			try (SseReader second = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId)) {
+				AcpSchema.JSONRPCMessage update = second.nextMessage();
+				assertThat(update).isInstanceOf(AcpSchema.JSONRPCNotification.class);
+				assertThat(second.nextResponse().id()).as("result sent while no stream was attached").isEqualTo("prompt-b");
+			}
+		}
+	}
+
 	private static String initializeRaw(HttpClient client, URI endpoint) throws Exception {
 		HttpResponse<String> initialize = client.send(HttpRequest.newBuilder(endpoint)
 			.header("Content-Type", "application/json")

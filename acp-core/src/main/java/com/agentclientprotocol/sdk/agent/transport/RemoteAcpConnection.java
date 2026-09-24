@@ -19,6 +19,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
@@ -86,10 +87,12 @@ public final class RemoteAcpConnection {
 	 */
 	public Mono<Void> start(AcpAgentFactory agentFactory) {
 		Assert.notNull(agentFactory, "The agentFactory can not be null");
-		if (!started.compareAndSet(false, true)) {
-			return Mono.error(new IllegalStateException("Already started"));
-		}
+		// Guard at subscribe time so a start publisher that is subscribed twice is refused
+		// the second time and one that is never subscribed does not consume the start.
 		return Mono.defer(() -> {
+			if (!started.compareAndSet(false, true)) {
+				return Mono.<Void>error(new IllegalStateException("Already started"));
+			}
 			this.agent = agentFactory.create(transport);
 			return this.agent.start();
 		}).doOnError(this::signalException);
@@ -168,6 +171,13 @@ public final class RemoteAcpConnection {
 
 		private final AtomicBoolean transportClosing = new AtomicBoolean(false);
 
+		/**
+		 * The inbound dispatch subscription. Owned so that closing the connection cancels
+		 * every in-flight handler: completing the inbound sink alone lets flatMap's active
+		 * inner publishers (a running prompt, for instance) run to completion after DELETE.
+		 */
+		private volatile Disposable inboundSubscription;
+
 		private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Remote ACP transport error", t);
 
 		ConnectionTransport(Consumer<JSONRPCMessage> outboundConsumer) {
@@ -177,20 +187,22 @@ public final class RemoteAcpConnection {
 		@Override
 		public Mono<Void> start(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 			Assert.notNull(handler, "The handler can not be null");
-			if (!transportStarted.compareAndSet(false, true)) {
-				return Mono.error(new IllegalStateException("Already started"));
-			}
-			inboundSink.asFlux()
-				.flatMap(message -> Mono.just(message).transform(handler))
-				.doOnNext(response -> {
-					if (response != null) {
-						outboundConsumer.accept(response);
-					}
-				})
-				.doOnError(this::signalException)
-				.doFinally(signal -> terminationSink.tryEmitValue(null))
-				.subscribe();
-			return Mono.empty();
+			return Mono.defer(() -> {
+				if (!transportStarted.compareAndSet(false, true)) {
+					return Mono.error(new IllegalStateException("Already started"));
+				}
+				this.inboundSubscription = inboundSink.asFlux()
+					.flatMap(message -> Mono.just(message).transform(handler))
+					.doOnNext(response -> {
+						if (response != null) {
+							outboundConsumer.accept(response);
+						}
+					})
+					.doOnError(this::signalException)
+					.doFinally(signal -> terminationSink.tryEmitValue(null))
+					.subscribe();
+				return Mono.empty();
+			});
 		}
 
 		void acceptInbound(JSONRPCMessage message) {
@@ -234,6 +246,11 @@ public final class RemoteAcpConnection {
 		public void close() {
 			if (transportClosing.compareAndSet(false, true)) {
 				inboundSink.tryEmitComplete();
+				Disposable current = this.inboundSubscription;
+				if (current != null) {
+					// Cancels in-flight handlers (their doFinally releases the prompt lock).
+					current.dispose();
+				}
 				terminationSink.tryEmitValue(null);
 			}
 		}

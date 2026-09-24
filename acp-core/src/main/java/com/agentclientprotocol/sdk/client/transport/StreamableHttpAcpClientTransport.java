@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -423,7 +424,15 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			.doOnSuccess(stream -> {
 				SseStream existing = sessionStreams.putIfAbsent(sessionId, stream);
 				if (existing == null) {
-					stream.start();
+					try {
+						stream.start();
+					}
+					catch (RuntimeException e) {
+						// Otherwise a later request for this session would skip the
+						// reopen and post into a stream that never reads.
+						sessionStreams.remove(sessionId, stream);
+						throw e;
+					}
 				}
 				else {
 					stream.close();
@@ -569,8 +578,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			if (expectedRoute != null) {
 				Mono<Void> processedResponse;
 				if (!Objects.equals(expectedRoute.responseScope(), actualScope)) {
-					processedResponse = emitInbound(errorResponse(response.id(), "Response id " + response.id()
-							+ " arrived on " + actualScope + " but expected " + expectedRoute.responseScope(), null));
+					// Peers differ on which stream carries session/load and session/resume
+					// replies (the Rust server uses the session stream, TypeScript the
+					// connection stream). The reply is still ours by id: deliver it.
+					logger.warn("Response id {} arrived on {} but was expected on {}; delivering it anyway",
+							response.id(), actualScope, expectedRoute.responseScope());
+					processedResponse = expectedRoute.kind() == RequestKind.SESSION_NEW
+							? processNewSessionResponse(response) : emitInbound(message);
 				}
 				else if (expectedRoute.kind() == RequestKind.SESSION_NEW) {
 					processedResponse = processNewSessionResponse(response);
@@ -734,14 +748,29 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private <T> Mono<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
-		return Mono.create(sink -> httpClient.sendAsync(request, bodyHandler).whenCompleteAsync((response, error) -> {
-			if (error != null) {
-				sink.error(error);
+		return Mono.create(sink -> {
+			CompletableFuture<HttpResponse<T>> future = httpClient.sendAsync(request, bodyHandler);
+			sink.onCancel(() -> future.cancel(true));
+			try {
+				future.whenCompleteAsync((response, error) -> {
+					if (error != null) {
+						sink.error(error);
+					}
+					else {
+						sink.success(response);
+					}
+				}, httpSignalExecutor).exceptionally(error -> {
+					// The signal executor rejected the completion callback: the HTTP call
+					// finished but nobody would have told the caller.
+					sink.error(error);
+					return null;
+				});
 			}
-			else {
-				sink.success(response);
+			catch (RejectedExecutionException e) {
+				future.cancel(true);
+				sink.error(e);
 			}
-		}, httpSignalExecutor));
+		});
 	}
 
 	private class SseStream {
