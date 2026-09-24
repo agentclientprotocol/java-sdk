@@ -65,14 +65,40 @@ final class SseOutboundStream {
 			return;
 		}
 		if (subscribers.isEmpty()) {
-			if (replay.size() == mailboxCapacity) {
-				throw new AcpConnectionException(
-						"Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
+			synchronized (replay) {
+				if (replay.size() == mailboxCapacity) {
+					throw new AcpConnectionException(
+							"Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
+				}
+				replay.addLast(payload);
 			}
-			replay.addLast(payload);
 			return;
 		}
 		subscribers.forEach(subscriber -> subscriber.send(payload));
+	}
+
+	/**
+	 * Puts events a closed subscriber never wrote back at the front of the mailbox, in
+	 * order, so the next subscriber receives them. Takes only the mailbox lock, so a
+	 * subscriber may call it while holding its own lock; a push that lands in the
+	 * mailbox meanwhile is newer and correctly stays behind them. Bytes already written
+	 * to a connection that then died can still be lost: without event ids and
+	 * {@code Last-Event-ID} (deferred by the RFD) nothing can know they did not arrive.
+	 */
+	private void requeue(List<String> unsent) {
+		if (unsent.isEmpty() || closed.get()) {
+			return;
+		}
+		synchronized (replay) {
+			if (replay.size() + unsent.size() > mailboxCapacity) {
+				logger.warn("Dropping {} undelivered SSE events: mailbox full ({} events)", unsent.size(),
+						mailboxCapacity);
+				return;
+			}
+			for (int i = unsent.size() - 1; i >= 0; i--) {
+				replay.addFirst(unsent.get(i));
+			}
+		}
 	}
 
 	synchronized void subscribe(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
@@ -93,10 +119,14 @@ final class SseOutboundStream {
 		SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
 		subscribers.add(subscriber);
 		subscriber.start();
-		for (String payload : new ArrayList<>(replay)) {
+		List<String> retained;
+		synchronized (replay) {
+			retained = new ArrayList<>(replay);
+			replay.clear();
+		}
+		for (String payload : retained) {
 			subscriber.send(payload);
 		}
-		replay.clear();
 		subscriber.drain();
 	}
 
@@ -114,7 +144,9 @@ final class SseOutboundStream {
 		if (closed.compareAndSet(false, true)) {
 			subscribers.forEach(SseSubscriber::close);
 			subscribers.clear();
-			replay.clear();
+			synchronized (replay) {
+				replay.clear();
+			}
 		}
 	}
 
@@ -127,7 +159,11 @@ final class SseOutboundStream {
 
 		private final ServletOutputStream output;
 
-		private final ArrayDeque<byte[]> pendingEvents = new ArrayDeque<>();
+		/** Queued writes; {@code payload} is null for comments (open, keep-alive), which are not requeued. */
+		private record Pending(byte[] bytes, String payload) {
+		}
+
+		private final ArrayDeque<Pending> pendingEvents = new ArrayDeque<>();
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
@@ -141,7 +177,7 @@ final class SseOutboundStream {
 
 		synchronized void start() {
 			asyncContext.addListener(this);
-			pendingEvents.addLast(SSE_OPEN_COMMENT);
+			pendingEvents.addLast(new Pending(SSE_OPEN_COMMENT, null));
 			output.setWriteListener(this);
 		}
 
@@ -152,10 +188,12 @@ final class SseOutboundStream {
 			if (pendingEvents.size() == parent.maxPendingSseEvents) {
 				logger.warn("Closing backpressured SSE subscriber after {} pending events",
 						parent.maxPendingSseEvents);
+				// The event that did not fit goes back to the mailbox with the queue.
+				pendingEvents.addLast(new Pending(null, payload));
 				close();
 				return;
 			}
-			pendingEvents.addLast(("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8));
+			pendingEvents.addLast(new Pending(("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8), payload));
 			drain();
 		}
 
@@ -163,7 +201,7 @@ final class SseOutboundStream {
 			if (closed.get() || !pendingEvents.isEmpty()) {
 				return;
 			}
-			pendingEvents.addLast(SSE_KEEP_ALIVE_COMMENT);
+			pendingEvents.addLast(new Pending(SSE_KEEP_ALIVE_COMMENT, null));
 			drain();
 		}
 
@@ -171,11 +209,11 @@ final class SseOutboundStream {
 			try {
 				flushIfReady();
 				while (!closed.get() && output.isReady()) {
-					byte[] event = pendingEvents.pollFirst();
+					Pending event = pendingEvents.pollFirst();
 					if (event == null) {
 						break;
 					}
-					output.write(event);
+					output.write(event.bytes());
 					flushPending = true;
 				}
 				flushIfReady();
@@ -225,9 +263,17 @@ final class SseOutboundStream {
 		void close() {
 			if (closed.compareAndSet(false, true)) {
 				parent.remove(this);
+				List<String> unsent = new ArrayList<>();
 				synchronized (this) {
+					for (Pending event : pendingEvents) {
+						if (event.payload() != null) {
+							unsent.add(event.payload());
+						}
+					}
 					pendingEvents.clear();
 				}
+				// Undelivered events are not lost with the subscriber (mailbox guarantee).
+				parent.requeue(unsent);
 				try {
 					asyncContext.complete();
 				}

@@ -60,7 +60,7 @@ class SseOutboundStreamTest {
 	}
 
 	@Test
-	void backpressuredSubscriberIsClosedAndLaterEventsGoToTheMailbox() throws IOException {
+	void backpressuredSubscriberIsClosedAndItsUndeliveredEventsReachTheNextSubscriber() throws IOException {
 		SseOutboundStream stream = new SseOutboundStream(4, 2);
 
 		// Never ready: the open comment and every event stay queued on the subscriber.
@@ -70,7 +70,7 @@ class SseOutboundStreamTest {
 		verify(slow.asyncContext, never()).complete();
 
 		// The queue now holds maxPendingSseEvents (open comment + one event): the next
-		// event closes the subscriber and is discarded with its queue.
+		// event closes the subscriber; its unsent events go back to the mailbox.
 		stream.push("\"overflow\"");
 		verify(slow.asyncContext).complete();
 
@@ -79,7 +79,9 @@ class SseOutboundStreamTest {
 		assertThat(slow.output.written()).isEmpty();
 
 		Attached next = attach(stream, true);
-		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"later\"\n\n");
+		assertThat(next.output.written())
+			.as("nothing the slow subscriber never wrote is lost, and order is kept")
+			.isEqualTo(OPEN + "data: \"queued\"\n\n" + "data: \"overflow\"\n\n" + "data: \"later\"\n\n");
 		verify(next.asyncContext, never()).complete();
 	}
 
