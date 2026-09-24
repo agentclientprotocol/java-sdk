@@ -662,6 +662,90 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	@Test
+	void oversizedPostBodyIsRejectedWith413() throws Exception {
+		try (FixtureServer server = FixtureServer.start(
+				StreamableHttpAcpAgentTransportOptions.builder().maxPostBodyBytes(200).build())) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String padding = "x".repeat(400);
+			HttpResponse<String> response = postJson(rawClient, server.endpoint(), connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":"big","method":"session/new","params":{"cwd":"/%s","mcpServers":[]}}
+							""".formatted(padding));
+			assertThat(response.statusCode()).isEqualTo(413);
+		}
+	}
+
+	@Test
+	void keepAliveCommentsFlowOnAnIdleStream() throws Exception {
+		try (FixtureServer server = FixtureServer.start(
+				StreamableHttpAcpAgentTransportOptions.builder().keepAliveInterval(Duration.ofMillis(100)).build())) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			HttpResponse<InputStream> stream = rawClient.send(HttpRequest.newBuilder(server.endpoint())
+				.header("Accept", "text/event-stream")
+				.header("Acp-Connection-Id", connectionId)
+				.GET()
+				.build(), HttpResponse.BodyHandlers.ofInputStream());
+			assertThat(stream.statusCode()).isEqualTo(200);
+			try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream.body(), StandardCharsets.UTF_8))) {
+				long deadline = System.nanoTime() + TIMEOUT.toNanos();
+				String line;
+				while (System.nanoTime() < deadline && (line = reader.readLine()) != null) {
+					if (line.equals(": keep-alive")) {
+						return;
+					}
+				}
+				throw new AssertionError("No keep-alive comment within " + TIMEOUT);
+			}
+		}
+	}
+
+	@Test
+	void aNewSessionStreamTakesOverFromTheAttachedOne() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+			try (SseReader first = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId);
+					SseReader second = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, sessionId,
+						"""
+								{"jsonrpc":"2.0","id":"prompt-takeover","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"hello"}]}}
+								""".formatted(sessionId));
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				second.nextMessage();
+				assertThat(second.nextResponse().id()).as("the newest GET receives the events").isEqualTo("prompt-takeover");
+			}
+		}
+	}
+
+	@Test
+	void provisionalSessionsAreBounded() throws Exception {
+		try (FixtureServer server = FixtureServer.start(
+				StreamableHttpAcpAgentTransportOptions.builder().maxProvisionalSessions(1).build())) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			HttpResponse<InputStream> first = rawClient.send(sessionGet(server.endpoint(), connectionId, "provisional-1"),
+					HttpResponse.BodyHandlers.ofInputStream());
+			assertThat(first.statusCode()).isEqualTo(200);
+			HttpResponse<String> second = rawClient.send(sessionGet(server.endpoint(), connectionId, "provisional-2"),
+					HttpResponse.BodyHandlers.ofString());
+			assertThat(second.statusCode()).as("a second provisional session exceeds the limit of one").isEqualTo(404);
+			first.body().close();
+		}
+	}
+
+	private static HttpRequest sessionGet(URI endpoint, String connectionId, String sessionId) {
+		return HttpRequest.newBuilder(endpoint)
+			.header("Accept", "text/event-stream")
+			.header("Acp-Connection-Id", connectionId)
+			.header("Acp-Session-Id", sessionId)
+			.GET()
+			.build();
+	}
+
 	private static String initializeRaw(HttpClient client, URI endpoint) throws Exception {
 		HttpResponse<String> initialize = client.send(HttpRequest.newBuilder(endpoint)
 			.header("Content-Type", "application/json")
@@ -727,7 +811,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			this.transport = transport;
 		}
 
-		static FixtureServer start() throws Exception {
+		static AcpAgentFactory defaultFactory() {
 			AtomicInteger sessionCounter = new AtomicInteger();
 			AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
 				.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
@@ -744,12 +828,26 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 						.thenReturn(AcpSchema.PromptResponse.endTurn());
 				})
 				.build());
-			return start(agentFactory);
+			return agentFactory;
+		}
+
+		static FixtureServer start() throws Exception {
+			return start(defaultFactory(), StreamableHttpAcpAgentTransportOptions.defaults());
+		}
+
+		static FixtureServer start(StreamableHttpAcpAgentTransportOptions options) throws Exception {
+			return start(defaultFactory(), options);
 		}
 
 		static FixtureServer start(AcpAgentFactory agentFactory) throws Exception {
+			return start(agentFactory, StreamableHttpAcpAgentTransportOptions.defaults());
+		}
+
+		static FixtureServer start(AcpAgentFactory agentFactory, StreamableHttpAcpAgentTransportOptions options)
+				throws Exception {
 			StreamableHttpAcpAgentTransport transport = new StreamableHttpAcpAgentTransport(
-					freePort(), AcpJsonMapper.createDefault(), agentFactory);
+					freePort(), StreamableHttpAcpAgentTransport.DEFAULT_ACP_PATH, AcpJsonMapper.createDefault(),
+					agentFactory, options);
 			transport.start().block(TIMEOUT);
 			return new FixtureServer(transport);
 		}

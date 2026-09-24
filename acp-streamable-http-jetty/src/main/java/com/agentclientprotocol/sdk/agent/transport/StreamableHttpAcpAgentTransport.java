@@ -56,6 +56,10 @@ import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
@@ -94,9 +98,7 @@ public class StreamableHttpAcpAgentTransport {
 
 	private static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
-	private static final int MAX_REPLAY_EVENTS = 1024;
-
-	private static final int MAX_PENDING_SSE_EVENTS = 1024;
+	private static final byte[] SSE_KEEP_ALIVE_COMMENT = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8);
 
 	// Commits the SSE response when there are no replay events, without emitting an ACP message.
 	private static final byte[] SSE_OPEN_COMMENT = ": connected\n\n".getBytes(StandardCharsets.UTF_8);
@@ -164,6 +166,12 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final AcpAgentFactory agentFactory;
 
+	private final StreamableHttpAcpAgentTransportOptions options;
+
+	private volatile Scheduler keepAliveScheduler;
+
+	private volatile Disposable keepAliveTask;
+
 	private final ConcurrentMap<String, ConnectionState> connections = new ConcurrentHashMap<>();
 
 	private final ConcurrentMap<String, WebSocketConnectionState> webSocketConnections = new ConcurrentHashMap<>();
@@ -197,14 +205,29 @@ public class StreamableHttpAcpAgentTransport {
 	 */
 	public StreamableHttpAcpAgentTransport(int port, String path, AcpJsonMapper jsonMapper,
 			AcpAgentFactory agentFactory) {
+		this(port, path, jsonMapper, agentFactory, StreamableHttpAcpAgentTransportOptions.defaults());
+	}
+
+	/**
+	 * Creates a new Streamable HTTP listener with explicit limits.
+	 * @param port port to listen on
+	 * @param path endpoint path
+	 * @param jsonMapper JSON mapper used for serialization
+	 * @param agentFactory factory used to create one agent runtime per connection
+	 * @param options bounds and timings
+	 */
+	public StreamableHttpAcpAgentTransport(int port, String path, AcpJsonMapper jsonMapper,
+			AcpAgentFactory agentFactory, StreamableHttpAcpAgentTransportOptions options) {
 		Assert.isTrue(port > 0, "Port must be positive");
 		Assert.hasText(path, "Path must not be empty");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(agentFactory, "The agentFactory can not be null");
+		Assert.notNull(options, "The options can not be null");
 		this.configuredPort = port;
 		this.path = path;
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
+		this.options = options;
 	}
 
 	/**
@@ -252,6 +275,7 @@ public class StreamableHttpAcpAgentTransport {
 			jettyServer.start();
 			this.server = jettyServer;
 			this.connector = jettyConnector;
+			startKeepAlive();
 			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
 			return null;
 		}).then();
@@ -289,7 +313,32 @@ public class StreamableHttpAcpAgentTransport {
 		});
 	}
 
+	private void startKeepAlive() {
+		Duration interval = options.keepAliveInterval();
+		if (interval.isZero()) {
+			return;
+		}
+		Scheduler scheduler = Schedulers.newSingle("acp-streamable-http-keepalive", true);
+		this.keepAliveScheduler = scheduler;
+		// A comment every interval keeps proxies from cutting idle streams and surfaces
+		// dead subscribers (the write fails) without waiting for the next real event.
+		this.keepAliveTask = Flux.interval(interval, interval, scheduler)
+			.subscribe(tick -> connections.values().forEach(ConnectionState::keepAlive));
+	}
+
+	private void stopKeepAlive() {
+		Disposable task = this.keepAliveTask;
+		if (task != null) {
+			task.dispose();
+		}
+		Scheduler scheduler = this.keepAliveScheduler;
+		if (scheduler != null) {
+			scheduler.dispose();
+		}
+	}
+
 	private void stopServer() {
+		stopKeepAlive();
 		Server currentServer = this.server;
 		if (currentServer != null) {
 			try {
@@ -339,7 +388,20 @@ public class StreamableHttpAcpAgentTransport {
 				return;
 			}
 
-			String body = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+			long declaredLength = request.getContentLengthLong();
+			if (declaredLength > options.maxPostBodyBytes()) {
+				writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+						"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
+				return;
+			}
+			byte[] bodyBytes = request.getInputStream().readNBytes((int) Math.min(Integer.MAX_VALUE,
+					options.maxPostBodyBytes() + 1));
+			if (bodyBytes.length > options.maxPostBodyBytes()) {
+				writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+						"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
+				return;
+			}
+			String body = new String(bodyBytes, StandardCharsets.UTF_8);
 			if (body.stripLeading().startsWith("[")) {
 				writeText(response, HttpServletResponse.SC_NOT_IMPLEMENTED, "JSON-RPC batches are not supported");
 				return;
@@ -693,8 +755,13 @@ public class StreamableHttpAcpAgentTransport {
 					String sessionId = extractSessionIdFromNewSessionResponse(response);
 					markSessionKnown(sessionId);
 				}
-				if (route.kind() == RequestKind.SESSION_LOAD && response.error() == null) {
-					markSessionKnown(route.requestScope().sessionId());
+				if (route.kind() == RequestKind.SESSION_LOAD) {
+					if (response.error() == null) {
+						markSessionKnown(route.requestScope().sessionId());
+					}
+					else {
+						discardProvisionalSession(route.requestScope().sessionId());
+					}
 				}
 				return route.responseScope();
 			}
@@ -816,7 +883,7 @@ public class StreamableHttpAcpAgentTransport {
 			SessionState current = sessions.get(sessionId);
 			if (route != null && route.kind() == RequestKind.SESSION_LOAD) {
 				if (current == null) {
-					sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
+					addProvisionalSession(sessionId);
 					sessionStream(sessionId);
 				}
 				return;
@@ -849,9 +916,35 @@ public class StreamableHttpAcpAgentTransport {
 				 * but its resume flow also asks clients to open a session stream before
 				 * sending session/load. Keep a provisional stream so practical resume can work.
 				 */
-				sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
+				addProvisionalSession(sessionId);
 			}
 			return sessionStream(sessionId);
+		}
+
+		/** Provisional sessions are bounded: a client cannot grow state with arbitrary ids. */
+		private void addProvisionalSession(String sessionId) {
+			long provisional = sessions.values().stream().filter(state -> state == SessionState.PENDING_LOAD).count();
+			if (provisional >= options.maxProvisionalSessions()
+					&& sessions.get(sessionId) != SessionState.PENDING_LOAD) {
+				throw new UnknownSessionException("Too many provisional sessions on connection " + id
+						+ " (limit " + options.maxProvisionalSessions() + ")");
+			}
+			sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
+		}
+
+		/** A failed session/load leaves no provisional state behind. */
+		private void discardProvisionalSession(String sessionId) {
+			if (sessions.remove(sessionId, SessionState.PENDING_LOAD)) {
+				OutboundStream stream = sessionStreams.remove(sessionId);
+				if (stream != null) {
+					stream.close();
+				}
+			}
+		}
+
+		void keepAlive() {
+			connectionStream.keepAlive();
+			sessionStreams.values().forEach(OutboundStream::keepAlive);
 		}
 
 		private OutboundStream sessionStream(String sessionId) {
@@ -909,9 +1002,9 @@ public class StreamableHttpAcpAgentTransport {
 				return;
 			}
 			if (subscribers.isEmpty()) {
-				if (replay.size() == MAX_REPLAY_EVENTS) {
+				if (replay.size() == options.mailboxCapacity()) {
 					throw new AcpConnectionException(
-							"Outbound SSE replay buffer exceeded " + MAX_REPLAY_EVENTS + " events");
+							"Outbound SSE replay buffer exceeded " + options.mailboxCapacity() + " events");
 				}
 				replay.addLast(payload);
 				return;
@@ -926,6 +1019,14 @@ public class StreamableHttpAcpAgentTransport {
 				asyncContext.complete();
 				return;
 			}
+			// One subscriber per stream: a new GET takes the stream over from a previous
+			// one that the server may not yet know is dead (proxy drop, client restart).
+			// Rust and TypeScript answer 409 instead; taking over is friendlier to a
+			// reconnecting client and never duplicates events.
+			for (SseSubscriber previous : new ArrayList<>(subscribers)) {
+				logger.debug("New SSE subscriber replaces the attached one");
+				previous.close();
+			}
 			SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
 			subscribers.add(subscriber);
 			subscriber.start();
@@ -938,6 +1039,12 @@ public class StreamableHttpAcpAgentTransport {
 
 		void remove(SseSubscriber subscriber) {
 			subscribers.remove(subscriber);
+		}
+
+		void keepAlive() {
+			if (!closed.get()) {
+				subscribers.forEach(SseSubscriber::sendKeepAlive);
+			}
 		}
 
 		synchronized void close() {
@@ -980,12 +1087,21 @@ public class StreamableHttpAcpAgentTransport {
 			if (closed.get()) {
 				return;
 			}
-			if (pendingEvents.size() == MAX_PENDING_SSE_EVENTS) {
-				logger.warn("Closing backpressured SSE subscriber after {} pending events", MAX_PENDING_SSE_EVENTS);
+			if (pendingEvents.size() == options.maxPendingSseEvents()) {
+				logger.warn("Closing backpressured SSE subscriber after {} pending events",
+						options.maxPendingSseEvents());
 				close();
 				return;
 			}
 			pendingEvents.addLast(("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8));
+			drain();
+		}
+
+		synchronized void sendKeepAlive() {
+			if (closed.get() || !pendingEvents.isEmpty()) {
+				return;
+			}
+			pendingEvents.addLast(SSE_KEEP_ALIVE_COMMENT);
 			drain();
 		}
 
@@ -1164,6 +1280,10 @@ public class StreamableHttpAcpAgentTransport {
 				synchronized (lock) {
 					if (closed.get()) {
 						throw new AcpConnectionException("Streamable ACP WebSocket connection is closed");
+					}
+					if (queue.size() >= options.maxWebSocketPendingFrames()) {
+						throw new AcpConnectionException("WebSocket send queue exceeded "
+								+ options.maxWebSocketPendingFrames() + " pending frames");
 					}
 					queue.addLast(payload);
 					shouldDrain = !sendInProgress;
