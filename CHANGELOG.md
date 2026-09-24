@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent session now reads `sessionId` from typed `PromptRequest`/`CancelNotification` params as
   well as from maps, so in-process transports get the right lock owner in logs and cancel matching.
 
+### Changed
+
+- **Unknown-field policy moved from the schema to the mapper (#10).** Every schema record carried
+  `@JsonIgnoreProperties(ignoreUnknown = true)`, which made the SDK tolerate fields it does not know
+  (deliberate: the spec adds fields between releases and a newer agent must keep working) but also
+  defeated any consumer's strict `ObjectMapper`, since a class-level annotation wins over
+  `FAIL_ON_UNKNOWN_PROPERTIES`. The annotations are gone. The default mapper,
+  `JacksonAcpJsonMapper.defaultObjectMapper()`, is lenient and logs each ignored property at DEBUG
+  so spec drift is observable; a consumer who passes a strict mapper to `JacksonAcpJsonMapper` now
+  gets strict behaviour. **If you construct `JacksonAcpJsonMapper` with a bare `new ObjectMapper()`,
+  you now get Jackson's default, which fails on unknown fields**: start from
+  `defaultObjectMapper()` instead. Unknown fields are not routed into `_meta`, which has its own
+  spec-defined meaning. Reported by @KallivdH.
+
 ### Added
 
 - `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.

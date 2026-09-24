@@ -16,7 +16,7 @@ public class JacksonAcpJsonMapperSupplier implements AcpJsonMapperSupplier {
 
 	@Override
 	public AcpJsonMapper get() {
-		return new JacksonAcpJsonMapper(new ObjectMapper());
+		return new JacksonAcpJsonMapper(JacksonAcpJsonMapper.defaultObjectMapper());
 	}
 
 }

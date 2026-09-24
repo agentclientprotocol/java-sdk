@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -162,7 +161,6 @@ public final class AcpSchema {
 	 * @param method The name of the method to be invoked
 	 * @param params Parameters for the method call
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCRequest(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("id") Object id,
 			@JsonProperty("method") String method, @JsonProperty("params") Object params) implements JSONRPCMessage {
@@ -178,7 +176,6 @@ public final class AcpSchema {
 	 * @param method The name of the method to be invoked
 	 * @param params Parameters for the method call
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCNotification(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("method") String method,
 			@JsonProperty("params") Object params) implements JSONRPCMessage {
@@ -195,14 +192,12 @@ public final class AcpSchema {
 	 * @param result The result of the method call (null if error occurred)
 	 * @param error The error information (null if successful)
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCResponse(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("id") Object id,
 			@JsonProperty("result") Object result,
 			@JsonProperty("error") JSONRPCError error) implements JSONRPCMessage {
 	}
 
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCError(@JsonProperty("code") int code, @JsonProperty("message") String message,
 			@JsonProperty("data") Object data) {
@@ -224,7 +219,6 @@ public final class AcpSchema {
 	/**
 	 * Initialize request - establishes connection and negotiates capabilities
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record InitializeRequest(@JsonProperty("protocolVersion") Integer protocolVersion,
 			@JsonProperty("clientCapabilities") ClientCapabilities clientCapabilities,
@@ -238,7 +232,6 @@ public final class AcpSchema {
 	/**
 	 * Initialize response - returns agent capabilities and auth methods
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record InitializeResponse(@JsonProperty("protocolVersion") Integer protocolVersion,
 			@JsonProperty("agentCapabilities") AgentCapabilities agentCapabilities,
@@ -272,7 +265,6 @@ public final class AcpSchema {
 	/**
 	 * Authenticate request - authenticates using specified method
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthenticateRequest(@JsonProperty("methodId") String methodId) {
 	}
@@ -280,7 +272,6 @@ public final class AcpSchema {
 	/**
 	 * Authenticate response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthenticateResponse() {
 	}
@@ -289,7 +280,6 @@ public final class AcpSchema {
 	 * Logout request - clears stored credentials, terminating the current
 	 * authenticated session.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LogoutRequest(@JsonProperty("_meta") Map<String, Object> meta) {
 		public LogoutRequest() {
@@ -300,7 +290,6 @@ public final class AcpSchema {
 	/**
 	 * Logout response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LogoutResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public LogoutResponse() {
@@ -311,7 +300,6 @@ public final class AcpSchema {
 	/**
 	 * Create new session request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NewSessionRequest(@JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") List<McpServer> mcpServers,
@@ -329,7 +317,6 @@ public final class AcpSchema {
 	/**
 	 * Create new session response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record NewSessionResponse(@JsonProperty("sessionId") String sessionId,
@@ -343,7 +330,6 @@ public final class AcpSchema {
 	/**
 	 * Load existing session request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LoadSessionRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") List<McpServer> mcpServers,
@@ -362,7 +348,6 @@ public final class AcpSchema {
 	/**
 	 * Load session response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record LoadSessionResponse(@JsonProperty("modes") SessionModeState modes,
@@ -376,7 +361,6 @@ public final class AcpSchema {
 	/**
 	 * Prompt request - sends user message to agent
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("prompt") List<ContentBlock> prompt,
@@ -404,7 +388,6 @@ public final class AcpSchema {
 	/**
 	 * Prompt response - indicates why agent stopped
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptResponse(@JsonProperty("stopReason") StopReason stopReason,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -443,7 +426,6 @@ public final class AcpSchema {
 	/**
 	 * Set session mode request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("modeId") String modeId) {
@@ -452,7 +434,6 @@ public final class AcpSchema {
 	/**
 	 * Set session mode response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeResponse() {
 	}
@@ -466,7 +447,6 @@ public final class AcpSchema {
 	 */
 	@Deprecated(forRemoval = true)
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModelRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("modelId") String modelId) {
@@ -479,7 +459,6 @@ public final class AcpSchema {
 	 */
 	@Deprecated(forRemoval = true)
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModelResponse() {
 	}
@@ -487,7 +466,6 @@ public final class AcpSchema {
 	/**
 	 * Cancel notification - cancels ongoing operations
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CancelNotification(@JsonProperty("sessionId") String sessionId) {
 	}
@@ -495,7 +473,6 @@ public final class AcpSchema {
 	/**
 	 * List sessions request - lists all sessions, optionally filtered by working directory
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListSessionsRequest(@JsonProperty("cwd") String cwd, @JsonProperty("cursor") String cursor,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -507,7 +484,6 @@ public final class AcpSchema {
 	/**
 	 * List sessions response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListSessionsResponse(@JsonProperty("sessions") List<SessionInfo> sessions,
 			@JsonProperty("nextCursor") String nextCursor,
@@ -520,7 +496,6 @@ public final class AcpSchema {
 	/**
 	 * Close session request - closes a session and cancels in-flight work
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CloseSessionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -532,7 +507,6 @@ public final class AcpSchema {
 	/**
 	 * Close session response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CloseSessionResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public CloseSessionResponse() {
@@ -546,7 +520,6 @@ public final class AcpSchema {
 	 * <p>Only available if the agent advertises the {@code sessionCapabilities.delete}
 	 * capability.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DeleteSessionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -558,7 +531,6 @@ public final class AcpSchema {
 	/**
 	 * Delete session response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DeleteSessionResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public DeleteSessionResponse() {
@@ -569,7 +541,6 @@ public final class AcpSchema {
 	/**
 	 * Resume session request - reconnects to existing session without replaying history
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResumeSessionRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") List<McpServer> mcpServers,
@@ -588,7 +559,6 @@ public final class AcpSchema {
 	/**
 	 * Resume session response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record ResumeSessionResponse(@JsonProperty("modes") SessionModeState modes,
@@ -603,7 +573,6 @@ public final class AcpSchema {
 	 * Fork session request - creates a new session branched from an existing one
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ForkSessionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("cwd") String cwd,
@@ -624,7 +593,6 @@ public final class AcpSchema {
 	 * Fork session response - returns the new forked session ID
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record ForkSessionResponse(@JsonProperty("sessionId") String sessionId,
@@ -639,7 +607,6 @@ public final class AcpSchema {
 	/**
 	 * Set session config option request - changes a configuration value
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("configId") String configId, @JsonProperty("value") Object value,
@@ -664,7 +631,6 @@ public final class AcpSchema {
 	/**
 	 * Set session config option response - returns full config state
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionResponse(
 			@JsonProperty("configOptions") List<SessionConfigOption> configOptions,
@@ -681,7 +647,6 @@ public final class AcpSchema {
 	/**
 	 * Request permission from user
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record RequestPermissionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("toolCall") ToolCallUpdate toolCall,
@@ -691,7 +656,6 @@ public final class AcpSchema {
 	/**
 	 * Permission response from user
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record RequestPermissionResponse(@JsonProperty("outcome") RequestPermissionOutcome outcome) {
 	}
@@ -699,7 +663,6 @@ public final class AcpSchema {
 	/**
 	 * Session update notification - real-time progress
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionNotification(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("update") SessionUpdate update,
@@ -712,7 +675,6 @@ public final class AcpSchema {
 	/**
 	 * Read text file request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReadTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
 			@JsonProperty("line") Integer line, @JsonProperty("limit") Integer limit) {
@@ -721,7 +683,6 @@ public final class AcpSchema {
 	/**
 	 * Read text file response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReadTextFileResponse(@JsonProperty("content") String content) {
 	}
@@ -729,7 +690,6 @@ public final class AcpSchema {
 	/**
 	 * Write text file request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WriteTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
 			@JsonProperty("content") String content) {
@@ -738,7 +698,6 @@ public final class AcpSchema {
 	/**
 	 * Write text file response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WriteTextFileResponse() {
 	}
@@ -746,7 +705,6 @@ public final class AcpSchema {
 	/**
 	 * Create terminal request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateTerminalRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("command") String command, @JsonProperty("args") List<String> args,
@@ -757,7 +715,6 @@ public final class AcpSchema {
 	/**
 	 * Create terminal response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateTerminalResponse(@JsonProperty("terminalId") String terminalId) {
 	}
@@ -765,7 +722,6 @@ public final class AcpSchema {
 	/**
 	 * Terminal output request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId) {
@@ -774,7 +730,6 @@ public final class AcpSchema {
 	/**
 	 * Terminal output response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputResponse(@JsonProperty("output") String output,
 			@JsonProperty("truncated") boolean truncated, @JsonProperty("exitStatus") TerminalExitStatus exitStatus) {
@@ -783,7 +738,6 @@ public final class AcpSchema {
 	/**
 	 * Release terminal request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReleaseTerminalRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId) {
@@ -792,7 +746,6 @@ public final class AcpSchema {
 	/**
 	 * Release terminal response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReleaseTerminalResponse() {
 	}
@@ -800,7 +753,6 @@ public final class AcpSchema {
 	/**
 	 * Wait for terminal exit request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId) {
@@ -809,7 +761,6 @@ public final class AcpSchema {
 	/**
 	 * Wait for terminal exit response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitResponse(@JsonProperty("exitCode") Integer exitCode,
 			@JsonProperty("signal") String signal) {
@@ -818,7 +769,6 @@ public final class AcpSchema {
 	/**
 	 * Kill terminal request
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record KillTerminalCommandRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId) {
@@ -827,7 +777,6 @@ public final class AcpSchema {
 	/**
 	 * Kill terminal response
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record KillTerminalCommandResponse() {
 	}
@@ -842,7 +791,6 @@ public final class AcpSchema {
 	 * Scope is either session (sessionId) or request (requestId).
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("requestId") Object requestId,
@@ -875,7 +823,6 @@ public final class AcpSchema {
 	 * Action is "accept" (with content), "decline", or "cancel".
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationResponse(@JsonProperty("action") ElicitationAction action,
 			@JsonProperty("content") Map<String, Object> content,
@@ -911,7 +858,6 @@ public final class AcpSchema {
 	 * Complete elicitation notification - signals URL-mode elicitation is done.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CompleteElicitationNotification(@JsonProperty("elicitationId") String elicitationId,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -924,7 +870,6 @@ public final class AcpSchema {
 	 * Elicitation schema - JSON Schema describing form fields for user input.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationSchema(@JsonProperty("type") String type,
 			@JsonProperty("properties") Map<String, ElicitationPropertySchema> properties,
@@ -953,7 +898,6 @@ public final class AcpSchema {
 	 * String property schema - text input or single-select enum.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record StringPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -976,7 +920,6 @@ public final class AcpSchema {
 	 * Number property schema - floating-point input.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NumberPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -989,7 +932,6 @@ public final class AcpSchema {
 	 * Integer property schema - whole number input.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record IntegerPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1002,7 +944,6 @@ public final class AcpSchema {
 	 * Boolean property schema - checkbox/toggle input.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BooleanPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1014,7 +955,6 @@ public final class AcpSchema {
 	 * Multi-select property schema - array of selected values.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record MultiSelectPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1039,7 +979,6 @@ public final class AcpSchema {
 	 * Untitled multi-select items - plain string enum values.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UntitledMultiSelectItems(@JsonProperty("type") String type,
 			@JsonProperty("enum") List<String> enumValues) implements MultiSelectItems {
@@ -1049,7 +988,6 @@ public final class AcpSchema {
 	 * Titled multi-select items - options with const/title pairs.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TitledMultiSelectItems(
 			@JsonProperty("anyOf") List<EnumOption> anyOf) implements MultiSelectItems {
@@ -1059,7 +997,6 @@ public final class AcpSchema {
 	 * Enum option - a named value for single-select or multi-select.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record EnumOption(@JsonProperty("const") String constValue,
 			@JsonProperty("title") String title) {
@@ -1069,7 +1006,6 @@ public final class AcpSchema {
 	 * Elicitation capabilities - advertised by client during initialize.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationCapabilities(@JsonProperty("form") Object form,
 			@JsonProperty("url") Object url,
@@ -1089,7 +1025,6 @@ public final class AcpSchema {
 	/**
 	 * Client capabilities
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") FileSystemCapability fs,
 			@JsonProperty("terminal") Boolean terminal,
@@ -1107,7 +1042,6 @@ public final class AcpSchema {
 	/**
 	 * File system capabilities
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record FileSystemCapability(@JsonProperty("readTextFile") Boolean readTextFile,
 			@JsonProperty("writeTextFile") Boolean writeTextFile) {
@@ -1119,7 +1053,6 @@ public final class AcpSchema {
 	/**
 	 * Agent capabilities
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentCapabilities(@JsonProperty("loadSession") Boolean loadSession,
 			@JsonProperty("sessionCapabilities") SessionCapabilities sessionCapabilities,
@@ -1146,7 +1079,6 @@ public final class AcpSchema {
 	 * Session capabilities advertised by the agent. Presence of a non-null field
 	 * signals support for that session method.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionCapabilities(@JsonProperty("list") Object list, @JsonProperty("close") Object close,
 			@JsonProperty("resume") Object resume, @JsonProperty("delete") Object delete,
@@ -1164,7 +1096,6 @@ public final class AcpSchema {
 	/**
 	 * MCP capabilities supported by agent
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpCapabilities(@JsonProperty("http") Boolean http, @JsonProperty("sse") Boolean sse) {
 		public McpCapabilities() {
@@ -1175,7 +1106,6 @@ public final class AcpSchema {
 	/**
 	 * Prompt capabilities
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptCapabilities(@JsonProperty("audio") Boolean audio,
 			@JsonProperty("embeddedContext") Boolean embeddedContext, @JsonProperty("image") Boolean image) {
@@ -1191,7 +1121,6 @@ public final class AcpSchema {
 	/**
 	 * Session information returned by session/list
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionInfo(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("title") String title, @JsonProperty("updatedAt") String updatedAt,
@@ -1205,7 +1134,6 @@ public final class AcpSchema {
 	/**
 	 * Session mode state
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionModeState(@JsonProperty("currentModeId") String currentModeId,
 			@JsonProperty("availableModes") List<SessionMode> availableModes) {
@@ -1214,7 +1142,6 @@ public final class AcpSchema {
 	/**
 	 * Session mode
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionMode(@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") String description) {
@@ -1230,7 +1157,6 @@ public final class AcpSchema {
 	 */
 	@Deprecated(forRemoval = true)
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionModelState(@JsonProperty("currentModelId") String currentModelId,
 			@JsonProperty("availableModels") List<ModelInfo> availableModels) {
@@ -1243,7 +1169,6 @@ public final class AcpSchema {
 	 */
 	@Deprecated(forRemoval = true)
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ModelInfo(@JsonProperty("modelId") String modelId, @JsonProperty("name") String name,
 			@JsonProperty("description") String description) {
@@ -1268,7 +1193,6 @@ public final class AcpSchema {
 	/**
 	 * Select-type config option - a dropdown with named values.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelect(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1290,7 +1214,6 @@ public final class AcpSchema {
 	 * {@code boolean} is an SDK extension that may change.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigBoolean(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1306,7 +1229,6 @@ public final class AcpSchema {
 	/**
 	 * A selectable option within a select-type config option.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelectOption(@JsonProperty("value") String value,
 			@JsonProperty("name") String name, @JsonProperty("description") String description,
@@ -1319,7 +1241,6 @@ public final class AcpSchema {
 	/**
 	 * Config option update - pushed by agent via session/update notification.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ConfigOptionUpdate(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1340,7 +1261,6 @@ public final class AcpSchema {
 	 * methods.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ProvidersCapabilities(@JsonProperty("_meta") Map<String, Object> meta) {
 		public ProvidersCapabilities() {
@@ -1356,7 +1276,6 @@ public final class AcpSchema {
 	 * {@code "bedrock"}) or a custom string.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ProviderCurrentConfig(@JsonProperty("apiType") String apiType,
 			@JsonProperty("baseUrl") String baseUrl) {
@@ -1372,7 +1291,6 @@ public final class AcpSchema {
 	 * @param meta reserved metadata
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ProviderInfo(@JsonProperty("id") String id, @JsonProperty("supported") List<String> supported,
 			@JsonProperty("required") Boolean required, @JsonProperty("current") ProviderCurrentConfig current,
@@ -1386,7 +1304,6 @@ public final class AcpSchema {
 	 * Request for {@code providers/list} - lists configurable providers.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListProvidersRequest(@JsonProperty("_meta") Map<String, Object> meta) {
 		public ListProvidersRequest() {
@@ -1398,7 +1315,6 @@ public final class AcpSchema {
 	 * Response to {@code providers/list}.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListProvidersResponse(@JsonProperty("providers") List<ProviderInfo> providers,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -1417,7 +1333,6 @@ public final class AcpSchema {
 	 * @param meta reserved metadata
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetProviderRequest(@JsonProperty("id") String id, @JsonProperty("apiType") String apiType,
 			@JsonProperty("baseUrl") String baseUrl, @JsonProperty("headers") Map<String, String> headers,
@@ -1435,7 +1350,6 @@ public final class AcpSchema {
 	 * Response to {@code providers/set}.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetProviderResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public SetProviderResponse() {
@@ -1447,7 +1361,6 @@ public final class AcpSchema {
 	 * Request for {@code providers/disable} - disables a provider by id.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DisableProviderRequest(@JsonProperty("id") String id,
 			@JsonProperty("_meta") Map<String, Object> meta) {
@@ -1460,7 +1373,6 @@ public final class AcpSchema {
 	 * Response to {@code providers/disable}.
 	 */
 	@UnstableAcpApi
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DisableProviderResponse(@JsonProperty("_meta") Map<String, Object> meta) {
 		public DisableProviderResponse() {
@@ -1488,7 +1400,6 @@ public final class AcpSchema {
 	/**
 	 * Text content
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TextContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("text") String text, @JsonProperty("annotations") Annotations annotations,
@@ -1501,7 +1412,6 @@ public final class AcpSchema {
 	/**
 	 * Image content
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ImageContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
@@ -1512,7 +1422,6 @@ public final class AcpSchema {
 	/**
 	 * Audio content
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AudioContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
@@ -1523,7 +1432,6 @@ public final class AcpSchema {
 	/**
 	 * Resource link
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResourceLink(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("name") String name, @JsonProperty("uri") String uri, @JsonProperty("title") String title,
@@ -1535,7 +1443,6 @@ public final class AcpSchema {
 	/**
 	 * Embedded resource
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Resource(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("resource") EmbeddedResourceResource resource,
@@ -1556,7 +1463,6 @@ public final class AcpSchema {
 	/**
 	 * Text resource contents
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TextResourceContents(@JsonProperty("text") String text, @JsonProperty("uri") String uri,
 			@JsonProperty("mimeType") String mimeType) implements EmbeddedResourceResource {
@@ -1565,7 +1471,6 @@ public final class AcpSchema {
 	/**
 	 * Blob resource contents
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BlobResourceContents(@JsonProperty("blob") String blob, @JsonProperty("uri") String uri,
 			@JsonProperty("mimeType") String mimeType) implements EmbeddedResourceResource {
@@ -1574,7 +1479,6 @@ public final class AcpSchema {
 	/**
 	 * Annotations for content
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Annotations(@JsonProperty("audience") List<Role> audience, @JsonProperty("priority") Double priority,
 			@JsonProperty("lastModified") String lastModified) {
@@ -1605,7 +1509,6 @@ public final class AcpSchema {
 	/**
 	 * User message chunk
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UserMessageChunk(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1623,7 +1526,6 @@ public final class AcpSchema {
 	/**
 	 * Agent message chunk
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentMessageChunk(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1641,7 +1543,6 @@ public final class AcpSchema {
 	/**
 	 * Agent thought chunk
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentThoughtChunk(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1659,7 +1560,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCall(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1674,7 +1574,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call update
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdate(@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") String title,
 			@JsonProperty("kind") ToolKind kind, @JsonProperty("status") ToolCallStatus status,
@@ -1686,7 +1585,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call update notification
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdateNotification(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1701,7 +1599,6 @@ public final class AcpSchema {
 	/**
 	 * Plan update
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Plan(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1715,7 +1612,6 @@ public final class AcpSchema {
 	/**
 	 * Available commands update
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommandsUpdate(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1729,7 +1625,6 @@ public final class AcpSchema {
 	/**
 	 * Current mode update
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CurrentModeUpdate(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1743,7 +1638,6 @@ public final class AcpSchema {
 	/**
 	 * Usage update - context window and cost update for the session (UNSTABLE)
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UsageUpdate(
 			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
@@ -1757,7 +1651,6 @@ public final class AcpSchema {
 	/**
 	 * Cost information for a session (UNSTABLE)
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Cost(@JsonProperty("amount") Double amount,
 			@JsonProperty("currency") String currency) {
@@ -1781,7 +1674,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call content block
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallContentBlock(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -1791,7 +1683,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call diff
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallDiff(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("path") String path, @JsonProperty("oldText") String oldText,
@@ -1801,7 +1692,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call terminal
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallTerminal(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("terminalId") String terminalId) implements ToolCallContent {
@@ -1810,7 +1700,6 @@ public final class AcpSchema {
 	/**
 	 * Tool call location
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallLocation(@JsonProperty("path") String path, @JsonProperty("line") Integer line) {
 	}
@@ -1899,7 +1788,6 @@ public final class AcpSchema {
 	/**
 	 * Metadata about an implementation (client or agent).
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Implementation(@JsonProperty("name") String name, @JsonProperty("version") String version,
 			@JsonProperty("title") String title) {
@@ -1937,7 +1825,6 @@ public final class AcpSchema {
 	/**
 	 * STDIO MCP server (default transport, no type field in JSON).
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerStdio(@JsonProperty("name") String name, @JsonProperty("command") String command,
 			@JsonProperty("args") List<String> args, @JsonProperty("env") List<EnvVariable> env) implements McpServer {
@@ -1946,7 +1833,6 @@ public final class AcpSchema {
 	/**
 	 * HTTP MCP server.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerHttp(@JsonProperty("name") String name, @JsonProperty("url") String url,
 			@JsonProperty("headers") List<HttpHeader> headers) implements McpServer {
@@ -1963,7 +1849,6 @@ public final class AcpSchema {
 	/**
 	 * SSE MCP server.
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerSse(@JsonProperty("name") String name, @JsonProperty("url") String url,
 			@JsonProperty("headers") List<HttpHeader> headers) implements McpServer {
@@ -1980,7 +1865,6 @@ public final class AcpSchema {
 	/**
 	 * Environment variable
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record EnvVariable(@JsonProperty("name") String name, @JsonProperty("value") String value) {
 	}
@@ -1988,7 +1872,6 @@ public final class AcpSchema {
 	/**
 	 * HTTP header
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record HttpHeader(@JsonProperty("name") String name, @JsonProperty("value") String value) {
 	}
@@ -1996,7 +1879,6 @@ public final class AcpSchema {
 	/**
 	 * Terminal exit status
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalExitStatus(@JsonProperty("exitCode") Integer exitCode,
 			@JsonProperty("signal") String signal) {
@@ -2005,7 +1887,6 @@ public final class AcpSchema {
 	/**
 	 * Authentication method
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthMethod(@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") String description) {
@@ -2014,7 +1895,6 @@ public final class AcpSchema {
 	/**
 	 * Permission option
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionOption(@JsonProperty("optionId") String optionId, @JsonProperty("name") String name,
 			@JsonProperty("kind") PermissionOptionKind kind) {
@@ -2033,7 +1913,6 @@ public final class AcpSchema {
 	/**
 	 * Permission cancelled
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionCancelled(
 			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome)
@@ -2046,7 +1925,6 @@ public final class AcpSchema {
 	/**
 	 * Permission selected
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionSelected(
 			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome,
@@ -2059,7 +1937,6 @@ public final class AcpSchema {
 	/**
 	 * Plan entry
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PlanEntry(@JsonProperty("content") String content,
 			@JsonProperty("priority") PlanEntryPriority priority, @JsonProperty("status") PlanEntryStatus status) {
@@ -2068,7 +1945,6 @@ public final class AcpSchema {
 	/**
 	 * Available command
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommand(@JsonProperty("name") String name, @JsonProperty("description") String description,
 			@JsonProperty("input") AvailableCommandInput input) {
@@ -2077,7 +1953,6 @@ public final class AcpSchema {
 	/**
 	 * Available command input
 	 */
-	@JsonIgnoreProperties(ignoreUnknown = true)
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommandInput(@JsonProperty("hint") String hint) {
 	}
