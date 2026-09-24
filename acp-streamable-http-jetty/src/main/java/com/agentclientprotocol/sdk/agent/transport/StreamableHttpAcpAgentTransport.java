@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,10 +20,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.ClientRequestRoute;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RequestKind;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.ResolvedInboundRoute;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RouteScope;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.SessionState;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
-import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
@@ -90,9 +93,9 @@ public class StreamableHttpAcpAgentTransport {
 
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
-	private static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
+	static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
 
-	private static final String HEADER_SESSION_ID = "Acp-Session-Id";
+	static final String HEADER_SESSION_ID = "Acp-Session-Id";
 
 	private static final String CONTENT_TYPE_JSON = "application/json";
 
@@ -105,59 +108,6 @@ public class StreamableHttpAcpAgentTransport {
 
 	private static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
-	private enum ScopeKind {
-
-		CONNECTION,
-
-		SESSION
-
-	}
-
-	private enum RequestKind {
-
-		INITIALIZE,
-
-		SESSION_NEW,
-
-		SESSION_FORK,
-
-		SESSION_LOAD,
-
-		GENERIC
-
-	}
-
-	private enum SessionState {
-
-		PENDING_LOAD,
-
-		KNOWN
-
-	}
-
-	private record RouteScope(ScopeKind kind, String sessionId) {
-
-		static RouteScope connection() {
-			return new RouteScope(ScopeKind.CONNECTION, null);
-		}
-
-		static RouteScope session(String sessionId) {
-			return new RouteScope(ScopeKind.SESSION, sessionId);
-		}
-
-		boolean isSession() {
-			return kind == ScopeKind.SESSION;
-		}
-
-	}
-
-	private record ClientRequestRoute(RequestKind kind, RouteScope requestScope, RouteScope responseScope) {
-	}
-
-	private record ResolvedInboundRoute(JSONRPCMessage message, RouteScope requestScope,
-			ClientRequestRoute requestRoute) {
-	}
-
 	private final int configuredPort;
 
 	private final String path;
@@ -167,6 +117,8 @@ public class StreamableHttpAcpAgentTransport {
 	private final AcpAgentFactory agentFactory;
 
 	private final StreamableHttpAcpAgentTransportOptions options;
+
+	private final StreamableHttpRouting routing;
 
 	private volatile Scheduler keepAliveScheduler;
 
@@ -228,6 +180,7 @@ public class StreamableHttpAcpAgentTransport {
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
 		this.options = options;
+		this.routing = new StreamableHttpRouting(jsonMapper);
 	}
 
 	/**
@@ -372,11 +325,6 @@ public class StreamableHttpAcpAgentTransport {
 		return new WebSocketConnectionState(connectionId);
 	}
 
-	private boolean isInitializeRequest(JSONRPCMessage message) {
-		return message instanceof AcpSchema.JSONRPCRequest request
-				&& AcpSchema.METHOD_INITIALIZE.equals(request.method()) && request.id() != null;
-	}
-
 	private final class AcpServlet extends HttpServlet {
 
 		@Override
@@ -416,7 +364,7 @@ public class StreamableHttpAcpAgentTransport {
 				return;
 			}
 
-			if (isInitialize(message)) {
+			if (StreamableHttpRouting.isInitialize(message)) {
 				handleInitialize(request, response, (AcpSchema.JSONRPCRequest) message);
 				return;
 			}
@@ -592,11 +540,6 @@ public class StreamableHttpAcpAgentTransport {
 
 	}
 
-	private boolean isInitialize(JSONRPCMessage message) {
-		return message instanceof AcpSchema.JSONRPCRequest request
-				&& AcpSchema.METHOD_INITIALIZE.equals(request.method());
-	}
-
 	private boolean hasContentType(HttpServletRequest request, String expected) {
 		return Optional.ofNullable(request.getContentType())
 			.map(String::toLowerCase)
@@ -672,7 +615,7 @@ public class StreamableHttpAcpAgentTransport {
 				return;
 			}
 
-			ResolvedInboundRoute resolved = resolveInboundRoute(message, sessionHeader);
+			ResolvedInboundRoute resolved = routing.resolveInboundRoute(message, sessionHeader);
 			if (resolved.requestScope().isSession()) {
 				prepareSessionForInbound(resolved.requestScope().sessionId(), resolved.requestRoute());
 			}
@@ -752,7 +695,7 @@ public class StreamableHttpAcpAgentTransport {
 				if ((route.kind() == RequestKind.SESSION_NEW || route.kind() == RequestKind.SESSION_FORK)
 						&& response.error() == null) {
 					// Both replies carry the id of a session that now exists on this connection.
-					String sessionId = extractSessionIdFromNewSessionResponse(response);
+					String sessionId = routing.extractSessionIdFromNewSessionResponse(response);
 					markSessionKnown(sessionId);
 				}
 				if (route.kind() == RequestKind.SESSION_LOAD) {
@@ -782,101 +725,11 @@ public class StreamableHttpAcpAgentTransport {
 				throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
 			}
 
-			RouteScope scope = resolveAgentRequestOrNotificationScope(method, params);
+			RouteScope scope = routing.resolveAgentRequestOrNotificationScope(method, params);
 			if (id != null) {
 				agentRequestRoutes.put(id, scope);
 			}
 			return scope;
-		}
-
-		private RouteScope resolveAgentRequestOrNotificationScope(String method, Object params) {
-			switch (method) {
-				case AcpSchema.METHOD_SESSION_REQUEST_PERMISSION:
-				case AcpSchema.METHOD_SESSION_UPDATE:
-				case AcpSchema.METHOD_FS_READ_TEXT_FILE:
-				case AcpSchema.METHOD_FS_WRITE_TEXT_FILE:
-				case AcpSchema.METHOD_TERMINAL_CREATE:
-				case AcpSchema.METHOD_TERMINAL_OUTPUT:
-				case AcpSchema.METHOD_TERMINAL_RELEASE:
-				case AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT:
-				case AcpSchema.METHOD_TERMINAL_KILL:
-					return RouteScope.session(requireSessionId(params, method));
-				default:
-					Optional<String> sessionId = extractSessionId(params);
-					return sessionId.map(RouteScope::session).orElseGet(RouteScope::connection);
-			}
-		}
-
-		private ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, String sessionHeader) {
-			String method;
-			Object params;
-			if (message instanceof AcpSchema.JSONRPCRequest request) {
-				method = request.method();
-				params = request.params();
-			}
-			else if (message instanceof AcpSchema.JSONRPCNotification notification) {
-				method = notification.method();
-				params = notification.params();
-			}
-			else {
-				throw new AcpConnectionException("Unsupported inbound JSON-RPC message type: " + message);
-			}
-
-			RouteScope requestScope;
-			RequestKind kind = RequestKind.GENERIC;
-			RouteScope responseScope;
-
-			switch (method) {
-				case AcpSchema.METHOD_AUTHENTICATE:
-				case AcpSchema.METHOD_SESSION_NEW:
-					requestScope = RouteScope.connection();
-					kind = AcpSchema.METHOD_SESSION_NEW.equals(method) ? RequestKind.SESSION_NEW : RequestKind.GENERIC;
-					responseScope = RouteScope.connection();
-					break;
-				case AcpSchema.METHOD_SESSION_LOAD:
-				case AcpSchema.METHOD_SESSION_RESUME:
-					requestScope = requireSessionScope(method, params, sessionHeader);
-					kind = RequestKind.SESSION_LOAD;
-					responseScope = RouteScope.connection();
-					break;
-				case AcpSchema.METHOD_SESSION_FORK:
-					// Scoped to the parent session; the reply names the forked session.
-					requestScope = requireSessionScope(method, params, sessionHeader);
-					kind = RequestKind.SESSION_FORK;
-					responseScope = requestScope;
-					break;
-				case AcpSchema.METHOD_SESSION_PROMPT:
-				case AcpSchema.METHOD_SESSION_SET_MODE:
-				case AcpSchema.METHOD_SESSION_SET_MODEL:
-				case AcpSchema.METHOD_SESSION_CANCEL:
-					requestScope = requireSessionScope(method, params, sessionHeader);
-					responseScope = requestScope;
-					break;
-				default:
-					Optional<String> sessionId = extractSessionId(params);
-					if (sessionId.isPresent()) {
-						requestScope = requireSessionScope(method, params, sessionHeader);
-					}
-					else {
-						requestScope = RouteScope.connection();
-					}
-					responseScope = requestScope;
-			}
-
-			ClientRequestRoute requestRoute = message instanceof AcpSchema.JSONRPCRequest
-					? new ClientRequestRoute(kind, requestScope, responseScope) : null;
-			return new ResolvedInboundRoute(message, requestScope, requestRoute);
-		}
-
-		private RouteScope requireSessionScope(String method, Object params, String sessionHeader) {
-			String sessionId = requireSessionId(params, method);
-			if (sessionHeader == null) {
-				throw new AcpConnectionException(HEADER_SESSION_ID + " header required for " + method);
-			}
-			if (!sessionId.equals(sessionHeader)) {
-				throw new AcpConnectionException("Header " + HEADER_SESSION_ID + " does not match params.sessionId");
-			}
-			return RouteScope.session(sessionId);
 		}
 
 		private void prepareSessionForInbound(String sessionId, ClientRequestRoute route) {
@@ -956,31 +809,6 @@ public class StreamableHttpAcpAgentTransport {
 			sessionStream(sessionId);
 		}
 
-		private String extractSessionIdFromNewSessionResponse(AcpSchema.JSONRPCResponse response) {
-			AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(response.result(),
-					new TypeRef<AcpSchema.NewSessionResponse>() {
-					});
-			if (sessionResponse.sessionId() == null || sessionResponse.sessionId().isBlank()) {
-				throw new AcpConnectionException("session/new response missing sessionId");
-			}
-			return sessionResponse.sessionId();
-		}
-
-	}
-
-	private Optional<String> extractSessionId(Object params) {
-		if (params == null) {
-			return Optional.empty();
-		}
-		Map<?, ?> paramsMap = jsonMapper.convertValue(params, Map.class);
-		Object sessionId = paramsMap.get("sessionId");
-		return sessionId == null ? Optional.empty() : Optional.of(sessionId.toString());
-	}
-
-	private String requireSessionId(Object params, String method) {
-		return extractSessionId(params)
-			.filter(sessionId -> !sessionId.isBlank())
-			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for method " + method));
 	}
 
 	private final class OutboundStream {
@@ -1212,7 +1040,7 @@ public class StreamableHttpAcpAgentTransport {
 				// The WebSocket branch of the streamable endpoint has no POST
 				// initialize response that can create the connection first, so the first
 				// client-originated JSON-RPC message on the socket must be initialize.
-				if (!isInitializeRequest(message)) {
+				if (!StreamableHttpRouting.isInitializeRequest(message)) {
 					close(StatusCode.PROTOCOL, "first ACP WebSocket message must be initialize");
 					return;
 				}
