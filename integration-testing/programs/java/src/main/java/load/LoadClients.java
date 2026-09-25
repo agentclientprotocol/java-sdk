@@ -36,6 +36,7 @@ public class LoadClients {
 		int prompts = Integer.parseInt(args[2]);
 		boolean sharedConnection = args.length > 3 && args[3].equals("shared");
 		long holdMs = Long.getLong("HOLD_MS", 4000);
+		int closeParallelism = Integer.getInteger("CLOSE_PARALLELISM", clients);
 		ExecutorService httpExecutor = Executors.newFixedThreadPool(32, daemon("http"));
 		HttpClient shared = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).executor(httpExecutor).build();
 		AtomicInteger ok = new AtomicInteger();
@@ -94,8 +95,9 @@ public class LoadClients {
 		ConcurrentLinkedQueue<Long> closeTimes = new ConcurrentLinkedQueue<>();
 		AtomicInteger closeErrors = new AtomicInteger();
 		CountDownLatch closed = new CountDownLatch(all.size());
+		ExecutorService closers = Executors.newFixedThreadPool(closeParallelism, daemon("close"));
 		for (AcpAsyncClient client : all) {
-			drivers.execute(() -> {
+			closers.execute(() -> {
 				long s = System.nanoTime();
 				try {
 					client.closeGracefully().block(Duration.ofSeconds(30));

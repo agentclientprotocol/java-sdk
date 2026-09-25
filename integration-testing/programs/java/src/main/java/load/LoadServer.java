@@ -7,13 +7,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import reactor.core.publisher.Mono;
 
 /**
  * Load-test agent: every prompt streams two updates, then ends the turn after a short think.
- * Usage: {@code LoadServer <port> [thinkMs]}. Prints {@code READY <port>} once listening; the
+ * Usage: {@code LoadServer <port> [thinkMs] [maxConcurrentStreamsPerConnection]}. Prints {@code READY <port>} once listening; the
  * runner samples this JVM (heap, threads) with jcmd.
  */
 public class LoadServer {
@@ -31,8 +32,12 @@ public class LoadServer {
 				.then(Mono.delay(Duration.ofMillis(thinkMs)))
 				.thenReturn(AcpSchema.PromptResponse.endTurn()))
 			.build());
-		StreamableHttpAcpAgentTransport server = new StreamableHttpAcpAgentTransport(port, AcpJsonMapper.createDefault(),
-				factory);
+		StreamableHttpAcpAgentTransportOptions.Builder options = StreamableHttpAcpAgentTransportOptions.builder();
+		if (args.length > 2) {
+			options.maxConcurrentStreamsPerConnection(Integer.parseInt(args[2]));
+		}
+		StreamableHttpAcpAgentTransport server = new StreamableHttpAcpAgentTransport(port,
+				StreamableHttpAcpAgentTransport.DEFAULT_ACP_PATH, AcpJsonMapper.createDefault(), factory, options.build());
 		server.start().block(Duration.ofSeconds(30));
 		System.out.println("READY " + server.getPort());
 		Thread.currentThread().join();
