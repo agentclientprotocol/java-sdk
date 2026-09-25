@@ -40,6 +40,13 @@
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
+        <!-- Only for BothJsonModulesOnClasspathTest; kept off the classpath of every other test -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-json-jackson2</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -67,6 +74,35 @@
                         <dependency>com.agentclientprotocol:acp-core:test-jar:tests</dependency>
                     </dependenciesToScan>
                 </configuration>
+                <executions>
+                    <!-- The contract suite and this module's tests, with no Jackson 2 on the
+                         classpath: Jackson 3 must stand on its own. -->
+                    <execution>
+                        <id>default-test</id>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/*$*</exclude>
+                                <exclude>**/BothJsonModulesOnClasspathTest.java</exclude>
+                            </excludes>
+                            <classpathDependencyExcludes>
+                                <classpathDependencyExclude>com.agentclientprotocol:acp-json-jackson2</classpathDependencyExclude>
+                                <classpathDependencyExclude>com.fasterxml.jackson.core:jackson-databind</classpathDependencyExclude>
+                                <classpathDependencyExclude>com.fasterxml.jackson.core:jackson-core</classpathDependencyExclude>
+                            </classpathDependencyExcludes>
+                        </configuration>
+                    </execution>
+                    <!-- Both JSON modules on one classpath: the selection must be deterministic. -->
+                    <execution>
+                        <id>both-json-modules</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <dependenciesToScan combine.self="override"/>
+                            <test>BothJsonModulesOnClasspathTest</test>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
