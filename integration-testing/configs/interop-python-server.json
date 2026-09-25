@@ -1,0 +1,92 @@
+{
+  "name": "interop-python-server",
+  "description": "Java client -> Python SDK server (Hypercorn, h2c enabled)",
+  "timeoutSec": 240,
+  "peers": [
+    "python-sdk"
+  ],
+  "processes": [
+    {
+      "name": "server",
+      "language": "python",
+      "role": "server",
+      "dir": "${ROOT}/programs/python",
+      "run": "${peer.python-sdk}/.venv/bin/python py-server.py",
+      "env": {
+        "PORT": "${PORT}",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 60
+      }
+    },
+    {
+      "name": "client",
+      "language": "java",
+      "role": "client",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -cp target/classes:$(cat target/classpath.txt) interop.JavaClientMain http://127.0.0.1:${PORT}/acp",
+      "timeoutSec": 120
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "client": [
+        "negotiated HTTP_2",
+        "permission request:",
+        "STEP initialize PASS",
+        "STEP session/new PASS",
+        "STEP prompt1 PASS",
+        "STEP prompt2 PASS",
+        "STEP prompt3-permission PASS",
+        "STEP session/load PASS",
+        "STEP prompt-after-load PASS",
+        "STEP close PASS",
+        "STEP reconnect-initialize PASS",
+        "STEP reconnect-close PASS"
+      ],
+      "server": [
+        "[agent] permission result",
+        "[agent] session/load"
+      ]
+    },
+    "forbiddenOutput": {
+      "client": [
+        "negotiated HTTP_1_1"
+      ]
+    },
+    "requiredPatterns": {
+      "server": [
+        "\\[http\\] POST /acp HTTP/2 .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/2 .*-> 202"
+      ]
+    },
+    "checks": [
+      "client RESULT pass == 10",
+      "client RESULT fail == 2",
+      "client RESULT prompt1_updates >= 2",
+      "client RESULT prompt2_updates >= 2",
+      "client RESULT prompt3_permission_updates >= 2",
+      "client RESULT prompt_after_load_updates >= 2"
+    ],
+    "expectedFailures": [
+      {
+        "process": "client",
+        "step": "reconnect-session/load",
+        "contains": "404",
+        "reason": "RFD contradiction, not a Java bug: the Java client follows the reconnect diagram and pre-opens the session GET before session/load on the new connection; the Python server follows the rule that an Acp-Session-Id unknown to the connection is a 404",
+        "see": "/home/mark/projects/acp-java-steward/plans/dossiers/2026-09-25-peer-sdk-http-header-bugs.md (RFD gap B)"
+      },
+      {
+        "process": "client",
+        "step": "reconnect-prompt",
+        "contains": "404",
+        "reason": "follows from reconnect-session/load: the session was never attached to the new connection",
+        "see": "/home/mark/projects/acp-java-steward/plans/dossiers/2026-09-25-peer-sdk-http-header-bugs.md (RFD gap B)"
+      }
+    ]
+  },
+  "comment": "Reconnect-then-load is an EXPECTED failure (RFD contradiction, not a Java bug); if the Python server starts accepting it the scenario fails so the expectation gets updated."
+}

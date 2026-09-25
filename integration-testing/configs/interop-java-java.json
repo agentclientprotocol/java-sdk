@@ -1,0 +1,76 @@
+{
+  "name": "interop-java-java",
+  "description": "Java client -> Java server (both SDKs from this checkout)",
+  "timeoutSec": 240,
+  "peers": [],
+  "processes": [
+    {
+      "name": "server",
+      "language": "java",
+      "role": "server",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -cp target/classes:$(cat target/classpath.txt) interop.JavaAgentMain ${PORT}",
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 60
+      }
+    },
+    {
+      "name": "client",
+      "language": "java",
+      "role": "client",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -cp target/classes:$(cat target/classpath.txt) interop.JavaClientMain http://127.0.0.1:${PORT}/acp",
+      "timeoutSec": 120
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "client": [
+        "negotiated HTTP_2",
+        "permission request:",
+        "STEP initialize PASS",
+        "STEP session/new PASS",
+        "STEP prompt1 PASS",
+        "STEP prompt2 PASS",
+        "STEP prompt3-permission PASS",
+        "STEP session/load PASS",
+        "STEP prompt-after-load PASS",
+        "STEP close PASS",
+        "STEP reconnect-initialize PASS",
+        "STEP reconnect-session/load PASS",
+        "STEP reconnect-prompt PASS",
+        "STEP reconnect-close PASS"
+      ],
+      "server": [
+        "[agent] permission granted=true",
+        "[agent] session/load java-sess-1"
+      ]
+    },
+    "forbiddenOutput": {
+      "client": [
+        "negotiated HTTP_1_1"
+      ],
+      "server": [
+        " HTTP/1.1 -> "
+      ]
+    },
+    "requiredPatterns": {
+      "server": [
+        "\\[http\\] POST /acp HTTP/2\\.0 .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/2\\.0 .*-> 202"
+      ]
+    },
+    "checks": [
+      "client RESULT pass == 12",
+      "client RESULT fail == 0",
+      "client RESULT prompt1_updates >= 2",
+      "client RESULT prompt2_updates >= 2",
+      "client RESULT prompt3_permission_updates >= 2",
+      "client RESULT prompt_after_load_updates >= 2",
+      "client RESULT reconnect_prompt_updates >= 2"
+    ]
+  }
+}

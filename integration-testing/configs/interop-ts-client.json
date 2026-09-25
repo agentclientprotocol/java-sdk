@@ -1,0 +1,71 @@
+{
+  "name": "interop-ts-client",
+  "description": "TypeScript SDK client -> Java server",
+  "timeoutSec": 240,
+  "peers": [
+    "typescript-sdk"
+  ],
+  "processes": [
+    {
+      "name": "server",
+      "language": "java",
+      "role": "server",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -cp target/classes:$(cat target/classpath.txt) interop.JavaAgentMain ${PORT}",
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 60
+      }
+    },
+    {
+      "name": "client",
+      "language": "node",
+      "role": "client",
+      "dir": "${ROOT}/programs/node",
+      "run": "node ts-client.mjs http://127.0.0.1:${PORT}/acp",
+      "env": {
+        "TS_SDK": "${peer.typescript-sdk}"
+      },
+      "timeoutSec": 90
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "client": [
+        "permission request",
+        "connectWith returned",
+        "STEP initialize PASS",
+        "STEP session/new PASS",
+        "STEP prompt1 PASS",
+        "STEP prompt2 PASS",
+        "STEP prompt3-permission PASS",
+        "STEP session/load PASS",
+        "STEP prompt-after-load PASS"
+      ],
+      "server": [
+        "[agent] permission granted=true",
+        "[agent] session/load java-sess-1"
+      ]
+    },
+    "forbiddenOutput": {
+      "server": [
+        "HTTP/2.0"
+      ]
+    },
+    "requiredPatterns": {
+      "server": [
+        "\\[http\\] POST /acp HTTP/1\\.1 -> 200",
+        "\\[http\\] DELETE /acp HTTP/1\\.1 -> 202"
+      ]
+    },
+    "checks": [
+      "client RESULT pass == 7",
+      "client RESULT fail == 0",
+      "client RESULT prompt1_updates >= 2",
+      "client RESULT prompt2_updates >= 2",
+      "client RESULT prompt3_permission_updates >= 2",
+      "client RESULT prompt_after_load_updates >= 2"
+    ]
+  }
+}

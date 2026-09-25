@@ -1,0 +1,76 @@
+{
+  "name": "load-shared-300",
+  "description": "300 clients x 5 prompts sharing one HttpClient (one HTTP/2 connection)",
+  "timeoutSec": 420,
+  "comment": "Baselines from the 2026-09-25 pre-release load run. Latency (p50/p99) is recorded, never asserted. Known, timing-dependent: when all 300 clients close at once, their stream cancellations (RST_STREAM) exceed Jetty's HTTP/2 rate control (WindowRateControl, 128 events/s by default) and the server sends GOAWAY for the shared connection. Every prompt and every close still succeeds (asserted); the client transport logs ERROR 'Transport error ... GOAWAY received' for the cut SSE streams, so 'ERROR ' is not forbidden here and the GOAWAY count is reported instead.",
+  "processes": [
+    {
+      "name": "server",
+      "language": "java",
+      "role": "server",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -Xmx512m -cp target/classes:$(cat target/classpath.txt) load.LoadServer ${PORT} 50",
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 60
+      },
+      "samples": [
+        {
+          "label": "idle",
+          "on": "ready"
+        },
+        {
+          "label": "peak",
+          "on": "line",
+          "process": "clients",
+          "line": "PEAK_REACHED"
+        },
+        {
+          "label": "after_close",
+          "on": "exit",
+          "process": "clients",
+          "delayMs": 3000
+        }
+      ]
+    },
+    {
+      "name": "clients",
+      "language": "java",
+      "role": "client",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -Xmx1g -Dacp.client.level=INFO -cp target/classes:$(cat target/classpath.txt) load.LoadClients http://127.0.0.1:${PORT}/acp 300 5 shared",
+      "timeoutSec": 300
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "clients": [
+        "PEAK_REACHED",
+        "CLOSED"
+      ]
+    },
+    "forbiddenOutput": {
+      "clients": [
+        "CLOSE_ERROR"
+      ]
+    },
+    "checks": [
+      "clients RESULT errors == 0",
+      "clients RESULT ok == expected",
+      "clients RESULT expected == 1500",
+      "clients RESULT updates == 2*ok",
+      "clients RESULT close_errors == 0",
+      "server SAMPLE peak acp_threads <= 4",
+      "server SAMPLE after_close acp_threads <= 4",
+      "server SAMPLE peak heap_mb <= 256",
+      "server SAMPLE after_close heap_mb <= 64"
+    ],
+    "report": {
+      "clients": [
+        "GOAWAY received"
+      ]
+    }
+  }
+}

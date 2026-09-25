@@ -1,0 +1,79 @@
+{
+  "name": "interop-rust-server",
+  "description": "Java client -> Rust SDK server (axum)",
+  "timeoutSec": 240,
+  "peers": [
+    "rust-sdk"
+  ],
+  "processes": [
+    {
+      "name": "server",
+      "language": "rust",
+      "role": "server",
+      "dir": "${ROOT}/programs/rust",
+      "build": "CARGO_TARGET_DIR=${CACHE}/build/${peerKey.rust-sdk} cargo build --release --quiet",
+      "run": "${CACHE}/build/${peerKey.rust-sdk}/release/rust-agent",
+      "env": {
+        "PORT": "${PORT}"
+      },
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 60
+      }
+    },
+    {
+      "name": "client",
+      "language": "java",
+      "role": "client",
+      "dir": "${ROOT}/programs/java",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "java -cp target/classes:$(cat target/classpath.txt) interop.JavaClientMain http://127.0.0.1:${PORT}/acp",
+      "timeoutSec": 120
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "client": [
+        "negotiated HTTP_1_1",
+        "permission request:",
+        "STEP initialize PASS",
+        "STEP session/new PASS",
+        "STEP prompt1 PASS",
+        "STEP prompt2 PASS",
+        "STEP prompt3-permission PASS",
+        "STEP session/load PASS",
+        "STEP prompt-after-load PASS",
+        "STEP close PASS",
+        "STEP reconnect-initialize PASS",
+        "STEP reconnect-session/load PASS",
+        "STEP reconnect-prompt PASS",
+        "STEP reconnect-close PASS"
+      ],
+      "server": [
+        "[agent] permission result",
+        "[agent] session/load"
+      ]
+    },
+    "forbiddenOutput": {
+      "client": [
+        "negotiated HTTP_2"
+      ]
+    },
+    "requiredPatterns": {
+      "server": [
+        "\\[http\\] POST /acp HTTP/1\\.1 .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202"
+      ]
+    },
+    "checks": [
+      "client RESULT pass == 12",
+      "client RESULT fail == 0",
+      "client RESULT prompt1_updates >= 2",
+      "client RESULT prompt2_updates >= 2",
+      "client RESULT prompt3_permission_updates >= 2",
+      "client RESULT prompt_after_load_updates >= 2",
+      "client RESULT reconnect_prompt_updates >= 2"
+    ]
+  },
+  "comment": "The Rust server answers session/load on the session stream rather than the connection stream; the Java client logs a WARN and accepts it."
+}
