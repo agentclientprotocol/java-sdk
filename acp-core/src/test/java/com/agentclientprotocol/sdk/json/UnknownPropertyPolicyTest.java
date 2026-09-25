@@ -1,22 +1,25 @@
 /*
- * Copyright 2025-2025 the original author or authors.
+ * Copyright 2025-2026 the original author or authors.
  */
 
 package com.agentclientprotocol.sdk.json;
 
+import java.util.List;
+
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unknown-field policy (#10): the SDK is lenient by default so that a peer newer than this
- * SDK keeps working, and that leniency lives in the mapper, not in the schema records. A
- * consumer who supplies a strict {@link ObjectMapper} therefore gets strict behaviour.
+ * SDK keeps working, and that leniency lives in the mapper, not in the schema records.
+ *
+ * <p>
+ * This class checks the default mapper, whichever JSON module supplies it; each JSON
+ * module adds its own test that a strict mapper supplied by the consumer is honoured,
+ * since building one is library-specific.
+ * </p>
  */
 class UnknownPropertyPolicyTest {
 
@@ -25,10 +28,10 @@ class UnknownPropertyPolicyTest {
 			{"loadSession": true, "fabricatedFeature": true}
 			""";
 
+	private final AcpJsonMapper mapper = AcpJsonMapper.createDefault();
+
 	@Test
 	void defaultMapperToleratesUnknownFieldsAndKeepsKnownOnes() throws Exception {
-		AcpJsonMapper mapper = AcpJsonMapper.createDefault();
-
 		AcpSchema.AgentCapabilities caps = mapper.readValue(CAPABILITIES_WITH_DRIFT, AcpSchema.AgentCapabilities.class);
 
 		assertThat(caps.loadSession()).isTrue();
@@ -36,34 +39,32 @@ class UnknownPropertyPolicyTest {
 	}
 
 	@Test
-	void strictMapperSuppliedByTheConsumerFailsOnUnknownFields() {
-		ObjectMapper strict = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
-		AcpJsonMapper mapper = new JacksonAcpJsonMapper(strict);
-
-		assertThatThrownBy(() -> mapper.readValue(CAPABILITIES_WITH_DRIFT, AcpSchema.AgentCapabilities.class))
-			.isInstanceOf(UnrecognizedPropertyException.class)
-			.hasMessageContaining("fabricatedFeature");
-	}
-
-	@Test
-	void strictMapperStillAcceptsEverySpecField() throws Exception {
-		ObjectMapper strict = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
-		AcpJsonMapper mapper = new JacksonAcpJsonMapper(strict);
-
-		String onSpec = """
-				{"protocolVersion": 1, "agentCapabilities": {"loadSession": true,
-				 "promptCapabilities": {"image": true, "audio": false, "embeddedContext": true}},
-				 "authMethods": [], "agentInfo": {"name": "x", "version": "1"}, "_meta": {"k": "v"}}
+	void defaultMapperSkipsUnknownStructuredValues() throws Exception {
+		String json = """
+				{"sessionId": "s1", "futureObject": {"a": [1, {"b": 2}]}, "futureArray": [[1], {}],
+				 "update": {"sessionUpdate": "agent_message_chunk", "futureField": {"x": 1},
+				            "content": {"type": "text", "text": "hi", "futureFlag": true}}}
 				""";
-		AcpSchema.InitializeResponse response = mapper.readValue(onSpec, AcpSchema.InitializeResponse.class);
 
-		assertThat(response.agentCapabilities().promptCapabilities().image()).isTrue();
-		assertThat(response.meta()).containsEntry("k", "v");
+		AcpSchema.SessionNotification notification = mapper.readValue(json, AcpSchema.SessionNotification.class);
+
+		assertThat(notification.sessionId()).isEqualTo("s1");
+		AcpSchema.AgentMessageChunk chunk = (AcpSchema.AgentMessageChunk) notification.update();
+		assertThat(((AcpSchema.TextContent) chunk.content()).text()).isEqualTo("hi");
 	}
 
 	@Test
-	void defaultObjectMapperIsANewInstanceEachTime() {
-		assertThat(JacksonAcpJsonMapper.defaultObjectMapper()).isNotSameAs(JacksonAcpJsonMapper.defaultObjectMapper());
+	void defaultMapperToleratesUnknownFieldsInsideListsOfPolymorphicValues() throws Exception {
+		String json = """
+				{"sessionId": "s1", "prompt": [{"type": "text", "text": "a", "extra": 1},
+				                               {"type": "text", "text": "b"}]}
+				""";
+
+		AcpSchema.PromptRequest request = mapper.readValue(json, AcpSchema.PromptRequest.class);
+
+		assertThat(request.prompt()).hasSize(2);
+		assertThat(request.prompt()).extracting(block -> ((AcpSchema.TextContent) block).text())
+			.isEqualTo(List.of("a", "b"));
 	}
 
 }

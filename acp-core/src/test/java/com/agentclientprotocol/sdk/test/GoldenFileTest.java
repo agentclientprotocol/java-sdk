@@ -9,10 +9,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.JsonTree;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,12 +27,11 @@ class GoldenFileTest {
 
 	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
-	private final ObjectMapper objectMapper = new ObjectMapper().configure(SerializationFeature.INDENT_OUTPUT, true);
 
 	@Test
 	void parseInitializeRequest() throws IOException {
 		String json = loadGoldenFile("initialize-request.json");
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("jsonrpc").asText()).isEqualTo("2.0");
 		assertThat(node.get("method").asText()).isEqualTo("initialize");
@@ -46,7 +43,7 @@ class GoldenFileTest {
 	@Test
 	void parseInitializeResponse() throws IOException {
 		String json = loadGoldenFile("initialize-response.json");
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("jsonrpc").asText()).isEqualTo("2.0");
 		assertThat(node.get("id").asText()).isEqualTo("1");
@@ -58,7 +55,7 @@ class GoldenFileTest {
 	@Test
 	void parseSessionNewRequest() throws IOException {
 		String json = loadGoldenFile("session-new-request.json");
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("method").asText()).isEqualTo("session/new");
 		assertThat(node.get("params").get("cwd").asText()).isEqualTo("/workspace");
@@ -67,7 +64,7 @@ class GoldenFileTest {
 	@Test
 	void parseSessionPromptRequest() throws IOException {
 		String json = loadGoldenFile("session-prompt-request.json");
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("method").asText()).isEqualTo("session/prompt");
 		assertThat(node.get("params").get("sessionId").asText()).isEqualTo("session-abc123");
@@ -78,7 +75,7 @@ class GoldenFileTest {
 	@Test
 	void parseSessionUpdateNotification() throws IOException {
 		String json = loadGoldenFile("session-update-notification.json");
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("method").asText()).isEqualTo("session/update");
 		assertThat(node.has("id")).isFalse(); // Notifications don't have id
@@ -93,7 +90,7 @@ class GoldenFileTest {
 				request);
 
 		String json = jsonMapper.writeValueAsString(jsonRpcRequest);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("jsonrpc").asText()).isEqualTo("2.0");
 		assertThat(node.get("method").asText()).isEqualTo("initialize");

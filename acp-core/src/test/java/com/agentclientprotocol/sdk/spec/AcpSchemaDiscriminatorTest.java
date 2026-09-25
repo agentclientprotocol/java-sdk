@@ -10,10 +10,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AcpSchemaDiscriminatorTest {
 
-	private static final ObjectMapper MAPPER = new ObjectMapper();
+	private static final AcpJsonMapper MAPPER = AcpJsonMapper.createDefault();
 
 	@ParameterizedTest(name = "{0} writes \"{1}\" exactly once")
 	@MethodSource("polymorphicSubtypes")
