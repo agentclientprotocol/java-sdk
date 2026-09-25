@@ -48,6 +48,12 @@ building a second client on an already-connected transport now fails at construc
   never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
   pending requests at once with the cause, and every later request, instead of waiting out the request
   timeout.
+- **`StreamableHttpAcpServlet` is public and mountable** in any Servlet 6 container (Spring Boot, Tomcat,
+  Jetty, Undertow) at the application's own path, from a JSON mapper, an `AcpAgentFactory` and optional
+  `StreamableHttpAcpAgentTransportOptions`; register it with async support. It owns its connections: the
+  container's `init()` starts the SSE keep-alive and `destroy()` closes every connection, cancelling
+  in-flight prompts. It serves the HTTP/SSE profile; the WebSocket upgrade on the same path needs
+  `StreamableHttpAcpAgentTransport`, which now mounts this servlet on its own Jetty server.
 - `CancelNotification` carries `_meta`.
 - `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
 

@@ -6,17 +6,23 @@ package com.agentclientprotocol.sdk.agent.transport;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpConnection.UnknownSessionException;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
+import com.agentclientprotocol.sdk.util.Assert;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
@@ -26,7 +32,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.CONTENT_TYPE_EVENT_STREAM;
 import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_CONNECTION_ID;
@@ -39,15 +49,29 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgent
  * connection or a session SSE stream, {@code DELETE} closes the connection.
  *
  * <p>
- * {@link StreamableHttpAcpAgentTransport} mounts it on Jetty next to the WebSocket
- * upgrade handler and owns the connection registry and lifecycle it is constructed
- * with. The servlet itself depends only on the Servlet API, so it can later be mounted
- * in another container.
+ * <b>Mountable in any Servlet 6 container</b> (Spring Boot, Tomcat, Jetty, Undertow) at
+ * the path of your choice; register it with async support enabled:
+ * </p>
+ *
+ * <pre>{@code
+ * StreamableHttpAcpServlet servlet = new StreamableHttpAcpServlet(AcpJsonMapper.createDefault(), agentFactory);
+ * ServletRegistration.Dynamic registration = servletContext.addServlet("acp", servlet);
+ * registration.addMapping("/acp");
+ * registration.setAsyncSupported(true);
+ * }</pre>
+ *
+ * <p>
+ * The servlet owns its connections: {@link #init()} starts the SSE keep-alive and
+ * {@link #destroy()} closes every connection, cancelling in-flight prompts, so the
+ * container's lifecycle drives it. It serves the HTTP/SSE profile of the RFD; the
+ * WebSocket upgrade on the same path needs {@link StreamableHttpAcpAgentTransport}, which
+ * mounts this servlet on its own Jetty server next to the upgrade handler. HTTP/2 is the
+ * container's to configure.
  * </p>
  *
  * @author Kaiser Dandangi
  */
-class StreamableHttpAcpServlet extends HttpServlet {
+public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(StreamableHttpAcpServlet.class);
 
@@ -57,17 +81,117 @@ class StreamableHttpAcpServlet extends HttpServlet {
 
 	private final transient StreamableHttpAcpAgentTransportOptions options;
 
-	private final transient ConcurrentMap<String, StreamableHttpConnection> connections;
+	private final transient ConcurrentMap<String, StreamableHttpConnection> connections = new ConcurrentHashMap<>();
 
-	private final transient Supplier<StreamableHttpConnection> connectionFactory;
+	private final transient AcpAgentFactory agentFactory;
 
-	StreamableHttpAcpServlet(AcpJsonMapper jsonMapper, StreamableHttpAcpAgentTransportOptions options,
-			ConcurrentMap<String, StreamableHttpConnection> connections,
-			Supplier<StreamableHttpConnection> connectionFactory) {
+	private final transient StreamableHttpRouting routing;
+
+	private final transient AtomicBoolean closing = new AtomicBoolean(false);
+
+	private transient volatile Scheduler keepAliveScheduler;
+
+	private transient volatile Disposable keepAliveTask;
+
+	/**
+	 * Creates a servlet with the default limits.
+	 * @param jsonMapper JSON mapper used for serialization
+	 * @param agentFactory creates one agent runtime per remote connection
+	 */
+	public StreamableHttpAcpServlet(AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory) {
+		this(jsonMapper, agentFactory, StreamableHttpAcpAgentTransportOptions.defaults());
+	}
+
+	/**
+	 * Creates a servlet with explicit limits.
+	 * @param jsonMapper JSON mapper used for serialization
+	 * @param agentFactory creates one agent runtime per remote connection
+	 * @param options bounds and timings; {@code maxConcurrentStreamsPerConnection} is the
+	 * container's to configure when this servlet is mounted elsewhere
+	 */
+	public StreamableHttpAcpServlet(AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory,
+			StreamableHttpAcpAgentTransportOptions options) {
+		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
+		Assert.notNull(agentFactory, "The agentFactory can not be null");
+		Assert.notNull(options, "The options can not be null");
 		this.jsonMapper = jsonMapper;
+		this.agentFactory = agentFactory;
 		this.options = options;
-		this.connections = connections;
-		this.connectionFactory = connectionFactory;
+		this.routing = new StreamableHttpRouting(jsonMapper);
+	}
+
+	/** Starts the SSE keep-alive. Called by the container when the servlet is put into service. */
+	@Override
+	public void init() throws ServletException {
+		super.init();
+		Duration interval = options.keepAliveInterval();
+		if (interval.isZero() || keepAliveTask != null) {
+			return;
+		}
+		Scheduler scheduler = Schedulers.newSingle("acp-streamable-http-keepalive", true);
+		this.keepAliveScheduler = scheduler;
+		// A comment every interval keeps proxies from cutting idle streams and surfaces
+		// dead subscribers (the write fails) without waiting for the next real event.
+		this.keepAliveTask = Flux.interval(interval, interval, scheduler)
+			.subscribe(tick -> connections.values().forEach(connection -> {
+				try {
+					connection.keepAlive();
+				}
+				catch (RuntimeException e) {
+					// One broken connection must not stop keep-alives for every other one.
+					logger.debug("Keep-alive failed for connection {}: {}", connection.id(), e.getMessage());
+				}
+			}));
+	}
+
+	/** Closes every connection and stops the keep-alive. Called by the container on shutdown. */
+	@Override
+	public void destroy() {
+		try {
+			closeGracefully().block(INITIALIZE_TIMEOUT);
+		}
+		catch (RuntimeException e) {
+			logger.warn("Streamable HTTP servlet did not close within {}: {}", INITIALIZE_TIMEOUT, e.getMessage());
+		}
+		super.destroy();
+	}
+
+	/**
+	 * Closes every connection this servlet holds, cancelling in-flight prompts, and stops
+	 * the keep-alive. New requests are refused afterwards.
+	 * @return a Mono that completes when every connection has closed
+	 */
+	public Mono<Void> closeGracefully() {
+		return Mono.defer(() -> {
+			if (!closing.compareAndSet(false, true)) {
+				return Mono.<Void>empty();
+			}
+			Disposable task = this.keepAliveTask;
+			if (task != null) {
+				task.dispose();
+			}
+			Scheduler scheduler = this.keepAliveScheduler;
+			if (scheduler != null) {
+				scheduler.dispose();
+			}
+			List<Mono<Void>> closures = new ArrayList<>();
+			connections.values().forEach(connection -> closures.add(connection.closeGracefully()));
+			connections.clear();
+			return Mono.whenDelayError(closures);
+		});
+	}
+
+	/**
+	 * The number of remote connections this servlet currently holds.
+	 * @return open connections
+	 */
+	public int activeConnectionCount() {
+		return connections.size();
+	}
+
+	private StreamableHttpConnection createConnection() {
+		return new StreamableHttpConnection(UUID.randomUUID().toString(), jsonMapper, agentFactory, routing, options,
+				connection -> connections.remove(connection.id(), connection));
 	}
 
 	@Override
@@ -187,7 +311,11 @@ class StreamableHttpAcpServlet extends HttpServlet {
 			return;
 		}
 
-		StreamableHttpConnection connection = connectionFactory.get();
+		if (closing.get()) {
+			writeText(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "ACP endpoint is shutting down");
+			return;
+		}
+		StreamableHttpConnection connection = createConnection();
 		AsyncContext asyncContext = request.startAsync();
 		asyncContext.setTimeout(INITIALIZE_TIMEOUT.toMillis());
 		AtomicBoolean completed = new AtomicBoolean(false);

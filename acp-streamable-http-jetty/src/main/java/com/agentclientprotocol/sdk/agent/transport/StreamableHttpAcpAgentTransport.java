@@ -26,10 +26,6 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.Disposable;
-import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
@@ -87,13 +83,7 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final StreamableHttpAcpAgentTransportOptions options;
 
-	private final StreamableHttpRouting routing;
-
-	private volatile Scheduler keepAliveScheduler;
-
-	private volatile Disposable keepAliveTask;
-
-	private final ConcurrentMap<String, StreamableHttpConnection> connections = new ConcurrentHashMap<>();
+	private final StreamableHttpAcpServlet servlet;
 
 	private final ConcurrentMap<String, StreamableHttpWebSocketConnection> webSocketConnections =
 			new ConcurrentHashMap<>();
@@ -150,7 +140,7 @@ public class StreamableHttpAcpAgentTransport {
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
 		this.options = options;
-		this.routing = new StreamableHttpRouting(jsonMapper);
+		this.servlet = new StreamableHttpAcpServlet(jsonMapper, agentFactory, options);
 	}
 
 	/**
@@ -179,8 +169,9 @@ public class StreamableHttpAcpAgentTransport {
 
 			ServletContextHandler context = new ServletContextHandler();
 			context.setContextPath("/");
-			context.addServlet(new ServletHolder(
-					new StreamableHttpAcpServlet(jsonMapper, options, connections, this::createConnection)), path);
+			ServletHolder holder = new ServletHolder(servlet);
+			holder.setAsyncSupported(true);
+			context.addServlet(holder, path);
 
 			WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
 				container.setIdleTimeout(Duration.ofMinutes(30));
@@ -205,7 +196,6 @@ public class StreamableHttpAcpAgentTransport {
 			jettyServer.start();
 			this.server = jettyServer;
 			this.connector = jettyConnector;
-			startKeepAlive();
 			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
 			return null;
 		}).then();
@@ -230,8 +220,7 @@ public class StreamableHttpAcpAgentTransport {
 				return Mono.<Void>empty();
 			}
 			List<Mono<Void>> connectionClosures = new ArrayList<>();
-			connections.values().forEach(connection -> connectionClosures.add(connection.closeGracefully()));
-			connections.clear();
+			connectionClosures.add(servlet.closeGracefully());
 			webSocketConnections.values().forEach(connection -> connectionClosures.add(connection.closeGracefully()));
 			webSocketConnections.clear();
 
@@ -243,40 +232,7 @@ public class StreamableHttpAcpAgentTransport {
 		});
 	}
 
-	private void startKeepAlive() {
-		Duration interval = options.keepAliveInterval();
-		if (interval.isZero()) {
-			return;
-		}
-		Scheduler scheduler = Schedulers.newSingle("acp-streamable-http-keepalive", true);
-		this.keepAliveScheduler = scheduler;
-		// A comment every interval keeps proxies from cutting idle streams and surfaces
-		// dead subscribers (the write fails) without waiting for the next real event.
-		this.keepAliveTask = Flux.interval(interval, interval, scheduler)
-			.subscribe(tick -> connections.values().forEach(connection -> {
-				try {
-					connection.keepAlive();
-				}
-				catch (RuntimeException e) {
-					// One broken connection must not stop keep-alives for every other one.
-					logger.debug("Keep-alive failed for connection {}: {}", connection.id(), e.getMessage());
-				}
-			}));
-	}
-
-	private void stopKeepAlive() {
-		Disposable task = this.keepAliveTask;
-		if (task != null) {
-			task.dispose();
-		}
-		Scheduler scheduler = this.keepAliveScheduler;
-		if (scheduler != null) {
-			scheduler.dispose();
-		}
-	}
-
 	private void stopServer() {
-		stopKeepAlive();
 		Server currentServer = this.server;
 		if (currentServer != null) {
 			try {
@@ -297,13 +253,7 @@ public class StreamableHttpAcpAgentTransport {
 	}
 
 	int activeConnectionCount() {
-		return connections.size() + webSocketConnections.size();
-	}
-
-	private StreamableHttpConnection createConnection() {
-		String connectionId = UUID.randomUUID().toString();
-		return new StreamableHttpConnection(connectionId, jsonMapper, agentFactory, routing, options,
-				connection -> connections.remove(connection.id(), connection));
+		return servlet.activeConnectionCount() + webSocketConnections.size();
 	}
 
 	private StreamableHttpWebSocketConnection createWebSocketConnection() {
