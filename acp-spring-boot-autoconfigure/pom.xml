@@ -20,6 +20,11 @@
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-core</artifactId>
         </dependency>
+        <!-- acp-core carries no JSON implementation from 0.18.0; Boot 4 defaults to Jackson 3 -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-json-jackson3</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-annotations</artifactId>

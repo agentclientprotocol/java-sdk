@@ -32,16 +32,15 @@ public class AcpClientAutoConfiguration {
 			.build();
 	}
 
+	/**
+	 * The sync client is a facade over the async client: one session, one transport
+	 * connection. Building it from the transport instead would call {@code connect()} a
+	 * second time on the same transport instance, which the SDK refuses.
+	 */
 	@Bean
 	@ConditionalOnMissingBean
-	AcpSyncClient acpSyncClient(AcpClientTransport transport, AcpClientProperties properties) {
-		var caps = properties.getCapabilities();
-		var clientCapabilities = new AcpSchema.ClientCapabilities(
-				new AcpSchema.FileSystemCapability(caps.isReadTextFile(), caps.isWriteTextFile()), caps.isTerminal());
-		return AcpClient.sync(transport)
-			.requestTimeout(properties.getRequestTimeout())
-			.clientCapabilities(clientCapabilities)
-			.build();
+	AcpSyncClient acpSyncClient(AcpAsyncClient asyncClient) {
+		return new AcpSyncClient(asyncClient);
 	}
 
 	@Bean
