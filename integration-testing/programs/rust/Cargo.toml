@@ -1,0 +1,27 @@
+# Interop agent and client on the Rust SDK's Streamable HTTP transport. The SDK path points at the
+# peer checkout the runner prepares: integration-testing/.cache/peers/rust-sdk is a symlink to
+# rust-sdk@<ref>, and CARGO_TARGET_DIR is set per ref so switching refs does not clobber builds.
+[package]
+name = "acp-interop-rust"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+# Explicit paths: the repository .gitignore ignores every directory named "bin".
+[[bin]]
+name = "rust-agent"
+path = "src/rust_agent.rs"
+
+[[bin]]
+name = "rust-client"
+path = "src/rust_client.rs"
+
+[dependencies]
+agent-client-protocol = { path = "../../.cache/peers/rust-sdk/src/agent-client-protocol" }
+agent-client-protocol-http = { path = "../../.cache/peers/rust-sdk/src/agent-client-protocol-http", features = ["client", "server"] }
+tokio = { version = "1.52", features = ["full"] }
+axum = "0.8"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
