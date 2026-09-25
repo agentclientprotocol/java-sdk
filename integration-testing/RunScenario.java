@@ -384,12 +384,12 @@ public class RunScenario {
 				}
 			}
 		}
+		collectNotes(cfg);
 		outcome.passes.forEach(s -> System.out.println("  ok     " + s));
 		outcome.expectedFailures.forEach(s -> System.out.println("  XFAIL  " + s));
 		outcome.failures.forEach(s -> System.out.println("  FAIL   " + s));
 		String status = code == 0 ? (outcome.expectedFailures.isEmpty() ? "PASS" : "PASS (xfail)") : "FAIL";
 		System.out.printf(Locale.ROOT, "%nSCENARIO %s %s in %.1f s; logs: %s%n", scenario, status, secs, logDir);
-		collectNotes();
 		List<String> result = new ArrayList<>();
 		result.add("scenario=" + scenario);
 		result.add("status=" + (code == 0 ? "PASS" : "FAIL"));
@@ -404,7 +404,15 @@ public class RunScenario {
 	}
 
 	/** Numbers worth seeing in the run-all table (recorded, not asserted). */
-	void collectNotes() {
+	void collectNotes(Scenario.Config cfg) {
+		cfg.assertions().report().forEach((proc, substrings) -> {
+			Proc p = procs.get(proc);
+			for (String sub : substrings) {
+				long n = p == null ? 0 : p.lines().stream().filter(l -> l.contains(sub)).count();
+				notes.add(proc + " \"" + sub + "\" x" + n);
+				System.out.println("  report " + proc + " \"" + sub + "\": " + n + " line(s)");
+			}
+		});
 		for (Proc p : procs.values()) {
 			Map<String, String> r = Checks.resultValues(p.lines());
 			if (r.containsKey("p50_ms")) {

@@ -25,7 +25,7 @@ public class Scenario {
 
 		public Config {
 			peers = peers == null ? List.of() : peers;
-			assertions = assertions == null ? new Assertions(null, null, null, null, null) : assertions;
+			assertions = assertions == null ? new Assertions(null, null, null, null, null, null) : assertions;
 			timeoutSec = timeoutSec == null ? 300 : timeoutSec;
 		}
 
@@ -81,11 +81,13 @@ public class Scenario {
 	 * Deterministic assertions. Maps are keyed by process name. {@code checks} are
 	 * {@code "<process> RESULT <lhs> <op> <rhs>"} or
 	 * {@code "<process> SAMPLE <label> <lhs> <op> <rhs>"}; a term is a number, a key, or
-	 * {@code <number>*<key>}.
+	 * {@code <number>*<key>}. {@code report} substrings are counted and shown in the results,
+	 * never asserted (for known, timing-dependent behaviour worth seeing).
 	 */
 	@JsonIgnoreProperties({ "comment" })
 	public record Assertions(Map<String, List<String>> requiredOutput, Map<String, List<String>> forbiddenOutput,
-			Map<String, List<String>> requiredPatterns, List<String> checks, List<ExpectedFailure> expectedFailures) {
+			Map<String, List<String>> requiredPatterns, List<String> checks, List<ExpectedFailure> expectedFailures,
+			Map<String, List<String>> report) {
 
 		public Assertions {
 			requiredOutput = requiredOutput == null ? Map.of() : requiredOutput;
@@ -93,6 +95,7 @@ public class Scenario {
 			requiredPatterns = requiredPatterns == null ? Map.of() : requiredPatterns;
 			checks = checks == null ? List.of() : checks;
 			expectedFailures = expectedFailures == null ? List.of() : expectedFailures;
+			report = report == null ? Map.of() : report;
 		}
 
 	}
