@@ -16,6 +16,7 @@
     <modules>
         <module>acp-annotations</module>
         <module>acp-core</module>
+        <module>acp-json-jackson2</module>
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
@@ -111,6 +112,11 @@
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
                 <artifactId>acp-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-json-jackson2</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

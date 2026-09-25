@@ -10,36 +10,36 @@
         <version>0.18.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>acp-websocket-jetty</artifactId>
+    <artifactId>acp-json-jackson2</artifactId>
     <packaging>jar</packaging>
 
-    <name>ACP WebSocket Jetty</name>
-    <description>WebSocket agent transport using Jetty - for agents that accept WebSocket connections</description>
+    <name>ACP JSON Jackson 2</name>
+    <description>ACP JSON mapper implementation based on Jackson 2 (com.fasterxml.jackson.databind)</description>
 
     <dependencies>
-        <!-- ACP Core -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-core</artifactId>
-        </dependency>
-        <!-- The JSON implementation: Jackson 2 by default. Add acp-json-jackson3 to use Jackson 3. -->
-        <dependency>
-            <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-json-jackson2</artifactId>
             <version>${project.version}</version>
         </dependency>
-
-        <!-- Jetty WebSocket Server -->
         <dependency>
-            <groupId>org.eclipse.jetty.websocket</groupId>
-            <artifactId>jetty-websocket-jetty-server</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.jetty.websocket</groupId>
-            <artifactId>jetty-websocket-jetty-api</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
         </dependency>
 
         <!-- Test dependencies -->
+        <!-- The JSON contract suite from acp-core, run here against this module's mapper -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -51,21 +51,24 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <dependenciesToScan>
+                        <dependency>com.agentclientprotocol:acp-core:test-jar:tests</dependency>
+                    </dependenciesToScan>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>ACP Core</name>
-    <description>Core ACP implementation with stdio transport - zero external dependencies beyond Reactor</description>
+    <description>Core ACP implementation with stdio transport; needs one JSON module (acp-json-jackson2 or acp-json-jackson3) at runtime</description>
 
     <dependencies>
         <!-- ACP annotations (@UnstableAcpApi, etc.) - zero-dependency module -->
@@ -30,15 +30,9 @@
             <artifactId>reactor-core</artifactId>
         </dependency>
 
-        <!-- Jackson JSON processing -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-        </dependency>
+        <!-- Jackson annotations on the schema records. Only the annotations: the JSON
+             implementation comes from acp-json-jackson2 or acp-json-jackson3, both of
+             which read this annotation package. -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
@@ -76,7 +70,70 @@
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- acp-core's own tests need a mapper, but cannot depend on acp-json-jackson2
+             (it depends on acp-core). They use the small test-only Jackson 2 mapper in
+             src/test (TestJacksonAcpJsonMapperSupplier). -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!-- LICENSE and NOTICE for the test-jar, like every other artifact -->
+            <testResource>
+                <directory>${maven.multiModuleProjectDirectory}</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>NOTICE</include>
+                </includes>
+            </testResource>
+        </testResources>
+        <plugins>
+            <!-- The JSON contract suite: the schema serialization tests that every JSON
+                 module runs against its own mapper (surefire dependenciesToScan). They
+                 obtain their mapper from AcpJsonMapper.createDefault(), so the test-only
+                 supplier and its services file are left out. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>json-contract-test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>com/agentclientprotocol/sdk/AcpTestFixtures*.class</include>
+                                <include>com/agentclientprotocol/sdk/json/AcpJsonMapperContractTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/json/JsonTree*.class</include>
+                                <include>com/agentclientprotocol/sdk/json/StrictMapperFixtures*.class</include>
+                                <include>com/agentclientprotocol/sdk/json/UnknownPropertyPolicyTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/AcpJsonRpcMessageTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/AcpSchemaDiscriminatorTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/AcpSchemaSerializationTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/McpServerConfigurationTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/SessionManagementTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/SessionUpdateDeserializationTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/WireFormatTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/test/GoldenFileTest*.class</include>
+                                <include>golden/**</include>
+                                <include>META-INF/LICENSE</include>
+                                <include>META-INF/NOTICE</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 
 </project>

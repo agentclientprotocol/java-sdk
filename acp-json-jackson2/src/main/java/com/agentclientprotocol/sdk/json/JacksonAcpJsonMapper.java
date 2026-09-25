@@ -18,8 +18,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Jackson-based implementation of {@link AcpJsonMapper}. Wraps a Jackson
- * {@link ObjectMapper} but keeps the SDK decoupled from Jackson at the API level.
+ * Jackson 2 implementation of {@link AcpJsonMapper}, shipped in {@code acp-json-jackson2}.
+ * Wraps a Jackson {@link ObjectMapper} but keeps the SDK decoupled from Jackson at the API
+ * level. It keeps the package it had when it lived in {@code acp-core}, so code that
+ * constructs it compiles unchanged.
  *
  * @author Mark Pollack
  */

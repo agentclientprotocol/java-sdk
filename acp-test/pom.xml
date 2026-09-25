@@ -22,6 +22,11 @@
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-core</artifactId>
         </dependency>
+        <!-- The JSON implementation: Jackson 2 by default. Add acp-json-jackson3 to use Jackson 3. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-json-jackson2</artifactId>
+        </dependency>
 
         <!-- Reactor for async operations -->
         <dependency>

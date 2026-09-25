@@ -26,6 +26,12 @@
             <artifactId>acp-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- The JSON implementation: Jackson 2 by default. Add acp-json-jackson3 to use Jackson 3. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-json-jackson2</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Logging -->
         <dependency>
