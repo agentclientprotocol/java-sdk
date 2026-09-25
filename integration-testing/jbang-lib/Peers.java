@@ -37,6 +37,7 @@ public class Peers {
 		Files.createDirectories(peersDir);
 		Path dir = peersDir.resolve(name + "@" + ref.replaceAll("[^A-Za-z0-9._-]", "_"));
 		Path log = logDir.resolve("peer-" + name + ".log");
+		String sha;
 		try (OutputStream out = Files.newOutputStream(log)) {
 			if (!Files.exists(dir.resolve(".git"))) {
 				System.out.println("  cloning " + peer.url() + " -> " + dir);
@@ -48,7 +49,7 @@ public class Peers {
 					System.out.println("  WARN fetch failed for " + name + "; using the cached checkout");
 				}
 			}
-			String sha = resolve(dir, ref);
+			sha = resolve(dir, ref);
 			run(out, dir, 120, "git", "-c", "advice.detachedHead=false", "checkout", "--quiet", "--force", sha);
 			Path stamp = dir.resolve(".harness-built");
 			String built = Files.exists(stamp) ? Files.readString(stamp).trim() : "";
@@ -64,7 +65,7 @@ public class Peers {
 		Path link = peersDir.resolve(name);
 		Files.deleteIfExists(link);
 		Files.createSymbolicLink(link, dir.getFileName());
-		return new Checkout(name, ref, resolve(dir, "HEAD"), dir.toAbsolutePath());
+		return new Checkout(name, ref, sha, dir.toAbsolutePath());
 	}
 
 	private static String resolve(Path dir, String ref) throws Exception {
