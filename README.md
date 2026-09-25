@@ -67,15 +67,6 @@ For annotation-based agent development:
 </dependency>
 ```
 
-For WebSocket server support (agents accepting WebSocket connections):
-```xml
-<dependency>
-    <groupId>com.agentclientprotocol</groupId>
-    <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.17.0</version>
-</dependency>
-```
-
 For Streamable HTTP server support (agents accepting remote HTTP/SSE connections):
 ```xml
 <dependency>
@@ -377,21 +368,22 @@ var transport = new WebSocketAcpClientTransport(
 AcpSyncClient client = AcpClient.sync(transport).build();
 ```
 
-**Agent (requires acp-websocket-jetty module):**
+**Agent (requires acp-streamable-http-jetty module):** `StreamableHttpAcpAgentTransport` serves the
+WebSocket upgrade and the Streamable HTTP profile on the same path, one agent per connection.
 ```java
-import com.agentclientprotocol.sdk.agent.transport.WebSocketAcpAgentTransport;
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 
-var transport = new WebSocketAcpAgentTransport(
-    8080,                           // port
-    "/acp",                         // path
-    AcpJsonMapper.createDefault()
-);
-AcpAsyncAgent agent = AcpAgent.async(transport)
+AcpAgentFactory agents = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
     // ... handlers ...
-    .build();
+    .build());
 
-agent.start().block();  // Starts WebSocket server on port 8080
+var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefault(), agents);
+server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/acp
 ```
+
+`WebSocketAcpAgentTransport` in `acp-websocket-jetty` is deprecated for removal: it serves a single
+client. Existing `WebSocketAcpClientTransport` clients connect to the transport above unchanged.
 
 ---
 
@@ -420,14 +412,14 @@ agent.start().block();  // Starts WebSocket server on port 8080
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
-| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | Jetty-based WebSocket server transport for agents |
+| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | **Deprecated** single-client WebSocket agent transport; use `acp-streamable-http-jetty` |
 
 ### Transports
 
 | Transport | Client | Agent | Module |
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
-| WebSocket | `WebSocketAcpClientTransport` | `WebSocketAcpAgentTransport` | acp-core / acp-websocket-jetty |
+| WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 
 ---

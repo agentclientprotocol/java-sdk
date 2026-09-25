@@ -64,7 +64,14 @@ import reactor.core.scheduler.Schedulers;
  * }</pre>
  *
  * @author Mark Pollack
+ * @deprecated since 0.18.0, for removal in a future release. Use
+ * {@code StreamableHttpAcpAgentTransport} from {@code acp-streamable-http-jetty}: it serves
+ * the WebSocket upgrade on the same path ({@code ws://host:port/acp}) for any number of
+ * clients, one agent per connection through an {@code AcpAgentFactory}, plus the
+ * Streamable HTTP profile. Existing {@code WebSocketAcpClientTransport} clients connect
+ * to it unchanged. This transport serves a single client and is no longer developed.
  */
+@Deprecated(since = "0.18.0", forRemoval = true)
 public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(WebSocketAcpAgentTransport.class);

@@ -116,6 +116,13 @@ already-connected transport now fails at construction; and `JacksonAcpJsonMapper
 - The scheduler-hygiene test (`SchedulerBestPracticesTest`) now scans every module's production sources,
   not only `acp-core`.
 
+### Deprecated
+
+- **`WebSocketAcpAgentTransport` (`acp-websocket-jetty`) is deprecated for removal.** It serves a single
+  WebSocket client. `StreamableHttpAcpAgentTransport` (`acp-streamable-http-jetty`) serves the WebSocket
+  upgrade on the same path for any number of clients, one agent per connection, plus the Streamable HTTP
+  profile; `WebSocketAcpClientTransport` clients connect to it unchanged.
+
 ### Fixed
 
 - `WebSocketAcpAgentTransport` wrote each frame without waiting for the previous one to complete; Jetty
