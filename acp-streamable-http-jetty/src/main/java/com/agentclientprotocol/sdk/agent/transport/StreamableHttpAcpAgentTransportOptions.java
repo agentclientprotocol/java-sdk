@@ -24,11 +24,13 @@ import com.agentclientprotocol.sdk.util.Assert;
  * session is known (the {@code session/load} pre-open case)
  * @param keepAliveInterval interval between SSE keep-alive comments on attached streams;
  * {@link Duration#ZERO} disables them
+ * @param maxConcurrentStreamsPerConnection HTTP/2 streams one client connection may hold open
+ * at once; each attached SSE stream holds one for its lifetime
  * @author Mark Pollack
  */
 public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int mailboxCapacity,
 		int maxPendingSseEvents, int maxWebSocketPendingFrames, int maxProvisionalSessions,
-		Duration keepAliveInterval) {
+		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection) {
 
 	private static final long DEFAULT_MAX_POST_BODY_BYTES = 16L * 1024 * 1024;
 
@@ -42,6 +44,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 
 	private static final Duration DEFAULT_KEEP_ALIVE_INTERVAL = Duration.ofSeconds(15);
 
+	private static final int DEFAULT_MAX_CONCURRENT_STREAMS_PER_CONNECTION = 1024;
+
 	public StreamableHttpAcpAgentTransportOptions {
 		Assert.isTrue(maxPostBodyBytes > 0, "maxPostBodyBytes must be positive");
 		Assert.isTrue(mailboxCapacity > 0, "mailboxCapacity must be positive");
@@ -50,6 +54,7 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		Assert.isTrue(maxProvisionalSessions > 0, "maxProvisionalSessions must be positive");
 		Assert.notNull(keepAliveInterval, "keepAliveInterval must not be null");
 		Assert.isTrue(!keepAliveInterval.isNegative(), "keepAliveInterval must not be negative");
+		Assert.isTrue(maxConcurrentStreamsPerConnection > 0, "maxConcurrentStreamsPerConnection must be positive");
 	}
 
 	public static StreamableHttpAcpAgentTransportOptions defaults() {
@@ -73,6 +78,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		private int maxProvisionalSessions = DEFAULT_MAX_PROVISIONAL_SESSIONS;
 
 		private Duration keepAliveInterval = DEFAULT_KEEP_ALIVE_INTERVAL;
+
+		private int maxConcurrentStreamsPerConnection = DEFAULT_MAX_CONCURRENT_STREAMS_PER_CONNECTION;
 
 		private Builder() {
 		}
@@ -107,9 +114,15 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 			return this;
 		}
 
+		public Builder maxConcurrentStreamsPerConnection(int maxConcurrentStreamsPerConnection) {
+			this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
+			return this;
+		}
+
 		public StreamableHttpAcpAgentTransportOptions build() {
 			return new StreamableHttpAcpAgentTransportOptions(maxPostBodyBytes, mailboxCapacity, maxPendingSseEvents,
-					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval);
+					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval,
+					maxConcurrentStreamsPerConnection);
 		}
 
 	}

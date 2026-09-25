@@ -166,8 +166,14 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			Server jettyServer = new Server();
 			HttpConfiguration httpConfig = new HttpConfiguration();
+			HTTP2CServerConnectionFactory h2c = new HTTP2CServerConnectionFactory(httpConfig);
+			// Every SSE stream is a long-lived HTTP/2 stream: one ACP client holds one per
+			// session plus the connection stream. Jetty's default of 128 per connection
+			// is reached by a client with ~120 sessions, and the server then answers with
+			// GOAWAY, which takes down every exchange on the connection.
+			h2c.setMaxConcurrentStreams(options.maxConcurrentStreamsPerConnection());
 			ServerConnector jettyConnector = new ServerConnector(jettyServer,
-					new HttpConnectionFactory(httpConfig), new HTTP2CServerConnectionFactory(httpConfig));
+					new HttpConnectionFactory(httpConfig), h2c);
 			jettyConnector.setPort(configuredPort);
 			jettyServer.addConnector(jettyConnector);
 

@@ -740,9 +740,16 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				deleteRequest = sendAsync(request, HttpResponse.BodyHandlers.discarding())
 					.flatMap(response -> {
 						if (response.statusCode() != 202) {
-							return Mono.error(new AcpConnectionException(
+							return Mono.<Void>error(new AcpConnectionException(
 									"Expected 202 for DELETE, got " + response.statusCode()));
 						}
+						return Mono.<Void>empty();
+					})
+					// A dead or unresponsive server must not hang shutdown; the connection is
+					// released server-side by its own close or idle handling.
+					.timeout(PROBE_TIMEOUT, AcpSchedulers.timeouts())
+					.onErrorResume(error -> {
+						logger.debug("DELETE of connection {} did not complete: {}", connectionId, error.getMessage());
 						return Mono.empty();
 					});
 			}

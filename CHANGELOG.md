@@ -30,6 +30,9 @@ building a second client on an already-connected transport now fails at construc
   the SSE mailbox and backpressure limits are configurable, attached streams get a `: keep-alive`
   comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
   from a subscriber the server may not yet know is dead instead of fanning out duplicates.
+  One HTTP/2 connection may hold 1,024 concurrent streams (`maxConcurrentStreamsPerConnection`), not
+  Jetty's default 128: each attached SSE stream holds one for its lifetime, and at the limit Jetty
+  sends GOAWAY, which drops every exchange on the connection.
 - **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
   deployment. Over cleartext the JDK client only offers the h2c upgrade on a request without a body, so
   `initialize`, a POST, went out on HTTP/1.1. `StreamableHttpAcpClientTransport` now sends a bodiless
