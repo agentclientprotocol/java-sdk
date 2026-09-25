@@ -249,7 +249,16 @@ final class StreamableHttpConnection {
 			logger.warn("Client posted response for unknown agent request id {}", response.id());
 			return;
 		}
-		RouteScope actual = sessionHeader == null ? RouteScope.connection() : RouteScope.session(sessionHeader);
+		if (sessionHeader == null) {
+			// The RFD asks for Acp-Session-Id on permission responses; the Rust and Python
+			// clients omit it on every response. The id alone identifies the exchange, so a
+			// missing header is accepted. A header naming a different scope is still an error.
+			logger.debug("Client response {} carried no {}; accepting it for {}", response.id(),
+					StreamableHttpAcpAgentTransport.HEADER_SESSION_ID, expected);
+			agentRequestRoutes.remove(response.id(), expected);
+			return;
+		}
+		RouteScope actual = RouteScope.session(sessionHeader);
 		if (!Objects.equals(expected, actual)) {
 			throw new AcpConnectionException(
 					"Response id " + response.id() + " arrived on " + actual + " but expected " + expected);
@@ -272,7 +281,7 @@ final class StreamableHttpConnection {
 	}
 
 	/** Provisional sessions are bounded: a client cannot grow state with arbitrary ids. */
-	private void addProvisionalSession(String sessionId) {
+	private synchronized void addProvisionalSession(String sessionId) {
 		long provisional = sessions.values().stream().filter(state -> state == SessionState.PENDING_LOAD).count();
 		if (provisional >= options.maxProvisionalSessions()
 				&& sessions.get(sessionId) != SessionState.PENDING_LOAD) {

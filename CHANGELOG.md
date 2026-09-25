@@ -33,7 +33,9 @@ building a second client on an already-connected transport now fails at construc
 - **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
   deployment. Over cleartext the JDK client only offers the h2c upgrade on a request without a body, so
   `initialize`, a POST, went out on HTTP/1.1. `StreamableHttpAcpClientTransport` now sends a bodiless
-  OPTIONS first on `http://` endpoints, and every request, streams included, runs on HTTP/2.
+  OPTIONS first on `http://` endpoints, so against a server that speaks h2c (the SDK's own does) every
+  request, streams included, runs on HTTP/2. Against one that does not, the probe settles on HTTP/1.1
+  and later requests stop offering the upgrade, which some servers route to their WebSocket handler.
 - **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
   never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
   pending requests at once with the cause, and every later request, instead of waiting out the request

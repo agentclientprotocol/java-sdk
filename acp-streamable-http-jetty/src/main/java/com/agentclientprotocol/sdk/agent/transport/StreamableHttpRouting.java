@@ -141,7 +141,10 @@ final class StreamableHttpRouting {
 				break;
 			case AcpSchema.METHOD_SESSION_LOAD:
 			case AcpSchema.METHOD_SESSION_RESUME:
-				requestScope = requireSessionScope(method, params, sessionHeader);
+				// The RFD is ambiguous here: its reconnect diagram sends the header, its text
+				// says load answers on the connection stream because the client has no session
+				// yet. The Python client omits it. Accept either; the id comes from params.
+				requestScope = sessionScopeFromParams(method, params, sessionHeader);
 				kind = RequestKind.SESSION_LOAD;
 				responseScope = RouteScope.connection();
 				break;
@@ -172,6 +175,14 @@ final class StreamableHttpRouting {
 		ClientRequestRoute requestRoute = message instanceof AcpSchema.JSONRPCRequest
 				? new ClientRequestRoute(kind, requestScope, responseScope) : null;
 		return new ResolvedInboundRoute(message, requestScope, requestRoute);
+	}
+
+	/** Like {@link #requireSessionScope} but tolerates a missing header; a conflicting one is still rejected. */
+	RouteScope sessionScopeFromParams(String method, Object params, String sessionHeader) {
+		if (sessionHeader == null) {
+			return RouteScope.session(requireSessionId(params, method));
+		}
+		return requireSessionScope(method, params, sessionHeader);
 	}
 
 	RouteScope requireSessionScope(String method, Object params, String sessionHeader) {

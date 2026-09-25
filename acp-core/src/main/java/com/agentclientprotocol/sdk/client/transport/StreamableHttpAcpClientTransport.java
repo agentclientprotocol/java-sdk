@@ -40,6 +40,7 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,12 +300,23 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * The transport requires HTTP/2 (RFD). Over {@code https} ALPN negotiates it on the first
-	 * request. Over cleartext {@code http} the JDK client only offers the h2c upgrade on a
-	 * request without a body, and {@code initialize} is a POST, so without this the whole
-	 * connection would stay on HTTP/1.1. A bodiless OPTIONS first upgrades the connection;
-	 * every later request, the POSTs and the SSE GETs, reuses it over HTTP/2. A failed probe
-	 * is ignored: initialize then proceeds and reports any real problem itself.
+	 * HTTP version pinned for every request after the cleartext probe, or {@code null} to
+	 * use the client's own setting. Set to HTTP/1.1 when an {@code http://} server does not
+	 * speak h2c, so later requests stop carrying {@code Upgrade: h2c}: some servers hand any
+	 * request with an Upgrade header to their WebSocket handler and answer 405 (the
+	 * TypeScript SDK's example server does).
+	 */
+	private volatile HttpClient.Version pinnedVersion;
+
+	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
+
+	/**
+	 * The transport requires HTTP/2 (RFD). Over {@code https} ALPN negotiates it. Over
+	 * cleartext {@code http} the JDK offers an h2c upgrade on every request, but servers
+	 * (Jetty among them) only honour it on a request without a body, and {@code initialize}
+	 * is a POST. A bodiless OPTIONS first upgrades the connection when the server speaks
+	 * h2c; every later request reuses it over HTTP/2. When it does not (answer on HTTP/1.1,
+	 * an error, or no answer within five seconds), every later request is pinned to HTTP/1.1.
 	 */
 	private Mono<Void> upgradeCleartextToHttp2() {
 		if (!"http".equalsIgnoreCase(endpointUri.getScheme()) || httpClient.version() != HttpClient.Version.HTTP_2) {
@@ -313,13 +325,39 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		HttpRequest probe = HttpRequest.newBuilder(endpointUri)
 			.method("OPTIONS", HttpRequest.BodyPublishers.noBody())
 			.build();
+		// Cancelling the Mono on timeout cancels the HTTP exchange (see sendAsync).
 		return sendAsync(probe, HttpResponse.BodyHandlers.discarding())
-			.doOnNext(response -> logger.debug("Cleartext probe to {} negotiated {}", endpointUri, response.version()))
+			.timeout(PROBE_TIMEOUT, AcpSchedulers.timeouts())
+			.doOnNext(response -> {
+				logger.debug("Cleartext probe to {} negotiated {}", endpointUri, response.version());
+				if (response.version() != HttpClient.Version.HTTP_2) {
+					this.pinnedVersion = HttpClient.Version.HTTP_1_1;
+				}
+			})
 			.then()
 			.onErrorResume(error -> {
-				logger.debug("Cleartext HTTP/2 probe to {} failed: {}", endpointUri, error.getMessage());
+				logger.debug("Cleartext HTTP/2 probe to {} failed ({}); using HTTP/1.1", endpointUri, error.getMessage());
+				this.pinnedVersion = HttpClient.Version.HTTP_1_1;
 				return Mono.empty();
 			});
+	}
+
+	/** Re-stamps a request built before the probe with the version the probe settled on. */
+	private HttpRequest pinned(HttpRequest request) {
+		HttpClient.Version version = this.pinnedVersion;
+		if (version == null) {
+			return request;
+		}
+		return HttpRequest.newBuilder(request, (name, value) -> true).version(version).build();
+	}
+
+	private HttpRequest.Builder newRequest() {
+		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpointUri);
+		HttpClient.Version version = this.pinnedVersion;
+		if (version != null) {
+			requestBuilder.version(version);
+		}
+		return requestBuilder;
 	}
 
 	private Mono<Void> initialize(AcpSchema.JSONRPCRequest request) {
@@ -338,8 +376,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return Mono.error(new AcpConnectionException("Failed to serialize initialize request", e));
 		}
 
+		HttpRequest initializeRequest = httpRequest;
 		return upgradeCleartextToHttp2()
-			.then(sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString()))
+			.then(Mono.defer(() -> sendAsync(pinned(initializeRequest), HttpResponse.BodyHandlers.ofString())))
 			.flatMap(response -> {
 				if (response.statusCode() != 200) {
 					return Mono.error(new AcpConnectionException(
@@ -397,6 +436,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private Mono<Void> prepareRoute(ResolvedOutboundRoute resolved) {
 		if (resolved.message() instanceof AcpSchema.JSONRPCRequest request
 				&& AcpSchema.METHOD_SESSION_LOAD.equals(request.method())) {
+			// Open the session stream first (the RFD's reconnect order) unless it is already
+			// open: servers allow one receiver per stream, and the TypeScript and Rust servers
+			// answer a second GET with 409.
+			SseStream existing = sessionStreams.get(resolved.scope().sessionId());
+			if (existing != null && !existing.closed.get()) {
+				return Mono.empty();
+			}
 			return openSessionStream(resolved.scope().sessionId());
 		}
 		if (resolved.scope().isSession() && !sessionStreams.containsKey(resolved.scope().sessionId())) {
@@ -427,7 +473,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private HttpRequest.Builder jsonPostBuilder(RouteScope scope) {
-		HttpRequest.Builder builder = HttpRequest.newBuilder(endpointUri)
+		HttpRequest.Builder builder = newRequest()
 			.header("Content-Type", CONTENT_TYPE_JSON)
 			.header("Accept", CONTENT_TYPE_JSON);
 		addScopeHeaders(builder, scope);
@@ -473,7 +519,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<SseStream> openSseStream(RouteScope scope) {
-		HttpRequest.Builder builder = HttpRequest.newBuilder(endpointUri).GET().header("Accept", CONTENT_TYPE_EVENT_STREAM);
+		HttpRequest.Builder builder = newRequest().GET().header("Accept", CONTENT_TYPE_EVENT_STREAM);
 		addScopeHeaders(builder, scope);
 		HttpRequest request = builder.build();
 
@@ -687,7 +733,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 			Mono<Void> deleteRequest = Mono.empty();
 			if (connectionId != null) {
-				HttpRequest request = HttpRequest.newBuilder(endpointUri)
+				HttpRequest request = newRequest()
 					.DELETE()
 					.header(HEADER_CONNECTION_ID, connectionId)
 					.build();

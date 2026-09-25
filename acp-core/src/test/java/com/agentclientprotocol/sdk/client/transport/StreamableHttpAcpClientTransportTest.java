@@ -633,6 +633,11 @@ class StreamableHttpAcpClientTransportTest {
 	 */
 	private HttpClient twoStreamHttpClient(PipedInputStream connectionStreamBody,
 			Map<String, PipedOutputStream> sessionWriters) {
+		return twoStreamHttpClient(connectionStreamBody, sessionWriters, new java.util.concurrent.CopyOnWriteArrayList<>());
+	}
+
+	private HttpClient twoStreamHttpClient(PipedInputStream connectionStreamBody,
+			Map<String, PipedOutputStream> sessionWriters, List<String> sessionGets) {
 		HttpClient httpClient = mock(HttpClient.class);
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
 			HttpRequest request = invocation.getArgument(0);
@@ -648,6 +653,7 @@ class StreamableHttpAcpClientTransportTest {
 			}
 			if ("GET".equals(request.method())) {
 				String sessionId = request.headers().firstValue("Acp-Session-Id").orElseThrow();
+				sessionGets.add(sessionId);
 				PipedInputStream sessionBody = new PipedInputStream(16 * 1024);
 				sessionWriters.put(sessionId, new PipedOutputStream(sessionBody));
 				return CompletableFuture.completedFuture(
@@ -737,6 +743,118 @@ class StreamableHttpAcpClientTransportTest {
 			});
 			transport.close();
 		}
+	}
+
+	/**
+	 * Servers allow one receiver per stream; the TypeScript and Rust servers answer a second
+	 * GET with 409. session/load for a session whose stream is open must not open another.
+	 */
+	@Test
+	void loadingASessionWhoseStreamIsOpenDoesNotOpenItAgain() throws Exception {
+		Map<String, PipedOutputStream> sessionWriters = new ConcurrentHashMap<>();
+		List<String> sessionGets = new java.util.concurrent.CopyOnWriteArrayList<>();
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper,
+				twoStreamHttpClient(connectionStreamBody, sessionWriters, sessionGets));
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest())).block();
+			awaitResponse(inboundMessages, "init-1");
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_NEW, "new-1",
+					AcpTestFixtures.createNewSessionRequest("/workspace"))).block();
+			writeSse(connectionStreamWriter, new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "new-1",
+					new AcpSchema.NewSessionResponse("sess-1", null, null), null));
+			awaitResponse(inboundMessages, "new-1");
+			assertThat(sessionGets).containsExactly("sess-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_LOAD, "load-1",
+					new AcpSchema.LoadSessionRequest("sess-1", "/workspace", List.of()))).block();
+			writeSse(connectionStreamWriter, new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "load-1",
+					new AcpSchema.LoadSessionResponse(null, null), null));
+			awaitResponse(inboundMessages, "load-1");
+
+			assertThat(sessionGets).as("no second GET for an open session stream").containsExactly("sess-1");
+		}
+		finally {
+			connectionStreamWriter.close();
+			sessionWriters.values().forEach(writer -> {
+				try {
+					writer.close();
+				}
+				catch (Exception ignored) {
+				}
+			});
+			transport.close();
+		}
+	}
+
+	/**
+	 * Over http:// a server that does not speak h2c must not keep receiving Upgrade headers:
+	 * the TypeScript example server routes any request carrying one to its WebSocket handler
+	 * and answers 405. After a probe that comes back on HTTP/1.1, every request is pinned.
+	 */
+	@Test
+	void cleartextServerWithoutH2cGetsPlainHttp11Requests() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		when(httpClient.version()).thenReturn(HttpClient.Version.HTTP_2);
+		List<HttpRequest> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			requests.add(request);
+			if ("OPTIONS".equals(request.method())) {
+				HttpResponse<Object> probe = response(405, Map.of(), null);
+				when(probe.version()).thenReturn(HttpClient.Version.HTTP_1_1);
+				return CompletableFuture.completedFuture(probe);
+			}
+			String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+				.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+			if ("POST".equals(request.method())) {
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			return CompletableFuture.completedFuture(
+					response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+		});
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("http://localhost:8080/acp"), jsonMapper, httpClient);
+		transport.setExceptionHandler(error -> {
+		});
+		try {
+			transport.connect(message -> message.then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest())).block();
+
+			assertThat(requests.get(0).method()).isEqualTo("OPTIONS");
+			assertThat(requests.subList(1, requests.size()))
+				.as("every request after the probe is pinned to HTTP/1.1")
+				.isNotEmpty()
+				.allMatch(request -> request.version().equals(java.util.Optional.of(HttpClient.Version.HTTP_1_1)));
+		}
+		finally {
+			transport.close();
+		}
+	}
+
+	@Test
+	void initializeRequiresConnectionIdHeader() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		String body = jsonMapper.writeValueAsString(
+				AcpTestFixtures.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+		HttpResponse<Object> noConnectionId = response(200, Map.of("Content-Type", "application/json"), body);
+		when(httpClient.sendAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(noConnectionId));
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		transport.setExceptionHandler(error -> {
+		});
+
+		assertThatThrownBy(() -> transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE,
+				"init-1", AcpTestFixtures.createInitializeRequest())).block())
+			.isInstanceOf(AcpConnectionException.class)
+			.hasMessageContaining("Acp-Connection-Id");
 	}
 
 	private void awaitSessionSseClosure() throws InterruptedException {

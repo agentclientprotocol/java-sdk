@@ -252,7 +252,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 	}
 
 	@Test
-	void wrongStreamClientResponseIsRejected() throws Exception {
+	void clientResponseNamingAnotherSessionIsRejected() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
@@ -273,7 +273,10 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 									{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"permission please"}]}}
 									""".formatted(session.sessionId()));
 					AcpSchema.JSONRPCRequest permissionRequest = sessionStream.nextRequest();
-					HttpResponse<String> wrongStreamResponse = postJson(rawClient, server.endpoint(), connectionId, null,
+					// A missing Acp-Session-Id is tolerated (Rust and Python clients omit it); a
+					// header naming a different session is still a routing error.
+					HttpResponse<String> wrongStreamResponse = postJson(rawClient, server.endpoint(), connectionId,
+							"some-other-session",
 							"""
 									{"jsonrpc":"2.0","id":"%s","result":{"outcome":{"outcome":"selected","optionId":"allow"}}}
 									""".formatted(permissionRequest.id()));
@@ -744,6 +747,52 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			.header("Acp-Session-Id", sessionId)
 			.GET()
 			.build();
+	}
+
+	/** The Rust and Python clients post every response without Acp-Session-Id. */
+	@Test
+	void permissionResponseWithoutSessionHeaderIsAccepted() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+			try (SseReader sessionStream = SseReader.open(rawClient, server.endpoint(), connectionId, sessionId)) {
+				postJson(rawClient, server.endpoint(), connectionId, sessionId,
+						"""
+								{"jsonrpc":"2.0","id":"prompt-perm","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"permission please"}]}}
+								""".formatted(sessionId));
+				AcpSchema.JSONRPCMessage request = sessionStream.nextMessage();
+				assertThat(request).isInstanceOf(AcpSchema.JSONRPCRequest.class);
+				String id = JSON_MAPPER.writeValueAsString(((AcpSchema.JSONRPCRequest) request).id());
+
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":%s,"result":{"outcome":{"outcome":"selected","optionId":"allow"}}}
+								""".formatted(id));
+				assertThat(accepted.statusCode()).as("response without Acp-Session-Id").isEqualTo(202);
+				sessionStream.nextMessage();
+				assertThat(sessionStream.nextResponse().id()).isEqualTo("prompt-perm");
+			}
+		}
+	}
+
+	/** The Python client sends session/load without Acp-Session-Id (an RFD ambiguity). */
+	@Test
+	void sessionLoadWithoutSessionHeaderIsAccepted() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":"load-nohdr","method":"session/load","params":{"sessionId":"sess-9","cwd":"/workspace","mcpServers":[]}}
+								""");
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse response = connectionStream.nextResponse();
+				assertThat(response.id()).isEqualTo("load-nohdr");
+				assertThat(response.error()).isNull();
+			}
+		}
 	}
 
 	private static String initializeRaw(HttpClient client, URI endpoint) throws Exception {
