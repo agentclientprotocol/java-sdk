@@ -77,14 +77,14 @@
         "step": "reconnect-session/load",
         "contains": "404",
         "reason": "RFD contradiction, not a Java bug: the Java client follows the reconnect diagram and pre-opens the session GET before session/load on the new connection; the Python server follows the rule that an Acp-Session-Id unknown to the connection is a 404",
-        "see": "/home/mark/projects/acp-java-steward/plans/dossiers/2026-09-25-peer-sdk-http-header-bugs.md (RFD gap B)"
+        "see": "RFD streamable-http-websocket-transport: the reconnect sequence opens the session GET before session/load, while the server rules say an unknown Acp-Session-Id returns 404; the Python server follows the latter"
       },
       {
         "process": "client",
         "step": "reconnect-prompt",
         "contains": "404",
         "reason": "follows from reconnect-session/load: the session was never attached to the new connection",
-        "see": "/home/mark/projects/acp-java-steward/plans/dossiers/2026-09-25-peer-sdk-http-header-bugs.md (RFD gap B)"
+        "see": "RFD streamable-http-websocket-transport: the reconnect sequence opens the session GET before session/load, while the server rules say an unknown Acp-Session-Id returns 404; the Python server follows the latter"
       }
     ]
   },
