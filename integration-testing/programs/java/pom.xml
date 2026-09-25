@@ -14,7 +14,8 @@
     <version>1</version>
 
     <properties>
-        <acp.version>0.18.0-SNAPSHOT</acp.version>
+        <!-- Set by RunScenario from the root pom's version (-Dacp.version); never a literal here, so the release workflow's SNAPSHOT check stays clean. -->
+        <acp.version>set-by-RunScenario</acp.version>
         <logback.version>1.5.18</logback.version>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
