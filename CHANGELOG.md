@@ -83,6 +83,9 @@ building a second client on an already-connected transport now fails at construc
 
 ### Fixed
 
+- `WebSocketAcpAgentTransport` wrote each frame without waiting for the previous one to complete; Jetty
+  allows one outstanding write per WebSocket session. Frames are now written one at a time, each after
+  Jetty's completion callback, and a failed write is reported without ending the outbound stream.
 - **A second client on an already-connected transport now fails at construction.** A transport
   instance carries exactly one session. `StdioAcpClientTransport.connect()` had no once-only guard
   (the WebSocket and agent transports did), so a second `AcpClient.async(transport)` or

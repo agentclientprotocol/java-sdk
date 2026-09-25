@@ -211,24 +211,43 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	private void startOutboundProcessing() {
+		// Jetty allows one outstanding write per WebSocket session; a second sendText before
+		// the first completes can fail. Each frame therefore waits for Jetty's callback before
+		// the next is written (concatMap, one at a time). A failed send is reported and
+		// skipped; it never ends the outbound stream.
 		this.outboundSink.asFlux()
 			.publishOn(outboundScheduler)
-			.subscribe(message -> {
-				Session currentSession = clientSession;
-				if (message != null && !isClosing.get() && currentSession != null && currentSession.isOpen()) {
-					try {
-						String jsonMessage = jsonMapper.writeValueAsString(message);
-						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
-						currentSession.sendText(jsonMessage, Callback.NOOP);
-					}
-					catch (Exception e) {
-						if (!isClosing.get()) {
-							logger.error("Error sending WebSocket message", e);
-							exceptionHandler.accept(e);
-						}
-					}
-				}
-			});
+			.concatMap(this::sendFrame, 1)
+			.subscribe();
+	}
+
+	private Mono<Void> sendFrame(JSONRPCMessage message) {
+		return Mono.create(sink -> {
+			Session currentSession = clientSession;
+			if (message == null || isClosing.get() || currentSession == null || !currentSession.isOpen()) {
+				sink.success();
+				return;
+			}
+			try {
+				String jsonMessage = jsonMapper.writeValueAsString(message);
+				logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
+				currentSession.sendText(jsonMessage, Callback.from(sink::success, error -> {
+					reportSendFailure(error);
+					sink.success();
+				}));
+			}
+			catch (Exception e) {
+				reportSendFailure(e);
+				sink.success();
+			}
+		});
+	}
+
+	private void reportSendFailure(Throwable error) {
+		if (!isClosing.get()) {
+			logger.error("Error sending WebSocket message", error);
+			exceptionHandler.accept(error);
+		}
 	}
 
 	@Override
