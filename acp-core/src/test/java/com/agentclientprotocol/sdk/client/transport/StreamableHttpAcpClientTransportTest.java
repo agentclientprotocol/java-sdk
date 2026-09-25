@@ -828,9 +828,12 @@ class StreamableHttpAcpClientTransportTest {
 			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
 					AcpTestFixtures.createInitializeRequest())).block();
 
-			assertThat(requests.get(0).method()).as("the probe").isEqualTo("GET");
-			assertThat(requests.get(0).headers().firstValue("Acp-Connection-Id")).isEmpty();
-			assertThat(requests.subList(1, requests.size()))
+			// The mocked connection stream ends at once, so the client keeps reconnecting while
+			// this runs; take a snapshot. Reconnects must be pinned too.
+			List<HttpRequest> seen = List.copyOf(requests);
+			assertThat(seen.get(0).method()).as("the probe").isEqualTo("GET");
+			assertThat(seen.get(0).headers().firstValue("Acp-Connection-Id")).isEmpty();
+			assertThat(seen.subList(1, seen.size()))
 				.as("every request after the probe is pinned to HTTP/1.1")
 				.isNotEmpty()
 				.allMatch(request -> request.version().equals(java.util.Optional.of(HttpClient.Version.HTTP_1_1)));
@@ -856,6 +859,63 @@ class StreamableHttpAcpClientTransportTest {
 				"init-1", AcpTestFixtures.createInitializeRequest())).block())
 			.isInstanceOf(AcpConnectionException.class)
 			.hasMessageContaining("Acp-Connection-Id");
+	}
+
+	/**
+	 * The server closed the connection stream once (backpressure, a proxy restart). The
+	 * client reconnects, and a response the server sends afterwards is delivered: its
+	 * mailbox kept it.
+	 */
+	@Test
+	void droppedConnectionStreamIsReconnectedAndLaterResponsesArrive() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		AtomicInteger connectionGets = new AtomicInteger();
+		PipedInputStream secondBody = new PipedInputStream();
+		PipedOutputStream secondWriter = new PipedOutputStream(secondBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inbound = new LinkedBlockingQueue<>();
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String init = jsonMapper.writeValueAsString(AcpTestFixtures.createJsonRpcResponse("init-1",
+						AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), init));
+			}
+			if ("GET".equals(request.method()) && request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				// First connection stream ends at once; the reconnect gets a live one.
+				InputStream body = connectionGets.incrementAndGet() == 1 ? emptyBody() : secondBody;
+				return CompletableFuture.completedFuture(response(200, Map.of("Content-Type", "text/event-stream"), body));
+			}
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), new PipedInputStream(1024)));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.connect(message -> message.doOnNext(inbound::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest())).block();
+			awaitResponse(inbound, "init-1");
+
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+			while (connectionGets.get() < 2 && System.nanoTime() < deadline) {
+				Thread.sleep(20);
+			}
+			assertThat(connectionGets.get()).as("the connection stream was reopened").isGreaterThanOrEqualTo(2);
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_NEW, "new-1",
+					AcpTestFixtures.createNewSessionRequest("/workspace"))).block();
+			writeSse(secondWriter, new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "new-1",
+					new AcpSchema.NewSessionResponse("sess-1", null, null), null));
+			assertThat(awaitResponse(inbound, "new-1").error()).isNull();
+		}
+		finally {
+			secondWriter.close();
+			transport.close();
+		}
 	}
 
 	private void awaitSessionSseClosure() throws InterruptedException {

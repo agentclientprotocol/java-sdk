@@ -783,22 +783,73 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		}
 	}
 
+	/** Reconnects in a row that delivered nothing before the transport gives up on a stream. */
+	private static final int MAX_BARREN_RECONNECTS = 3;
+
+	private static final Duration RECONNECT_BACKOFF = Duration.ofMillis(200);
+
+	/**
+	 * A stream closed that this client did not close: the server detached it (backpressure,
+	 * a restart of the proxy in between), or the network dropped it. The server keeps what
+	 * it has not delivered in the stream's mailbox, so reopening loses nothing: reconnect
+	 * with a short backoff. Give up, as before, when the server answers that the connection
+	 * is gone, or after {@value #MAX_BARREN_RECONNECTS} reconnects in a row that delivered no
+	 * event (a server that keeps closing must not cause an endless loop).
+	 */
 	private void handleUnexpectedSseClosure(SseStream stream, Throwable error) {
 		if (closing.get()) {
 			return;
 		}
-
 		RouteScope scope = stream.scope;
-		if (!scope.isSession()) {
+		int barren = stream.delivered ? 0 : stream.barrenReconnects + 1;
+		if (barren > MAX_BARREN_RECONNECTS) {
+			giveUpOn(stream, error);
+			return;
+		}
+		logger.info("SSE stream closed unexpectedly; reconnecting: {}", scope);
+		Mono.defer(() -> openSseStream(scope))
+			.retryWhen(reactor.util.retry.Retry.backoff(2, RECONNECT_BACKOFF)
+				.scheduler(AcpSchedulers.timeouts())
+				.filter(e -> !isConnectionGone(e)))
+			.subscribe(reopened -> {
+				reopened.barrenReconnects = barren;
+				if (closing.get() || !replaceStream(stream, reopened)) {
+					reopened.close();
+					return;
+				}
+				reopened.start();
+				logger.info("SSE stream reconnected: {}", scope);
+			}, reconnectError -> giveUpOn(stream, reconnectError));
+	}
+
+	private boolean replaceStream(SseStream old, SseStream reopened) {
+		if (old.scope.isSession()) {
+			return sessionStreams.replace(old.scope.sessionId(), old, reopened);
+		}
+		synchronized (this) {
+			if (this.connectionStream != old) {
+				return false;
+			}
+			this.connectionStream = reopened;
+			return true;
+		}
+	}
+
+	/** 404 on reconnect: the server no longer knows this connection or session. */
+	private static boolean isConnectionGone(Throwable error) {
+		return error instanceof AcpConnectionException && String.valueOf(error.getMessage()).contains("got 404");
+	}
+
+	/** The old behaviour: a dead connection stream, or a session stream owing a response, ends the transport. */
+	private void giveUpOn(SseStream stream, Throwable error) {
+		if (closing.get()) {
+			return;
+		}
+		RouteScope scope = stream.scope;
+		if (!scope.isSession() || hasPendingResponseFor(scope)) {
 			terminateAfterSseFailure(error);
 			return;
 		}
-
-		if (hasPendingResponseFor(scope)) {
-			terminateAfterSseFailure(error);
-			return;
-		}
-
 		if (sessionStreams.remove(scope.sessionId(), stream)) {
 			sessionStreamOpenOperations.remove(scope.sessionId());
 			logger.info("Session SSE stream closed; it will be reopened before the next session request: {}", scope);
@@ -873,6 +924,12 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 		private Future<?> readerTask;
 
+		/** Whether this stream carried at least one event; resets the reconnect budget. */
+		private volatile boolean delivered;
+
+		/** Reconnects in a row, ending with this stream, that delivered nothing. */
+		private volatile int barrenReconnects;
+
 		SseStream(RouteScope scope, InputStream body) {
 			this.scope = scope;
 			this.body = body;
@@ -939,6 +996,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			}
 			try {
 				JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, dataBuffer.toString());
+				delivered = true;
 				processInbound(scope, message).subscribe(v -> {
 				}, error -> {
 					if (!closed.get() && !closing.get()) {

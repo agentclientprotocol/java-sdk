@@ -39,6 +39,11 @@ building a second client on an already-connected transport now fails at construc
   GET first on `http://` endpoints, so against a server that speaks h2c (the SDK's own does) every
   request, streams included, runs on HTTP/2. Against one that does not, the probe settles on HTTP/1.1
   and later requests stop offering the upgrade, which some servers route to their WebSocket handler.
+- **The Streamable HTTP client reconnects a dropped SSE stream.** When the server or the network closes
+  the connection stream or a session stream, the client reopens it with a short backoff instead of
+  failing the transport; the server's mailbox delivers whatever was not yet written. It gives up, as
+  before, when the server answers 404 (the connection is gone) or after three reconnects in a row that
+  delivered nothing.
 - **Client sessions learn that their transport died.** `AcpClientTransport.awaitTermination()` (default:
   never) is implemented by the Streamable HTTP and WebSocket client transports; `AcpClientSession` fails
   pending requests at once with the cause, and every later request, instead of waiting out the request
