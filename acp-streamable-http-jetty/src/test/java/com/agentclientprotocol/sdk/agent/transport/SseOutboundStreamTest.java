@@ -69,8 +69,11 @@ class SseOutboundStreamTest {
 		assertThat(slow.output.written()).isEmpty();
 		verify(slow.asyncContext, never()).complete();
 
-		// The queue now holds maxPendingSseEvents (open comment + one event): the next
-		// event closes the subscriber; its unsent events go back to the mailbox.
+		stream.push("\"second\"");
+		verify(slow.asyncContext, never()).complete();
+
+		// More than maxPendingSseEvents events are now waiting on a subscriber that does not
+		// read: it is detached, and every event stays queued for the next one.
 		stream.push("\"overflow\"");
 		verify(slow.asyncContext).complete();
 
@@ -81,8 +84,59 @@ class SseOutboundStreamTest {
 		Attached next = attach(stream, true);
 		assertThat(next.output.written())
 			.as("nothing the slow subscriber never wrote is lost, and order is kept")
-			.isEqualTo(OPEN + "data: \"queued\"\n\n" + "data: \"overflow\"\n\n" + "data: \"later\"\n\n");
+			.isEqualTo(OPEN + "data: \"queued\"\n\n" + "data: \"second\"\n\n" + "data: \"overflow\"\n\n"
+					+ "data: \"later\"\n\n");
 		verify(next.asyncContext, never()).complete();
+	}
+
+	/** Review probe P1: a subscriber that backs up during the replay must not lose the rest of it. */
+	@Test
+	void replayIntoASubscriberThatCannotWriteLosesNothing() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 2);
+		stream.push("\"a\"");
+		stream.push("\"b\"");
+		stream.push("\"c\"");
+		stream.push("\"d\"");
+
+		attach(stream, false);
+		Attached next = attach(stream, true);
+
+		assertThat(next.output.written())
+			.isEqualTo(OPEN + "data: \"a\"\n\n" + "data: \"b\"\n\n" + "data: \"c\"\n\n" + "data: \"d\"\n\n");
+	}
+
+	/**
+	 * Review probe P3: the container reports the old connection's error on its own thread
+	 * after the client has already reconnected. The late close must not strand or reorder
+	 * anything, and must not detach the new subscriber.
+	 */
+	@Test
+	void aLateErrorOnTheOldSubscriberDoesNotDisturbTheNewOne() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached old = attach(stream, false);
+		stream.push("\"a\"");
+		stream.push("\"b\"");
+
+		Attached reconnected = attach(stream, true);
+		stream.push("\"c\"");
+		old.output.listener.onError(new IOException("connection reset"));
+		stream.push("\"d\"");
+
+		assertThat(reconnected.output.written()).isEqualTo(
+				OPEN + "data: \"a\"\n\n" + "data: \"b\"\n\n" + "data: \"c\"\n\n" + "data: \"d\"\n\n");
+		verify(reconnected.asyncContext, never()).complete();
+	}
+
+	/** Review probe P2: an event pushed around a subscriber's close reaches the next subscriber. */
+	@Test
+	void anEventPushedWhileTheSubscriberIsClosingIsKept() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached first = attach(stream, false);
+		first.output.listener.onError(new IOException("gone"));
+		stream.push("\"x\"");
+
+		Attached next = attach(stream, true);
+		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"x\"\n\n");
 	}
 
 	private static Attached attach(SseOutboundStream stream, boolean ready) throws IOException {
@@ -116,8 +170,11 @@ class SseOutboundStreamTest {
 			return ready;
 		}
 
+		WriteListener listener;
+
 		@Override
 		public void setWriteListener(WriteListener writeListener) {
+			this.listener = writeListener;
 		}
 
 		@Override

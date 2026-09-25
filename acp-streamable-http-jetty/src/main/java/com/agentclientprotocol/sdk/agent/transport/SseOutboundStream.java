@@ -7,10 +7,6 @@ package com.agentclientprotocol.sdk.agent.transport;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import jakarta.servlet.AsyncContext;
@@ -24,9 +20,21 @@ import org.slf4j.LoggerFactory;
 
 /**
  * One outbound SSE stream of the Streamable HTTP transport (the connection stream or
- * one session stream): a bounded mailbox for events produced while no client is
- * attached, plus at most one attached {@link SseSubscriber} writing to a servlet async
- * response.
+ * one session stream), with at most one attached {@link SseSubscriber} writing to a
+ * servlet async response.
+ *
+ * <p>
+ * <b>A mailbox, as in the Rust and TypeScript servers.</b> Every event goes into one
+ * bounded queue owned by the stream. An attached subscriber removes an event only at the
+ * moment it writes it to the response, so an event is never owned by a subscriber: when a
+ * subscriber goes away (the client dropped, the server closed it for backpressure, a new
+ * GET took the stream over, or the container reported an error on another thread) nothing
+ * it had not written is lost or reordered, and the next subscriber continues from the
+ * same queue. All state changes happen under this stream's monitor, including the
+ * container's asynchronous callbacks, so a reconnect racing the old subscriber's close is
+ * serialised. Bytes already written to a connection that then died can still be lost;
+ * only event ids and {@code Last-Event-ID}, which the RFD defers, could close that.
+ * </p>
  *
  * @author Kaiser Dandangi
  */
@@ -36,73 +44,55 @@ final class SseOutboundStream {
 
 	private static final byte[] SSE_KEEP_ALIVE_COMMENT = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8);
 
-	// Commits the SSE response when there are no replay events, without emitting an ACP message.
+	// Commits the SSE response when there are no queued events, without emitting an ACP message.
 	private static final byte[] SSE_OPEN_COMMENT = ": connected\n\n".getBytes(StandardCharsets.UTF_8);
 
 	private final int mailboxCapacity;
 
 	private final int maxPendingSseEvents;
 
-	private final ArrayDeque<String> replay = new ArrayDeque<>();
+	/** Events not yet written to any subscriber, oldest first. Guarded by {@code this}. */
+	private final ArrayDeque<String> mailbox = new ArrayDeque<>();
 
-	private final List<SseSubscriber> subscribers = new CopyOnWriteArrayList<>();
+	/** Guarded by {@code this}. */
+	private SseSubscriber current;
 
-	private final AtomicBoolean closed = new AtomicBoolean(false);
+	/** Guarded by {@code this}. */
+	private boolean closed;
 
 	SseOutboundStream(int mailboxCapacity, int maxPendingSseEvents) {
 		this.mailboxCapacity = mailboxCapacity;
 		this.maxPendingSseEvents = maxPendingSseEvents;
 	}
 
-	/*
-	 * A mailbox, as in the Rust and TypeScript servers: whenever no subscriber is
-	 * attached (before the first GET, or after the client's stream dropped and before
-	 * it reopens) events are retained, bounded, and delivered on the next attach. A
-	 * dropped stream must not lose an accepted prompt's result.
+	/**
+	 * Queues an event and writes as much as the attached subscriber can take.
+	 * @throws AcpConnectionException when the mailbox is full; the caller closes the
+	 * connection rather than drop an event
 	 */
 	synchronized void push(String payload) {
-		if (closed.get()) {
+		if (closed) {
 			return;
 		}
-		if (subscribers.isEmpty()) {
-			synchronized (replay) {
-				if (replay.size() == mailboxCapacity) {
-					throw new AcpConnectionException(
-							"Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
-				}
-				replay.addLast(payload);
-			}
+		if (mailbox.size() == mailboxCapacity) {
+			throw new AcpConnectionException("Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
+		}
+		mailbox.addLast(payload);
+		if (current == null) {
 			return;
 		}
-		subscribers.forEach(subscriber -> subscriber.send(payload));
-	}
-
-	/**
-	 * Puts events a closed subscriber never wrote back at the front of the mailbox, in
-	 * order, so the next subscriber receives them. Takes only the mailbox lock, so a
-	 * subscriber may call it while holding its own lock; a push that lands in the
-	 * mailbox meanwhile is newer and correctly stays behind them. Bytes already written
-	 * to a connection that then died can still be lost: without event ids and
-	 * {@code Last-Event-ID} (deferred by the RFD) nothing can know they did not arrive.
-	 */
-	private void requeue(List<String> unsent) {
-		if (unsent.isEmpty() || closed.get()) {
+		if (mailbox.size() > maxPendingSseEvents) {
+			// The attached client is not reading. Detach it; the events stay queued for the
+			// next GET, and a full mailbox then closes the connection.
+			logger.warn("Closing backpressured SSE subscriber after {} pending events", maxPendingSseEvents);
+			detach(current);
 			return;
 		}
-		synchronized (replay) {
-			if (replay.size() + unsent.size() > mailboxCapacity) {
-				logger.warn("Dropping {} undelivered SSE events: mailbox full ({} events)", unsent.size(),
-						mailboxCapacity);
-				return;
-			}
-			for (int i = unsent.size() - 1; i >= 0; i--) {
-				replay.addFirst(unsent.get(i));
-			}
-		}
+		current.drain();
 	}
 
 	synchronized void subscribe(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
-		if (closed.get()) {
+		if (closed) {
 			// DELETE may close the connection after GET has started async processing.
 			// Complete that request instead of leaving its response open indefinitely.
 			asyncContext.complete();
@@ -112,114 +102,109 @@ final class SseOutboundStream {
 		// one that the server may not yet know is dead (proxy drop, client restart).
 		// Rust and TypeScript answer 409 instead; taking over is friendlier to a
 		// reconnecting client and never duplicates events.
-		for (SseSubscriber previous : new ArrayList<>(subscribers)) {
+		if (current != null) {
 			logger.debug("New SSE subscriber replaces the attached one");
-			previous.close();
+			detach(current);
 		}
-		SseSubscriber subscriber = new SseSubscriber(this, asyncContext, response);
-		subscribers.add(subscriber);
+		SseSubscriber subscriber = new SseSubscriber(asyncContext, response);
+		current = subscriber;
 		subscriber.start();
-		List<String> retained;
-		synchronized (replay) {
-			retained = new ArrayList<>(replay);
-			replay.clear();
-		}
-		for (String payload : retained) {
-			subscriber.send(payload);
-		}
 		subscriber.drain();
 	}
 
-	void remove(SseSubscriber subscriber) {
-		subscribers.remove(subscriber);
-	}
-
-	void keepAlive() {
-		if (!closed.get()) {
-			subscribers.forEach(SseSubscriber::sendKeepAlive);
+	synchronized void keepAlive() {
+		if (!closed && current != null) {
+			current.sendKeepAlive();
 		}
 	}
 
 	synchronized void close() {
-		if (closed.compareAndSet(false, true)) {
-			subscribers.forEach(SseSubscriber::close);
-			subscribers.clear();
-			synchronized (replay) {
-				replay.clear();
-			}
+		if (closed) {
+			return;
+		}
+		closed = true;
+		if (current != null) {
+			detach(current);
+		}
+		mailbox.clear();
+	}
+
+	/** Detaches a subscriber if it is still the attached one, and completes its response. */
+	private synchronized void detach(SseSubscriber subscriber) {
+		if (subscriber.detached) {
+			return;
+		}
+		subscriber.detached = true;
+		if (current == subscriber) {
+			current = null;
+		}
+		try {
+			subscriber.asyncContext.complete();
+		}
+		catch (IllegalStateException ignored) {
+			// already completed by the container
 		}
 	}
 
-
-	private static final class SseSubscriber implements AsyncListener, WriteListener {
-
-		private final SseOutboundStream parent;
+	/**
+	 * Writes to one servlet async response. Holds no events of its own except comments;
+	 * every method runs under the enclosing stream's monitor.
+	 */
+	private final class SseSubscriber implements AsyncListener, WriteListener {
 
 		private final AsyncContext asyncContext;
 
 		private final ServletOutputStream output;
 
-		/** Queued writes; {@code payload} is null for comments (open, keep-alive), which are not requeued. */
-		private record Pending(byte[] bytes, String payload) {
-		}
+		/** Comments (open, keep-alive) not yet written; written before queued events. */
+		private final ArrayDeque<byte[]> comments = new ArrayDeque<>();
 
-		private final ArrayDeque<Pending> pendingEvents = new ArrayDeque<>();
-
-		private final AtomicBoolean closed = new AtomicBoolean(false);
+		private boolean detached;
 
 		private boolean flushPending;
 
-		SseSubscriber(SseOutboundStream parent, AsyncContext asyncContext, HttpServletResponse response) throws IOException {
-			this.parent = parent;
+		SseSubscriber(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
 			this.asyncContext = asyncContext;
 			this.output = response.getOutputStream();
 		}
 
-		synchronized void start() {
+		void start() {
 			asyncContext.addListener(this);
-			pendingEvents.addLast(new Pending(SSE_OPEN_COMMENT, null));
+			comments.addLast(SSE_OPEN_COMMENT);
 			output.setWriteListener(this);
 		}
 
-		synchronized void send(String payload) {
-			if (closed.get()) {
-				return;
+		void sendKeepAlive() {
+			if (!detached && comments.isEmpty() && mailbox.isEmpty()) {
+				comments.addLast(SSE_KEEP_ALIVE_COMMENT);
+				drain();
 			}
-			if (pendingEvents.size() == parent.maxPendingSseEvents) {
-				logger.warn("Closing backpressured SSE subscriber after {} pending events",
-						parent.maxPendingSseEvents);
-				// The event that did not fit goes back to the mailbox with the queue.
-				pendingEvents.addLast(new Pending(null, payload));
-				close();
-				return;
-			}
-			pendingEvents.addLast(new Pending(("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8), payload));
-			drain();
 		}
 
-		synchronized void sendKeepAlive() {
-			if (closed.get() || !pendingEvents.isEmpty()) {
-				return;
-			}
-			pendingEvents.addLast(new Pending(SSE_KEEP_ALIVE_COMMENT, null));
-			drain();
-		}
-
-		synchronized void drain() {
-			try {
-				flushIfReady();
-				while (!closed.get() && output.isReady()) {
-					Pending event = pendingEvents.pollFirst();
-					if (event == null) {
-						break;
-					}
-					output.write(event.bytes());
-					flushPending = true;
+		void drain() {
+			synchronized (SseOutboundStream.this) {
+				if (detached) {
+					return;
 				}
-				flushIfReady();
-			}
-			catch (IOException | IllegalStateException e) {
-				close();
+				try {
+					flushIfReady();
+					while (!detached && output.isReady()) {
+						byte[] bytes = comments.pollFirst();
+						if (bytes == null) {
+							String payload = mailbox.pollFirst();
+							if (payload == null) {
+								break;
+							}
+							bytes = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
+						}
+						output.write(bytes);
+						flushPending = true;
+					}
+					flushIfReady();
+				}
+				catch (IOException | IllegalStateException e) {
+					detach(this);
+				}
 			}
 		}
 
@@ -237,49 +222,27 @@ final class SseOutboundStream {
 
 		@Override
 		public void onError(Throwable error) {
-			close();
+			detach(this);
 		}
 
 		@Override
 		public void onComplete(AsyncEvent event) {
-			close();
+			detach(this);
 		}
 
 		@Override
 		public void onTimeout(AsyncEvent event) {
-			close();
+			detach(this);
 		}
 
 		@Override
 		public void onError(AsyncEvent event) {
-			close();
+			detach(this);
 		}
 
 		@Override
 		public void onStartAsync(AsyncEvent event) {
 			event.getAsyncContext().addListener(this);
-		}
-
-		void close() {
-			if (closed.compareAndSet(false, true)) {
-				parent.remove(this);
-				List<String> unsent = new ArrayList<>();
-				synchronized (this) {
-					for (Pending event : pendingEvents) {
-						if (event.payload() != null) {
-							unsent.add(event.payload());
-						}
-					}
-					pendingEvents.clear();
-				}
-				// Undelivered events are not lost with the subscriber (mailbox guarantee).
-				parent.requeue(unsent);
-				try {
-					asyncContext.complete();
-				}
-				catch (IllegalStateException ignored) {
-				}
-			}
 		}
 
 	}

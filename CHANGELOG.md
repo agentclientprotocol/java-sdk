@@ -27,7 +27,7 @@ building a second client on an already-connected transport now fails at construc
 - **Limits and keep-alive for the HTTP agent transport** (`StreamableHttpAcpAgentTransportOptions`): POST bodies
   are capped (16 MiB by default, 413 beyond), the WebSocket send queue and the number of provisional
   `session/load` streams per connection are bounded, a failed `session/load` leaves no provisional state,
-  the SSE mailbox and per-subscriber queue limits are configurable, attached streams get a `: keep-alive`
+  the SSE mailbox and backpressure limits are configurable, attached streams get a `: keep-alive`
   comment every 15 s so proxies do not cut idle connections, and a new GET on a stream takes it over
   from a subscriber the server may not yet know is dead instead of fanning out duplicates.
 - **HTTP/2 over plain `http://`.** The RFD requires HTTP/2, and localhost without TLS is a first-class
