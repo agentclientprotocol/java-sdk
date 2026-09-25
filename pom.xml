@@ -17,6 +17,7 @@
         <module>acp-annotations</module>
         <module>acp-core</module>
         <module>acp-json-jackson2</module>
+        <module>acp-json-jackson3</module>
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
@@ -65,6 +66,9 @@
         <!-- Dependency versions -->
         <reactor.version>2025.0.7</reactor.version>
         <jackson.version>2.22.2</jackson.version>
+        <!-- Jackson 3 for acp-json-jackson3: the version Spring Boot 4.1 manages. It reads
+             the jackson-annotations 2.x that jackson.version manages. -->
+        <jackson3.version>3.1.5</jackson3.version>
 
         <slf4j.version>2.0.18</slf4j.version>
         <jetty.version>12.1.12</jetty.version>
@@ -108,6 +112,16 @@
                 <scope>import</scope>
             </dependency>
 
+            <!-- Jackson 3 BOM. Imported after the Jackson 2 BOM, so jackson-annotations
+                 (managed by both) comes from jackson.version. -->
+            <dependency>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson3.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- ACP modules -->
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
@@ -117,6 +131,11 @@
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
                 <artifactId>acp-json-jackson2</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-json-jackson3</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
