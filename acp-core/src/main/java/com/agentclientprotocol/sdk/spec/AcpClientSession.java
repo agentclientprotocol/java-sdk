@@ -58,7 +58,7 @@ public class AcpClientSession implements AcpSession {
 	private final Duration requestTimeout;
 
 	/**
-	 * Per-session daemon scheduler for timeout operations. Disposed when session closes.
+	 * The JVM-wide daemon timer shared by every session (see AcpSchedulers); never disposed here.
 	 */
 	private final Scheduler timeoutScheduler;
 
@@ -418,7 +418,7 @@ public class AcpClientSession implements AcpSession {
 				this.pendingResponses.remove(requestId);
 				pendingResponseSink.error(error);
 			});
-		})).timeout(this.requestTimeout, timeoutScheduler).handle((jsonRpcResponse, deliveredResponseSink) -> {
+		})).transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout)).handle((jsonRpcResponse, deliveredResponseSink) -> {
 			if (jsonRpcResponse.error() != null) {
 				logger.error("Error handling request: {}", jsonRpcResponse.error());
 				deliveredResponseSink.error(new AcpError(jsonRpcResponse.error()));

@@ -190,14 +190,24 @@ final class SseOutboundStream {
 					flushIfReady();
 					while (!detached && output.isReady()) {
 						byte[] bytes = comments.pollFirst();
+						String payload = null;
 						if (bytes == null) {
-							String payload = mailbox.pollFirst();
+							payload = mailbox.pollFirst();
 							if (payload == null) {
 								break;
 							}
 							bytes = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
 						}
-						output.write(bytes);
+						try {
+							output.write(bytes);
+						}
+						catch (IOException | IllegalStateException e) {
+							if (payload != null) {
+								// The write failed, so the event did not go out: keep it first in line.
+								mailbox.addFirst(payload);
+							}
+							throw e;
+						}
 						flushPending = true;
 					}
 					flushIfReady();

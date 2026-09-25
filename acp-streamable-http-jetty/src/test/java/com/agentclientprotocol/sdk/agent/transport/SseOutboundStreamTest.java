@@ -139,6 +139,17 @@ class SseOutboundStreamTest {
 		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"x\"\n\n");
 	}
 
+	@Test
+	void anEventWhoseWriteFailsIsKeptForTheNextSubscriber() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached broken = attach(stream, true);
+		broken.output.failWrites = true;
+		stream.push("\"lost?\"");
+
+		Attached next = attach(stream, true);
+		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"lost?\"\n\n");
+	}
+
 	private static Attached attach(SseOutboundStream stream, boolean ready) throws IOException {
 		FakeOutput output = new FakeOutput(ready);
 		AsyncContext asyncContext = mock(AsyncContext.class);
@@ -177,8 +188,13 @@ class SseOutboundStreamTest {
 			this.listener = writeListener;
 		}
 
+		boolean failWrites;
+
 		@Override
-		public void write(int b) {
+		public void write(int b) throws IOException {
+			if (failWrites) {
+				throw new IOException("broken pipe");
+			}
 			bytes.write(b);
 		}
 

@@ -247,7 +247,15 @@ public class StreamableHttpAcpAgentTransport {
 		// A comment every interval keeps proxies from cutting idle streams and surfaces
 		// dead subscribers (the write fails) without waiting for the next real event.
 		this.keepAliveTask = Flux.interval(interval, interval, scheduler)
-			.subscribe(tick -> connections.values().forEach(StreamableHttpConnection::keepAlive));
+			.subscribe(tick -> connections.values().forEach(connection -> {
+				try {
+					connection.keepAlive();
+				}
+				catch (RuntimeException e) {
+					// One broken connection must not stop keep-alives for every other one.
+					logger.debug("Keep-alive failed for connection {}: {}", connection.id(), e.getMessage());
+				}
+			}));
 	}
 
 	private void stopKeepAlive() {

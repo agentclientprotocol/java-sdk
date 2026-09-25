@@ -47,7 +47,7 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgent
  *
  * @author Kaiser Dandangi
  */
-public class StreamableHttpAcpServlet extends HttpServlet {
+class StreamableHttpAcpServlet extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(StreamableHttpAcpServlet.class);
 
