@@ -26,6 +26,8 @@ public class JavaClientMain {
 
 	static final AtomicInteger updates = new AtomicInteger();
 
+	static final AtomicInteger total = new AtomicInteger();
+
 	static final Map<String, Integer> updatesPerStep = new LinkedHashMap<>();
 
 	static int pass;
@@ -62,6 +64,7 @@ public class JavaClientMain {
 			.requestTimeout(T)
 			.sessionUpdateConsumer(n -> {
 				updates.incrementAndGet();
+				total.incrementAndGet();
 				System.out.println("  update: " + n.update());
 				return Mono.empty();
 			})
@@ -108,7 +111,8 @@ public class JavaClientMain {
 	}
 
 	static void printResult() {
-		StringBuilder sb = new StringBuilder("RESULT pass=" + pass + " fail=" + fail);
+		StringBuilder sb = new StringBuilder(
+				"RESULT pass=" + pass + " fail=" + fail + " updates_total=" + total.get());
 		updatesPerStep.forEach((k, v) -> sb.append(' ').append(k.replaceAll("[^A-Za-z0-9]+", "_")).append("_updates=").append(v));
 		System.out.println(sb);
 	}

@@ -1,7 +1,8 @@
 """Interop client on the Python SDK's Streamable HTTP client. Usage: python py-client.py <url>.
 
 Prints one "STEP <name> PASS|FAIL" line per step and a RESULT line with pass/fail counts and the
-number of session updates each step received.
+number of session updates each step received and in total. Per-step counts are indicative only:
+update handlers run as tasks, so an update can land after the response that follows it.
 """
 import asyncio
 import re
@@ -14,6 +15,7 @@ from acp.interfaces import Client
 from acp.schema import TextContentBlock
 
 UPDATES = 0
+TOTAL = 0
 PER_STEP = {}
 COUNTS = {"pass": 0, "fail": 0}
 
@@ -26,8 +28,9 @@ class C(Client):
         return {"outcome": {"outcome": "selected", "optionId": oid}}
 
     async def session_update(self, session_id, update, **kw):
-        global UPDATES
+        global UPDATES, TOTAL
         UPDATES += 1
+        TOTAL += 1
         c = getattr(update, "content", None)
         print("  update:", getattr(c, "text", update), flush=True)
 
@@ -61,7 +64,7 @@ async def main():
     await step("prompt-after-load", conn.prompt(session_id=sid, prompt=[TextContentBlock(type="text", text="after load")]))
     await step("close", conn.close())
     await tr.close()
-    print(f"RESULT pass={COUNTS['pass']} fail={COUNTS['fail']} " + " ".join(f"{k}={v}" for k, v in PER_STEP.items()), flush=True)
+    print(f"RESULT pass={COUNTS['pass']} fail={COUNTS['fail']} updates_total={TOTAL} " + " ".join(f"{k}={v}" for k, v in PER_STEP.items()), flush=True)
 
 
 asyncio.run(main())

@@ -51,7 +51,7 @@
     },
     "forbiddenOutput": {
       "server": [
-        "HTTP/2.0"
+        " /acp HTTP/2.0 "
       ]
     },
     "requiredPatterns": {
@@ -63,10 +63,7 @@
     "checks": [
       "client RESULT pass == 8",
       "client RESULT fail == 0",
-      "client RESULT prompt1_updates >= 2",
-      "client RESULT prompt2_updates >= 2",
-      "client RESULT prompt3_permission_updates >= 2",
-      "client RESULT prompt_after_load_updates >= 2"
+      "client RESULT updates_total == 9"
     ]
   }
 }

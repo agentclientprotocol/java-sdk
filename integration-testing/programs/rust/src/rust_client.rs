@@ -1,6 +1,7 @@
 //! Interop client on the Rust SDK's Streamable HTTP client. Usage: rust-client <url>. Prints one
 //! "STEP <name> PASS|FAIL" line per step and a RESULT line with pass/fail counts and the number
-//! of session updates each step received. Dropping the connection sends the DELETE.
+//! of session updates each step received and in total (per-step counts are indicative only).
+//! Dropping the connection sends the DELETE.
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::*;
 use agent_client_protocol::{Agent, ConnectionTo};
@@ -10,6 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::time::Instant;
 
 static UPDATES: AtomicUsize = AtomicUsize::new(0);
+static TOTAL: AtomicUsize = AtomicUsize::new(0);
 static PASS: AtomicUsize = AtomicUsize::new(0);
 static FAIL: AtomicUsize = AtomicUsize::new(0);
 static PER_STEP: Mutex<Vec<(String, usize)>> = Mutex::new(Vec::new());
@@ -44,6 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let res = agent_client_protocol::Client.builder()
         .on_receive_notification(async move |n: SessionNotification, _cx| {
             UPDATES.fetch_add(1, SeqCst);
+            TOTAL.fetch_add(1, SeqCst);
             println!("  update: {:?}", n.update);
             Ok(())
         }, agent_client_protocol::on_receive_notification!())
@@ -79,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }).await;
     println!("connect_with result: {res:?} total {} ms", t0.elapsed().as_millis());
     let per: Vec<String> = PER_STEP.lock().unwrap().iter().map(|(k, v)| format!("{k}={v}")).collect();
-    println!("RESULT pass={} fail={} {}", PASS.load(SeqCst), FAIL.load(SeqCst), per.join(" "));
+    println!("RESULT pass={} fail={} updates_total={} {}", PASS.load(SeqCst), FAIL.load(SeqCst), TOTAL.load(SeqCst), per.join(" "));
     // Give the transport time to send its DELETE before the runtime shuts down.
     tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
     Ok(())

@@ -1,6 +1,7 @@
 // Interop client on the TypeScript SDK's Streamable HTTP client. Usage: node ts-client.mjs <url>,
 // env TS_SDK (built typescript-sdk checkout). Prints one "STEP <name> PASS|FAIL" line per step and
-// a RESULT line with pass/fail counts and updates per step. The DELETE happens when connectWith
+// a RESULT line with pass/fail counts, updates per step and in total. Per-step counts are
+// indicative only: nothing orders an update's dispatch against the response that follows it. The DELETE happens when connectWith
 // returns (the SDK closes the stream itself); the server-side log is where scenarios assert on it.
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -13,7 +14,7 @@ const { MemoryAcpCookieStore, createHttpStream } = await load("http-stream.js");
 
 const url = process.argv[2];
 const stream = createHttpStream(url, { cookieStore: new MemoryAcpCookieStore() });
-let pass = 0, fail = 0, updates = 0;
+let pass = 0, fail = 0, updates = 0, total = 0;
 const perStep = {};
 const key = (n) => n.replace(/[^A-Za-z0-9]+/g, "_") + "_updates";
 const step = async (name, fn) => {
@@ -34,7 +35,7 @@ try {
       console.log("  permission request", JSON.stringify(ctx.params.options));
       return { outcome: { outcome: "selected", optionId: ctx.params.options[0].optionId } };
     })
-    .onNotification(acp.methods.client.session.update, (ctx) => { updates++; console.log("  update:", JSON.stringify(ctx.params.update)); })
+    .onNotification(acp.methods.client.session.update, (ctx) => { updates++; total++; console.log("  update:", JSON.stringify(ctx.params.update)); })
     .connectWith(stream, async (ctx) => {
       await step("initialize", () => withTimeout(ctx.request(acp.methods.agent.initialize, { protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} })));
       const s = await step("session/new", () => withTimeout(ctx.request(acp.methods.agent.session.new, { cwd: process.cwd(), mcpServers: [] })));
@@ -50,5 +51,5 @@ try {
 } catch (e) {
   console.log("connectWith failed:", e?.stack ?? e); exitCode = 1;
 }
-console.log(`RESULT pass=${pass} fail=${fail} ` + Object.entries(perStep).map(([k, v]) => `${k}=${v}`).join(" "));
+console.log(`RESULT pass=${pass} fail=${fail} updates_total=${total} ` + Object.entries(perStep).map(([k, v]) => `${k}=${v}`).join(" "));
 process.exit(exitCode);
