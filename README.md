@@ -30,7 +30,7 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.17.0</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 
@@ -42,13 +42,13 @@ JSON module next to it; `acp-agent-support`, `acp-test`, `acp-websocket-jetty` a
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson2</artifactId>
-    <version>0.18.0-SNAPSHOT</version>
+    <version>0.18.0</version>
 </dependency>
 <!-- or Jackson 3 (tools.jackson.databind), for example alongside Spring Boot 4 -->
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson3</artifactId>
-    <version>0.18.0-SNAPSHOT</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 
@@ -63,7 +63,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.17.0</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 
@@ -72,11 +72,11 @@ For Streamable HTTP server support (agents accepting remote HTTP/SSE connections
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-streamable-http-jetty</artifactId>
-    <version>0.18.0-SNAPSHOT</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.18.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.19.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -494,7 +494,17 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.17.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.18.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, contributed by
+@kamikaz1k, on plain `http://` (HTTP/2 over cleartext) and `https://`, with a new
+`acp-streamable-http-jetty` module for the agent side. Single-turn enforcement is per session.
+Fixes the Spring Boot "unicast" client failure (a second client on one transport now fails fast)
+and the multi-prompt wedge under CPU contention (#14). Unknown-field handling moved to the mapper
+(#10): a bare `new ObjectMapper()` is now strict. `acp-core` no longer contains a JSON
+implementation: choose `acp-json-jackson2` or `acp-json-jackson3` (see [Installation](#installation)).
+
+### 0.17.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Wire-format correction with no API change: every polymorphic discriminator (`type`, `sessionUpdate`,
 `outcome`) was written twice, which Jackson-based peers tolerated and strict parsers rejected. It is

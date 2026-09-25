@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-25
+
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, on plain `http://` and
 `https://`, plus the fixes found reviewing it, and a choice of Jackson 2 or Jackson 3. Three changes
 need attention when upgrading: `acp-core` no longer contains a JSON implementation, so a project
@@ -378,6 +380,7 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the n
 - SLF4J 2.0.16
 
 [0.9.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.9.0
+[0.18.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.18.0
 [0.17.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.17.0
 [0.16.1]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.1
 [0.16.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.0
