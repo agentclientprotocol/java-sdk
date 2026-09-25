@@ -14,7 +14,7 @@ the `*IT` integration classes through Failsafe. Before 0.15.0 the integration te
 
 Releases happen only by dispatching the organization's `release.yml` workflow; a local
 `-Prelease deploy` is not a path, because the local publishing token is not entitled to the
-`com.agentclientprotocol` namespace. The workflow's release commit bumps the six `pom.xml` files and
+`com.agentclientprotocol` namespace. The workflow's release commit bumps every reactor `pom.xml` and
 tags; it does not touch `CHANGELOG.md`. Keep the changelog current by hand, in the same change
 that earns the entry.
 

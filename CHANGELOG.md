@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, on plain `http://` and
-`https://`, plus the fixes found reviewing it. Two behaviour changes need attention when upgrading:
-building a second client on an already-connected transport now fails at construction, and
-`JacksonAcpJsonMapper` built from a bare `new ObjectMapper()` is now strict about unknown fields.
+`https://`, plus the fixes found reviewing it, and a choice of Jackson 2 or Jackson 3. Three changes
+need attention when upgrading: `acp-core` no longer contains a JSON implementation, so a project
+that depends on `acp-core` alone must add a JSON module; building a second client on an
+already-connected transport now fails at construction; and `JacksonAcpJsonMapper` built from a bare
+`new ObjectMapper()` is now strict about unknown fields.
 
 ### Added
 
@@ -54,11 +56,44 @@ building a second client on an already-connected transport now fails at construc
   container's `init()` starts the SSE keep-alive and `destroy()` closes every connection, cancelling
   in-flight prompts. It serves the HTTP/SSE profile; the WebSocket upgrade on the same path needs
   `StreamableHttpAcpAgentTransport`, which now mounts this servlet on its own Jetty server.
+- **JSON modules: `acp-json-jackson2` and `acp-json-jackson3` (#12).** The Jackson 2 mapper moved out
+  of `acp-core` into `acp-json-jackson2`, and `acp-json-jackson3` adds `Jackson3AcpJsonMapper`
+  (package `com.agentclientprotocol.sdk.json.jackson3`) on Jackson 3 (`tools.jackson`, 3.1.5, the
+  version Spring Boot 4.1 manages). Both read the same schema records, whose Jackson annotations
+  Jackson 3 reads unchanged, and write the same bytes: the schema serialization suite and an exact
+  wire-format test run against each. The Jackson 3 default mapper is lenient and logs ignored
+  properties at DEBUG like the Jackson 2 one, and restores Jackson 2 behaviour where Jackson 3
+  changed a default that touches the wire (alphabetical property sorting, `null` for primitives,
+  trailing content, enums via `toString()`); a strict `JsonMapper` passed to
+  `new Jackson3AcpJsonMapper(...)` is honoured. Proposed by @bengbengbalabalabeng (#12).
+- **Deterministic JSON mapper selection.** `AcpJsonMapperSupplier` has a `default int priority()`
+  (0); `AcpJsonMapper.createDefault()` uses the highest, ties broken by class name, instead of
+  whichever supplier came first on the classpath. Jackson 3 is -100 and Jackson 2 -200, so with both
+  modules present Jackson 3 wins, and an application's own supplier wins over both. The system
+  property `acp.json.mapper.supplier` names a supplier class explicitly.
 - `CancelNotification` carries `_meta`.
 - `AcpSyncClient(AcpAsyncClient)` is public: the supported way to have both APIs over one session.
 
 ### Changed
 
+- **Breaking: `acp-core` no longer contains a JSON implementation (#12).** It depends on
+  `jackson-annotations` only (for the schema records), not on `jackson-databind` or `jackson-core`.
+  `acp-agent-support`, `acp-test`, `acp-websocket-jetty` and `acp-streamable-http-jetty` depend on
+  `acp-json-jackson2`, so their users see no change. **If you depend on `acp-core` alone, add one
+  JSON module**, otherwise `AcpJsonMapper.createDefault()` fails with "No AcpJsonMapperSupplier
+  found on the classpath":
+
+  ```xml
+  <dependency>
+      <groupId>com.agentclientprotocol</groupId>
+      <artifactId>acp-json-jackson2</artifactId> <!-- or acp-json-jackson3 -->
+      <version>0.18.0</version>
+  </dependency>
+  ```
+
+  `JacksonAcpJsonMapper` and `JacksonAcpJsonMapperSupplier` keep their package
+  (`com.agentclientprotocol.sdk.json`) and names, so code that constructs them compiles unchanged
+  once the module is on the classpath. Proposed by @bengbengbalabalabeng (#12).
 - **Single-turn enforcement is per logical session.** `AcpAgentSession` keyed its active-prompt lock
   per transport connection; over HTTP one connection carries many sessions, so it is now keyed by
   `sessionId` (`hasActivePrompt(sessionId)`, `getActivePromptSessionIds()`), matching the Kotlin SDK.

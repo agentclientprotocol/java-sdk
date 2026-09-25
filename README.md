@@ -34,6 +34,30 @@ Three API styles for building agents:
 </dependency>
 ```
 
+From 0.18.0, `acp-core` contains no JSON implementation. If you depend on `acp-core` alone, add one
+JSON module next to it; `acp-agent-support`, `acp-test`, `acp-websocket-jetty` and
+`acp-streamable-http-jetty` already bring `acp-json-jackson2`, so users of those need nothing more:
+```xml
+<!-- Jackson 2 (com.fasterxml.jackson.databind) -->
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-json-jackson2</artifactId>
+    <version>0.18.0-SNAPSHOT</version>
+</dependency>
+<!-- or Jackson 3 (tools.jackson.databind), for example alongside Spring Boot 4 -->
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-json-jackson3</artifactId>
+    <version>0.18.0-SNAPSHOT</version>
+</dependency>
+```
+
+Both write the same bytes on the wire. `AcpJsonMapper.createDefault()` chooses by
+`AcpJsonMapperSupplier.priority()`: with both modules on the classpath Jackson 3 (-100) wins over
+Jackson 2 (-200), and an application's own supplier (default 0) wins over both. To force one, set
+the system property `acp.json.mapper.supplier` to the supplier's class name, for example
+`com.agentclientprotocol.sdk.json.JacksonAcpJsonMapperSupplier`.
+
 For annotation-based agent development:
 ```xml
 <dependency>
@@ -389,7 +413,9 @@ agent.start().block();  // Starts WebSocket server on port 8080
 
 | Artifact | Description |
 |----------|-------------|
-| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports |
+| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports; needs one JSON module |
+| `acp-json-jackson2` | JSON implementation on Jackson 2 (`JacksonAcpJsonMapper`); brought in by the transport and agent-support modules |
+| `acp-json-jackson3` | JSON implementation on Jackson 3 (`Jackson3AcpJsonMapper`) |
 | `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
