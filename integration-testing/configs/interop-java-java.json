@@ -54,7 +54,7 @@
         "negotiated HTTP_1_1"
       ],
       "server": [
-        " HTTP/1.1 -> "
+        " /acp HTTP/1.1 "
       ]
     },
     "requiredPatterns": {
