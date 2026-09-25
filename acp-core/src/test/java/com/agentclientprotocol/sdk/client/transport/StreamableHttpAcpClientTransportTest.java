@@ -805,8 +805,8 @@ class StreamableHttpAcpClientTransportTest {
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
 			HttpRequest request = invocation.getArgument(0);
 			requests.add(request);
-			if ("OPTIONS".equals(request.method())) {
-				HttpResponse<Object> probe = response(405, Map.of(), null);
+			if ("GET".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				HttpResponse<Object> probe = response(400, Map.of(), null);
 				when(probe.version()).thenReturn(HttpClient.Version.HTTP_1_1);
 				return CompletableFuture.completedFuture(probe);
 			}
@@ -828,7 +828,8 @@ class StreamableHttpAcpClientTransportTest {
 			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
 					AcpTestFixtures.createInitializeRequest())).block();
 
-			assertThat(requests.get(0).method()).isEqualTo("OPTIONS");
+			assertThat(requests.get(0).method()).as("the probe").isEqualTo("GET");
+			assertThat(requests.get(0).headers().firstValue("Acp-Connection-Id")).isEmpty();
 			assertThat(requests.subList(1, requests.size()))
 				.as("every request after the probe is pinned to HTTP/1.1")
 				.isNotEmpty()

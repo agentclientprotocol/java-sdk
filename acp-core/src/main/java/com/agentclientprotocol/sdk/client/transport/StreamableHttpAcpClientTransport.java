@@ -314,16 +314,19 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	 * The transport requires HTTP/2 (RFD). Over {@code https} ALPN negotiates it. Over
 	 * cleartext {@code http} the JDK offers an h2c upgrade on every request, but servers
 	 * (Jetty among them) only honour it on a request without a body, and {@code initialize}
-	 * is a POST. A bodiless OPTIONS first upgrades the connection when the server speaks
+	 * is a POST. A bodiless GET first upgrades the connection when the server speaks
 	 * h2c; every later request reuses it over HTTP/2. When it does not (answer on HTTP/1.1,
 	 * an error, or no answer within five seconds), every later request is pinned to HTTP/1.1.
+	 * A GET rather than OPTIONS because some h2c servers (Hypercorn) upgrade a GET but answer
+	 * OPTIONS with 405 on HTTP/1.1. It carries no connection id, so servers answer it with a
+	 * 4xx without opening a stream; only the negotiated version is used.
 	 */
 	private Mono<Void> upgradeCleartextToHttp2() {
 		if (!"http".equalsIgnoreCase(endpointUri.getScheme()) || httpClient.version() != HttpClient.Version.HTTP_2) {
 			return Mono.empty();
 		}
 		HttpRequest probe = HttpRequest.newBuilder(endpointUri)
-			.method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+			.GET()
 			.build();
 		// Cancelling the Mono on timeout cancels the HTTP exchange (see sendAsync).
 		return sendAsync(probe, HttpResponse.BodyHandlers.discarding())
