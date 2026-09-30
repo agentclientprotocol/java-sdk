@@ -53,4 +53,16 @@ public class AcpException extends RuntimeException {
 		super(cause);
 	}
 
+	/**
+	 * Returns the detail message. Every constructor sets one (the cause-only constructor
+	 * uses the cause's description), so an ACP exception always has a message: a
+	 * JSON-RPC error built from it needs one.
+	 * @return the detail message, never {@code null}
+	 */
+	@Override
+	public String getMessage() {
+		String message = super.getMessage();
+		return (message != null) ? message : getClass().getName();
+	}
+
 }

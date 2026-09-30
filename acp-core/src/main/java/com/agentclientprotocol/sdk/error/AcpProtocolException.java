@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.error;
 
+import org.jspecify.annotations.Nullable;
+
 
 /**
  * Exception representing a JSON-RPC protocol error from the peer.
@@ -41,7 +43,7 @@ public class AcpProtocolException extends AcpException {
 
 	private final int code;
 
-	private final Object data;
+	private final @Nullable Object data;
 
 	/**
 	 * Constructs a new protocol exception with the specified code and message.
@@ -60,7 +62,7 @@ public class AcpProtocolException extends AcpException {
 	 * @param message the error message
 	 * @param data optional additional error data
 	 */
-	public AcpProtocolException(int code, String message, Object data) {
+	public AcpProtocolException(int code, String message, @Nullable Object data) {
 		super(formatMessage(code, message));
 		this.code = code;
 		this.data = data;
@@ -79,7 +81,7 @@ public class AcpProtocolException extends AcpException {
 	 * Returns the optional additional error data.
 	 * @return the error data, or null if none was provided
 	 */
-	public Object getData() {
+	public @Nullable Object getData() {
 		return data;
 	}
 
