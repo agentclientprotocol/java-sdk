@@ -64,8 +64,31 @@ public class MockAcpAgent {
 
 	private final AtomicReference<CountDownLatch> promptLatch = new AtomicReference<>(new CountDownLatch(0));
 
-	private MockAcpAgent(AcpAsyncAgent delegate) {
-		this.delegate = delegate;
+	private MockAcpAgent(Builder builder) {
+		AcpSchema.InitializeResponse initializeResponse = builder.initializeResponse;
+		AcpSchema.NewSessionResponse newSessionResponse = builder.newSessionResponse;
+		Function<AcpSchema.PromptRequest, AcpSchema.PromptResponse> promptResponseProvider = builder.promptResponseProvider;
+		// The handlers record into this mock's fields, which are initialized before this body runs
+		this.delegate = AcpAgent.async(builder.transport)
+			.requestTimeout(builder.requestTimeout)
+			.initializeHandler(request -> {
+				receivedInitRequests.add(request);
+				return Mono.just(initializeResponse);
+			})
+			.newSessionHandler(request -> {
+				receivedNewSessionRequests.add(request);
+				return Mono.just(newSessionResponse);
+			})
+			.promptHandler((request, updater) -> {
+				receivedPrompts.add(request);
+				promptLatch.get().countDown();
+				return Mono.just(promptResponseProvider.apply(request));
+			})
+			.cancelHandler(notification -> {
+				receivedCancellations.add(notification);
+				return Mono.empty();
+			})
+			.build();
 	}
 
 	/**
@@ -242,40 +265,7 @@ public class MockAcpAgent {
 		 * @return The configured mock agent
 		 */
 		public MockAcpAgent build() {
-			MockAcpAgent mockAgent = new MockAcpAgent(null);
-
-			AcpAsyncAgent delegate = AcpAgent.async(transport)
-				.requestTimeout(requestTimeout)
-				.initializeHandler(request -> {
-					mockAgent.receivedInitRequests.add(request);
-					return Mono.just(initializeResponse);
-				})
-				.newSessionHandler(request -> {
-					mockAgent.receivedNewSessionRequests.add(request);
-					return Mono.just(newSessionResponse);
-				})
-				.promptHandler((request, updater) -> {
-					mockAgent.receivedPrompts.add(request);
-					mockAgent.promptLatch.get().countDown();
-					return Mono.just(promptResponseProvider.apply(request));
-				})
-				.cancelHandler(notification -> {
-					mockAgent.receivedCancellations.add(notification);
-					return Mono.empty();
-				})
-				.build();
-
-			// Replace the delegate using reflection (a bit ugly but avoids circular reference issues)
-			try {
-				var field = MockAcpAgent.class.getDeclaredField("delegate");
-				field.setAccessible(true);
-				field.set(mockAgent, delegate);
-			}
-			catch (Exception e) {
-				throw new RuntimeException("Failed to set delegate", e);
-			}
-
-			return mockAgent;
+			return new MockAcpAgent(this);
 		}
 
 	}
