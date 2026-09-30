@@ -60,6 +60,10 @@ public final class AcpSchema {
 		logger.debug("Received JSON message ({} characters)", jsonText.length());
 
 		var map = jsonMapper.readValue(jsonText, MAP_TYPE_REF);
+		if (map == null) {
+			// The JSON null literal: valid JSON, but no JSON-RPC message
+			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
+		}
 
 		// Determine message type based on specific JSON structure
 		if (map.containsKey("method") && map.containsKey("id")) {

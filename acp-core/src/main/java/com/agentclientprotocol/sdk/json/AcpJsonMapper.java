@@ -7,6 +7,8 @@ package com.agentclientprotocol.sdk.json;
 import java.io.IOException;
 import java.util.ServiceLoader;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Abstraction for JSON serialization/deserialization to decouple the SDK from any
  * specific JSON library.
@@ -53,41 +55,41 @@ public interface AcpJsonMapper {
 	 * Deserialize JSON string into a target type.
 	 * @param content JSON as String
 	 * @param type target class
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(String content, Class<T> type) throws IOException;
+	<T> @Nullable T readValue(String content, Class<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON bytes into a target type.
 	 * @param content JSON as bytes
 	 * @param type target class
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(byte[] content, Class<T> type) throws IOException;
+	<T> @Nullable T readValue(byte[] content, Class<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON string into a parameterized target type.
 	 * @param content JSON as String
 	 * @param type parameterized type reference
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(String content, TypeRef<T> type) throws IOException;
+	<T> @Nullable T readValue(String content, TypeRef<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON bytes into a parameterized target type.
 	 * @param content JSON as bytes
 	 * @param type parameterized type reference
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(byte[] content, TypeRef<T> type) throws IOException;
+	<T> @Nullable T readValue(byte[] content, TypeRef<T> type) throws IOException;
 
 	/**
 	 * Convert a value to a given type, useful for mapping nested JSON structures.

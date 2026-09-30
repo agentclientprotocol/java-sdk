@@ -11,6 +11,8 @@ import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The selection rule behind {@link AcpJsonMapper#createDefault()}, kept out of the
  * interface so it can be tested with suppliers that are not registered as services.
@@ -47,7 +49,7 @@ final class AcpJsonMapperSelector {
 	 * @throws ServiceConfigurationError if there is no candidate, or none matches the
 	 * override
 	 */
-	static AcpJsonMapperSupplier select(Iterable<? extends AcpJsonMapperSupplier> candidates, String override) {
+	static AcpJsonMapperSupplier select(Iterable<? extends AcpJsonMapperSupplier> candidates, @Nullable String override) {
 		List<AcpJsonMapperSupplier> all = new ArrayList<>();
 		candidates.forEach(all::add);
 		if (all.isEmpty()) {
