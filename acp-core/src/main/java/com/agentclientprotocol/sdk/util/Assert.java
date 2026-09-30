@@ -6,6 +6,8 @@
 
 package com.agentclientprotocol.sdk.util;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Assertion utility class that assists in validating arguments. Useful for identifying
  * programmer errors early and clearly at runtime.
@@ -21,7 +23,7 @@ public abstract class Assert {
 	 * @param message the exception message to use if the assertion fails
 	 * @throws IllegalArgumentException if the object is {@code null}
 	 */
-	public static void notNull(Object object, String message) {
+	public static void notNull(@Nullable Object object, String message) {
 		if (object == null) {
 			throw new IllegalArgumentException(message);
 		}
@@ -34,7 +36,7 @@ public abstract class Assert {
 	 * @param message the exception message to use if the assertion fails
 	 * @throws IllegalArgumentException if the text is empty
 	 */
-	public static void hasText(String text, String message) {
+	public static void hasText(@Nullable String text, String message) {
 		if (text == null || text.trim().isEmpty()) {
 			throw new IllegalArgumentException(message);
 		}
