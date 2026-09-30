@@ -21,6 +21,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -68,7 +69,8 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
-	private WebSocket webSocket;
+	/** Set once the WebSocket opens; null before connect. */
+	private volatile @Nullable WebSocket webSocket;
 
 	private Scheduler outboundScheduler;
 
@@ -190,6 +192,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		this.outboundSink.asFlux()
 			.publishOn(outboundScheduler)
 			.subscribe(message -> {
+				WebSocket webSocket = this.webSocket;
 				if (message != null && !isClosing.get() && webSocket != null) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
@@ -224,6 +227,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			outboundSink.tryEmitComplete();
 			terminationSink.tryEmitEmpty();
 		}).then(Mono.defer(() -> {
+			WebSocket webSocket = this.webSocket;
 			if (webSocket != null) {
 				return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")
 					.thenApply(ws -> null));

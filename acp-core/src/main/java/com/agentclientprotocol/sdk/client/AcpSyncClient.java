@@ -8,8 +8,10 @@ import java.time.Duration;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Mono;
 
 /**
  * A synchronous client implementation for the Agent Client Protocol (ACP) that wraps an
@@ -145,7 +147,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_INITIALIZE
 	 */
 	public AcpSchema.InitializeResponse initialize(AcpSchema.InitializeRequest initializeRequest) {
-		return this.delegate.initialize(initializeRequest).block();
+		return awaitResponse(this.delegate.initialize(initializeRequest));
 	}
 
 	/**
@@ -159,7 +161,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see #initialize(AcpSchema.InitializeRequest)
 	 */
 	public AcpSchema.InitializeResponse initialize() {
-		return this.delegate.initialize().block();
+		return awaitResponse(this.delegate.initialize());
 	}
 
 	/**
@@ -170,7 +172,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * </p>
 	 * @return the negotiated agent capabilities, or null if not initialized
 	 */
-	public com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities getAgentCapabilities() {
+	public com.agentclientprotocol.sdk.capabilities.@Nullable NegotiatedCapabilities getAgentCapabilities() {
 		return this.delegate.getAgentCapabilities();
 	}
 
@@ -191,7 +193,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_AUTHENTICATE
 	 */
 	public AcpSchema.AuthenticateResponse authenticate(AcpSchema.AuthenticateRequest authenticateRequest) {
-		return this.delegate.authenticate(authenticateRequest).block();
+		return awaitResponse(this.delegate.authenticate(authenticateRequest));
 	}
 
 	/**
@@ -201,7 +203,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_LOGOUT
 	 */
 	public AcpSchema.LogoutResponse logout(AcpSchema.LogoutRequest logoutRequest) {
-		return this.delegate.logout(logoutRequest).block();
+		return awaitResponse(this.delegate.logout(logoutRequest));
 	}
 
 	// --------------------------
@@ -221,7 +223,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_NEW
 	 */
 	public AcpSchema.NewSessionResponse newSession(AcpSchema.NewSessionRequest newSessionRequest) {
-		return this.delegate.newSession(newSessionRequest).block();
+		return awaitResponse(this.delegate.newSession(newSessionRequest));
 	}
 
 	/**
@@ -236,7 +238,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_LOAD
 	 */
 	public AcpSchema.LoadSessionResponse loadSession(AcpSchema.LoadSessionRequest loadSessionRequest) {
-		return this.delegate.loadSession(loadSessionRequest).block();
+		return awaitResponse(this.delegate.loadSession(loadSessionRequest));
 	}
 
 	/**
@@ -251,7 +253,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_SET_MODE
 	 */
 	public AcpSchema.SetSessionModeResponse setSessionMode(AcpSchema.SetSessionModeRequest setModeRequest) {
-		return this.delegate.setSessionMode(setModeRequest).block();
+		return awaitResponse(this.delegate.setSessionMode(setModeRequest));
 	}
 
 	/**
@@ -269,7 +271,7 @@ public class AcpSyncClient implements AutoCloseable {
 	@Deprecated(forRemoval = true)
 	@SuppressWarnings("removal")
 	public AcpSchema.SetSessionModelResponse setSessionModel(AcpSchema.SetSessionModelRequest setModelRequest) {
-		return this.delegate.setSessionModel(setModelRequest).block();
+		return awaitResponse(this.delegate.setSessionModel(setModelRequest));
 	}
 
 	/**
@@ -279,7 +281,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_LIST
 	 */
 	public AcpSchema.ListSessionsResponse listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
-		return this.delegate.listSessions(listSessionsRequest).block();
+		return awaitResponse(this.delegate.listSessions(listSessionsRequest));
 	}
 
 	/**
@@ -289,7 +291,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_CLOSE
 	 */
 	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
-		return this.delegate.closeSession(closeSessionRequest).block();
+		return awaitResponse(this.delegate.closeSession(closeSessionRequest));
 	}
 
 	/**
@@ -299,7 +301,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_DELETE
 	 */
 	public AcpSchema.DeleteSessionResponse deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
-		return this.delegate.deleteSession(deleteSessionRequest).block();
+		return awaitResponse(this.delegate.deleteSession(deleteSessionRequest));
 	}
 
 	/**
@@ -309,7 +311,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_RESUME
 	 */
 	public AcpSchema.ResumeSessionResponse resumeSession(AcpSchema.ResumeSessionRequest resumeSessionRequest) {
-		return this.delegate.resumeSession(resumeSessionRequest).block();
+		return awaitResponse(this.delegate.resumeSession(resumeSessionRequest));
 	}
 
 	/**
@@ -319,7 +321,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
 	public AcpSchema.ForkSessionResponse forkSession(AcpSchema.ForkSessionRequest forkSessionRequest) {
-		return this.delegate.forkSession(forkSessionRequest).block();
+		return awaitResponse(this.delegate.forkSession(forkSessionRequest));
 	}
 
 	/**
@@ -330,7 +332,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 */
 	public AcpSchema.SetSessionConfigOptionResponse setSessionConfigOption(
 			AcpSchema.SetSessionConfigOptionRequest request) {
-		return this.delegate.setSessionConfigOption(request).block();
+		return awaitResponse(this.delegate.setSessionConfigOption(request));
 	}
 
 	// --------------------------
@@ -344,7 +346,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_PROVIDERS_LIST
 	 */
 	public AcpSchema.ListProvidersResponse listProviders(AcpSchema.ListProvidersRequest request) {
-		return this.delegate.listProviders(request).block();
+		return awaitResponse(this.delegate.listProviders(request));
 	}
 
 	/**
@@ -354,7 +356,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_PROVIDERS_SET
 	 */
 	public AcpSchema.SetProviderResponse setProvider(AcpSchema.SetProviderRequest request) {
-		return this.delegate.setProvider(request).block();
+		return awaitResponse(this.delegate.setProvider(request));
 	}
 
 	/**
@@ -364,7 +366,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
 	 */
 	public AcpSchema.DisableProviderResponse disableProvider(AcpSchema.DisableProviderRequest request) {
-		return this.delegate.disableProvider(request).block();
+		return awaitResponse(this.delegate.disableProvider(request));
 	}
 
 	// --------------------------
@@ -384,7 +386,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
 	 */
 	public AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest promptRequest) {
-		return this.delegate.prompt(promptRequest).block();
+		return awaitResponse(this.delegate.prompt(promptRequest));
 	}
 
 	/**
@@ -401,6 +403,20 @@ public class AcpSyncClient implements AutoCloseable {
 	 */
 	public void cancel(AcpSchema.CancelNotification cancelNotification) {
 		this.delegate.cancel(cancelNotification).block();
+	}
+
+	/**
+	 * Blocks for the response to a request. A request's Mono emits the response or fails:
+	 * the session delivers every result through a Reactor sink, which cannot carry null, so
+	 * it never completes empty. An empty completion would be a broken invariant, reported
+	 * as such rather than returned as a null response.
+	 */
+	private static <T> T awaitResponse(Mono<T> response) {
+		T value = response.block();
+		if (value == null) {
+			throw new IllegalStateException("ACP request completed without a response");
+		}
+		return value;
 	}
 
 }

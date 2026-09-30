@@ -42,6 +42,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -98,7 +99,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	}
 
-	private record RouteScope(ScopeKind kind, String sessionId) {
+	private record RouteScope(ScopeKind kind, @Nullable String sessionId) {
 
 		static RouteScope bootstrap() {
 			return new RouteScope(ScopeKind.BOOTSTRAP, null);
@@ -116,12 +117,23 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return kind == ScopeKind.SESSION;
 		}
 
+		/**
+		 * The session id this scope routes to. Only session scopes carry one, and every
+		 * caller has already established that the scope is one.
+		 */
+		String boundSessionId() {
+			if (sessionId == null) {
+				throw new IllegalStateException("A " + kind + " route scope has no session id");
+			}
+			return sessionId;
+		}
+
 	}
 
 	private record OutboundRequestRoute(RequestKind kind, RouteScope requestScope, RouteScope responseScope) {
 	}
 
-	private record HttpClientBundle(HttpClient httpClient, ExecutorService ownedExecutor) {
+	private record HttpClientBundle(HttpClient httpClient, @Nullable ExecutorService ownedExecutor) {
 	}
 
 	private final URI endpointUri;
@@ -130,7 +142,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private final HttpClient httpClient;
 
-	private final ExecutorService ownedHttpExecutor;
+	private final @Nullable ExecutorService ownedHttpExecutor;
 
 	private final ExecutorService httpSignalExecutor;
 
@@ -164,9 +176,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	// Session id -> shared open operation so callers reuse one GET while opening.
 	private final Map<String, Mono<Void>> sessionStreamOpenOperations = new ConcurrentHashMap<>();
 
-	private volatile SseStream connectionStream;
+	private volatile @Nullable SseStream connectionStream;
 
-	private volatile String connectionId;
+	private volatile @Nullable String connectionId;
 
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
@@ -306,7 +318,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	 * request with an Upgrade header to their WebSocket handler and answer 405 (the
 	 * TypeScript SDK's example server does).
 	 */
-	private volatile HttpClient.Version pinnedVersion;
+	private volatile HttpClient.@Nullable Version pinnedVersion;
 
 	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
 
@@ -442,14 +454,15 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			// Open the session stream first (the RFD's reconnect order) unless it is already
 			// open: servers allow one receiver per stream, and the TypeScript and Rust servers
 			// answer a second GET with 409.
-			SseStream existing = sessionStreams.get(resolved.scope().sessionId());
+			String sessionId = resolved.scope().boundSessionId();
+			SseStream existing = sessionStreams.get(sessionId);
 			if (existing != null && !existing.closed.get()) {
 				return Mono.empty();
 			}
-			return openSessionStream(resolved.scope().sessionId());
+			return openSessionStream(sessionId);
 		}
-		if (resolved.scope().isSession() && !sessionStreams.containsKey(resolved.scope().sessionId())) {
-			return openSessionStream(resolved.scope().sessionId());
+		if (resolved.scope().isSession() && !sessionStreams.containsKey(resolved.scope().boundSessionId())) {
+			return openSessionStream(resolved.scope().boundSessionId());
 		}
 		return Mono.empty();
 	}
@@ -547,7 +560,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			builder.header(HEADER_CONNECTION_ID, currentConnectionId);
 		}
 		if (scope.isSession()) {
-			builder.header(HEADER_SESSION_ID, scope.sessionId());
+			builder.header(HEADER_SESSION_ID, scope.boundSessionId());
 		}
 	}
 
@@ -583,7 +596,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
 	}
 
-	private ResolvedOutboundRoute resolveRequestOrNotificationRoute(JSONRPCMessage message, String method, Object params) {
+	private ResolvedOutboundRoute resolveRequestOrNotificationRoute(JSONRPCMessage message, String method,
+			@Nullable Object params) {
 		RouteScope requestScope;
 		RequestKind requestKind = RequestKind.GENERIC;
 		RouteScope responseScope;
@@ -626,14 +640,14 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				responseScope = requestScope;
 		}
 
-		OutboundRequestRoute requestRoute = null;
+		@Nullable OutboundRequestRoute requestRoute = null;
 		if (message instanceof AcpSchema.JSONRPCRequest) {
 			requestRoute = new OutboundRequestRoute(requestKind, requestScope, responseScope);
 		}
 		return new ResolvedOutboundRoute(message, requestScope, requestRoute);
 	}
 
-	private Optional<String> extractSessionId(Object params) {
+	private Optional<String> extractSessionId(@Nullable Object params) {
 		if (params == null) {
 			return Optional.empty();
 		}
@@ -642,7 +656,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return sessionId == null ? Optional.empty() : Optional.of(sessionId.toString());
 	}
 
-	private String requireSessionId(Object params, String method) {
+	private String requireSessionId(@Nullable Object params, String method) {
 		return extractSessionId(params)
 			.filter(sessionId -> !sessionId.isBlank())
 			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for outbound method " + method));
@@ -707,7 +721,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 					"Failed to open session SSE stream for session " + sessionId, error)));
 	}
 
-	private AcpSchema.JSONRPCResponse errorResponse(Object id, String message, Throwable error) {
+	private AcpSchema.JSONRPCResponse errorResponse(Object id, String message, @Nullable Throwable error) {
 		Object data = error == null ? null : error.getMessage();
 		return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
 				new AcpSchema.JSONRPCError(AcpErrorCodes.INTERNAL_ERROR, message, data));
@@ -824,7 +838,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private boolean replaceStream(SseStream old, SseStream reopened) {
 		if (old.scope.isSession()) {
-			return sessionStreams.replace(old.scope.sessionId(), old, reopened);
+			return sessionStreams.replace(old.scope.boundSessionId(), old, reopened);
 		}
 		synchronized (this) {
 			if (this.connectionStream != old) {
@@ -850,8 +864,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			terminateAfterSseFailure(error);
 			return;
 		}
-		if (sessionStreams.remove(scope.sessionId(), stream)) {
-			sessionStreamOpenOperations.remove(scope.sessionId());
+		if (sessionStreams.remove(scope.boundSessionId(), stream)) {
+			sessionStreamOpenOperations.remove(scope.boundSessionId());
 			logger.info("Session SSE stream closed; it will be reopened before the next session request: {}", scope);
 		}
 	}
@@ -885,7 +899,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return jsonMapper.convertValue(data, typeRef);
 	}
 
-	private record ResolvedOutboundRoute(JSONRPCMessage message, RouteScope scope, OutboundRequestRoute requestRoute) {
+	private record ResolvedOutboundRoute(JSONRPCMessage message, RouteScope scope,
+			@Nullable OutboundRequestRoute requestRoute) {
 	}
 
 	private <T> Mono<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
@@ -922,7 +937,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 		private final AtomicBoolean closed = new AtomicBoolean(false);
 
-		private Future<?> readerTask;
+		private volatile @Nullable Future<?> readerTask;
 
 		/** Whether this stream carried at least one event; resets the reconnect budget. */
 		private volatile boolean delivered;
@@ -952,6 +967,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				}
 				catch (IOException ignored) {
 				}
+				Future<?> readerTask = this.readerTask;
 				if (readerTask != null) {
 					readerTask.cancel(true);
 				}

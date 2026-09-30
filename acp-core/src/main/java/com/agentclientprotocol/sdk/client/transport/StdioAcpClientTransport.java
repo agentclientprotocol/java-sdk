@@ -22,6 +22,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
@@ -56,19 +57,19 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.Many<JSONRPCMessage> outboundSink;
 
-	/** The agent process being communicated with */
-	private Process process;
+	/** The agent process being communicated with; null until {@link #connect} starts it */
+	private volatile @Nullable Process process;
 
-	private AcpJsonMapper jsonMapper;
+	private final AcpJsonMapper jsonMapper;
 
 	/** Scheduler for handling inbound messages from the agent process */
-	private Scheduler inboundScheduler;
+	private final Scheduler inboundScheduler;
 
 	/** Scheduler for handling outbound messages to the agent process */
-	private Scheduler outboundScheduler;
+	private final Scheduler outboundScheduler;
 
 	/** Scheduler for handling error messages from the agent process */
-	private Scheduler errorScheduler;
+	private final Scheduler errorScheduler;
 
 	/** Parameters for configuring and starting the agent process */
 	private final AgentParameters params;
@@ -167,23 +168,19 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 				processBuilder.environment().putAll(params.getEnv());
 
 				// Start the process
+				Process started;
 				try {
-					this.process = processBuilder.start();
+					started = processBuilder.start();
 				}
 				catch (IOException e) {
 					throw new RuntimeException("Failed to start process with command: " + fullCommand, e);
 				}
-
-				// Validate process streams
-				if (this.process.getInputStream() == null || process.getOutputStream() == null) {
-					this.process.destroy();
-					throw new RuntimeException("Process input or output stream is null");
-				}
+				this.process = started;
 
 				// Start threads
-				startInboundProcessing();
-				startOutboundProcessing();
-				startErrorProcessing();
+				startInboundProcessing(started);
+				startOutboundProcessing(started);
+				startErrorProcessing(started);
 				logger.info("ACP agent started");
 			});
 		});
@@ -213,11 +210,16 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * Waits for the agent process to exit.
+	 * @throws IllegalStateException if {@link #connect} has not started the process
 	 * @throws RuntimeException if the process is interrupted while waiting
 	 */
 	public void awaitForExit() {
+		Process process = this.process;
+		if (process == null) {
+			throw new IllegalStateException("The agent process has not been started: connect first");
+		}
 		try {
-			this.process.waitFor();
+			process.waitFor();
 		}
 		catch (InterruptedException e) {
 			throw new RuntimeException("Process interrupted", e);
@@ -228,7 +230,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * Starts the error processing thread that reads from the process's error stream.
 	 * Error messages are logged and emitted to the error sink.
 	 */
-	private void startErrorProcessing() {
+	private void startErrorProcessing(Process process) {
 		this.errorScheduler.schedule(() -> {
 			try (BufferedReader processErrorReader = new BufferedReader(
 					new InputStreamReader(process.getErrorStream()))) {
@@ -287,7 +289,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * Starts the inbound processing thread that reads JSON-RPC messages from the
 	 * process's input stream. Messages are deserialized and emitted to the inbound sink.
 	 */
-	private void startInboundProcessing() {
+	private void startInboundProcessing(Process process) {
 		this.inboundScheduler.schedule(() -> {
 			try (BufferedReader processReader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
 				String line;
@@ -327,7 +329,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * process's output stream. Messages are serialized to JSON and written with a newline
 	 * delimiter.
 	 */
-	private void startOutboundProcessing() {
+	private void startOutboundProcessing(Process process) {
 		this.handleOutbound(messages -> messages
 			// this bit is important since writes come from user threads, and we
 			// want to ensure that the actual writing happens on a dedicated thread
@@ -342,7 +344,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 						jsonMessage = jsonMessage.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
 						logger.trace("SEND: {}", jsonMessage);
 
-						var os = this.process.getOutputStream();
+						var os = process.getOutputStream();
 						synchronized (os) {
 							os.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
 							os.write("\n".getBytes(StandardCharsets.UTF_8));
@@ -390,9 +392,10 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			// Destroy process FIRST - this closes streams and unblocks readLine()
 			// Use blocking waitFor() instead of Mono.fromFuture(process.onExit())
 			// to avoid ForkJoinPool.commonPool (per BEST-PRACTICES-REACTIVE-SCHEDULERS.md Rule 1)
-			if (this.process != null) {
+			Process process = this.process;
+			if (process != null) {
 				logger.debug("Sending TERM to process");
-				this.process.destroy();
+				process.destroy();
 				try {
 					boolean exited = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
 					if (exited) {

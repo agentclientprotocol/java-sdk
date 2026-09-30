@@ -55,6 +55,17 @@ class StdioAcpClientTransportTest {
 	}
 
 	@Test
+	void awaitForExitBeforeConnectIsRefused() {
+		// No process exists until connect starts one; this used to fail with a
+		// NullPointerException on the unset process field.
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(AgentParameters.builder("gemini").build(),
+				AcpJsonMapper.createDefault());
+
+		assertThatThrownBy(transport::awaitForExit).isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("connect first");
+	}
+
+	@Test
 	void testProtocolVersions() {
 		AgentParameters params = AgentParameters.builder("gemini").build();
 		AcpJsonMapper mapper = AcpJsonMapper.createDefault();
