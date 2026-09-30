@@ -702,9 +702,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return emitInbound(response);
 		}
 
+		Object result = response.result();
+		if (result == null) {
+			return emitInbound(errorResponse(response.id(), "session/new response carried no result", null));
+		}
 		String sessionId;
 		try {
-			AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(response.result(),
+			AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(result,
 					new TypeRef<AcpSchema.NewSessionResponse>() {
 					});
 			sessionId = sessionResponse.sessionId();
@@ -721,7 +725,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 					"Failed to open session SSE stream for session " + sessionId, error)));
 	}
 
-	private AcpSchema.JSONRPCResponse errorResponse(Object id, String message, @Nullable Throwable error) {
+	private AcpSchema.JSONRPCResponse errorResponse(@Nullable Object id, String message, @Nullable Throwable error) {
 		Object data = error == null ? null : error.getMessage();
 		return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
 				new AcpSchema.JSONRPCError(AcpErrorCodes.INTERNAL_ERROR, message, data));

@@ -208,7 +208,7 @@ final class StreamableHttpConnection {
 		}
 
 		String method;
-		Object params;
+		@Nullable Object params;
 		Object id = null;
 		if (message instanceof AcpSchema.JSONRPCRequest request) {
 			method = request.method();

@@ -171,7 +171,7 @@ PromptResponse handle(PromptRequest req, SyncPromptContext ctx) {
 
     // Execute terminal commands (requires client capabilities)
     CommandResult result = ctx.execute("ls", "-la");
-    if (result.exitCode() == 0) {
+    if (result.success()) {
         ctx.sendMessage("Output: " + result.output());
     }
 

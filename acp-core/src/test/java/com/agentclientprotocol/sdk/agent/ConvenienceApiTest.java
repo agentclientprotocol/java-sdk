@@ -552,6 +552,47 @@ class ConvenienceApiTest {
 	}
 
 	@Test
+	void executeReportsACommandKilledBySignal() throws Exception {
+		// A command killed by a signal has no exit code; execute() used to unbox the
+		// absent exit code and fail the prompt with a NullPointerException.
+		AtomicReference<Object> cmdResult = new AtomicReference<>();
+
+		AcpSyncAgent agent = AcpAgent.sync(transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("signal-session", null, null))
+			.promptHandler((request, context) -> {
+				cmdResult.set(context.execute("sleep", "100"));
+				return PromptResponse.endTurn();
+			})
+			.build();
+
+		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.createTerminalHandler(req -> Mono.just(new CreateTerminalResponse("term-killed")))
+			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(null, "SIGKILL")))
+			.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("", false, null)))
+			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.build();
+
+		agent.start();
+		Thread.sleep(100);
+
+		client.initialize(new InitializeRequest(1, new ClientCapabilities(null, true))).block(TIMEOUT);
+		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+		client.prompt(new PromptRequest("signal-session", List.of(new TextContent("test")))).block(TIMEOUT);
+
+		assertThat(cmdResult.get()).isInstanceOf(CommandResult.class);
+		CommandResult result = (CommandResult) cmdResult.get();
+		assertThat(result.exitCode()).isNull();
+		assertThat(result.signal()).isEqualTo("SIGKILL");
+		assertThat(result.success()).isFalse();
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
+	@Test
 	void executeWithCommandBuilderWorks() throws Exception {
 		AtomicReference<String> capturedCwd = new AtomicReference<>();
 

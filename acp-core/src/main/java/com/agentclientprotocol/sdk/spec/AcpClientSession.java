@@ -9,6 +9,7 @@ import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +96,7 @@ public class AcpClientSession implements AcpSession {
 	 * response, so every request is failed immediately with the cause instead of waiting
 	 * out the request timeout.
 	 */
-	private volatile Throwable connectFailure;
+	private volatile @Nullable Throwable connectFailure;
 
 	/** Set once this session starts closing itself, so a transport termination it caused is not reported. */
 	private volatile boolean closing;
@@ -111,8 +112,9 @@ public class AcpClientSession implements AcpSession {
 
 		/**
 		 * Handles an incoming request with the given parameters.
-		 * @param params The request parameters
-		 * @return A Mono containing the response object
+		 * @param params The request parameters; an omitted params arrives as an empty
+		 * object
+		 * @return A Mono containing the response object; it must not complete empty
 		 */
 		Mono<T> handle(Object params);
 
@@ -127,7 +129,8 @@ public class AcpClientSession implements AcpSession {
 
 		/**
 		 * Handles an incoming notification with the given parameters.
-		 * @param params The notification parameters
+		 * @param params The notification parameters; an omitted params arrives as an empty
+		 * object
 		 * @return A Mono that completes when the notification is processed
 		 */
 		Mono<Void> handle(Object params);
@@ -198,7 +201,7 @@ public class AcpClientSession implements AcpSession {
 		}, this::onTransportTerminated, () -> onTransportTerminated(null));
 	}
 
-	private void onTransportTerminated(Throwable cause) {
+	private void onTransportTerminated(@Nullable Throwable cause) {
 		if (this.closing) {
 			return;
 		}
@@ -228,7 +231,7 @@ public class AcpClientSession implements AcpSession {
 		dismissPendingResponses(null);
 	}
 
-	private void dismissPendingResponses(Throwable cause) {
+	private void dismissPendingResponses(@Nullable Throwable cause) {
 		this.pendingResponses.forEach((id, sink) -> {
 			logger.warn("Abruptly terminating exchange for request {}", id);
 			sink.error(new RuntimeException("ACP session with agent terminated", cause));
@@ -270,7 +273,7 @@ public class AcpClientSession implements AcpSession {
 					errorCode = AcpErrorCodes.INTERNAL_ERROR;
 				}
 				var errorResponse = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-						new AcpSchema.JSONRPCError(errorCode, error.getMessage(), errorData));
+						new AcpSchema.JSONRPCError(errorCode, errorMessage(error), errorData));
 				return Mono.just(errorResponse);
 			}).flatMap(this.transport::sendMessage).onErrorComplete(t -> {
 				logger.warn("Issue sending response to the agent, ", t);
@@ -323,14 +326,14 @@ public class AcpClientSession implements AcpSession {
 
 			logger.debug("Invoking handler for method '{}'", request.method());
 			logger.trace("Handler params for '{}': {}", request.method(), request.params());
-			return handler.handle(request.params())
+			return requireResult(handler.handle(paramsOrEmpty(request.params())), request.method())
 				.doOnSuccess(result -> logger.debug("Handler for '{}' completed successfully", request.method()))
 				.doOnError(error -> logger.debug("Handler for '{}' threw error: {}", request.method(), error.getMessage()))
 				.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
 		});
 	}
 
-	record MethodNotFoundError(String method, String message, Object data) {
+	record MethodNotFoundError(String method, String message, @Nullable Object data) {
 	}
 
 	private MethodNotFoundError getMethodNotFoundError(String method) {
@@ -369,7 +372,7 @@ public class AcpClientSession implements AcpSession {
 				logger.warn("No handler registered for notification method: {}", notification);
 				return Mono.empty();
 			}
-			return handler.handle(notification.params());
+			return handler.handle(paramsOrEmpty(notification.params()));
 		});
 	}
 
@@ -428,7 +431,14 @@ public class AcpClientSession implements AcpSession {
 					deliveredResponseSink.complete();
 				}
 				else {
-					deliveredResponseSink.next(this.transport.unmarshalFrom(jsonRpcResponse.result(), typeRef));
+					Object result = jsonRpcResponse.result();
+					if (result == null) {
+						deliveredResponseSink.error(new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+								"The response to " + method + " carried no result"));
+					}
+					else {
+						deliveredResponseSink.next(this.transport.unmarshalFrom(result, typeRef));
+					}
 				}
 			}
 		});
@@ -441,7 +451,7 @@ public class AcpClientSession implements AcpSession {
 	 * @return A Mono that completes when the notification is sent
 	 */
 	@Override
-	public Mono<Void> sendNotification(String method, Object params) {
+	public Mono<Void> sendNotification(String method, @Nullable Object params) {
 		return Mono.defer(() -> {
 			Throwable failure = this.connectFailure;
 			if (failure != null) {
@@ -483,6 +493,27 @@ public class AcpClientSession implements AcpSession {
 		dismissPendingResponses();
 		notificationSink.tryEmitComplete();
 		notificationSubscription.dispose();
+	}
+
+	/**
+	 * The params a handler receives. JSON-RPC lets a request or notification omit them;
+	 * an omitted params reads as an empty object, which is what a peer sending {@code {}}
+	 * would deliver, so handlers never see null.
+	 */
+	private static Object paramsOrEmpty(@Nullable Object params) {
+		return (params != null) ? params : Map.of();
+	}
+
+	/** JSON-RPC requires an error message; an exception without one is named by its type. */
+	private static String errorMessage(Throwable error) {
+		String message = error.getMessage();
+		return (message != null) ? message : error.getClass().getName();
+	}
+
+	/** A request always gets a response: a handler that completes empty is answered with an error. */
+	private static <T> Mono<T> requireResult(Mono<T> result, String method) {
+		return result.switchIfEmpty(Mono.error(() -> new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+				"The " + method + " handler produced no response")));
 	}
 
 	/**
@@ -531,7 +562,7 @@ public class AcpClientSession implements AcpSession {
 			return error.code();
 		}
 
-		public Object getData() {
+		public @Nullable Object getData() {
 			return error.data();
 		}
 

@@ -108,7 +108,7 @@ final class StreamableHttpRouting {
 				&& AcpSchema.METHOD_INITIALIZE.equals(request.method()) && request.id() != null;
 	}
 
-	RouteScope resolveAgentRequestOrNotificationScope(String method, Object params) {
+	RouteScope resolveAgentRequestOrNotificationScope(String method, @Nullable Object params) {
 		switch (method) {
 			case AcpSchema.METHOD_SESSION_REQUEST_PERMISSION:
 			case AcpSchema.METHOD_SESSION_UPDATE:
@@ -227,7 +227,11 @@ final class StreamableHttpRouting {
 	}
 
 	String extractSessionIdFromNewSessionResponse(AcpSchema.JSONRPCResponse response) {
-		AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(response.result(),
+		Object result = response.result();
+		if (result == null) {
+			throw new AcpConnectionException("session/new response carried no result");
+		}
+		AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(result,
 				new TypeRef<AcpSchema.NewSessionResponse>() {
 				});
 		if (sessionResponse.sessionId() == null || sessionResponse.sessionId().isBlank()) {

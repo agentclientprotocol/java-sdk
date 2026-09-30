@@ -397,4 +397,90 @@ class AcpClientSessionTest {
 		session.close();
 	}
 
+	// ---------------------------------------------------------------------------------
+	// Absent values on the wire (found by the NullAway adoption)
+	// ---------------------------------------------------------------------------------
+
+	private static AcpSchema.JSONRPCResponse awaitSentResponse(MockAcpClientTransport transport) throws Exception {
+		long deadline = System.nanoTime() + TIMEOUT.toNanos();
+		while (System.nanoTime() < deadline) {
+			for (AcpSchema.JSONRPCMessage message : transport.getSentMessages()) {
+				if (message instanceof AcpSchema.JSONRPCResponse response) {
+					return response;
+				}
+			}
+			Thread.sleep(10);
+		}
+		throw new AssertionError("The session sent no JSON-RPC response");
+	}
+
+	@Test
+	void requestWithoutParamsReachesItsHandlerAsAnEmptyObject() throws Exception {
+		// JSON-RPC lets a request omit params; handlers used to receive null.
+		Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = Map.of(ECHO_METHOD,
+				params -> Mono.just(String.valueOf(params)));
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, requestHandlers, Map.of(), Function.identity());
+
+		transport.simulateIncomingMessage(
+				new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "no-params", ECHO_METHOD, null));
+
+		AcpSchema.JSONRPCResponse response = awaitSentResponse(transport);
+		assertThat(response.error()).isNull();
+		assertThat(response.result()).isEqualTo("{}");
+		session.close();
+	}
+
+	@Test
+	void requestHandlerCompletingEmptyIsAnsweredWithAnError() throws Exception {
+		// An empty handler result used to send no response at all: the peer waited for its
+		// timeout. A JSON-RPC request always gets a response.
+		Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = Map.of(ECHO_METHOD,
+				params -> Mono.empty());
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, requestHandlers, Map.of(), Function.identity());
+
+		transport.simulateIncomingMessage(
+				new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "empty", ECHO_METHOD, Map.of()));
+
+		AcpSchema.JSONRPCResponse response = awaitSentResponse(transport);
+		assertThat(response.id()).isEqualTo("empty");
+		assertThat(response.error()).isNotNull();
+		assertThat(response.error().message()).contains("produced no response");
+		session.close();
+	}
+
+	@Test
+	void handlerErrorWithoutMessageStillSendsAnErrorMessage() throws Exception {
+		// JSON-RPC requires error.message; an exception without one used to send none.
+		Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = Map.of(ECHO_METHOD,
+				params -> Mono.error(new IllegalStateException()));
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, requestHandlers, Map.of(), Function.identity());
+
+		transport.simulateIncomingMessage(
+				new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "no-message", ECHO_METHOD, Map.of()));
+
+		AcpSchema.JSONRPCResponse response = awaitSentResponse(transport);
+		assertThat(response.error()).isNotNull();
+		assertThat(response.error().message()).isEqualTo("java.lang.IllegalStateException");
+		session.close();
+	}
+
+	@Test
+	void successResponseWithoutResultFailsTheRequestClearly() {
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<String> responseMono = session.sendRequest(TEST_METHOD, "test", responseType);
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
+		}).expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result")).verify(TIMEOUT);
+
+		session.close();
+	}
+
 }
