@@ -8,6 +8,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.function.Supplier;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Encapsulates a handler method and its target bean.
  * Supports both eager instance and lazy factory-based construction.
@@ -105,7 +107,7 @@ public final class AcpHandlerMethod {
 	 * @return the return value
 	 * @throws Exception if invocation fails
 	 */
-	public Object invoke(Object[] args) throws Exception {
+	public @Nullable Object invoke(@Nullable Object[] args) throws Exception {
 		try {
 			return method.invoke(getBean(), args);
 		}

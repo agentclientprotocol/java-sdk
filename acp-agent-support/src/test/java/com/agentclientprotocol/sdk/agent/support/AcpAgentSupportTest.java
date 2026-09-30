@@ -56,6 +56,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
+import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 
 import org.junit.jupiter.api.AfterEach;
@@ -63,6 +64,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for {@link AcpAgentSupport}.
@@ -299,6 +301,78 @@ class AcpAgentSupportTest {
 
 		assertThat(loadedSessionId.get()).isEqualTo("existing-session");
 		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void requestHandlerWithoutResultAnswersWithError() throws Exception {
+		// A void handler for a request used to produce no JSON-RPC response at all, leaving
+		// the client waiting for its timeout. It now answers with an error.
+		@AcpAgent
+		class VoidSetModeAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@SetSessionMode
+			void setMode(SetSessionModeRequest req) {
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new VoidSetModeAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+
+		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
+			.hasMessageContaining("produced no response");
+	}
+
+	@Test
+	void requestVetoedByInterceptorAnswersWithError() throws Exception {
+		// A preInvoke veto on a request used to produce no JSON-RPC response at all.
+		AcpInterceptor vetoSetMode = new AcpInterceptor() {
+			@Override
+			public boolean preInvoke(AcpInvocationContext context) {
+				return !"session/set_mode".equals(context.getAcpMethod());
+			}
+		};
+
+		@AcpAgent
+		class SetModeAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@SetSessionMode
+			SetSessionModeResponse setMode(SetSessionModeRequest req) {
+				return new SetSessionModeResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new SetModeAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.interceptor(vetoSetMode)
+				.build();
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+
+		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
+			.hasMessageContaining("produced no response");
 	}
 
 	@Test

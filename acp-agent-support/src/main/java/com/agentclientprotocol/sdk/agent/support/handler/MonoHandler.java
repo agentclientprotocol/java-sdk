@@ -10,6 +10,7 @@ import java.lang.reflect.Type;
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
 
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -29,7 +30,8 @@ public class MonoHandler implements ReturnValueHandler {
 	}
 
 	@Override
-	public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context) {
+	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context) {
 		if (returnValue == null) {
 			return null;
 		}

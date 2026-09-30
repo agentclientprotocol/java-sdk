@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Converts String return values to {@link PromptResponse} using
@@ -25,7 +26,8 @@ public class StringToPromptResponseHandler implements ReturnValueHandler {
 	}
 
 	@Override
-	public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context) {
+	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context) {
 		// Only convert to PromptResponse for prompt handlers
 		if ("session/prompt".equals(context.getAcpMethod())) {
 			String text = (String) returnValue;

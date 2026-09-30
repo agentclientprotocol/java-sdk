@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Composite that chains multiple argument resolvers.
@@ -85,7 +86,7 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 	}
 
 	@Override
-	public Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
+	public @Nullable Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
 		ArgumentResolver resolver = getResolver(parameter);
 		if (resolver == null) {
 			throw new ArgumentResolutionException(
@@ -95,7 +96,7 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 		return resolver.resolveArgument(parameter, context);
 	}
 
-	private ArgumentResolver getResolver(AcpMethodParameter parameter) {
+	private @Nullable ArgumentResolver getResolver(AcpMethodParameter parameter) {
 		// Check cache first
 		ArgumentResolver resolver = resolverCache.get(parameter);
 		if (resolver != null) {
