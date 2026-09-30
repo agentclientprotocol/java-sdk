@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
@@ -55,7 +56,8 @@ public final class RemoteAcpConnection {
 
 	private final AtomicBoolean closing = new AtomicBoolean(false);
 
-	private volatile AcpAsyncAgent agent;
+	/** The connection's agent runtime; null until {@link #start} creates it. */
+	private volatile @Nullable AcpAsyncAgent agent;
 
 	/**
 	 * Creates a new remote ACP connection core.
@@ -93,8 +95,9 @@ public final class RemoteAcpConnection {
 			if (!started.compareAndSet(false, true)) {
 				return Mono.<Void>error(new IllegalStateException("Already started"));
 			}
-			this.agent = agentFactory.create(transport);
-			return this.agent.start();
+			AcpAsyncAgent created = agentFactory.create(transport);
+			this.agent = created;
+			return created.start();
 		}).doOnError(this::signalException);
 	}
 
@@ -176,7 +179,7 @@ public final class RemoteAcpConnection {
 		 * every in-flight handler: completing the inbound sink alone lets flatMap's active
 		 * inner publishers (a running prompt, for instance) run to completion after DELETE.
 		 */
-		private volatile Disposable inboundSubscription;
+		private volatile @Nullable Disposable inboundSubscription;
 
 		private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Remote ACP transport error", t);
 

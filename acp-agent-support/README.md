@@ -166,8 +166,8 @@ PromptResponse handle(PromptRequest req, SyncPromptContext ctx) {
     // Ask for user permission
     boolean allowed = ctx.askPermission("Delete all files in /tmp?");
 
-    // Multiple choice
-    String choice = ctx.askChoice("Which format?", "JSON", "XML", "YAML");
+    // Multiple choice (empty if the user cancelled)
+    Optional<String> choice = ctx.askChoice("Which format?", "JSON", "XML", "YAML");
 
     // Execute terminal commands (requires client capabilities)
     CommandResult result = ctx.execute("ls", "-la");
@@ -389,8 +389,9 @@ class CodeAssistant {
 
         ctx.sendThought("Analyzing the code...");
 
-        // Check if we can read files
-        if (ctx.getClientCapabilities().readTextFile()) {
+        // Check if we can read files (capabilities are null before initialize)
+        NegotiatedCapabilities caps = ctx.getClientCapabilities();
+        if (caps != null && caps.supportsReadTextFile()) {
             ctx.sendMessage("I can access files if needed.");
         }
 

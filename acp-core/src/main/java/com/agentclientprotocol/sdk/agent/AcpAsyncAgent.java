@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -58,7 +59,7 @@ public interface AcpAsyncAgent {
 	 * </p>
 	 * @return the negotiated client capabilities, or null if not initialized
 	 */
-	NegotiatedCapabilities getClientCapabilities();
+	@Nullable NegotiatedCapabilities getClientCapabilities();
 
 	/**
 	 * Sends a session update notification to the client.

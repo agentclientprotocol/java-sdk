@@ -12,6 +12,7 @@ import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -580,42 +581,42 @@ public interface AcpAgent {
 
 		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
-		private InitializeHandler initializeHandler;
+		private @Nullable InitializeHandler initializeHandler;
 
-		private AuthenticateHandler authenticateHandler;
+		private @Nullable AuthenticateHandler authenticateHandler;
 
-		private LogoutHandler logoutHandler;
+		private @Nullable LogoutHandler logoutHandler;
 
-		private NewSessionHandler newSessionHandler;
+		private @Nullable NewSessionHandler newSessionHandler;
 
-		private LoadSessionHandler loadSessionHandler;
+		private @Nullable LoadSessionHandler loadSessionHandler;
 
-		private PromptHandler promptHandler;
+		private @Nullable PromptHandler promptHandler;
 
-		private SetSessionModeHandler setSessionModeHandler;
+		private @Nullable SetSessionModeHandler setSessionModeHandler;
 
 		@SuppressWarnings("removal")
-		private SetSessionModelHandler setSessionModelHandler;
+		private @Nullable SetSessionModelHandler setSessionModelHandler;
 
-		private ListSessionsHandler listSessionsHandler;
+		private @Nullable ListSessionsHandler listSessionsHandler;
 
-		private CloseSessionHandler closeSessionHandler;
+		private @Nullable CloseSessionHandler closeSessionHandler;
 
-		private DeleteSessionHandler deleteSessionHandler;
+		private @Nullable DeleteSessionHandler deleteSessionHandler;
 
-		private ResumeSessionHandler resumeSessionHandler;
+		private @Nullable ResumeSessionHandler resumeSessionHandler;
 
-		private ForkSessionHandler forkSessionHandler;
+		private @Nullable ForkSessionHandler forkSessionHandler;
 
-		private SetSessionConfigOptionHandler setSessionConfigOptionHandler;
+		private @Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler;
 
-		private ListProvidersHandler listProvidersHandler;
+		private @Nullable ListProvidersHandler listProvidersHandler;
 
-		private SetProviderHandler setProviderHandler;
+		private @Nullable SetProviderHandler setProviderHandler;
 
-		private DisableProviderHandler disableProviderHandler;
+		private @Nullable DisableProviderHandler disableProviderHandler;
 
-		private CancelHandler cancelHandler;
+		private @Nullable CancelHandler cancelHandler;
 
 		AsyncAgentBuilder(AcpAgentTransport transport) {
 			Assert.notNull(transport, "Transport must not be null");
@@ -1065,49 +1066,31 @@ public interface AcpAgent {
 		// ========================================================================
 
 		private static InitializeHandler fromSync(SyncInitializeHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static AuthenticateHandler fromSync(SyncAuthenticateHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static LogoutHandler fromSync(SyncLogoutHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static NewSessionHandler fromSync(SyncNewSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static LoadSessionHandler fromSync(SyncLoadSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static PromptHandler fromSync(SyncPromptHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return (request, asyncContext) -> Mono.fromCallable(() -> {
 				// Create a blocking wrapper around the async PromptContext
 				SyncPromptContext syncContext = new DefaultSyncPromptContext(asyncContext);
@@ -1116,9 +1099,6 @@ public interface AcpAgent {
 		}
 
 		private static SetSessionModeHandler fromSync(SyncSetSessionModeHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
@@ -1126,89 +1106,56 @@ public interface AcpAgent {
 		@Deprecated(forRemoval = true)
 		@SuppressWarnings("removal")
 		private static SetSessionModelHandler fromSync(SyncSetSessionModelHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static ListSessionsHandler fromSync(SyncListSessionsHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static CloseSessionHandler fromSync(SyncCloseSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static DeleteSessionHandler fromSync(SyncDeleteSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static ResumeSessionHandler fromSync(SyncResumeSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static ForkSessionHandler fromSync(SyncForkSessionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static SetSessionConfigOptionHandler fromSync(SyncSetSessionConfigOptionHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static ListProvidersHandler fromSync(SyncListProvidersHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static SetProviderHandler fromSync(SyncSetProviderHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static DisableProviderHandler fromSync(SyncDisableProviderHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		private static CancelHandler fromSync(SyncCancelHandler syncHandler) {
-			if (syncHandler == null) {
-				return null;
-			}
 			return notification -> Mono.<Void>fromRunnable(() -> syncHandler.handle(notification))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}

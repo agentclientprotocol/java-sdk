@@ -15,6 +15,7 @@ import com.agentclientprotocol.sdk.spec.AcpAgentSession;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -38,64 +39,65 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final Duration requestTimeout;
 
-	private final AcpAgent.InitializeHandler initializeHandler;
+	private final AcpAgent.@Nullable InitializeHandler initializeHandler;
 
-	private final AcpAgent.AuthenticateHandler authenticateHandler;
+	private final AcpAgent.@Nullable AuthenticateHandler authenticateHandler;
 
-	private final AcpAgent.LogoutHandler logoutHandler;
+	private final AcpAgent.@Nullable LogoutHandler logoutHandler;
 
-	private final AcpAgent.NewSessionHandler newSessionHandler;
+	private final AcpAgent.@Nullable NewSessionHandler newSessionHandler;
 
-	private final AcpAgent.LoadSessionHandler loadSessionHandler;
+	private final AcpAgent.@Nullable LoadSessionHandler loadSessionHandler;
 
-	private final AcpAgent.PromptHandler promptHandler;
+	private final AcpAgent.@Nullable PromptHandler promptHandler;
 
-	private final AcpAgent.SetSessionModeHandler setSessionModeHandler;
+	private final AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler;
 
 	@SuppressWarnings("removal")
-	private final AcpAgent.SetSessionModelHandler setSessionModelHandler;
+	private final AcpAgent.@Nullable SetSessionModelHandler setSessionModelHandler;
 
-	private final AcpAgent.ListSessionsHandler listSessionsHandler;
+	private final AcpAgent.@Nullable ListSessionsHandler listSessionsHandler;
 
-	private final AcpAgent.CloseSessionHandler closeSessionHandler;
+	private final AcpAgent.@Nullable CloseSessionHandler closeSessionHandler;
 
-	private final AcpAgent.DeleteSessionHandler deleteSessionHandler;
+	private final AcpAgent.@Nullable DeleteSessionHandler deleteSessionHandler;
 
-	private final AcpAgent.ResumeSessionHandler resumeSessionHandler;
+	private final AcpAgent.@Nullable ResumeSessionHandler resumeSessionHandler;
 
-	private final AcpAgent.ForkSessionHandler forkSessionHandler;
+	private final AcpAgent.@Nullable ForkSessionHandler forkSessionHandler;
 
-	private final AcpAgent.SetSessionConfigOptionHandler setSessionConfigOptionHandler;
+	private final AcpAgent.@Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler;
 
-	private final AcpAgent.ListProvidersHandler listProvidersHandler;
+	private final AcpAgent.@Nullable ListProvidersHandler listProvidersHandler;
 
-	private final AcpAgent.SetProviderHandler setProviderHandler;
+	private final AcpAgent.@Nullable SetProviderHandler setProviderHandler;
 
-	private final AcpAgent.DisableProviderHandler disableProviderHandler;
+	private final AcpAgent.@Nullable DisableProviderHandler disableProviderHandler;
 
-	private final AcpAgent.CancelHandler cancelHandler;
+	private final AcpAgent.@Nullable CancelHandler cancelHandler;
 
-	private volatile AcpAgentSession session;
+	/** The session serving this agent; null until {@link #start()}. */
+	private volatile @Nullable AcpAgentSession session;
 
 	/**
 	 * Capabilities negotiated with the client during initialization.
 	 */
-	private final AtomicReference<NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
+	private final AtomicReference<@Nullable NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
 	@SuppressWarnings("removal") // accepts the deprecated-for-removal SetSessionModelHandler
 	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout,
-			AcpAgent.InitializeHandler initializeHandler, AcpAgent.AuthenticateHandler authenticateHandler,
-			AcpAgent.LogoutHandler logoutHandler, AcpAgent.NewSessionHandler newSessionHandler,
-			AcpAgent.LoadSessionHandler loadSessionHandler,
-			AcpAgent.PromptHandler promptHandler, AcpAgent.SetSessionModeHandler setSessionModeHandler,
-			AcpAgent.SetSessionModelHandler setSessionModelHandler,
-			AcpAgent.ListSessionsHandler listSessionsHandler, AcpAgent.CloseSessionHandler closeSessionHandler,
-			AcpAgent.DeleteSessionHandler deleteSessionHandler,
-			AcpAgent.ResumeSessionHandler resumeSessionHandler, AcpAgent.ForkSessionHandler forkSessionHandler,
-			AcpAgent.SetSessionConfigOptionHandler setSessionConfigOptionHandler,
-			AcpAgent.ListProvidersHandler listProvidersHandler, AcpAgent.SetProviderHandler setProviderHandler,
-			AcpAgent.DisableProviderHandler disableProviderHandler,
-			AcpAgent.CancelHandler cancelHandler) {
+			AcpAgent.@Nullable InitializeHandler initializeHandler, AcpAgent.@Nullable AuthenticateHandler authenticateHandler,
+			AcpAgent.@Nullable LogoutHandler logoutHandler, AcpAgent.@Nullable NewSessionHandler newSessionHandler,
+			AcpAgent.@Nullable LoadSessionHandler loadSessionHandler,
+			AcpAgent.@Nullable PromptHandler promptHandler, AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler,
+			AcpAgent.@Nullable SetSessionModelHandler setSessionModelHandler,
+			AcpAgent.@Nullable ListSessionsHandler listSessionsHandler, AcpAgent.@Nullable CloseSessionHandler closeSessionHandler,
+			AcpAgent.@Nullable DeleteSessionHandler deleteSessionHandler,
+			AcpAgent.@Nullable ResumeSessionHandler resumeSessionHandler, AcpAgent.@Nullable ForkSessionHandler forkSessionHandler,
+			AcpAgent.@Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler,
+			AcpAgent.@Nullable ListProvidersHandler listProvidersHandler, AcpAgent.@Nullable SetProviderHandler setProviderHandler,
+			AcpAgent.@Nullable DisableProviderHandler disableProviderHandler,
+			AcpAgent.@Nullable CancelHandler cancelHandler) {
 		this.transport = transport;
 		this.requestTimeout = requestTimeout;
 		this.initializeHandler = initializeHandler;
@@ -330,7 +332,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	}
 
 	@Override
-	public NegotiatedCapabilities getClientCapabilities() {
+	public @Nullable NegotiatedCapabilities getClientCapabilities() {
 		return clientCapabilities.get();
 	}
 
