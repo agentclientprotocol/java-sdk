@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `AcpProtocolException` no longer converts to or from `JSONRPCError`.** Use
+  `AcpSchema.JSONRPCError.from(exception)` instead of `exception.toJsonRpcError()`, and
+  `error.toException()` instead of `new AcpProtocolException(error)`. Dependencies between the `spec` and
+  `error` packages now run one way.
+
+### Build
+
+- Architecture rules (ArchUnit) guard the package structure: acp-core's layers (util and json under the
+  protocol, protocol under capabilities, capabilities under client and agent, which never depend on each
+  other), no package cycles, no Jackson databind in acp-core, and no Jetty types on the path of
+  `StreamableHttpAcpServlet`, which must stay mountable in any Servlet 6 container.
+
 ## [0.18.0] - 2026-09-25
 
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, on plain `http://` and

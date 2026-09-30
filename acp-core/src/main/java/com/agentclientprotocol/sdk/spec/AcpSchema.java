@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -201,6 +202,24 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCError(@JsonProperty("code") int code, @JsonProperty("message") String message,
 			@JsonProperty("data") Object data) {
+
+		/**
+		 * The wire form of a protocol exception.
+		 * @param exception the exception to send
+		 * @return a JSON-RPC error carrying its code, message and data
+		 */
+		public static JSONRPCError from(AcpProtocolException exception) {
+			return new JSONRPCError(exception.getCode(), exception.getMessage(), exception.getData());
+		}
+
+		/**
+		 * The exception form of an error received from the peer.
+		 * @return a protocol exception carrying this error's code, message and data
+		 */
+		public AcpProtocolException toException() {
+			return new AcpProtocolException(code, message, data);
+		}
+
 	}
 
 	/**

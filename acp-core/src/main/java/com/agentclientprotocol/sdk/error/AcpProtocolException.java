@@ -4,7 +4,6 @@
 
 package com.agentclientprotocol.sdk.error;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
 
 /**
  * Exception representing a JSON-RPC protocol error from the peer.
@@ -45,16 +44,6 @@ public class AcpProtocolException extends AcpException {
 	private final Object data;
 
 	/**
-	 * Constructs a new protocol exception from a JSON-RPC error.
-	 * @param error the JSON-RPC error from the protocol response
-	 */
-	public AcpProtocolException(AcpSchema.JSONRPCError error) {
-		super(formatMessage(error.code(), error.message()));
-		this.code = error.code();
-		this.data = error.data();
-	}
-
-	/**
 	 * Constructs a new protocol exception with the specified code and message.
 	 * @param code the JSON-RPC error code
 	 * @param message the error message
@@ -92,14 +81,6 @@ public class AcpProtocolException extends AcpException {
 	 */
 	public Object getData() {
 		return data;
-	}
-
-	/**
-	 * Converts this exception to a JSON-RPC error object for sending over the wire.
-	 * @return a JSON-RPC error object
-	 */
-	public AcpSchema.JSONRPCError toJsonRpcError() {
-		return new AcpSchema.JSONRPCError(code, getMessage(), data);
 	}
 
 	/**
