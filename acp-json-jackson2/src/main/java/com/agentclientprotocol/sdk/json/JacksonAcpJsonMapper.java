@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,23 +95,23 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	}
 
 	@Override
-	public <T> T readValue(String content, Class<T> type) throws IOException {
+	public <T> @Nullable T readValue(String content, Class<T> type) throws IOException {
 		return objectMapper.readValue(content, type);
 	}
 
 	@Override
-	public <T> T readValue(byte[] content, Class<T> type) throws IOException {
+	public <T> @Nullable T readValue(byte[] content, Class<T> type) throws IOException {
 		return objectMapper.readValue(content, type);
 	}
 
 	@Override
-	public <T> T readValue(String content, TypeRef<T> type) throws IOException {
+	public <T> @Nullable T readValue(String content, TypeRef<T> type) throws IOException {
 		JavaType javaType = objectMapper.getTypeFactory().constructType(type.getType());
 		return objectMapper.readValue(content, javaType);
 	}
 
 	@Override
-	public <T> T readValue(byte[] content, TypeRef<T> type) throws IOException {
+	public <T> @Nullable T readValue(byte[] content, TypeRef<T> type) throws IOException {
 		JavaType javaType = objectMapper.getTypeFactory().constructType(type.getType());
 		return objectMapper.readValue(content, javaType);
 	}

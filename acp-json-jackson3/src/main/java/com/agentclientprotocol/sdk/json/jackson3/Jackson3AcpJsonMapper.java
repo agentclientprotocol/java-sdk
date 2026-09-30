@@ -8,6 +8,7 @@ import java.io.IOException;
 
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -133,7 +134,7 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	@Override
-	public <T> T readValue(String content, Class<T> type) throws IOException {
+	public <T> @Nullable T readValue(String content, Class<T> type) throws IOException {
 		try {
 			return jsonMapper.readValue(content, type);
 		}
@@ -143,7 +144,7 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	@Override
-	public <T> T readValue(byte[] content, Class<T> type) throws IOException {
+	public <T> @Nullable T readValue(byte[] content, Class<T> type) throws IOException {
 		try {
 			return jsonMapper.readValue(content, type);
 		}
@@ -153,7 +154,7 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	@Override
-	public <T> T readValue(String content, TypeRef<T> type) throws IOException {
+	public <T> @Nullable T readValue(String content, TypeRef<T> type) throws IOException {
 		try {
 			return jsonMapper.readValue(content, javaType(type));
 		}
@@ -163,7 +164,7 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	@Override
-	public <T> T readValue(byte[] content, TypeRef<T> type) throws IOException {
+	public <T> @Nullable T readValue(byte[] content, TypeRef<T> type) throws IOException {
 		try {
 			return jsonMapper.readValue(content, javaType(type));
 		}
