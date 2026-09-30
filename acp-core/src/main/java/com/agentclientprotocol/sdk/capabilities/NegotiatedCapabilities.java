@@ -12,6 +12,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.McpCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ElicitationCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SessionCapabilities;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Tracks the capabilities negotiated during the ACP initialization handshake.
@@ -122,7 +123,7 @@ public final class NegotiatedCapabilities {
 	 * @param caps the client's advertised capabilities, may be null
 	 * @return negotiated capabilities based on client
 	 */
-	public static NegotiatedCapabilities fromClient(ClientCapabilities caps) {
+	public static NegotiatedCapabilities fromClient(@Nullable ClientCapabilities caps) {
 		if (caps == null) {
 			return new Builder().build();
 		}
@@ -152,7 +153,7 @@ public final class NegotiatedCapabilities {
 	 * @param caps the agent's advertised capabilities, may be null
 	 * @return negotiated capabilities based on agent
 	 */
-	public static NegotiatedCapabilities fromAgent(AgentCapabilities caps) {
+	public static NegotiatedCapabilities fromAgent(@Nullable AgentCapabilities caps) {
 		if (caps == null) {
 			return new Builder().build();
 		}

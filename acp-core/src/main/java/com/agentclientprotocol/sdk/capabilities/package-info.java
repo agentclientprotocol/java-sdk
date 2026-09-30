@@ -17,4 +17,7 @@
  *
  * @see com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
  */
+@NullMarked
 package com.agentclientprotocol.sdk.capabilities;
+
+import org.jspecify.annotations.NullMarked;
