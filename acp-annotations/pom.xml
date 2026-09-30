@@ -15,13 +15,20 @@
     <description>Zero-dependency annotations for ACP agent development</description>
 
     <!--
-    IMPORTANT: This module has ZERO dependencies by design.
+    IMPORTANT: This module has ZERO transitive dependencies by design.
     It contains only annotation definitions that can be used
     without pulling in the full ACP runtime.
     -->
 
     <dependencies>
-        <!-- No dependencies - by design -->
+        <!-- The only dependency, and optional so consumers inherit nothing: JSpecify's
+             annotations null-mark this module's package for the build's NullAway check.
+             They have no runtime role. -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 
 </project>

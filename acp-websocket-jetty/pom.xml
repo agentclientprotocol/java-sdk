@@ -17,6 +17,11 @@
     <description>WebSocket agent transport using Jetty - for agents that accept WebSocket connections</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <!-- ACP Core -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>

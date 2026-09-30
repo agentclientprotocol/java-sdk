@@ -17,6 +17,11 @@
     <description>Core ACP implementation with stdio transport; needs one JSON module (acp-json-jackson2 or acp-json-jackson3) at runtime</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <!-- ACP annotations (@UnstableAcpApi, etc.) - zero-dependency module -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>

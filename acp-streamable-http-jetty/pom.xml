@@ -17,6 +17,11 @@
     <description>Streamable HTTP agent transport using Jetty for listener-backed remote agents</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-core</artifactId>

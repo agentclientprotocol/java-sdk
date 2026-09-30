@@ -17,6 +17,11 @@
     <description>Test utilities for ACP SDK - InMemoryTransportPair, MockAcpAgent, MockAcpClient</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <!-- ACP Core (required for transport interfaces and schema types) -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>

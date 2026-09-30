@@ -17,6 +17,11 @@
     <description>ACP JSON mapper implementation based on Jackson 2 (com.fasterxml.jackson.databind)</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-core</artifactId>

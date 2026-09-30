@@ -15,6 +15,11 @@
     <description>Reflection-based runtime for annotation-driven ACP agents</description>
 
     <dependencies>
+        <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <!-- ACP dependencies -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
