@@ -23,6 +23,7 @@ import org.eclipse.jetty.websocket.api.annotations.OnWebSocketError;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketOpen;
 import org.eclipse.jetty.websocket.api.annotations.WebSocket;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -50,7 +51,8 @@ final class StreamableHttpWebSocketConnection {
 
 	private final SerializedWebSocketSender outboundSender = new SerializedWebSocketSender();
 
-	private volatile Session session;
+	/** The client's WebSocket session; null until {@link #open}. */
+	private volatile @Nullable Session session;
 
 	private final AcpJsonMapper jsonMapper;
 

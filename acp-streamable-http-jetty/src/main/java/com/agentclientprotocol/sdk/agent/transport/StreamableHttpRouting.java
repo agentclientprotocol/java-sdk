@@ -12,6 +12,7 @@ import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Routing rules of the Streamable HTTP transport: which stream (connection or session)
@@ -63,7 +64,7 @@ final class StreamableHttpRouting {
 
 	}
 
-	record RouteScope(ScopeKind kind, String sessionId) {
+	record RouteScope(ScopeKind kind, @Nullable String sessionId) {
 
 		static RouteScope connection() {
 			return new RouteScope(ScopeKind.CONNECTION, null);
@@ -77,12 +78,24 @@ final class StreamableHttpRouting {
 			return kind == ScopeKind.SESSION;
 		}
 
+		/**
+		 * The session id this scope routes to. Only session scopes carry one, and every
+		 * caller has already established that the scope is one.
+		 */
+		String boundSessionId() {
+			if (sessionId == null) {
+				throw new IllegalStateException("A " + kind + " route scope has no session id");
+			}
+			return sessionId;
+		}
+
 	}
 
 	record ClientRequestRoute(RequestKind kind, RouteScope requestScope, RouteScope responseScope) {
 	}
 
-	record ResolvedInboundRoute(JSONRPCMessage message, RouteScope requestScope, ClientRequestRoute requestRoute) {
+	record ResolvedInboundRoute(JSONRPCMessage message, RouteScope requestScope,
+			@Nullable ClientRequestRoute requestRoute) {
 	}
 
 	static boolean isInitialize(JSONRPCMessage message) {
@@ -113,9 +126,9 @@ final class StreamableHttpRouting {
 		}
 	}
 
-	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, String sessionHeader) {
+	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, @Nullable String sessionHeader) {
 		String method;
-		Object params;
+		@Nullable Object params;
 		if (message instanceof AcpSchema.JSONRPCRequest request) {
 			method = request.method();
 			params = request.params();
@@ -178,14 +191,14 @@ final class StreamableHttpRouting {
 	}
 
 	/** Like {@link #requireSessionScope} but tolerates a missing header; a conflicting one is still rejected. */
-	RouteScope sessionScopeFromParams(String method, Object params, String sessionHeader) {
+	RouteScope sessionScopeFromParams(String method, @Nullable Object params, @Nullable String sessionHeader) {
 		if (sessionHeader == null) {
 			return RouteScope.session(requireSessionId(params, method));
 		}
 		return requireSessionScope(method, params, sessionHeader);
 	}
 
-	RouteScope requireSessionScope(String method, Object params, String sessionHeader) {
+	RouteScope requireSessionScope(String method, @Nullable Object params, @Nullable String sessionHeader) {
 		String sessionId = requireSessionId(params, method);
 		if (sessionHeader == null) {
 			throw new AcpConnectionException(
@@ -198,7 +211,7 @@ final class StreamableHttpRouting {
 		return RouteScope.session(sessionId);
 	}
 
-	Optional<String> extractSessionId(Object params) {
+	Optional<String> extractSessionId(@Nullable Object params) {
 		if (params == null) {
 			return Optional.empty();
 		}
@@ -207,7 +220,7 @@ final class StreamableHttpRouting {
 		return sessionId == null ? Optional.empty() : Optional.of(sessionId.toString());
 	}
 
-	String requireSessionId(Object params, String method) {
+	String requireSessionId(@Nullable Object params, String method) {
 		return extractSessionId(params)
 			.filter(sessionId -> !sessionId.isBlank())
 			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for method " + method));

@@ -26,6 +26,7 @@ import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketOpen;
 import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -85,7 +86,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private final String path;
 
-	private Server server;
+	/** The embedded Jetty server; null until {@link #start} creates it. */
+	private volatile @Nullable Server server;
 
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
@@ -103,7 +105,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
-	private volatile Session clientSession;
+	/** The connected client's session; null while no client is connected. */
+	private volatile @Nullable Session clientSession;
 
 	private Duration idleTimeout = Duration.ofMinutes(30);
 
@@ -173,7 +176,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			handleIncomingMessages(handler);
 
 			// Create and configure Jetty server
-			server = new Server();
+			Server server = new Server();
+			this.server = server;
 			ServerConnector connector = new ServerConnector(server);
 			connector.setPort(port);
 			server.addConnector(connector);
@@ -278,6 +282,7 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			if (currentSession != null && currentSession.isOpen()) {
 				currentSession.close();
 			}
+			Server server = this.server;
 			if (server != null) {
 				server.stop();
 			}

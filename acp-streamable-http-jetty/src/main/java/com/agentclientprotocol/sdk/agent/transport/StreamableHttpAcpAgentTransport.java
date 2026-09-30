@@ -24,6 +24,7 @@ import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -94,9 +95,9 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
-	private volatile Server server;
+	private volatile @Nullable Server server;
 
-	private volatile ServerConnector connector;
+	private volatile @Nullable ServerConnector connector;
 
 	/**
 	 * Creates a new Streamable HTTP listener on the default ACP path.

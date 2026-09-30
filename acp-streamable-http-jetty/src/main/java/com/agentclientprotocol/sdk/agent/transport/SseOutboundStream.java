@@ -15,6 +15,7 @@ import jakarta.servlet.AsyncListener;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ final class SseOutboundStream {
 	private final ArrayDeque<String> mailbox = new ArrayDeque<>();
 
 	/** Guarded by {@code this}. */
-	private SseSubscriber current;
+	private @Nullable SseSubscriber current;
 
 	/** Guarded by {@code this}. */
 	private boolean closed;

@@ -24,6 +24,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -66,7 +67,7 @@ final class StreamableHttpConnection {
 
 	private final AtomicBoolean initialized = new AtomicBoolean(false);
 
-	private volatile Object initializeRequestId;
+	private volatile @Nullable Object initializeRequestId;
 
 	private final AcpJsonMapper jsonMapper;
 
@@ -105,7 +106,7 @@ final class StreamableHttpConnection {
 		return initializeResponse.asMono().doOnSuccess(ignored -> initialized.set(true));
 	}
 
-	void acceptClientPost(JSONRPCMessage message, String sessionHeader) {
+	void acceptClientPost(JSONRPCMessage message, @Nullable String sessionHeader) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
 			validateClientResponseScope(response, sessionHeader);
 			connection.acceptInbound(message);
@@ -114,7 +115,7 @@ final class StreamableHttpConnection {
 
 		ResolvedInboundRoute resolved = routing.resolveInboundRoute(message, sessionHeader);
 		if (resolved.requestScope().isSession()) {
-			prepareSessionForInbound(resolved.requestScope().sessionId(), resolved.requestRoute());
+			prepareSessionForInbound(resolved.requestScope().boundSessionId(), resolved.requestRoute());
 		}
 		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null
 				&& resolved.requestRoute() != null) {
@@ -123,12 +124,12 @@ final class StreamableHttpConnection {
 		connection.acceptInbound(message);
 	}
 
-	void openStream(HttpServletRequest request, HttpServletResponse response, String sessionId)
+	void openStream(HttpServletRequest request, HttpServletResponse response, @Nullable String sessionId)
 			throws IOException {
 		RouteScope scope = sessionId == null ? RouteScope.connection() : RouteScope.session(sessionId);
 		SseOutboundStream stream;
 		if (scope.isSession()) {
-			stream = openSessionStream(scope.sessionId());
+			stream = openSessionStream(scope.boundSessionId());
 		}
 		else {
 			stream = connectionStream;
@@ -139,7 +140,7 @@ final class StreamableHttpConnection {
 		response.setHeader("Cache-Control", "no-cache");
 		response.setHeader(HEADER_CONNECTION_ID, id);
 		if (scope.isSession()) {
-			response.setHeader(HEADER_SESSION_ID, scope.sessionId());
+			response.setHeader(HEADER_SESSION_ID, scope.boundSessionId());
 		}
 		AsyncContext asyncContext = request.startAsync();
 		asyncContext.setTimeout(0);
@@ -169,7 +170,7 @@ final class StreamableHttpConnection {
 			RouteScope scope = resolveAgentOutboundScope(message);
 			String payload = jsonMapper.writeValueAsString(message);
 			if (scope.isSession()) {
-				sessionStream(scope.sessionId()).push(payload);
+				sessionStream(scope.boundSessionId()).push(payload);
 			}
 			else {
 				connectionStream.push(payload);
@@ -197,10 +198,10 @@ final class StreamableHttpConnection {
 			}
 			if (route.kind() == RequestKind.SESSION_LOAD) {
 				if (response.error() == null) {
-					markSessionKnown(route.requestScope().sessionId());
+					markSessionKnown(route.requestScope().boundSessionId());
 				}
 				else {
-					discardProvisionalSession(route.requestScope().sessionId());
+					discardProvisionalSession(route.requestScope().boundSessionId());
 				}
 			}
 			return route.responseScope();
@@ -229,7 +230,7 @@ final class StreamableHttpConnection {
 		return scope;
 	}
 
-	private void prepareSessionForInbound(String sessionId, ClientRequestRoute route) {
+	private void prepareSessionForInbound(String sessionId, @Nullable ClientRequestRoute route) {
 		SessionState current = sessions.get(sessionId);
 		if (route != null && route.kind() == RequestKind.SESSION_LOAD) {
 			if (current == null) {
@@ -243,7 +244,7 @@ final class StreamableHttpConnection {
 		}
 	}
 
-	private void validateClientResponseScope(AcpSchema.JSONRPCResponse response, String sessionHeader) {
+	private void validateClientResponseScope(AcpSchema.JSONRPCResponse response, @Nullable String sessionHeader) {
 		RouteScope expected = agentRequestRoutes.get(response.id());
 		if (expected == null) {
 			logger.warn("Client posted response for unknown agent request id {}", response.id());

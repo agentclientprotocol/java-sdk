@@ -30,6 +30,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
@@ -89,9 +90,9 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private final transient AtomicBoolean closing = new AtomicBoolean(false);
 
-	private transient volatile Scheduler keepAliveScheduler;
+	private transient volatile @Nullable Scheduler keepAliveScheduler;
 
-	private transient volatile Disposable keepAliveTask;
+	private transient volatile @Nullable Disposable keepAliveTask;
 
 	/**
 	 * Creates a servlet with the default limits.
@@ -428,10 +429,12 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		return Optional.ofNullable(request.getHeader(name)).filter(value -> !value.isBlank());
 	}
 
-	private void writeText(HttpServletResponse response, int status, String body) throws IOException {
+	private void writeText(HttpServletResponse response, int status, @Nullable String body) throws IOException {
 		response.setStatus(status);
 		response.setContentType("text/plain");
-		response.getWriter().write(body);
+		if (body != null) {
+			response.getWriter().write(body);
+		}
 	}
 
 }
