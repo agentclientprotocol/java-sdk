@@ -13,6 +13,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AcpSchema.JSONRPCError.from(exception)` instead of `exception.toJsonRpcError()`, and
   `error.toException()` instead of `new AcpProtocolException(error)`. Dependencies between the `spec` and
   `error` packages now run one way.
+- **Every package is null-marked (JSpecify `@NullMarked`), and the nullness is now part of the API.**
+  Types are non-null unless annotated `@Nullable`, and the annotations say where absence is legal:
+  `AcpSchema` record components follow the ACP schema (optional and nullable fields are `@Nullable`,
+  217 of them; required ones are not), as do the JSON-RPC envelope (`id`, `params`, `result`, `error`,
+  `data`), `AcpJsonMapper.readValue` (the JSON `null` literal), `getClientCapabilities()` and
+  `getAgentCapabilities()` (before initialization), `AcpProtocolException.getData()`, and the
+  annotation-driven support types (resolved arguments, handler return values, interceptor results).
+  Kotlin and other nullness-aware callers see these types; Java callers compile unchanged.
+- **Breaking: `SyncPromptContext.askChoice` returns `Optional<String>`**, empty when the client cancels
+  the choice (it was documented to return null, and failed instead, below). `PromptContext.askChoice`
+  completes empty on cancellation. Migration: `askChoice(...).orElse(...)`, or test `isPresent()`.
+- **Breaking: `CommandResult` carries a nullable exit code and the terminating signal.** Its components
+  are `(String output, @Nullable Integer exitCode, @Nullable String signal, boolean timedOut)`: a
+  command killed by a signal has no exit code. The `(output, int exitCode)` and
+  `(output, int exitCode, boolean timedOut)` constructors remain. Migration: `exitCode()` returns
+  `Integer`; use `success()`, or check `exitCode()` for null before comparing it.
+- **Breaking: `Command.env()` is never null**; it is empty when no variables are set (`Command.of`
+  now builds it with `Map.of()`, and the canonical constructor takes a non-null map). Migration: test
+  `env().isEmpty()` instead of `env() == null`.
+- `AcpException.getMessage()` is declared non-null: every constructor sets a message.
+- `StdioAcpClientTransport.awaitForExit()` before `connect` throws `IllegalStateException` instead of
+  `NullPointerException`.
+- `AcpInvocationContext.Builder.build()` requires `acpMethod` and `request`.
+
+### Fixed
+
+Found by the NullAway adoption; each has a test.
+
+- A request or notification that omits `params` (legal JSON-RPC) reached its handler as `null`; it now
+  reads as an empty object, as if the peer had sent `{}`.
+- A request whose handler produced no result got no JSON-RPC response at all, so the peer waited for
+  its timeout: a core request handler that completed empty, and in `acp-agent-support` a `void` or
+  null-returning handler method, or one vetoed by an interceptor. Such requests are now answered with
+  an `INTERNAL_ERROR` saying the handler produced no response.
+- A handler exception without a message produced a JSON-RPC error without the required `message`; the
+  exception's type name is sent instead.
+- A success response without a `result` failed the request with an opaque `NullPointerException`; the
+  error now says the response carried no result.
+- `PromptContext.askChoice` failed the prompt with a `NullPointerException` when the client cancelled.
+- `PromptContext.execute` failed the prompt with a `NullPointerException` when the command was killed
+  by a signal (no exit code).
+- `AcpSchema.deserializeJsonRpcMessage` threw `NullPointerException` for the JSON `null` literal
+  instead of the documented `IllegalArgumentException`.
 
 ### Build
 
@@ -20,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   protocol, protocol under capabilities, capabilities under client and agent, which never depend on each
   other), no package cycles, no Jackson databind in acp-core, and no Jetty types on the path of
   `StreamableHttpAcpServlet`, which must stay mountable in any Servlet 6 container.
+- Null safety is enforced, not just declared: every package is `@NullMarked` (JSpecify 1.0.0, a
+  compile dependency of each module; optional in `acp-annotations`, which keeps no transitive
+  dependencies), and NullAway 0.13.8 on Error Prone 2.50.0 checks main sources at ERROR. Error Prone
+  needs JDK 21, so the check runs in a `nullaway` profile activated on JDK 21+ and in a new JDK 21 CI
+  job; the JDK 17 build and release are unchanged. Compilation uses `--release 17`, so a JDK 21 build
+  still compiles against the Java 17 API. `.mvn/jvm.config` opens the javac internals Error Prone needs
+  (harmless on JDK 17).
 
 ## [0.18.0] - 2026-09-25
 
