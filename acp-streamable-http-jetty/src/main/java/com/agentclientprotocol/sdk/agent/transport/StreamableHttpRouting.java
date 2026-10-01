@@ -138,7 +138,7 @@ final class StreamableHttpRouting {
 
 	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, @Nullable String sessionHeader) {
 		String method;
-		@Nullable Object params;
+		Object params;
 		if (message instanceof AcpSchema.JSONRPCRequest request) {
 			method = request.method();
 			params = request.params();

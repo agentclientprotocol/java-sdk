@@ -100,7 +100,7 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 
 		@Override
 		public boolean handleUnknownProperty(DeserializationContext ctxt, JsonParser p,
-				ValueDeserializer<?> deserializer, Object beanOrClass, String propertyName) throws JacksonException {
+				ValueDeserializer<?> deserializer, @Nullable Object beanOrClass, String propertyName) throws JacksonException {
 			if (logger.isDebugEnabled()) {
 				Object type = beanOrClass instanceof Class<?> c ? c.getSimpleName()
 						: beanOrClass != null ? beanOrClass.getClass().getSimpleName() : "?";

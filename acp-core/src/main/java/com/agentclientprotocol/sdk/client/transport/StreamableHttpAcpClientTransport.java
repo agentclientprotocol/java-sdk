@@ -509,7 +509,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<Void> createSessionStreamOpenMono(String sessionId) {
-		AtomicReference<Mono<Void>> operation = new AtomicReference<>();
+		AtomicReference<@Nullable Mono<Void>> operation = new AtomicReference<>();
 		Mono<Void> openOperation = openSseStream(RouteScope.session(sessionId))
 			.doOnNext(stream -> {
 				SseStream existing = sessionStreams.putIfAbsent(sessionId, stream);
@@ -646,7 +646,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				responseScope = requestScope;
 		}
 
-		@Nullable OutboundRequestRoute requestRoute = null;
+		OutboundRequestRoute requestRoute = null;
 		if (message instanceof AcpSchema.JSONRPCRequest) {
 			requestRoute = new OutboundRequestRoute(requestKind, requestScope, responseScope);
 		}
