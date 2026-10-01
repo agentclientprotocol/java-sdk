@@ -1,0 +1,4 @@
+# Gradle and Kotlin build state (launch/build.sh)
+build/
+.gradle/
+.kotlin/
