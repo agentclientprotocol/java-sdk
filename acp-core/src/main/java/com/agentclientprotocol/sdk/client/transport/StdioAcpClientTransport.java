@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
@@ -82,12 +83,24 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	private volatile boolean isClosing = false;
 
+	/** Set by {@link #closeGracefully}: the end of the agent process is then expected. */
+	private volatile boolean closedLocally = false;
+
+	/**
+	 * Terminates when the transport can no longer deliver: empty once closed locally, with
+	 * an error naming the exit when the agent process ended on its own.
+	 */
+	private final Sinks.One<Void> terminationSink = Sinks.one();
+
 	/**
 	 * A transport instance carries exactly one session. {@link #connect} subscribes the
 	 * unicast inbound and outbound sinks and starts the agent process; a second call would
 	 * subscribe them again and start a second process, so it is refused up front.
 	 */
 	private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
+	/** How long to wait for the agent process to exit after its standard output ends. */
+	private static final Duration EXIT_WAIT = Duration.ofSeconds(5);
 
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
@@ -318,8 +331,52 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * process's input stream. Messages are deserialized and emitted to the inbound sink.
 	 */
 	private void startInboundProcessing(Process process) {
-		readLines(this.inboundScheduler, process.getInputStream(), "input stream", this::emitInbound,
-				this.inboundSink::tryEmitComplete);
+		readLines(this.inboundScheduler, process.getInputStream(), "input stream", this::emitInbound, () -> {
+			this.inboundSink.tryEmitComplete();
+			terminated(process);
+		});
+	}
+
+	/**
+	 * The agent's standard output has ended: once the process has exited, reports the end of
+	 * the transport, naming the exit, unless it was closed locally.
+	 */
+	private void terminated(Process process) {
+		if (this.closedLocally) {
+			this.terminationSink.tryEmitEmpty();
+			return;
+		}
+		String reason;
+		try {
+			// The agent normally exits right after its output ends; one that closed its
+			// output but goes on running can deliver nothing more either.
+			reason = process.waitFor(EXIT_WAIT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
+					? exitDescription(process.exitValue())
+					: "ACP agent process closed its standard output but has not exited";
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			reason = "ACP agent process closed its standard output";
+		}
+		if (this.closedLocally) {
+			this.terminationSink.tryEmitEmpty();
+			return;
+		}
+		logger.info("{}", reason);
+		this.terminationSink.tryEmitError(new AcpConnectionException(reason));
+	}
+
+	/**
+	 * Names how the agent process ended. On POSIX systems Java reports a process killed by
+	 * signal {@code n} as exit code {@code 128 + n}.
+	 */
+	static String exitDescription(int exitCode) {
+		String description = "ACP agent process exited with code " + exitCode;
+		boolean windows = System.getProperty("os.name", "").startsWith("Windows");
+		if (!windows && exitCode > 128 && exitCode < 128 + 65) {
+			description += " (signal " + (exitCode - 128) + ")";
+		}
+		return description;
 	}
 
 	/**
@@ -433,6 +490,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
+			closedLocally = true;
 			isClosing = true;
 			logger.debug("Initiating graceful shutdown");
 
@@ -457,6 +515,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			catch (Exception e) {
 				logger.error("Error during graceful shutdown", e);
 			}
+			terminationSink.tryEmitEmpty();
 		});
 	}
 
@@ -491,6 +550,17 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		else {
 			logger.warn("Process terminated unexpectedly with code {}", exitCode);
 		}
+	}
+
+	/**
+	 * Completes when the transport is closed; errors with an {@link AcpConnectionException}
+	 * naming the exit code (and, on POSIX systems, the signal) when the agent process ends
+	 * on its own, once its standard output has been read to the end.
+	 * @return a Mono that terminates when the transport does
+	 */
+	@Override
+	public Mono<Void> awaitTermination() {
+		return this.terminationSink.asMono();
 	}
 
 	public Sinks.Many<String> getErrorSink() {

@@ -151,6 +151,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A stdio client did not notice its agent process exiting.** `StdioAcpClientTransport` did not
+  implement `awaitTermination()`, so when the agent exited or crashed, pending requests waited out the
+  request timeout. It now completes when the transport is closed, and errors with an
+  `AcpConnectionException` such as `ACP agent process exited with code 137 (signal 9)` once the
+  agent's output has ended and the process has exited on its own; the session fails pending requests
+  with it at once.
 - **A peer's error answer to a message it could not read was logged as an SDK bug.** An error
   response with `"id": null` (what JSON-RPC 2.0 prescribes, and what this SDK and its peers send, for
   a message whose id could not be read) was logged at ERROR as "a bug in the request sender code".
