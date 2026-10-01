@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.ClientRequestRoute;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.MethodCall;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RequestKind;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.ResolvedInboundRoute;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RouteScope;
@@ -184,56 +185,57 @@ final class StreamableHttpConnection {
 
 	private RouteScope resolveAgentOutboundScope(JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			Object responseId = response.id();
-			if (responseId == null) {
-				// The answer to a request posted with "id": null, which was never routed (a
-				// ConcurrentMap holds no null key); only the connection stream can carry it.
-				return RouteScope.connection();
-			}
-			ClientRequestRoute route = clientRequestRoutes.remove(responseId);
-			if (route == null) {
-				logger.warn("Agent emitted response for unknown client request id {}; routing to connection stream",
-						responseId);
-				return RouteScope.connection();
-			}
-			if ((route.kind() == RequestKind.SESSION_NEW || route.kind() == RequestKind.SESSION_FORK)
-					&& response.error() == null) {
+			return resolveResponseScope(response);
+		}
+		MethodCall call = MethodCall.of(message, "outbound");
+		RouteScope scope = routing.resolveAgentRequestOrNotificationScope(call.method(), call.params());
+		Object requestId = call.id();
+		if (requestId != null) {
+			agentRequestRoutes.put(requestId, scope);
+		}
+		return scope;
+	}
+
+	/** The stream the client request answered by {@code response} asked for its reply. */
+	private RouteScope resolveResponseScope(AcpSchema.JSONRPCResponse response) {
+		Object responseId = response.id();
+		if (responseId == null) {
+			// The answer to a request posted with "id": null, which was never routed (a
+			// ConcurrentMap holds no null key); only the connection stream can carry it.
+			return RouteScope.connection();
+		}
+		ClientRequestRoute route = clientRequestRoutes.remove(responseId);
+		if (route == null) {
+			logger.warn("Agent emitted response for unknown client request id {}; routing to connection stream",
+					responseId);
+			return RouteScope.connection();
+		}
+		recordSessionOutcome(route, response);
+		return route.responseScope();
+	}
+
+	/** Applies what a reply to session/new, session/fork or session/load says about its session. */
+	private void recordSessionOutcome(ClientRequestRoute route, AcpSchema.JSONRPCResponse response) {
+		boolean succeeded = response.error() == null;
+		switch (route.kind()) {
+			case SESSION_NEW, SESSION_FORK -> {
 				// Both replies carry the id of a session that now exists on this connection.
-				String sessionId = routing.extractSessionIdFromNewSessionResponse(response);
-				markSessionKnown(sessionId);
+				if (succeeded) {
+					markSessionKnown(routing.extractSessionIdFromNewSessionResponse(response));
+				}
 			}
-			if (route.kind() == RequestKind.SESSION_LOAD) {
-				if (response.error() == null) {
+			case SESSION_LOAD -> {
+				if (succeeded) {
 					markSessionKnown(route.requestScope().boundSessionId());
 				}
 				else {
 					discardProvisionalSession(route.requestScope().boundSessionId());
 				}
 			}
-			return route.responseScope();
+			default -> {
+				// No session changes state.
+			}
 		}
-
-		String method;
-		Object params;
-		Object id = null;
-		if (message instanceof AcpSchema.JSONRPCRequest request) {
-			method = request.method();
-			params = request.params();
-			id = request.id();
-		}
-		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
-			method = notification.method();
-			params = notification.params();
-		}
-		else {
-			throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
-		}
-
-		RouteScope scope = routing.resolveAgentRequestOrNotificationScope(method, params);
-		if (id != null) {
-			agentRequestRoutes.put(id, scope);
-		}
-		return scope;
 	}
 
 	private void prepareSessionForInbound(String sessionId, @Nullable ClientRequestRoute route) {
