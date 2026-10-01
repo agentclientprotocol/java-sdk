@@ -168,6 +168,9 @@ public class StreamableHttpAcpAgentTransport {
 
 			WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
 				container.setIdleTimeout(Duration.ofMinutes(30));
+				// Jetty's default is 64 KB; a prompt or file content is often larger. One inbound
+				// limit for both profiles: the POST body cap also bounds a WebSocket text message.
+				container.setMaxTextMessageSize(options.maxPostBodyBytes());
 				container.addMapping(path, (request, response, callback) -> {
 					StreamableHttpWebSocketConnection connection = createWebSocketConnection();
 					try {

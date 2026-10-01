@@ -13,7 +13,8 @@ import com.agentclientprotocol.sdk.util.Assert;
  * allocation is bounded by one of these so a slow or hostile client cannot grow memory
  * without bound.
  *
- * @param maxPostBodyBytes largest accepted POST body; larger requests get 413
+ * @param maxPostBodyBytes largest accepted inbound message: a larger POST body gets 413, and a
+ * larger WebSocket text message closes the connection (1009, message too big)
  * @param mailboxCapacity events retained per outbound stream while no subscriber is
  * attached; overflow closes the connection
  * @param maxPendingSseEvents events queued for one attached SSE subscriber before it is

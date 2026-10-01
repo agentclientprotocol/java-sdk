@@ -76,6 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`StreamableHttpAcpAgentTransport`'s WebSocket upgrade closed the connection on any inbound text
+  message over 64 KB** (Jetty's default; close code 1009), so a prompt carrying a file of that size
+  ended the session. The single-client `WebSocketAcpAgentTransport` accepted 4 MB. The upgrade now
+  accepts messages up to `StreamableHttpAcpAgentTransportOptions.maxPostBodyBytes` (16 MB by
+  default), the same inbound limit as a Streamable HTTP POST body.
 - **A response with `"result": null` failed the request** ("carried no result") even where the
   result is an empty object, a regression in this release: the Python SDK answers
   `fs/write_text_file` with `"result": null` when its handler returns `None`, so a Java agent could
