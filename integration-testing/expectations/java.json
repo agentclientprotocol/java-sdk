@@ -29,24 +29,6 @@
       "reason": "The Java client has no $/cancel_request send"
     },
     {
-      "step": "init.config-boolean",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P6:",
-      "see": "P6",
-      "reason": "AcpSchema.ClientCapabilities has no session field, so the Java client cannot advertise session.configOptions.boolean"
-    },
-    {
-      "step": "config.boolean",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P6:",
-      "see": "P6",
-      "reason": "The Java client cannot advertise session.configOptions.boolean, so no agent offers the boolean option"
-    },
-    {
       "step": "auth.logout-capability",
       "when": {
         "client": "java"
@@ -108,24 +90,6 @@
       "contains": "P2:",
       "see": "P2",
       "reason": "The Java agent cannot send $/cancel_request"
-    },
-    {
-      "step": "init.config-boolean",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P6",
-      "reason": "AcpSchema.ClientCapabilities has no session field: the Java agent drops session.configOptions.boolean and cannot echo it"
-    },
-    {
-      "step": "config.boolean",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P6",
-      "reason": "The Java agent cannot see session.configOptions.boolean, so it offers no boolean option and rejects verbose with -32602"
     },
     {
       "step": "auth.logout-capability",

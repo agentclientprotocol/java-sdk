@@ -96,6 +96,8 @@ public final class NegotiatedCapabilities {
 
 	private final boolean mcpSse;
 
+	private final boolean booleanConfigOptions;
+
 	private final boolean terminalAuth;
 
 	private NegotiatedCapabilities(Builder builder) {
@@ -118,6 +120,7 @@ public final class NegotiatedCapabilities {
 		this.embeddedContext = builder.embeddedContext;
 		this.mcpHttp = builder.mcpHttp;
 		this.mcpSse = builder.mcpSse;
+		this.booleanConfigOptions = builder.booleanConfigOptions;
 		this.terminalAuth = builder.terminalAuth;
 	}
 
@@ -147,6 +150,10 @@ public final class NegotiatedCapabilities {
 			builder.elicitationForm(elicit.form() != null);
 			builder.elicitationUrl(elicit.url() != null);
 		}
+
+		var session = caps.session();
+		var configOptions = session != null ? session.configOptions() : null;
+		builder.booleanConfigOptions(configOptions != null && configOptions.booleanOptions() != null);
 
 		var auth = caps.auth();
 		builder.terminalAuth(auth != null && Boolean.TRUE.equals(auth.terminal()));
@@ -228,9 +235,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the client doesn't support this capability
 	 */
 	public void requireReadTextFile() {
-		if (!readTextFile) {
-			throw new AcpCapabilityException("fs.readTextFile");
-		}
+		require(readTextFile, "fs.readTextFile");
 	}
 
 	/**
@@ -238,9 +243,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the client doesn't support this capability
 	 */
 	public void requireWriteTextFile() {
-		if (!writeTextFile) {
-			throw new AcpCapabilityException("fs.writeTextFile");
-		}
+		require(writeTextFile, "fs.writeTextFile");
 	}
 
 	/**
@@ -248,9 +251,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the client doesn't support this capability
 	 */
 	public void requireTerminal() {
-		if (!terminal) {
-			throw new AcpCapabilityException("terminal");
-		}
+		require(terminal, "terminal");
 	}
 
 	/**
@@ -282,9 +283,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the client doesn't support elicitation
 	 */
 	public void requireElicitation() {
-		if (!elicitation) {
-			throw new AcpCapabilityException("elicitation");
-		}
+		require(elicitation, "elicitation");
 	}
 
 	/**
@@ -300,9 +299,23 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the client doesn't support this capability
 	 */
 	public void requireTerminalAuth() {
-		if (!terminalAuth) {
-			throw new AcpCapabilityException("auth.terminal");
-		}
+		require(terminalAuth, "auth.terminal");
+	}
+
+	/**
+	 * Returns true if the client supports boolean config options.
+	 * @return true if session.configOptions.boolean was advertised
+	 */
+	public boolean supportsBooleanConfigOptions() {
+		return booleanConfigOptions;
+	}
+
+	/**
+	 * Requires session.configOptions.boolean, throwing if the client did not advertise it.
+	 * @throws AcpCapabilityException if the client doesn't support this capability
+	 */
+	public void requireBooleanConfigOptions() {
+		require(booleanConfigOptions, "session.configOptions.boolean");
 	}
 
 	// --------------------------
@@ -419,9 +432,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireLoadSession() {
-		if (!loadSession) {
-			throw new AcpCapabilityException("loadSession");
-		}
+		require(loadSession, "loadSession");
 	}
 
 	/**
@@ -429,9 +440,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireListSessions() {
-		if (!listSessions) {
-			throw new AcpCapabilityException("sessionCapabilities.list");
-		}
+		require(listSessions, "sessionCapabilities.list");
 	}
 
 	/**
@@ -439,9 +448,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireCloseSession() {
-		if (!closeSession) {
-			throw new AcpCapabilityException("sessionCapabilities.close");
-		}
+		require(closeSession, "sessionCapabilities.close");
 	}
 
 	/**
@@ -449,9 +456,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireResumeSession() {
-		if (!resumeSession) {
-			throw new AcpCapabilityException("sessionCapabilities.resume");
-		}
+		require(resumeSession, "sessionCapabilities.resume");
 	}
 
 	/**
@@ -459,9 +464,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireDeleteSession() {
-		if (!deleteSession) {
-			throw new AcpCapabilityException("sessionCapabilities.delete");
-		}
+		require(deleteSession, "sessionCapabilities.delete");
 	}
 
 	/**
@@ -469,15 +472,11 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireAdditionalDirectories() {
-		if (!additionalDirectories) {
-			throw new AcpCapabilityException("sessionCapabilities.additionalDirectories");
-		}
+		require(additionalDirectories, "sessionCapabilities.additionalDirectories");
 	}
 
 	public void requireForkSession() {
-		if (!forkSession) {
-			throw new AcpCapabilityException("sessionCapabilities.fork");
-		}
+		require(forkSession, "sessionCapabilities.fork");
 	}
 
 	/**
@@ -485,9 +484,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support the {@code providers/*} methods
 	 */
 	public void requireProviders() {
-		if (!providers) {
-			throw new AcpCapabilityException("providers");
-		}
+		require(providers, "providers");
 	}
 
 	/**
@@ -495,9 +492,7 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireImageContent() {
-		if (!imageContent) {
-			throw new AcpCapabilityException("promptCapabilities.image");
-		}
+		require(imageContent, "promptCapabilities.image");
 	}
 
 	/**
@@ -505,8 +500,12 @@ public final class NegotiatedCapabilities {
 	 * @throws AcpCapabilityException if the agent doesn't support this capability
 	 */
 	public void requireAudioContent() {
-		if (!audioContent) {
-			throw new AcpCapabilityException("promptCapabilities.audio");
+		require(audioContent, "promptCapabilities.audio");
+	}
+
+	private static void require(boolean supported, String capability) {
+		if (!supported) {
+			throw new AcpCapabilityException(capability);
 		}
 	}
 
@@ -520,7 +519,7 @@ public final class NegotiatedCapabilities {
 				+ deleteSession + ", additionalDirectories=" + additionalDirectories + ", forkSession="
 				+ forkSession + ", providers=" + providers + ", imageContent="
 				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
-				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + '}';
+				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + ", booleanConfigOptions=" + booleanConfigOptions + '}';
 	}
 
 	/**
@@ -565,6 +564,8 @@ public final class NegotiatedCapabilities {
 		private boolean mcpHttp = false;
 
 		private boolean mcpSse = false;
+
+		private boolean booleanConfigOptions = false;
 
 		private boolean terminalAuth = false;
 
@@ -665,6 +666,11 @@ public final class NegotiatedCapabilities {
 
 		public Builder terminalAuth(boolean value) {
 			this.terminalAuth = value;
+			return this;
+		}
+
+		public Builder booleanConfigOptions(boolean value) {
+			this.booleanConfigOptions = value;
 			return this;
 		}
 

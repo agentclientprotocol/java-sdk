@@ -139,11 +139,30 @@ public class Agent {
 	}
 
 	static List<AcpSchema.SessionConfigOption> configOptions(String model) {
-		// verbose (boolean) is offered only to a client that advertised
-		// session.configOptions.boolean, which ClientCapabilities cannot carry yet (P6).
-		return List.of(new AcpSchema.SessionConfigSelect("model", "Model", model,
+		return configOptions(model, null);
+	}
+
+	/** The model option, and the boolean verbose option when {@code verbose} is not null. */
+	static List<AcpSchema.SessionConfigOption> configOptions(String model, Boolean verbose) {
+		List<AcpSchema.SessionConfigOption> options = new ArrayList<>();
+		options.add(new AcpSchema.SessionConfigSelect("model", "Model", model,
 				List.of(new AcpSchema.SessionConfigSelectOption("model-a", "Model A"),
 						new AcpSchema.SessionConfigSelectOption("model-b", "Model B"))));
+		if (verbose != null) {
+			options.add(new AcpSchema.SessionConfigBoolean("verbose", "Verbose", verbose));
+		}
+		return options;
+	}
+
+	/** Whether the client advertised session.configOptions.boolean: only then is verbose offered. */
+	static boolean booleanOptions(AcpSchema.InitializeRequest init) {
+		AcpSchema.ClientCapabilities caps = init == null ? null : init.clientCapabilities();
+		return caps != null && caps.session() != null && caps.session().configOptions() != null
+				&& caps.session().configOptions().booleanOptions() != null;
+	}
+
+	static List<AcpSchema.SessionConfigOption> configOptions(SessionState s, AcpSchema.InitializeRequest init) {
+		return configOptions(s.model, booleanOptions(init) ? s.verbose : null);
 	}
 
 	/** The state of one session, shared by every connection of this process. */
@@ -161,6 +180,8 @@ public class Agent {
 		volatile String mode = "interop-mode-a";
 
 		volatile String model = "model-a";
+
+		volatile boolean verbose;
 
 		/** The running turn, or null. */
 		final AtomicReference<Turn> turn = new AtomicReference<>();
@@ -225,19 +246,22 @@ public class Agent {
 			.logoutHandler(r -> Mono.just(new AcpSchema.LogoutResponse()))
 			.newSessionHandler(r -> {
 				String id = "java-sess-" + sessionCounter.incrementAndGet();
-				SESSIONS.put(id, new SessionState(id, r.cwd()));
+				SessionState created = new SessionState(id, r.cwd());
+				SESSIONS.put(id, created);
 				log("[agent] session/new " + id + " cwd " + r.cwd());
-				return Mono.just(new AcpSchema.NewSessionResponse(id, modes("interop-mode-a"), configOptions("model-a")));
+				return Mono.just(
+						new AcpSchema.NewSessionResponse(id, modes("interop-mode-a"), configOptions(created, init.get())));
 			})
 			.loadSessionHandler(r -> known(r.sessionId()).flatMap(s -> {
 				log("[agent] session/load " + s.id + ": replaying " + s.history.size() + " updates");
 				return Flux.fromIterable(s.history)
 					.concatMap(u -> self.get().sendSessionUpdate(s.id, u))
-					.then(Mono.just(new AcpSchema.LoadSessionResponse(modes(s.mode), configOptions(s.model))));
+					.then(Mono.fromSupplier(
+							() -> new AcpSchema.LoadSessionResponse(modes(s.mode), configOptions(s, init.get()))));
 			}))
 			.resumeSessionHandler(r -> known(r.sessionId()).map(s -> {
 				log("[agent] session/resume " + s.id);
-				return new AcpSchema.ResumeSessionResponse(modes(s.mode), configOptions(s.model));
+				return new AcpSchema.ResumeSessionResponse(modes(s.mode), configOptions(s, init.get()));
 			}))
 			.listSessionsHandler(r -> {
 				List<AcpSchema.SessionInfo> out = new ArrayList<>();
@@ -288,11 +312,16 @@ public class Agent {
 			.setSessionConfigOptionHandler(r -> known(r.sessionId()).flatMap(s -> {
 				if ("model".equals(r.configId()) && ("model-a".equals(r.value()) || "model-b".equals(r.value()))) {
 					s.model = (String) r.value();
-					return Mono.just(new AcpSchema.SetSessionConfigOptionResponse(configOptions(s.model)));
+					return Mono.just(new AcpSchema.SetSessionConfigOptionResponse(configOptions(s, init.get())));
+				}
+				if ("verbose".equals(r.configId()) && "boolean".equals(r.type()) && r.value() instanceof Boolean on
+						&& booleanOptions(init.get())) {
+					s.verbose = on;
+					return Mono.just(new AcpSchema.SetSessionConfigOptionResponse(configOptions(s, init.get())));
 				}
 				return Mono.error(new AcpProtocolException(-32602,
 						"unknown config option " + r.configId() + "=" + r.value()
-								+ " (verbose needs session.configOptions.boolean, which the Java SDK cannot see: P6)"));
+								+ " (verbose needs a boolean value and session.configOptions.boolean)"));
 			}))
 			.cancelHandler(n -> {
 				SessionState s = SESSIONS.get(n.sessionId());

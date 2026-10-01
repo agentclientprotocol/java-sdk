@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   program with for an interactive login) and the client capability `auth.terminal`
   (`AcpSchema.AuthCapabilities` on `ClientCapabilities.auth`). Agents check it with
   `NegotiatedCapabilities.supportsTerminalAuth()` / `requireTerminalAuth()`.
+- **Boolean config options are stable** (ACP v1 since 2026-07-06): `SessionConfigBoolean` is no
+  longer `@UnstableAcpApi`. The client capability `session.configOptions.boolean`
+  (`ClientCapabilities.session`, `ClientSessionCapabilities`, `SessionConfigOptionsCapabilities`,
+  `BooleanConfigOptionCapabilities`; `SessionConfigOptionsCapabilities.withBoolean()`) tells the
+  agent it may send them; agents check `NegotiatedCapabilities.supportsBooleanConfigOptions()`.
 
 ### Changed
 
@@ -104,9 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type reads as `AuthMethodAgent`, as in the Rust SDK. Migration: `new AuthMethod(id, name,
   description)` becomes `new AcpSchema.AuthMethodAgent(id, name, description)`; `id()`, `name()`
   and `description()` stay on the interface. `AuthMethodAgent` also carries `_meta`.
-- **Breaking: `ClientCapabilities` takes `auth` after `terminal`** in its canonical constructor.
-  Migration: `new ClientCapabilities(fs, terminal, elicitation, meta)` becomes
-  `new ClientCapabilities(fs, terminal, auth, elicitation, meta)` (`auth` may be `null`).
+- **Breaking: `ClientCapabilities` takes `session` and `auth` after `terminal`** in its canonical
+  constructor, in schema order. Migration: `new ClientCapabilities(fs, terminal, elicitation,
+  meta)` becomes `new ClientCapabilities(fs, terminal, session, auth, elicitation, meta)` (both
+  may be `null`).
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's

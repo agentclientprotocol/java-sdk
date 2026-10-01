@@ -85,7 +85,7 @@ class TerminalAuthTest {
 	@Test
 	void terminalAuthIsOffUnlessAdvertised() {
 		var none = NegotiatedCapabilities.fromClient(new AcpSchema.ClientCapabilities());
-		var off = NegotiatedCapabilities.fromClient(new AcpSchema.ClientCapabilities(null, null,
+		var off = NegotiatedCapabilities.fromClient(new AcpSchema.ClientCapabilities(null, null, null,
 				new AcpSchema.AuthCapabilities(false), null, null));
 
 		assertThat(none.supportsTerminalAuth()).isFalse();

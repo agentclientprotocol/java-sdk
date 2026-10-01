@@ -168,7 +168,7 @@ public class Client {
 		STEPS.put("init.client-capabilities", Client::initClientCapabilities);
 		STEPS.put("init.auth-methods", Client::initAuthMethods);
 		STEPS.put("init.agent-info", Client::initAgentInfo);
-		STEPS.put("init.config-boolean", gapped("P6", Client::initConfigBoolean));
+		STEPS.put("init.config-boolean", Client::initConfigBoolean);
 		STEPS.put("auth.authenticate", Client::authAuthenticate);
 		STEPS.put("auth.logout", Client::authLogout);
 		STEPS.put("auth.logout-capability", () -> gap("P7",
@@ -218,7 +218,7 @@ public class Client {
 		STEPS.put("mode.set", Client::modeSet);
 		STEPS.put("config.on-new", Client::configOnNew);
 		STEPS.put("config.select", Client::configSelect);
-		STEPS.put("config.boolean", gapped("P6", Client::configBoolean));
+		STEPS.put("config.boolean", Client::configBoolean);
 		STEPS.put("perm.selected", Client::permSelected);
 		STEPS.put("perm.cancelled", Client::permCancelled);
 		STEPS.put("fs.write", Client::fsWrite);
@@ -324,8 +324,7 @@ public class Client {
 	static String initConfigBoolean() throws IOException {
 		Map<String, Object> caps = echoCaps();
 		check(path(caps, "session", "configOptions", "boolean") != null,
-				"no session.configOptions.boolean in the echoed capabilities " + caps
-						+ " (Java ClientCapabilities cannot carry it)");
+				"no session.configOptions.boolean in the echoed capabilities " + caps);
 		return "echoed session.configOptions.boolean";
 	}
 
@@ -644,8 +643,7 @@ public class Client {
 			r = block(c.client.setSessionConfigOption(AcpSchema.SetSessionConfigOptionRequest.bool(sid, "verbose", true)));
 		}
 		catch (RuntimeException e) {
-			throw new StepFailure("set_config_option verbose failed (the Java client cannot advertise"
-					+ " session.configOptions.boolean): " + describe(e));
+			throw new StepFailure("set_config_option verbose failed: " + describe(e));
 		}
 		check(r != null && r.configOptions() != null && r.configOptions()
 			.stream()
@@ -1080,6 +1078,7 @@ public class Client {
 
 		static AcpSchema.ClientCapabilities capabilities() {
 			return new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true,
+					new AcpSchema.ClientSessionCapabilities(AcpSchema.SessionConfigOptionsCapabilities.withBoolean()),
 					new AcpSchema.AuthCapabilities(true), new AcpSchema.ElicitationCapabilities(Map.of(), Map.of(), null),
 					null);
 		}
