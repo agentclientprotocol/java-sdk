@@ -1,0 +1,33 @@
+{
+  "comment": "Expected failures caused by the Kotlin SDK (kotlin-sdk master, 3af219a) or the Kotlin programs (programs/kotlin). Citations are relative to the kotlin-sdk root; M = acp-model/src/commonMain/kotlin/com/agentclientprotocol/model.",
+  "expectations": [
+    {
+      "step": "init.config-boolean",
+      "when": { "client": "kotlin" },
+      "contains": "cannot advertise it",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Capabilities.kt:84",
+      "reason": "Kotlin ClientCapabilities has no session field, so the Kotlin client cannot advertise session.configOptions.boolean"
+    },
+    {
+      "step": "config.boolean",
+      "when": { "client": "kotlin" },
+      "contains": "",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Capabilities.kt:84",
+      "reason": "the Kotlin client cannot advertise session.configOptions.boolean, so no agent offers the boolean option verbose to it"
+    },
+    {
+      "step": "auth.terminal",
+      "when": { "client": "kotlin" },
+      "contains": "cannot advertise auth.terminal",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Capabilities.kt:53",
+      "reason": "Kotlin AuthCapabilities has only _meta, so the Kotlin client cannot advertise auth.terminal and no agent lists its terminal auth method"
+    },
+    {
+      "step": "update.tool_call-name",
+      "when": { "client": "kotlin" },
+      "contains": "no name field",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/SessionUpdate.kt:131",
+      "reason": "Kotlin v1 SessionUpdate.ToolCall has no name field, so the client cannot read the tool call name"
+    }
+  ]
+}
