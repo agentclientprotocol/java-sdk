@@ -51,12 +51,9 @@ import reactor.core.publisher.Mono;
  * </p>
  *
  * <p>
- * What the Java SDK cannot do yet is answered honestly, never faked: no {@code configOptions} on session responses (P1b), no {@code $/cancel_request}
- * (P2), no tool call {@code name} (P3), no terminal auth method or {@code auth.logout} capability
- * (P5, P7), no view of {@code session.configOptions.boolean} in the client capabilities (P6), no
- * {@code _meta} on permission requests (P8), and no generic send or receive of extension methods
- * (P9). The unknown update is an {@code AcpSchema.UnknownSessionUpdate}, which writes the type and
- * fields it is given.
+ * What the Java SDK cannot do yet is answered honestly, never faked: no {@code $/cancel_request}
+ * (P2) and no generic send or receive of extension methods (P9). The unknown update is an
+ * {@code AcpSchema.UnknownSessionUpdate}, which writes the type and fields it is given.
  * </p>
  */
 public class Agent {
@@ -468,11 +465,15 @@ public class Agent {
 		long t0 = System.nanoTime();
 		String id = hold ? "perm.cancelled" : "perm.selected";
 		AcpSchema.RequestPermissionRequest req = new AcpSchema.RequestPermissionRequest(sessionId,
-				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", null, AcpSchema.ToolKind.EDIT,
-						AcpSchema.ToolCallStatus.PENDING, null, null, null, null),
+				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING),
 				List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE),
-						new AcpSchema.PermissionOption("reject", "Reject", AcpSchema.PermissionOptionKind.REJECT_ONCE)));
+						new AcpSchema.PermissionOption("reject", "Reject", AcpSchema.PermissionOptionKind.REJECT_ONCE)),
+				Map.of("interop", "m1"));
 		return context.requestPermission(req).flatMap(r -> {
+			if (r.meta() != null && "m1".equals(r.meta().get("interop"))) {
+				// meta.permission: printed only when the client echoed the request's _meta
+				step("meta.permission", true, t0, "the response carried _meta interop == m1");
+			}
 			String said = r.outcome() instanceof AcpSchema.PermissionSelected sel ? "selected " + sel.optionId()
 					: "cancelled";
 			step(id, said.equals(hold ? "cancelled" : "selected allow"), t0, "outcome " + said);

@@ -29,15 +29,6 @@
       "reason": "The Java client has no $/cancel_request send"
     },
     {
-      "step": "meta.permission",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P8:",
-      "see": "P8",
-      "reason": "AcpSchema.RequestPermissionRequest and RequestPermissionResponse have no _meta"
-    },
-    {
       "step": "ext.client-request",
       "when": {
         "client": "java"
@@ -81,15 +72,6 @@
       "contains": "P2:",
       "see": "P2",
       "reason": "The Java agent cannot send $/cancel_request"
-    },
-    {
-      "step": "meta.permission",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P8",
-      "reason": "AcpSchema.RequestPermissionRequest has no _meta, so the Java agent cannot put it on the request"
     },
     {
       "step": "ext.agent-request",

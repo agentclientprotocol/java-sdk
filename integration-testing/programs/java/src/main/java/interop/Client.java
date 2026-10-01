@@ -58,9 +58,8 @@ import reactor.core.scheduler.Schedulers;
  *
  * <p>
  * The client advertises what it implements: {@code fs} read and write, {@code terminal} (real
- * processes) and {@code elicitation} form and url. It cannot advertise {@code auth.terminal} (P5)
- * or {@code session.configOptions.boolean} (P6), which {@code ClientCapabilities} cannot carry.
- * Steps that need what the Java SDK lacks still run as far as they can and then fail with the
+ * processes), {@code elicitation} form and url, {@code auth.terminal} and
+ * {@code session.configOptions.boolean}. Steps that need what the Java SDK lacks still run as far as they can and then fail with the
  * Phase B item in their detail (e.g. {@code P9: ...}).
  * </p>
  *
@@ -241,7 +240,7 @@ public class Client {
 		STEPS.put("ext.client-request", () -> gap("P9", "AcpAsyncClient has no generic request send"));
 		STEPS.put("ext.client-notification", () -> gap("P9", "AcpAsyncClient has no generic notification send"));
 		STEPS.put("meta.prompt", Client::metaPrompt);
-		STEPS.put("meta.permission", gapped("P8", Client::metaPermission));
+		STEPS.put("meta.permission", Client::metaPermission);
 		STEPS.put("error.method-not-found", Client::methodNotFound);
 		STEPS.put("big.prompt-1m", () -> bigPrompt(1 << 20));
 		STEPS.put("big.update-1m", () -> bigUpdate(1 << 20));
@@ -875,7 +874,9 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		c.prompt(sid, "#permission allow");
-		throw new StepFailure("AcpSchema.RequestPermissionRequest/Response have no _meta");
+		Map<String, Object> meta = c.permissionMeta.get(sid);
+		check(meta != null && "m1".equals(meta.get("interop")), "permission request _meta " + meta);
+		return "the permission request carried _meta interop == m1";
 	}
 
 	static String methodNotFound() {
@@ -1006,6 +1007,9 @@ public class Client {
 
 		final Map<String, AtomicInteger> permissions = new ConcurrentHashMap<>();
 
+		/** Per session, the _meta of the last permission request (echoed into the response). */
+		final Map<String, Map<String, Object>> permissionMeta = new ConcurrentHashMap<>();
+
 		/** Sessions whose permission request is answered by cancelling the turn (perm.cancelled). */
 		final java.util.Set<String> cancelOnPermission = ConcurrentHashMap.newKeySet();
 
@@ -1091,6 +1095,9 @@ public class Client {
 
 		Mono<AcpSchema.RequestPermissionResponse> permission(AcpSchema.RequestPermissionRequest req) {
 			this.permissions.computeIfAbsent(req.sessionId(), k -> new AtomicInteger()).incrementAndGet();
+			if (req.meta() != null) {
+				this.permissionMeta.put(req.sessionId(), req.meta());
+			}
 			System.out.println("  permission request " + req.sessionId() + ": " + req.options());
 			if (this.cancelOnPermission.contains(req.sessionId())) {
 				return this.client.cancel(new AcpSchema.CancelNotification(req.sessionId()))
@@ -1104,7 +1111,8 @@ public class Client {
 				.filter(o -> o.kind() == AcpSchema.PermissionOptionKind.ALLOW_ONCE)
 				.findFirst()
 				.orElse(req.options().get(0));
-			return Mono.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected(chosen.optionId())));
+			return Mono.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected(chosen.optionId()),
+					req.meta()));
 		}
 
 		Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest req) {

@@ -60,6 +60,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LogoutCapabilities`; `AgentAuthCapabilities.withLogout()`): the agent advertises that it
   supports `logout`, and clients check `NegotiatedCapabilities.supportsLogout()` /
   `requireLogout()` before calling it.
+- **`_meta` on every record the ACP schema gives it.** 48 records lacked it, among them
+  `RequestPermissionRequest`/`Response`, the `fs/*` and `terminal/*` requests and responses,
+  `AuthenticateRequest`/`Response`, `SetSessionModeRequest`/`Response`, `Implementation`, the
+  MCP server records, `PlanEntry`, `AvailableCommand`, `ToolCallUpdate`, the tool call content
+  records, `Annotations` and the capability records. Each gains a nullable `meta` component
+  (`"_meta"` on the wire) as its last component, and keeps a constructor with its previous
+  components, so existing calls compile; the exception is `ToolCallUpdate` (nine components
+  before `_meta`), which instead gains `ToolCallUpdate(toolCallId, title, kind, status)` for the
+  common permission-request case (migration: use it, or add `null` for `_meta`). A test walks a copy of the v1.9.1 schema
+  (`acp-core/src/test/resources/schema/v1/schema.json`) and fails on any object with `_meta`
+  whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
+  presence markers typed `Object` (they keep `_meta` as a map entry), `$/cancel_request`, and
+  grouped select options (`SessionConfigSelectGroup`), which the SDK does not model: a select
+  option list in grouped form still fails to read.
 
 ### Changed
 

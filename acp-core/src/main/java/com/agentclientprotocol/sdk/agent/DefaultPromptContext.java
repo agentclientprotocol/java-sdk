@@ -160,9 +160,7 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Boolean> askPermission(String action) {
-		ToolCallUpdate toolCall = new ToolCallUpdate(
-				UUID.randomUUID().toString(), action, null, ToolKind.EDIT, ToolCallStatus.PENDING,
-				null, null, null, null);
+		ToolCallUpdate toolCall = new ToolCallUpdate(UUID.randomUUID().toString(), action, ToolKind.EDIT, ToolCallStatus.PENDING);
 
 		List<PermissionOption> options = List.of(
 				new PermissionOption("allow", "Allow", PermissionOptionKind.ALLOW_ONCE),
@@ -185,9 +183,7 @@ class DefaultPromptContext implements PromptContext {
 					String.valueOf(i), options[i], PermissionOptionKind.ALLOW_ONCE));
 		}
 
-		ToolCallUpdate toolCall = new ToolCallUpdate(
-				UUID.randomUUID().toString(), question, null, ToolKind.OTHER,
-				ToolCallStatus.PENDING, null, null, null, null);
+		ToolCallUpdate toolCall = new ToolCallUpdate(UUID.randomUUID().toString(), question, ToolKind.OTHER, ToolCallStatus.PENDING);
 
 		return requestPermission(new RequestPermissionRequest(sessionId, toolCall, permOptions))
 				.flatMap(response -> {

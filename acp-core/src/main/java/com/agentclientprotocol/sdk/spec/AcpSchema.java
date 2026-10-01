@@ -309,7 +309,6 @@ public final class AcpSchema {
 		public AcpProtocolException toException() {
 			return new AcpProtocolException(code, message, data);
 		}
-
 	}
 
 	/**
@@ -392,14 +391,21 @@ public final class AcpSchema {
 	 * Authenticate request - authenticates using specified method
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AuthenticateRequest(@JsonProperty("methodId") String methodId) {
+	public record AuthenticateRequest(@JsonProperty("methodId") String methodId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public AuthenticateRequest(String methodId) {
+			this(methodId, null);
+		}
 	}
 
 	/**
 	 * Authenticate response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AuthenticateResponse() implements DefaultOnNull {
+	public record AuthenticateResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public AuthenticateResponse() {
+			this(null);
+		}
 	}
 
 	/**
@@ -498,7 +504,8 @@ public final class AcpSchema {
 			this(modes, null, null);
 		}
 
-		public LoadSessionResponse(@Nullable SessionModeState modes, @Nullable List<SessionConfigOption> configOptions) {
+		public LoadSessionResponse(@Nullable SessionModeState modes,
+				@Nullable List<SessionConfigOption> configOptions) {
 			this(modes, configOptions, null);
 		}
 	}
@@ -574,14 +581,21 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("modeId") String modeId) {
+			@JsonProperty("modeId") String modeId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public SetSessionModeRequest(String sessionId, String modeId) {
+			this(sessionId, modeId, null);
+		}
 	}
 
 	/**
 	 * Set session mode response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetSessionModeResponse() implements DefaultOnNull {
+	public record SetSessionModeResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public SetSessionModeResponse() {
+			this(null);
+		}
 	}
 
 	/**
@@ -697,7 +711,8 @@ public final class AcpSchema {
 			this(modes, null, null);
 		}
 
-		public ResumeSessionResponse(@Nullable SessionModeState modes, @Nullable List<SessionConfigOption> configOptions) {
+		public ResumeSessionResponse(@Nullable SessionModeState modes,
+				@Nullable List<SessionConfigOption> configOptions) {
 			this(modes, configOptions, null);
 		}
 	}
@@ -782,14 +797,22 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record RequestPermissionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("toolCall") ToolCallUpdate toolCall,
-			@JsonProperty("options") List<PermissionOption> options) {
+			@JsonProperty("options") List<PermissionOption> options,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public RequestPermissionRequest(String sessionId, ToolCallUpdate toolCall, List<PermissionOption> options) {
+			this(sessionId, toolCall, options, null);
+		}
 	}
 
 	/**
 	 * Permission response from user
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record RequestPermissionResponse(@JsonProperty("outcome") RequestPermissionOutcome outcome) {
+	public record RequestPermissionResponse(@JsonProperty("outcome") RequestPermissionOutcome outcome,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public RequestPermissionResponse(RequestPermissionOutcome outcome) {
+			this(outcome, null);
+		}
 	}
 
 	/**
@@ -809,14 +832,22 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReadTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
-			@JsonProperty("line") @Nullable Integer line, @JsonProperty("limit") @Nullable Integer limit) {
+			@JsonProperty("line") @Nullable Integer line, @JsonProperty("limit") @Nullable Integer limit,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ReadTextFileRequest(String sessionId, String path, @Nullable Integer line, @Nullable Integer limit) {
+			this(sessionId, path, line, limit, null);
+		}
 	}
 
 	/**
 	 * Read text file response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ReadTextFileResponse(@JsonProperty("content") String content) {
+	public record ReadTextFileResponse(@JsonProperty("content") String content,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ReadTextFileResponse(String content) {
+			this(content, null);
+		}
 	}
 
 	/**
@@ -824,14 +855,21 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WriteTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
-			@JsonProperty("content") String content) {
+			@JsonProperty("content") String content,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public WriteTextFileRequest(String sessionId, String path, String content) {
+			this(sessionId, path, content, null);
+		}
 	}
 
 	/**
 	 * Write text file response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record WriteTextFileResponse() implements DefaultOnNull {
+	public record WriteTextFileResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public WriteTextFileResponse() {
+			this(null);
+		}
 	}
 
 	/**
@@ -841,14 +879,23 @@ public final class AcpSchema {
 	public record CreateTerminalRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("command") String command, @JsonProperty("args") @Nullable List<String> args,
 			@JsonProperty("cwd") @Nullable String cwd, @JsonProperty("env") @Nullable List<EnvVariable> env,
-			@JsonProperty("outputByteLimit") @Nullable Long outputByteLimit) {
+			@JsonProperty("outputByteLimit") @Nullable Long outputByteLimit,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public CreateTerminalRequest(String sessionId, String command, @Nullable List<String> args,
+				@Nullable String cwd, @Nullable List<EnvVariable> env, @Nullable Long outputByteLimit) {
+			this(sessionId, command, args, cwd, env, outputByteLimit, null);
+		}
 	}
 
 	/**
 	 * Create terminal response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record CreateTerminalResponse(@JsonProperty("terminalId") String terminalId) {
+	public record CreateTerminalResponse(@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public CreateTerminalResponse(String terminalId) {
+			this(terminalId, null);
+		}
 	}
 
 	/**
@@ -856,7 +903,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("terminalId") String terminalId) {
+			@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public TerminalOutputRequest(String sessionId, String terminalId) {
+			this(sessionId, terminalId, null);
+		}
 	}
 
 	/**
@@ -864,7 +915,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputResponse(@JsonProperty("output") String output,
-			@JsonProperty("truncated") boolean truncated, @JsonProperty("exitStatus") @Nullable TerminalExitStatus exitStatus) {
+			@JsonProperty("truncated") boolean truncated, @JsonProperty("exitStatus") @Nullable TerminalExitStatus exitStatus,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public TerminalOutputResponse(String output, boolean truncated, @Nullable TerminalExitStatus exitStatus) {
+			this(output, truncated, exitStatus, null);
+		}
 	}
 
 	/**
@@ -872,14 +927,21 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReleaseTerminalRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("terminalId") String terminalId) {
+			@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ReleaseTerminalRequest(String sessionId, String terminalId) {
+			this(sessionId, terminalId, null);
+		}
 	}
 
 	/**
 	 * Release terminal response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ReleaseTerminalResponse() implements DefaultOnNull {
+	public record ReleaseTerminalResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public ReleaseTerminalResponse() {
+			this(null);
+		}
 	}
 
 	/**
@@ -887,7 +949,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("terminalId") String terminalId) {
+			@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public WaitForTerminalExitRequest(String sessionId, String terminalId) {
+			this(sessionId, terminalId, null);
+		}
 	}
 
 	/**
@@ -895,7 +961,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitResponse(@JsonProperty("exitCode") @Nullable Integer exitCode,
-			@JsonProperty("signal") @Nullable String signal) implements DefaultOnNull {
+			@JsonProperty("signal") @Nullable String signal,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public WaitForTerminalExitResponse(@Nullable Integer exitCode, @Nullable String signal) {
+			this(exitCode, signal, null);
+		}
 	}
 
 	/**
@@ -903,14 +973,21 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record KillTerminalCommandRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("terminalId") String terminalId) {
+			@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public KillTerminalCommandRequest(String sessionId, String terminalId) {
+			this(sessionId, terminalId, null);
+		}
 	}
 
 	/**
 	 * Kill terminal response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record KillTerminalCommandResponse() implements DefaultOnNull {
+	public record KillTerminalCommandResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		public KillTerminalCommandResponse() {
+			this(null);
+		}
 	}
 
 	// ---------------------------
@@ -1007,7 +1084,8 @@ public final class AcpSchema {
 			@JsonProperty("properties") @Nullable Map<String, ElicitationPropertySchema> properties,
 			@JsonProperty("required") @Nullable List<String> required, @JsonProperty("title") @Nullable String title,
 			@JsonProperty("description") @Nullable String description) {
-		public ElicitationSchema(@Nullable Map<String, ElicitationPropertySchema> properties, @Nullable List<String> required) {
+		public ElicitationSchema(@Nullable Map<String, ElicitationPropertySchema> properties,
+				@Nullable List<String> required) {
 			this("object", properties, required, null, null);
 		}
 	}
@@ -1230,7 +1308,12 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record FileSystemCapability(@JsonProperty("readTextFile") @Nullable Boolean readTextFile,
-			@JsonProperty("writeTextFile") @Nullable Boolean writeTextFile) {
+			@JsonProperty("writeTextFile") @Nullable Boolean writeTextFile,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public FileSystemCapability(@Nullable Boolean readTextFile, @Nullable Boolean writeTextFile) {
+			this(readTextFile, writeTextFile, null);
+		}
+
 		public FileSystemCapability() {
 			this(false, false);
 		}
@@ -1304,12 +1387,19 @@ public final class AcpSchema {
 	public record SessionCapabilities(@JsonProperty("list") @Nullable Object list, @JsonProperty("close") @Nullable Object close,
 			@JsonProperty("resume") @Nullable Object resume, @JsonProperty("delete") @Nullable Object delete,
 			@JsonProperty("additionalDirectories") @Nullable Object additionalDirectories,
-			@UnstableAcpApi @JsonProperty("fork") @Nullable Object fork) {
+			@UnstableAcpApi @JsonProperty("fork") @Nullable Object fork,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
+				@Nullable Object delete, @Nullable Object additionalDirectories, @Nullable Object fork) {
+			this(list, close, resume, delete, additionalDirectories, fork, null);
+		}
+
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume) {
 			this(list, close, resume, null, null, null);
 		}
 
-		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume, @Nullable Object fork) {
+		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
+				@Nullable Object fork) {
 			this(list, close, resume, null, null, fork);
 		}
 	}
@@ -1318,7 +1408,12 @@ public final class AcpSchema {
 	 * MCP capabilities supported by agent
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record McpCapabilities(@JsonProperty("http") @Nullable Boolean http, @JsonProperty("sse") @Nullable Boolean sse) {
+	public record McpCapabilities(@JsonProperty("http") @Nullable Boolean http, @JsonProperty("sse") @Nullable Boolean sse,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public McpCapabilities(@Nullable Boolean http, @Nullable Boolean sse) {
+			this(http, sse, null);
+		}
+
 		public McpCapabilities() {
 			this(false, false);
 		}
@@ -1329,7 +1424,12 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptCapabilities(@JsonProperty("audio") @Nullable Boolean audio,
-			@JsonProperty("embeddedContext") @Nullable Boolean embeddedContext, @JsonProperty("image") @Nullable Boolean image) {
+			@JsonProperty("embeddedContext") @Nullable Boolean embeddedContext, @JsonProperty("image") @Nullable Boolean image,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public PromptCapabilities(@Nullable Boolean audio, @Nullable Boolean embeddedContext, @Nullable Boolean image) {
+			this(audio, embeddedContext, image, null);
+		}
+
 		public PromptCapabilities() {
 			this(false, false, false);
 		}
@@ -1357,7 +1457,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionModeState(@JsonProperty("currentModeId") String currentModeId,
-			@JsonProperty("availableModes") List<SessionMode> availableModes) {
+			@JsonProperty("availableModes") List<SessionMode> availableModes,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public SessionModeState(String currentModeId, List<SessionMode> availableModes) {
+			this(currentModeId, availableModes, null);
+		}
 	}
 
 	/**
@@ -1365,7 +1469,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionMode(@JsonProperty("id") String id, @JsonProperty("name") String name,
-			@JsonProperty("description") @Nullable String description) {
+			@JsonProperty("description") @Nullable String description,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public SessionMode(String id, String name, @Nullable String description) {
+			this(id, name, description, null);
+		}
 	}
 
 	// ---------------------------
@@ -1724,7 +1832,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TextResourceContents(@JsonProperty("text") String text, @JsonProperty("uri") String uri,
-			@JsonProperty("mimeType") @Nullable String mimeType) implements EmbeddedResourceResource {
+			@JsonProperty("mimeType") @Nullable String mimeType,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements EmbeddedResourceResource {
+		public TextResourceContents(String text, String uri, @Nullable String mimeType) {
+			this(text, uri, mimeType, null);
+		}
 	}
 
 	/**
@@ -1732,7 +1844,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BlobResourceContents(@JsonProperty("blob") String blob, @JsonProperty("uri") String uri,
-			@JsonProperty("mimeType") @Nullable String mimeType) implements EmbeddedResourceResource {
+			@JsonProperty("mimeType") @Nullable String mimeType,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements EmbeddedResourceResource {
+		public BlobResourceContents(String blob, String uri, @Nullable String mimeType) {
+			this(blob, uri, mimeType, null);
+		}
 	}
 
 	/**
@@ -1740,7 +1856,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Annotations(@JsonProperty("audience") @Nullable List<Role> audience, @JsonProperty("priority") @Nullable Double priority,
-			@JsonProperty("lastModified") @Nullable String lastModified) {
+			@JsonProperty("lastModified") @Nullable String lastModified,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public Annotations(@Nullable List<Role> audience, @Nullable Double priority, @Nullable String lastModified) {
+			this(audience, priority, lastModified, null);
+		}
 	}
 
 	// ---------------------------
@@ -1871,13 +1991,25 @@ public final class AcpSchema {
 	 * Tool call update, as carried by a permission request. Every field but
 	 * {@code toolCallId} is optional; {@code name} is the tool's programmatic name.
 	 */
+	// CPD-OFF: the same components as ToolCallUpdateNotification, by design. Both are the
+	// schema's ToolCallUpdate: bare in a permission request, and as a session update with its
+	// discriminator.
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdate(@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") @Nullable String title,
 			@JsonProperty("name") @Nullable String name, @JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
-			@JsonProperty("rawOutput") @Nullable Object rawOutput) {
+			@JsonProperty("rawOutput") @Nullable Object rawOutput,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * A tool call for a permission request: its id, title, kind and status.
+		 */
+		public ToolCallUpdate(String toolCallId, @Nullable String title, @Nullable ToolKind kind,
+				@Nullable ToolCallStatus status) {
+			this(toolCallId, title, null, kind, status, null, null, null, null, null);
+		}
 	}
+	// CPD-ON
 
 	/**
 	 * Tool call update notification. Every field but {@code toolCallId} is optional;
@@ -1998,7 +2130,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Cost(@JsonProperty("amount") Double amount,
-			@JsonProperty("currency") String currency) {
+			@JsonProperty("currency") String currency,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public Cost(Double amount, String currency) {
+			this(amount, currency, null);
+		}
 	}
 
 	// ---------------------------
@@ -2040,7 +2176,12 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallContentBlock(
 			@JsonProperty("type") String type,
-			@JsonProperty("content") ContentBlock content) implements ToolCallContent {
+			@JsonProperty("content") ContentBlock content,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		public ToolCallContentBlock(String type, ContentBlock content) {
+			this(type, content, null);
+		}
+
 		public ToolCallContentBlock {
 			type = discriminator(type, "content");
 		}
@@ -2052,7 +2193,12 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallDiff(@JsonProperty("type") String type,
 			@JsonProperty("path") String path, @JsonProperty("oldText") @Nullable String oldText,
-			@JsonProperty("newText") String newText) implements ToolCallContent {
+			@JsonProperty("newText") String newText,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		public ToolCallDiff(String type, String path, @Nullable String oldText, String newText) {
+			this(type, path, oldText, newText, null);
+		}
+
 		public ToolCallDiff {
 			type = discriminator(type, "diff");
 		}
@@ -2063,7 +2209,12 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallTerminal(@JsonProperty("type") String type,
-			@JsonProperty("terminalId") String terminalId) implements ToolCallContent {
+			@JsonProperty("terminalId") String terminalId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		public ToolCallTerminal(String type, String terminalId) {
+			this(type, terminalId, null);
+		}
+
 		public ToolCallTerminal {
 			type = discriminator(type, "terminal");
 		}
@@ -2073,7 +2224,11 @@ public final class AcpSchema {
 	 * Tool call location
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallLocation(@JsonProperty("path") String path, @JsonProperty("line") @Nullable Integer line) {
+	public record ToolCallLocation(@JsonProperty("path") String path, @JsonProperty("line") @Nullable Integer line,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ToolCallLocation(String path, @Nullable Integer line) {
+			this(path, line, null);
+		}
 	}
 
 	// ---------------------------
@@ -2162,7 +2317,12 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Implementation(@JsonProperty("name") String name, @JsonProperty("version") String version,
-			@JsonProperty("title") @Nullable String title) {
+			@JsonProperty("title") @Nullable String title,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public Implementation(String name, String version, @Nullable String title) {
+			this(name, version, title, null);
+		}
+
 		public Implementation(String name, String version) {
 			this(name, version, null);
 		}
@@ -2199,7 +2359,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerStdio(@JsonProperty("name") String name, @JsonProperty("command") String command,
-			@JsonProperty("args") List<String> args, @JsonProperty("env") List<EnvVariable> env) implements McpServer {
+			@JsonProperty("args") List<String> args, @JsonProperty("env") List<EnvVariable> env,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		public McpServerStdio(String name, String command, List<String> args, List<EnvVariable> env) {
+			this(name, command, args, env, null);
+		}
 	}
 
 	/**
@@ -2207,7 +2371,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerHttp(@JsonProperty("name") String name, @JsonProperty("url") String url,
-			@JsonProperty("headers") List<HttpHeader> headers) implements McpServer {
+			@JsonProperty("headers") List<HttpHeader> headers,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		public McpServerHttp(String name, String url, List<HttpHeader> headers) {
+			this(name, url, headers, null);
+		}
 
 		/**
 		 * Returns the transport type identifier.
@@ -2223,7 +2391,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerSse(@JsonProperty("name") String name, @JsonProperty("url") String url,
-			@JsonProperty("headers") List<HttpHeader> headers) implements McpServer {
+			@JsonProperty("headers") List<HttpHeader> headers,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		public McpServerSse(String name, String url, List<HttpHeader> headers) {
+			this(name, url, headers, null);
+		}
 
 		/**
 		 * Returns the transport type identifier.
@@ -2238,14 +2410,22 @@ public final class AcpSchema {
 	 * Environment variable
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record EnvVariable(@JsonProperty("name") String name, @JsonProperty("value") String value) {
+	public record EnvVariable(@JsonProperty("name") String name, @JsonProperty("value") String value,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public EnvVariable(String name, String value) {
+			this(name, value, null);
+		}
 	}
 
 	/**
 	 * HTTP header
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record HttpHeader(@JsonProperty("name") String name, @JsonProperty("value") String value) {
+	public record HttpHeader(@JsonProperty("name") String name, @JsonProperty("value") String value,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public HttpHeader(String name, String value) {
+			this(name, value, null);
+		}
 	}
 
 	/**
@@ -2253,7 +2433,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalExitStatus(@JsonProperty("exitCode") @Nullable Integer exitCode,
-			@JsonProperty("signal") @Nullable String signal) {
+			@JsonProperty("signal") @Nullable String signal,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public TerminalExitStatus(@Nullable Integer exitCode, @Nullable String signal) {
+			this(exitCode, signal, null);
+		}
 	}
 
 	/**
@@ -2357,7 +2541,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionOption(@JsonProperty("optionId") String optionId, @JsonProperty("name") String name,
-			@JsonProperty("kind") PermissionOptionKind kind) {
+			@JsonProperty("kind") PermissionOptionKind kind,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public PermissionOption(String optionId, String name, PermissionOptionKind kind) {
+			this(optionId, name, kind, null);
+		}
 	}
 
 	/**
@@ -2410,7 +2598,12 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionSelected(
 			@JsonProperty("outcome") String outcome,
-			@JsonProperty("optionId") String optionId) implements RequestPermissionOutcome {
+			@JsonProperty("optionId") String optionId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements RequestPermissionOutcome {
+		public PermissionSelected(String outcome, String optionId) {
+			this(outcome, optionId, null);
+		}
+
 		public PermissionSelected {
 			outcome = discriminator(outcome, "selected");
 		}
@@ -2425,7 +2618,11 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PlanEntry(@JsonProperty("content") String content,
-			@JsonProperty("priority") PlanEntryPriority priority, @JsonProperty("status") PlanEntryStatus status) {
+			@JsonProperty("priority") PlanEntryPriority priority, @JsonProperty("status") PlanEntryStatus status,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public PlanEntry(String content, PlanEntryPriority priority, PlanEntryStatus status) {
+			this(content, priority, status, null);
+		}
 	}
 
 	/**
@@ -2433,14 +2630,22 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommand(@JsonProperty("name") String name, @JsonProperty("description") String description,
-			@JsonProperty("input") @Nullable AvailableCommandInput input) {
+			@JsonProperty("input") @Nullable AvailableCommandInput input,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public AvailableCommand(String name, String description, @Nullable AvailableCommandInput input) {
+			this(name, description, input, null);
+		}
 	}
 
 	/**
 	 * Available command input
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AvailableCommandInput(@JsonProperty("hint") String hint) {
+	public record AvailableCommandInput(@JsonProperty("hint") String hint,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public AvailableCommandInput(String hint) {
+			this(hint, null);
+		}
 	}
 
 }
