@@ -344,7 +344,8 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			return true;
 		}
 		if (!isClosing) {
-			logger.error("Failed to enqueue inbound message: {}", message);
+			logger.error("Failed to enqueue an inbound {}", message.getClass().getSimpleName());
+			logger.debug("Inbound message not enqueued: {}", message);
 		}
 		return false;
 	}
@@ -356,7 +357,8 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 */
 	private void rejectUnreadable(String line, Exception e) {
 		if (!isClosing) {
-			logger.error("Skipped an inbound line that is not a JSON-RPC message: {}", line, e);
+			logger.error("Skipped an inbound line that is not a JSON-RPC message", e);
+			logger.debug("Skipped inbound line: {}", line);
 		}
 		this.exceptionHandler.accept(e);
 		try {

@@ -65,7 +65,8 @@ public final class OutboundSinks {
 					emit(outbound, reply);
 				}
 				catch (Sinks.EmissionException e) {
-					logger.error("Dropped response {}: {}", reply, e.getReason());
+					logger.error("Dropped a response: {}", e.getReason());
+					logger.debug("Dropped response: {}", reply);
 				}
 			})
 			.doOnTerminate(() -> {

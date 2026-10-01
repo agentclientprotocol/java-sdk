@@ -15,12 +15,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCNotification;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,6 +124,46 @@ class StdioAcpClientTransportProcessTest {
 		assertThat(reported).hasSize(1);
 	}
 
+	/**
+	 * A malformed line is the peer's payload and can carry personal data: it is logged at
+	 * DEBUG at most, never in the ERROR that reports it.
+	 */
+	@Test
+	void aMalformedLineIsNotLoggedAboveDebug() throws InterruptedException {
+		Logger logger = (Logger) LoggerFactory.getLogger(StdioAcpClientTransport.class);
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		logger.addAppender(logs);
+		try {
+			CountDownLatch answered = new CountDownLatch(1);
+			transport = new StdioAcpClientTransport(echoAgent());
+			transport.setStdErrorHandler(line -> {
+			});
+			transport.setExceptionHandler(e -> {
+			});
+			transport.connect(message -> message.doOnNext(m -> answered.countDown()).then(Mono.empty()))
+				.block(TIMEOUT);
+
+			transport.sendMessage(new JSONRPCNotification(EchoAgent.MALFORMED, null)).block(TIMEOUT);
+			assertThat(answered.await(30, TimeUnit.SECONDS)).isTrue();
+		}
+		finally {
+			logger.detachAppender(logs);
+			logs.stop();
+		}
+
+		assertThat(logs.list).filteredOn(event -> event.getLevel() == Level.ERROR)
+			.extracting(ILoggingEvent::getFormattedMessage)
+			.anySatisfy(message -> assertThat(message).contains("not a JSON-RPC message"));
+		assertThat(logs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
+			.allSatisfy(event -> {
+				assertThat(event.getFormattedMessage()).doesNotContain("someone@example.com");
+				if (event.getThrowableProxy() != null) {
+					assertThat(event.getThrowableProxy().getMessage()).doesNotContain("someone@example.com");
+				}
+			});
+	}
+
 	@Test
 	void awaitForExitReturnsWhenTheAgentExits() {
 		transport = new StdioAcpClientTransport(echoAgent());
@@ -150,6 +195,9 @@ class StdioAcpClientTransportProcessTest {
 		/** Answered with a line that is not JSON instead of its echo. */
 		static final String MALFORMED = "test/malformed";
 
+		/** The line that is not JSON; it carries personal data, as an agent's output can. */
+		static final String MALFORMED_LINE = "{not json someone@example.com";
+
 		private EchoAgent() {
 		}
 
@@ -162,7 +210,7 @@ class StdioAcpClientTransportProcessTest {
 				if (line.contains("\"" + EXIT + "\"")) {
 					return;
 				}
-				String echo = line.contains("\"" + MALFORMED + "\"") ? "{not json" : line;
+				String echo = line.contains("\"" + MALFORMED + "\"") ? MALFORMED_LINE : line;
 				System.out.write((echo + "\n").getBytes(StandardCharsets.UTF_8));
 				System.out.flush();
 			}

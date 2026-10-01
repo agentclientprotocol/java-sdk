@@ -204,7 +204,7 @@ public class AcpAgentSession implements AcpSession {
 			logger.debug("Received notification method={}", notification.method());
 			return handleIncomingNotification(notification).then(Mono.empty());
 		}
-		logger.warn("Received unknown message type: {}", message);
+		logger.warn("Received unknown message type: {}", message.getClass().getName());
 		return Mono.empty();
 	}
 

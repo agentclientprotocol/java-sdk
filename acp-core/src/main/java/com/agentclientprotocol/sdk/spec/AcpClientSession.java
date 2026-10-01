@@ -236,7 +236,7 @@ public class AcpClientSession implements AcpSession {
 			enqueue(notification);
 		}
 		else {
-			logger.warn("Received unknown message type: {}", message);
+			logger.warn("Received unknown message type: {}", message.getClass().getName());
 		}
 	}
 
@@ -342,7 +342,9 @@ public class AcpClientSession implements AcpSession {
 		return Mono.defer(() -> {
 			var handler = notificationHandlers.get(notification.method());
 			if (handler == null) {
-				logger.warn("No handler registered for notification method: {}", notification);
+				// The method only: params can carry personal data (_auth/status_update carries
+				// the account's email address).
+				logger.warn("No handler registered for notification method: {}", notification.method());
 				return Mono.empty();
 			}
 			return handler.handle(InboundMessages.paramsOrEmpty(notification.params()));

@@ -134,6 +134,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Inbound payloads no longer reach logs above DEBUG.** An unhandled notification was logged at
+  WARN with its params: Claude's and Codex's agents send `_auth/status_update`, whose params carry
+  the account's email address in login mode. `AcpClientSession` now logs the method only, as
+  `AcpAgentSession` already did. The same rule now holds wherever an inbound message reached a log
+  at INFO or above: an error response's `data` (`OutboundMessages`), a line from the agent that is
+  not a JSON-RPC message and a message the stdio client could not queue (`StdioAcpClientTransport`),
+  and a message of unknown type (both sessions). Each is logged at DEBUG instead. The exception
+  `AcpSchema.deserializeJsonRpcMessage` throws for JSON that is no JSON-RPC message, which every
+  transport logs, no longer quotes the text. A dropped outbound response is logged without its
+  content too (`OutboundSinks`).
 - **`closeGracefully()` could wait out the whole request timeout when a notification arrived
   as it closed.** Found by the real-agent smoke tier: Claude's ACP agent sends a
   `session_info_update` about 10 ms after a prompt answers, and closing the client right after the
