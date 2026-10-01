@@ -158,7 +158,7 @@ print nothing themselves. They read the environment below and nothing else.
 
 | Variable | Set for | Value |
 |---|---|---|
-| `MVNW`, `ACP_VERSION`, `CACHE`, `IT_ROOT` | `build.sh` | the Maven wrapper, the SDK version under test, `integration-testing/.cache`, `integration-testing/` |
+| `MVNW`, `ACP_VERSION`, `CACHE`, `IT_ROOT` | `build.sh` | the Maven wrapper (pinned to `IT_M2_REPO`), the SDK version under test, `integration-testing/.cache`, `integration-testing/` |
 | the language's `env` in `matrix.json` | `build.sh`, and every process of a cell that uses the language | e.g. `TS_SDK`, `PY_SDK`, `RUST_SDK` + `CARGO_TARGET_DIR`, `KOTLIN_SDK`: the peer checkout (and build dir) for the ref under test |
 | `STEPS` | client | comma-separated step ids, in order |
 | `AGENT_CMD` | client, stdio only | a shell command line that starts the agent |
@@ -338,8 +338,24 @@ language too, run on the same host at the same time.
 
 - **Ports.** Never a fixed port. An agent binds exactly the `--port` it is given: the runner takes
   `${PORT}` from a range reserved for the scenario (`IT_PORT_RANGE`, 100 ports per scenario from
-  20000, below the Linux ephemeral range). `--port 0` must also work (print the bound port in
-  `READY`). A client connects only to the `--url` it is given.
+  the run's port block, below the Linux ephemeral range). `--port 0` must also work (print the
+  bound port in `READY`). A client connects only to the `--url` it is given.
+- **Concurrent runs: ports.** Several checkouts may run `run-all.sh` on one host at once. Each
+  run-all takes an exclusive 10,000-port block for its lifetime: the first of 20000, 30000, 40000
+  and 50000 whose lock file (`${XDG_RUNTIME_DIR:-/tmp}/acp-it-ports-<base>.lock`) it can `flock`,
+  held by a file descriptor until the run and everything it started exit (a kill releases it
+  too); with all four taken it waits. `IT_PORT_BASE=<n>` overrides the choice (no lock). Scenario
+  `i` gets `<base> + 100 * (i mod 100)`, 100 ports wide. `RunScenario.java` run directly, without
+  `IT_PORT_RANGE`, uses an OS-chosen ephemeral port.
+- **Concurrent runs: Maven repository.** One knob, `IT_M2_REPO`, is the local repository for
+  everything the suite resolves or installs: the SDK install, every program build (`${MVNW}` is
+  `scripts/mvnw.sh`, the checkout's `./mvnw` with `-Dmaven.repo.local=$IT_M2_REPO`) and JBang
+  (`JBANG_REPO` is set to it). Unset, it is `integration-testing/.cache/m2` (per checkout,
+  git-ignored), so concurrent checkouts never see each other's `0.19.0-SNAPSHOT`; with `CI=true`
+  it is `~/.m2/repository`, which the CI cache keeps. A cold per-checkout repository downloads
+  the SDK's third-party dependencies once (a few minutes); copying another checkout's
+  `.cache/m2` warms it, since the SNAPSHOT is reinstalled by every run. Never call `./mvnw` or
+  `mvn` directly from a build; use `${MVNW}`.
 - **Files.** Never a fixed path. Temporary files go under `$TMPDIR`, which the runner sets for every
   process to `logs/<scenario>/tmp/`, or under the client's `{dir}` (created with a unique name).
   Nothing is written into `programs/<lang>/` at run time.
@@ -350,7 +366,7 @@ language too, run on the same host at the same time.
   in a `--prepared` run nothing else does either.
 - **Processes.** No daemons and no detached children: everything a program starts dies with it
   (a stdio client ends its agent; the runner kills each process tree at the end of a scenario).
-- **No shared mutable state**: no lock files, fixed sockets or named pipes, no global caches
+- **No shared mutable state** in programs: no lock files, fixed sockets or named pipes, no global caches
   written at run time.
 
 ### 8. CI
