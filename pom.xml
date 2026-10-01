@@ -59,7 +59,7 @@
     <properties>
         <java.version>17</java.version>
         <!-- release, not source/target: compiles against the Java 17 API even when the build
-             runs on a newer JDK (the NullAway profile below runs only on JDK 21+). -->
+             runs on a newer JDK (the errorprone profile below runs only on JDK 21+). -->
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -94,7 +94,7 @@
         <owasp.version>13.0.0</owasp.version>
         <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
 
-        <!-- Null checking (nullaway profile, JDK 21+ only) -->
+        <!-- Error Prone and NullAway (errorprone profile, JDK 21+ only) -->
         <errorprone.version>2.50.0</errorprone.version>
         <nullaway.version>0.13.8</nullaway.version>
     </properties>
@@ -157,7 +157,7 @@
             </dependency>
 
             <!-- Null-marking annotations (@NullMarked, @Nullable). Annotations only; NullAway
-                 enforces them in the nullaway profile. -->
+                 enforces them in the errorprone profile. -->
             <dependency>
                 <groupId>org.jspecify</groupId>
                 <artifactId>jspecify</artifactId>
@@ -369,18 +369,31 @@
     </build>
 
     <profiles>
-        <!-- NullAway: enforces the JSpecify null-marking of main sources at ERROR.
+        <!-- Error Prone: Error Prone's own bug checks and NullAway, at ERROR, on main sources.
              Error Prone 2.50 runs only on JDK 21+, while the SDK targets Java 17 and its
-             release build runs on JDK 17, so the check activates by JDK: every build on
+             release build runs on JDK 17, so the profile activates by JDK: every build on
              JDK 21+ (including the CI job that exists for it) is checked, and a JDK 17
              build compiles exactly as before. The javac internals Error Prone needs are
-             opened in .mvn/jvm.config. Scope, per the canonical Java library guide:
-             - only NullAway, every other Error Prone check disabled (nullness, not lint);
-             - only @NullMarked packages (OnlyNullMarked), in JSpecify mode;
+             opened in .mvn/jvm.config. Scope:
+             - Error Prone's default-enabled checks, and failOnWarning (javac -Werror), so a
+               check whose default severity is WARNING fails the build like an ERROR one.
+               -Werror also fails on javac's own default warnings (removal, for one), which
+               are worth failing on too; suggestions stay notes. A new Error Prone version
+               brings its new checks in at ERROR: triage them on upgrade.
+             - Checks that are pure style for this code base are disabled by name below,
+               each with its reason. A real exception is a @SuppressWarnings with a reason.
+             - Beyond the defaults, two bug finders that fit this code base:
+               CheckReturnValue over reactor.core.publisher: a Mono or Flux operator whose
+               result is dropped never runs. Results that are fine to drop (subscribe's
+               Disposable, a terminal tryEmit*, fluent sink callbacks) are listed with
+               reasons in config/errorprone/reactor-ignorable-results.txt.
+               SystemOut: the stdio transport owns System.out, and anything else printed
+               there corrupts the JSON-RPC stream.
+             - NullAway: only @NullMarked packages (OnlyNullMarked), in JSpecify mode.
              - only default-compile: test sources are deliberately unchecked;
              - never fork the compiler (compiler-plugin then hides every diagnostic). -->
         <profile>
-            <id>nullaway</id>
+            <id>errorprone</id>
             <activation>
                 <jdk>[21,)</jdk>
             </activation>
@@ -393,11 +406,14 @@
                             <execution>
                                 <id>default-compile</id>
                                 <configuration>
+                                    <failOnWarning>true</failOnWarning>
                                     <compilerArgs>
                                         <arg>-XDcompilePolicy=simple</arg>
                                         <arg>--should-stop=ifError=FLOW</arg>
                                         <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
-                                        <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:JSpecifyMode=true -XepOpt:NullAway:OnlyNullMarked=true</arg>
+                                        <!-- Disabled, as style for this code base:
+                                             StatementSwitchToExpressionSwitch: arrow or colon switch is a style choice. -->
+                                        <arg>-Xplugin:ErrorProne -Xep:StatementSwitchToExpressionSwitch:OFF -Xep:SystemOut:ERROR -XepOpt:CheckReturnValue:Packages=reactor.core.publisher -XepOpt:CheckReturnValue:ApiExclusionList=${maven.multiModuleProjectDirectory}/config/errorprone/reactor-ignorable-results.txt -Xep:NullAway:ERROR -XepOpt:NullAway:JSpecifyMode=true -XepOpt:NullAway:OnlyNullMarked=true</arg>
                                     </compilerArgs>
                                     <annotationProcessorPaths>
                                         <path>

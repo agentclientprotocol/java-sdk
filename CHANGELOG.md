@@ -95,6 +95,20 @@ Found by the NullAway adoption; each has a test.
 - `AcpSchema.deserializeJsonRpcMessage` threw `NullPointerException` for the JSON `null` literal
   instead of the documented `IllegalArgumentException`.
 
+Found by enabling Error Prone's bug checks; each has a test.
+
+- `StdioAcpClientTransport` read the agent's stdout and stderr in the platform default charset
+  while writing to it in UTF-8. On Java 17 that charset follows the platform (Cp1252 on Windows,
+  US-ASCII under a POSIX locale), so non-ASCII text from the agent arrived garbled. Both are now
+  read as UTF-8.
+- The Streamable HTTP client rejected an initialize response whose `Content-Type` was upper case
+  when the JVM's default locale was Turkish (`"APPLICATION/JSON".toLowerCase()` is
+  `"applıcatıon/json"` there). The client's and the servlet's media-type checks, and the `os.name`
+  check in `AgentParameters`, now lower-case with `Locale.ROOT`.
+- In `acp-agent-support`, a handler method whose result was not the ACP method's response type
+  failed with an opaque `ClassCastException` message; the `INTERNAL_ERROR` now names the method and
+  both types.
+
 ### Build
 
 - Architecture rules (ArchUnit) guard the package structure: acp-core's layers (util and json under the
@@ -108,6 +122,15 @@ Found by the NullAway adoption; each has a test.
   job; the JDK 17 build and release are unchanged. Compilation uses `--release 17`, so a JDK 21 build
   still compiles against the Java 17 API. `.mvn/jvm.config` opens the javac internals Error Prone needs
   (harmless on JDK 17).
+- Error Prone's own bug checks run beside NullAway, at ERROR, in the JDK 21 build. The profile is
+  renamed `errorprone` (from `nullaway`), and so is its CI job. Every check Error Prone enables by
+  default runs, and `failOnWarning` makes its warnings fail the build too (as it does javac's own
+  default warnings, such as use of an API deprecated for removal). One check is disabled as style,
+  `StatementSwitchToExpressionSwitch`. Two more are enabled: `SystemOut`, since anything printed to
+  standard out corrupts a stdio agent's JSON-RPC stream, and `CheckReturnValue` over
+  `reactor.core.publisher`, so a Mono or Flux operator whose result is dropped (and never runs)
+  fails the build; `config/errorprone/reactor-ignorable-results.txt` lists the results that may be
+  dropped, with reasons. Still main sources only, still JDK 21+ only.
 
 ## [0.18.0] - 2026-09-25
 

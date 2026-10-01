@@ -40,9 +40,9 @@ jobs:
           retention-days: 7
 
   # The SDK targets and releases on Java 17, but Error Prone (which runs NullAway) needs
-  # JDK 21. The parent pom's nullaway profile activates on JDK 21+, so this job is the one
-  # that enforces the @NullMarked packages at ERROR.
-  nullaway:
+  # JDK 21. The parent pom's errorprone profile activates on JDK 21+, so this job is the one
+  # that enforces Error Prone's bug checks and the @NullMarked packages at ERROR.
+  errorprone:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -56,7 +56,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build with Maven (NullAway enforced)
+      - name: Build with Maven (Error Prone and NullAway enforced)
         run: ./mvnw -B clean verify
 
   # Issue #14 only reproduced when the JVM was starved of cores: the agent's lock release
