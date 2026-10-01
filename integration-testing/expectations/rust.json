@@ -1,0 +1,4 @@
+{
+  "comment": "Expected failures caused by the Rust SDK or the Rust interop programs (programs/rust). See README.md in this directory.",
+  "expectations": []
+}
