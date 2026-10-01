@@ -1,8 +1,11 @@
 name: Cross-SDK and load scenarios
 
-# Runs integration-testing/ (interop with the TypeScript, Rust and Python SDKs, plus load runs)
-# against this checkout. Deliberately not on push or pull_request: it needs Node, Rust and Python
-# toolchains, clones the peer SDKs and takes minutes. It never gates the release workflow.
+# Runs integration-testing/ (interop with the TypeScript, Rust, Python and Kotlin SDKs, plus load
+# runs) against this checkout. One job per peer and transport, each installing only its own
+# toolchain; a prepare job per peer builds the peer once and caches it under the peer's commit, so
+# that peer's transport jobs reuse the build. Deliberately not on push or pull_request (the
+# Java <-> Java cells run there, from interop-java.yml): it needs several toolchains, clones the
+# peer SDKs and takes minutes. It never gates the release workflow.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +17,12 @@ on:
         description: 'Per-peer refs, space separated, e.g. "typescript-sdk=v0.5.0 rust-sdk=v1.2.0"'
         required: false
         default: ''
+      peer:
+        description: 'Run one peer only (java: the Java <-> Java cells, conformance and load)'
+        type: choice
+        required: false
+        default: 'all'
+        options: [all, java, typescript, rust, python, kotlin]
   schedule:
     - cron: '17 4 * * *'
 
@@ -25,34 +34,113 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scenarios:
+  # The job matrices, computed so that a manual run can pick one peer (a static include cannot be
+  # filtered by an input). One "prepare" leg per peer SDK, one "cells" leg per peer and transport.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      prepare: ${{ steps.pick.outputs.prepare }}
+      cells: ${{ steps.pick.outputs.cells }}
+      has-prepare: ${{ steps.pick.outputs.has-prepare }}
+    steps:
+      - id: pick
+        env:
+          PEER: ${{ github.event.inputs.peer || 'all' }}
+        run: |
+          # Per peer: its toolchain, its transports (cells x-java-<peer>-<t> and x-<peer>-java-<t>),
+          # the legacy scenarios that run with its http leg, and the cache paths of its build.
+          # java runs as one leg: the Java <-> Java cells, the legacy Java pair, conformance, load.
+          # kotlin has no Streamable HTTP; its Gradle toolchain is JDK 21 while the SDK and the
+          # Java programs stay on 17 (the last version listed is the default).
+          # allow-empty: a peer's cells exist only once its language is enabled in matrix.json and
+          # the cells are generated; until then its stdio and ws legs select nothing. Drop it for a
+          # peer whose cells are committed.
+          peers="$(jq -c . <<'JSON'
+          [
+            { "peer": "java", "java": "17", "only": "interop-java-java,x-java-java-*,conf-*,load-*" },
+            { "peer": "typescript", "sdk": "typescript-sdk", "java": "17", "allow-empty": true, "node": true,
+              "transports": ["stdio", "http", "ws"], "legacy": "interop-ts-*",
+              "cache-paths": "integration-testing/.cache/peers/typescript-sdk@*\n~/.npm" },
+            { "peer": "rust", "sdk": "rust-sdk", "java": "17", "allow-empty": true, "rust": true,
+              "transports": ["stdio", "http", "ws"], "legacy": "interop-rust-*",
+              "cache-paths": "integration-testing/.cache/peers/rust-sdk@*\nintegration-testing/.cache/build\n~/.cargo/registry/index\n~/.cargo/registry/cache\n~/.cargo/git/db" },
+            { "peer": "python", "sdk": "python-sdk", "java": "17", "allow-empty": true, "python": true,
+              "transports": ["stdio", "http", "ws"], "legacy": "interop-python-*",
+              "cache-paths": "integration-testing/.cache/peers/python-sdk@*" },
+            { "peer": "kotlin", "sdk": "kotlin-sdk", "java": "21\n17", "gradle": true, "allow-empty": true,
+              "transports": ["stdio", "ws"],
+              "cache-paths": "integration-testing/.cache/peers/kotlin-sdk@*\n~/.gradle/caches\n~/.gradle/wrapper" }
+          ]
+          JSON
+          )"
+          picked="$(jq -c --arg p "$PEER" '[.[] | select($p == "all" or .peer == $p)]' <<< "$peers")"
+          prepare="$(jq -c '{include: [.[] | select(.sdk)
+            | . + {only: ((["x-*-\(.peer)-*", "x-\(.peer)-*"] + (if .legacy then [.legacy] else [] end)) | join(","))}
+            | del(.transports, .legacy)]}' <<< "$picked")"
+          cells="$(jq -c '{include: [.[] as $x | ($x.transports // ["all"])[] as $t
+            | $x + (if $t == "all" then {leg: $x.peer} else {leg: "\($x.peer)-\($t)", transport: $t,
+                only: ((["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*"]
+                        + (if $t == "http" and $x.legacy then [$x.legacy] else [] end)) | join(","))} end)
+            | del(.transports, .legacy)]}' <<< "$picked")"
+          jq . <<< "$cells"
+          {
+            echo "prepare=$prepare"
+            echo "cells=$cells"
+            echo "has-prepare=$(jq '.include | length > 0' <<< "$prepare")"
+          } >> "$GITHUB_OUTPUT"
+
+  # Clone and build each peer once, and cache it under the peer's resolved commit for its legs.
+  prepare:
+    name: prepare ${{ matrix.peer }}
+    needs: plan
+    if: needs.plan.outputs.has-prepare == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.prepare) }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
-          java-version: '17'
+          java-version: ${{ matrix.java }}
           distribution: 'temurin'
           cache: maven
 
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
       - name: Set up Node 20
+        if: matrix.node
+        id: node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
 
       - name: Set up Rust stable
+        if: matrix.rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: stable
 
       - name: Set up Python 3.12
+        if: matrix.python
+        id: python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+
+      - name: Point Gradle toolchains at JDK 21
+        if: matrix.gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.installations.fromEnv=JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
 
       - name: Set up JBang
         uses: jbangdev/setup-jbang@2b1b465a7b75f4222b81426f23a01e013aa7b95c # v0.1.1
@@ -60,19 +148,147 @@ jobs:
           version: '0.135.1'
           setup-java: 'false'
 
-      - name: Run every scenario
+      - name: Resolve the peer SDK commit
+        id: peer
+        env:
+          SDK: ${{ matrix.sdk }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+        run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
+
+      # The key carries the toolchain version the build depends on (the Python venv, Node's
+      # node_modules) and the commit; a newer commit restores the last build and updates it.
+      - name: Cache the peer SDK build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ matrix.cache-paths }}
+          key: cross-sdk-${{ matrix.sdk }}-tc${{ steps.python.outputs.python-version }}${{ steps.node.outputs.node-version }}-${{ steps.peer.outputs.sha }}-${{ hashFiles('integration-testing/programs/**/Cargo.toml', 'integration-testing/programs/**/*.gradle.kts') }}
+          restore-keys: |
+            cross-sdk-${{ matrix.sdk }}-tc${{ steps.python.outputs.python-version }}${{ steps.node.outputs.node-version }}-
+
+      - name: Fetch and build the ${{ matrix.peer }} peer and programs
         env:
           PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          ONLY: ${{ matrix.only }}
+          ALLOW_EMPTY: ${{ matrix.allow-empty }}
         run: |
-          args=(--peers-ref "$PEERS_REF")
+          args=(--peers-ref "$PEERS_REF" --only "$ONLY" --prepare-only)
           for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
+          if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
+          integration-testing/scripts/run-all.sh "${args[@]}"
+
+      - name: Upload preparation logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cross-sdk-prepare-logs-${{ matrix.peer }}
+          path: integration-testing/logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  scenarios:
+    name: ${{ matrix.leg }}
+    needs: [plan, prepare]
+    # Also runs when a prepare leg failed (that peer's legs then build for themselves) or was
+    # skipped (java only).
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.cells) }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Set up Node 20
+        if: matrix.node
+        id: node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20'
+
+      - name: Set up Rust stable
+        if: matrix.rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+
+      - name: Set up Python 3.12
+        if: matrix.python
+        id: python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Point Gradle toolchains at JDK 21
+        if: matrix.gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.installations.fromEnv=JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
+
+      - name: Set up JBang
+        uses: jbangdev/setup-jbang@2b1b465a7b75f4222b81426f23a01e013aa7b95c # v0.1.1
+        with:
+          version: '0.135.1'
+          setup-java: 'false'
+
+      - name: Check the generated configs are up to date
+        if: matrix.peer == 'java'
+        working-directory: integration-testing
+        run: jbang GenConfigs.java --check
+
+      - name: Resolve the peer SDK commit
+        if: matrix.sdk
+        id: peer
+        env:
+          SDK: ${{ matrix.sdk }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+        run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
+
+      # Restore only: the prepare job saved this key. On a miss the leg builds for itself.
+      - name: Restore the peer SDK build
+        if: matrix.sdk
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ matrix.cache-paths }}
+          key: cross-sdk-${{ matrix.sdk }}-tc${{ steps.python.outputs.python-version }}${{ steps.node.outputs.node-version }}-${{ steps.peer.outputs.sha }}-${{ hashFiles('integration-testing/programs/**/Cargo.toml', 'integration-testing/programs/**/*.gradle.kts') }}
+          restore-keys: |
+            cross-sdk-${{ matrix.sdk }}-tc${{ steps.python.outputs.python-version }}${{ steps.node.outputs.node-version }}-
+
+      - name: Run the ${{ matrix.leg }} scenarios
+        env:
+          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          ONLY: ${{ matrix.only }}
+          ALLOW_EMPTY: ${{ matrix.allow-empty }}
+          RUN_LABEL: ${{ matrix.leg }}
+        run: |
+          args=(--peers-ref "$PEERS_REF" --only "$ONLY")
+          for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
+          if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
           integration-testing/scripts/run-all.sh "${args[@]}"
 
       - name: Upload scenario logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: cross-sdk-logs
+          name: cross-sdk-logs-${{ matrix.leg }}
           path: integration-testing/logs/
+          if-no-files-found: ignore
           retention-days: 14
