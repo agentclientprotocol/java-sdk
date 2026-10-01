@@ -38,3 +38,8 @@ artifact. Commit messages contain no AI attribution.
 
 Do not copy private planning, current-action, roadmap, checkpoint, or dirty-tree state into public
 files. The ignored `plans/` tree in a checkout is transition material, not public authority.
+
+Prove new tests locally before relying on CI. Get an integration, smoke or cross-SDK test passing on
+this machine first, with the tools, logins and keys already here (`integration-testing/scripts/run-all.sh`
+runs the cross-SDK suite). Then wire it into CI, so CI only repeats a run already known to pass. Do not
+debug by pushing and waiting for CI runs. Never print or commit credentials.
