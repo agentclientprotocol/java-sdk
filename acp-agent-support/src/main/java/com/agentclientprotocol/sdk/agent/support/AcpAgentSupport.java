@@ -4,12 +4,17 @@
 
 package com.agentclientprotocol.sdk.agent.support;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
@@ -109,6 +114,9 @@ public class AcpAgentSupport {
 
 	private static final Logger log = LoggerFactory.getLogger(AcpAgentSupport.class);
 
+	/** The handler annotations and the ACP method each one marks a handler for. */
+	private static final Map<Class<? extends Annotation>, String> HANDLER_ANNOTATIONS = handlerAnnotations();
+
 	private final Map<String, AcpHandlerMethod> handlers;
 
 	private final ArgumentResolverComposite argumentResolvers;
@@ -193,121 +201,69 @@ public class AcpAgentSupport {
 		return agent;
 	}
 
-	private void wireHandlers(AcpAgent.SyncAgentBuilder agentBuilder) {
-		// Initialize handler
-		AcpHandlerMethod initHandler = handlers.get("initialize");
-		if (initHandler != null) {
-			agentBuilder.initializeHandler(req -> respond(initHandler, AcpSchema.InitializeResponse.class, req, null, null, null));
+	/**
+	 * Binds each discovered handler method to the agent builder, one ACP method per line.
+	 * Initialize and session/new have defaults, so an agent with only a prompt handler can
+	 * still be initialized and open sessions.
+	 */
+	private void wireHandlers(AcpAgent.SyncAgentBuilder agent) {
+		bind(AcpSchema.METHOD_INITIALIZE,
+				handler -> agent.initializeHandler(req -> respond(handler, InitializeResponse.class, req, null)),
+				() -> agent.initializeHandler(req -> InitializeResponse.ok()));
+		bind(AcpSchema.METHOD_SESSION_NEW,
+				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
+				() -> agent.newSessionHandler(req -> new NewSessionResponse(UUID.randomUUID().toString(), null, null)));
+		bind(AcpSchema.METHOD_LOGOUT,
+				handler -> agent.logoutHandler(req -> respond(handler, AcpSchema.LogoutResponse.class, req, null)));
+		bind(AcpSchema.METHOD_SESSION_LOAD, handler -> agent.loadSessionHandler(
+				req -> respond(handler, AcpSchema.LoadSessionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_PROMPT, handler -> agent.promptHandler((req, context) -> respond(handler,
+				AcpSchema.PromptResponse.class, req, req.sessionId(), context, context.getClientCapabilities())));
+		bind(AcpSchema.METHOD_SESSION_SET_MODE, handler -> agent.setSessionModeHandler(
+				req -> respond(handler, AcpSchema.SetSessionModeResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_LIST, handler -> agent
+			.listSessionsHandler(req -> respond(handler, AcpSchema.ListSessionsResponse.class, req, null)));
+		bind(AcpSchema.METHOD_SESSION_CLOSE, handler -> agent.closeSessionHandler(
+				req -> respond(handler, AcpSchema.CloseSessionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_DELETE, handler -> agent.deleteSessionHandler(
+				req -> respond(handler, AcpSchema.DeleteSessionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_RESUME, handler -> agent.resumeSessionHandler(
+				req -> respond(handler, AcpSchema.ResumeSessionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_FORK, handler -> agent.forkSessionHandler(
+				req -> respond(handler, AcpSchema.ForkSessionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, handler -> agent.setSessionConfigOptionHandler(
+				req -> respond(handler, AcpSchema.SetSessionConfigOptionResponse.class, req, req.sessionId())));
+		bind(AcpSchema.METHOD_PROVIDERS_LIST, handler -> agent
+			.listProvidersHandler(req -> respond(handler, AcpSchema.ListProvidersResponse.class, req, null)));
+		bind(AcpSchema.METHOD_PROVIDERS_SET, handler -> agent
+			.setProviderHandler(req -> respond(handler, AcpSchema.SetProviderResponse.class, req, null)));
+		bind(AcpSchema.METHOD_PROVIDERS_DISABLE, handler -> agent
+			.disableProviderHandler(req -> respond(handler, AcpSchema.DisableProviderResponse.class, req, null)));
+		bind(AcpSchema.METHOD_SESSION_CANCEL, handler -> agent.cancelHandler(
+				notification -> invoke(handler, notification, notification.sessionId(), null, null)));
+	}
+
+	/** Binds the handler method discovered for an ACP method, if there is one. */
+	private void bind(String acpMethod, Consumer<AcpHandlerMethod> binding) {
+		bind(acpMethod, binding, () -> {
+		});
+	}
+
+	/** Binds the handler method discovered for an ACP method, or the default when there is none. */
+	private void bind(String acpMethod, Consumer<AcpHandlerMethod> binding, Runnable defaultBinding) {
+		AcpHandlerMethod handler = handlers.get(acpMethod);
+		if (handler != null) {
+			binding.accept(handler);
 		}
 		else {
-			// Default initialize handler
-			agentBuilder.initializeHandler(req -> InitializeResponse.ok());
+			defaultBinding.run();
 		}
+	}
 
-		// NewSession handler
-		AcpHandlerMethod newSessionHandler = handlers.get("session/new");
-		if (newSessionHandler != null) {
-			agentBuilder.newSessionHandler(req -> respond(newSessionHandler, AcpSchema.NewSessionResponse.class, req, null, null, null));
-		}
-		else {
-			// Default new session handler
-			agentBuilder.newSessionHandler(req -> new NewSessionResponse(
-					java.util.UUID.randomUUID().toString(), null, null));
-		}
-
-		// Logout handler
-		AcpHandlerMethod logoutHandler = handlers.get("logout");
-		if (logoutHandler != null) {
-			agentBuilder.logoutHandler(req -> respond(logoutHandler, AcpSchema.LogoutResponse.class, req, null, null, null));
-		}
-
-		// LoadSession handler
-		AcpHandlerMethod loadSessionHandler = handlers.get("session/load");
-		if (loadSessionHandler != null) {
-			agentBuilder.loadSessionHandler(req -> respond(loadSessionHandler, AcpSchema.LoadSessionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// Prompt handler
-		AcpHandlerMethod promptHandler = handlers.get("session/prompt");
-		if (promptHandler != null) {
-			agentBuilder.promptHandler((req, syncContext) -> {
-				NegotiatedCapabilities caps = syncContext.getClientCapabilities();
-				return respond(promptHandler, AcpSchema.PromptResponse.class, req, req.sessionId(), syncContext, caps);
-			});
-		}
-
-		// SetSessionMode handler
-		AcpHandlerMethod setModeHandler = handlers.get("session/set_mode");
-		if (setModeHandler != null) {
-			agentBuilder.setSessionModeHandler(req -> respond(setModeHandler, AcpSchema.SetSessionModeResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// ListSessions handler
-		AcpHandlerMethod listSessionsHandler = handlers.get("session/list");
-		if (listSessionsHandler != null) {
-			agentBuilder.listSessionsHandler(req -> respond(listSessionsHandler, AcpSchema.ListSessionsResponse.class, req, null, null, null));
-		}
-
-		// CloseSession handler
-		AcpHandlerMethod closeSessionHandler = handlers.get("session/close");
-		if (closeSessionHandler != null) {
-			agentBuilder.closeSessionHandler(
-					req -> respond(closeSessionHandler, AcpSchema.CloseSessionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// DeleteSession handler
-		AcpHandlerMethod deleteSessionHandler = handlers.get("session/delete");
-		if (deleteSessionHandler != null) {
-			agentBuilder.deleteSessionHandler(
-					req -> respond(deleteSessionHandler, AcpSchema.DeleteSessionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// ResumeSession handler
-		AcpHandlerMethod resumeSessionHandler = handlers.get("session/resume");
-		if (resumeSessionHandler != null) {
-			agentBuilder.resumeSessionHandler(
-					req -> respond(resumeSessionHandler, AcpSchema.ResumeSessionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// ForkSession handler
-		AcpHandlerMethod forkSessionHandler = handlers.get("session/fork");
-		if (forkSessionHandler != null) {
-			agentBuilder.forkSessionHandler(
-					req -> respond(forkSessionHandler, AcpSchema.ForkSessionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// SetSessionConfigOption handler
-		AcpHandlerMethod setConfigOptionHandler = handlers.get("session/set_config_option");
-		if (setConfigOptionHandler != null) {
-			agentBuilder.setSessionConfigOptionHandler(
-					req -> respond(setConfigOptionHandler, AcpSchema.SetSessionConfigOptionResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// ListProviders handler (unstable)
-		AcpHandlerMethod listProvidersHandler = handlers.get("providers/list");
-		if (listProvidersHandler != null) {
-			agentBuilder.listProvidersHandler(req -> respond(listProvidersHandler, AcpSchema.ListProvidersResponse.class, req, null, null, null));
-		}
-
-		// SetProvider handler (unstable)
-		AcpHandlerMethod setProviderHandler = handlers.get("providers/set");
-		if (setProviderHandler != null) {
-			agentBuilder.setProviderHandler(req -> respond(setProviderHandler, AcpSchema.SetProviderResponse.class, req, null, null, null));
-		}
-
-		// DisableProvider handler (unstable)
-		AcpHandlerMethod disableProviderHandler = handlers.get("providers/disable");
-		if (disableProviderHandler != null) {
-			agentBuilder.disableProviderHandler(req -> respond(disableProviderHandler, AcpSchema.DisableProviderResponse.class, req, null, null, null));
-		}
-
-		// Cancel handler
-		AcpHandlerMethod cancelHandler = handlers.get("session/cancel");
-		if (cancelHandler != null) {
-			agentBuilder.cancelHandler(notification -> {
-				invoke(cancelHandler, notification, notification.sessionId(), null, null);
-			});
-		}
+	/** {@link #respond(AcpHandlerMethod, Class, Object, String, SyncPromptContext, NegotiatedCapabilities)} for a method other than session/prompt. */
+	private <T> T respond(AcpHandlerMethod handler, Class<T> responseType, Object request,
+			@Nullable String sessionId) {
+		return respond(handler, responseType, request, sessionId, null, null);
 	}
 
 	/**
@@ -393,6 +349,27 @@ public class AcpAgentSupport {
 			args[i] = argumentResolvers.resolveArgument(params[i], context);
 		}
 		return args;
+	}
+
+	private static Map<Class<? extends Annotation>, String> handlerAnnotations() {
+		Map<Class<? extends Annotation>, String> annotations = new LinkedHashMap<>();
+		annotations.put(Initialize.class, AcpSchema.METHOD_INITIALIZE);
+		annotations.put(Logout.class, AcpSchema.METHOD_LOGOUT);
+		annotations.put(NewSession.class, AcpSchema.METHOD_SESSION_NEW);
+		annotations.put(LoadSession.class, AcpSchema.METHOD_SESSION_LOAD);
+		annotations.put(Prompt.class, AcpSchema.METHOD_SESSION_PROMPT);
+		annotations.put(SetSessionMode.class, AcpSchema.METHOD_SESSION_SET_MODE);
+		annotations.put(ListSessions.class, AcpSchema.METHOD_SESSION_LIST);
+		annotations.put(CloseSession.class, AcpSchema.METHOD_SESSION_CLOSE);
+		annotations.put(DeleteSession.class, AcpSchema.METHOD_SESSION_DELETE);
+		annotations.put(ResumeSession.class, AcpSchema.METHOD_SESSION_RESUME);
+		annotations.put(ForkSession.class, AcpSchema.METHOD_SESSION_FORK);
+		annotations.put(SetSessionConfigOption.class, AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION);
+		annotations.put(ListProviders.class, AcpSchema.METHOD_PROVIDERS_LIST);
+		annotations.put(SetProvider.class, AcpSchema.METHOD_PROVIDERS_SET);
+		annotations.put(DisableProvider.class, AcpSchema.METHOD_PROVIDERS_DISABLE);
+		annotations.put(Cancel.class, AcpSchema.METHOD_SESSION_CANCEL);
+		return Collections.unmodifiableMap(annotations);
 	}
 
 	// ========== BUILDER ==========
@@ -521,79 +498,16 @@ public class AcpAgentSupport {
 		}
 
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> beanSupplier) {
-			if (!agentClass.isAnnotationPresent(
-					com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
-				throw new IllegalArgumentException(
-						"Class must be annotated with @AcpAgent: " + agentClass.getName());
+			if (!agentClass.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
+				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName());
 			}
-
 			for (Method method : agentClass.getDeclaredMethods()) {
-				if (method.isAnnotationPresent(Initialize.class)) {
-					handlers.put("initialize", new AcpHandlerMethod(beanSupplier, method, "initialize"));
-					log.debug("Discovered @Initialize handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(Logout.class)) {
-					handlers.put("logout", new AcpHandlerMethod(beanSupplier, method, "logout"));
-					log.debug("Discovered @Logout handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(NewSession.class)) {
-					handlers.put("session/new", new AcpHandlerMethod(beanSupplier, method, "session/new"));
-					log.debug("Discovered @NewSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(LoadSession.class)) {
-					handlers.put("session/load", new AcpHandlerMethod(beanSupplier, method, "session/load"));
-					log.debug("Discovered @LoadSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(Prompt.class)) {
-					handlers.put("session/prompt", new AcpHandlerMethod(beanSupplier, method, "session/prompt"));
-					log.debug("Discovered @Prompt handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(SetSessionMode.class)) {
-					handlers.put("session/set_mode", new AcpHandlerMethod(beanSupplier, method, "session/set_mode"));
-					log.debug("Discovered @SetSessionMode handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(ListSessions.class)) {
-					handlers.put("session/list", new AcpHandlerMethod(beanSupplier, method, "session/list"));
-					log.debug("Discovered @ListSessions handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(CloseSession.class)) {
-					handlers.put("session/close", new AcpHandlerMethod(beanSupplier, method, "session/close"));
-					log.debug("Discovered @CloseSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(DeleteSession.class)) {
-					handlers.put("session/delete", new AcpHandlerMethod(beanSupplier, method, "session/delete"));
-					log.debug("Discovered @DeleteSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(ResumeSession.class)) {
-					handlers.put("session/resume", new AcpHandlerMethod(beanSupplier, method, "session/resume"));
-					log.debug("Discovered @ResumeSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(ForkSession.class)) {
-					handlers.put("session/fork", new AcpHandlerMethod(beanSupplier, method, "session/fork"));
-					log.debug("Discovered @ForkSession handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(SetSessionConfigOption.class)) {
-					handlers.put("session/set_config_option",
-							new AcpHandlerMethod(beanSupplier, method, "session/set_config_option"));
-					log.debug("Discovered @SetSessionConfigOption handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(ListProviders.class)) {
-					handlers.put("providers/list", new AcpHandlerMethod(beanSupplier, method, "providers/list"));
-					log.debug("Discovered @ListProviders handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(SetProvider.class)) {
-					handlers.put("providers/set", new AcpHandlerMethod(beanSupplier, method, "providers/set"));
-					log.debug("Discovered @SetProvider handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(DisableProvider.class)) {
-					handlers.put("providers/disable",
-							new AcpHandlerMethod(beanSupplier, method, "providers/disable"));
-					log.debug("Discovered @DisableProvider handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(Cancel.class)) {
-					handlers.put("session/cancel", new AcpHandlerMethod(beanSupplier, method, "session/cancel"));
-					log.debug("Discovered @Cancel handler: {}", method.getName());
-				}
+				HANDLER_ANNOTATIONS.forEach((annotation, acpMethod) -> {
+					if (method.isAnnotationPresent(annotation)) {
+						handlers.put(acpMethod, new AcpHandlerMethod(beanSupplier, method, acpMethod));
+						log.debug("Discovered @{} handler: {}", annotation.getSimpleName(), method.getName());
+					}
+				});
 			}
 		}
 
