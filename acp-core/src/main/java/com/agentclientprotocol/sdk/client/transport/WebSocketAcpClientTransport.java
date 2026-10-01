@@ -21,6 +21,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -66,7 +67,10 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.One<Void> connectionReady = Sinks.one();
 
-	private WebSocket webSocket;
+	private final Sinks.One<Void> terminationSink = Sinks.one();
+
+	/** Set once the WebSocket opens; null before connect. */
+	private volatile @Nullable WebSocket webSocket;
 
 	private Scheduler outboundScheduler;
 
@@ -167,7 +171,15 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			.flatMap(message -> Mono.just(message).transform(handler))
 			.doOnNext(response -> {
 				if (response != null) {
-					this.outboundSink.tryEmitNext(response);
+					// Responses are emitted from the inbound thread while sendMessage emits
+					// from user threads on the same sink; both must go through the serialising
+					// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
+					try {
+						this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+					}
+					catch (Sinks.EmissionException e) {
+						logger.error("Dropped response {}: {}", response, e.getReason());
+					}
 				}
 			})
 			.doOnTerminate(() -> {
@@ -180,6 +192,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		this.outboundSink.asFlux()
 			.publishOn(outboundScheduler)
 			.subscribe(message -> {
+				WebSocket webSocket = this.webSocket;
 				if (message != null && !isClosing.get() && webSocket != null) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
@@ -212,7 +225,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
 			outboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 		}).then(Mono.defer(() -> {
+			WebSocket webSocket = this.webSocket;
 			if (webSocket != null) {
 				return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")
 					.thenApply(ws -> null));
@@ -232,6 +247,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	@Override
 	public void setExceptionHandler(Consumer<Throwable> handler) {
 		this.exceptionHandler = handler;
+	}
+
+	@Override
+	public Mono<Void> awaitTermination() {
+		return terminationSink.asMono();
 	}
 
 	@Override
@@ -287,6 +307,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			logger.info("WebSocket connection closed: {} - {}", statusCode, reason);
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -295,9 +316,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			if (!isClosing.get()) {
 				logger.error("WebSocket error", error);
 				exceptionHandler.accept(error);
+				terminationSink.tryEmitError(error);
 			}
 			isClosing.set(true);
 			inboundSink.tryEmitComplete();
+			terminationSink.tryEmitEmpty();
 		}
 
 	}

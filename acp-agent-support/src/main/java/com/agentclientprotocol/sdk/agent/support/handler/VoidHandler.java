@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Handles void return types for prompt handlers by returning
@@ -24,7 +25,8 @@ public class VoidHandler implements ReturnValueHandler {
 	}
 
 	@Override
-	public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context) {
+	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context) {
 		// Only convert to PromptResponse for prompt handlers
 		if ("session/prompt".equals(context.getAcpMethod())) {
 			return PromptResponse.endTurn();

@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Builder for terminal command execution via the convenience API.
  *
@@ -32,7 +34,7 @@ import java.util.Map;
  * @param executable The command to execute
  * @param args The arguments to pass to the command
  * @param cwd The working directory (null for default)
- * @param env Environment variables to set (null for default)
+ * @param env Environment variables to set (empty for none)
  * @param outputByteLimit Maximum bytes of output to capture (null for default)
  * @author Mark Pollack
  * @since 0.9.2
@@ -42,9 +44,9 @@ import java.util.Map;
 public record Command(
 		String executable,
 		List<String> args,
-		String cwd,
+		@Nullable String cwd,
 		Map<String, String> env,
-		Long outputByteLimit
+		@Nullable Long outputByteLimit
 ) {
 
 	/**
@@ -62,7 +64,7 @@ public record Command(
 				commandAndArgs.length > 1
 						? Arrays.asList(commandAndArgs).subList(1, commandAndArgs.length)
 						: List.of(),
-				null, null, null);
+				null, Map.of(), null);
 	}
 
 	/**

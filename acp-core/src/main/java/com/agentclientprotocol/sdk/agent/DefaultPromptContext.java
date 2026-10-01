@@ -27,6 +27,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallUpdate;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolKind;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WaitForTerminalExitRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WriteTextFileRequest;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -118,7 +119,7 @@ class DefaultPromptContext implements PromptContext {
 	}
 
 	@Override
-	public NegotiatedCapabilities getClientCapabilities() {
+	public @Nullable NegotiatedCapabilities getClientCapabilities() {
 		return agent.getClientCapabilities();
 	}
 
@@ -147,7 +148,7 @@ class DefaultPromptContext implements PromptContext {
 	}
 
 	@Override
-	public Mono<String> readFile(String path, Integer startLine, Integer lineCount) {
+	public Mono<String> readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount) {
 		return readTextFile(new ReadTextFileRequest(sessionId, path, startLine, lineCount))
 				.map(AcpSchema.ReadTextFileResponse::content);
 	}
@@ -189,12 +190,12 @@ class DefaultPromptContext implements PromptContext {
 				ToolCallStatus.PENDING, null, null, null, null);
 
 		return requestPermission(new RequestPermissionRequest(sessionId, toolCall, permOptions))
-				.map(response -> {
+				.flatMap(response -> {
 					if (response.outcome() instanceof PermissionSelected s) {
 						int idx = Integer.parseInt(s.optionId());
-						return options[idx];
+						return Mono.just(options[idx]);
 					}
-					return null;
+					return Mono.empty();
 				});
 	}
 
@@ -205,9 +206,9 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<CommandResult> execute(Command command) {
-		// Convert env map to list of EnvVariable
+		// Convert env map to list of EnvVariable; no variables leaves the wire field out
 		List<EnvVariable> envList = null;
-		if (command.env() != null) {
+		if (!command.env().isEmpty()) {
 			envList = command.env().entrySet().stream()
 					.map(e -> new EnvVariable(e.getKey(), e.getValue()))
 					.toList();
@@ -222,7 +223,8 @@ class DefaultPromptContext implements PromptContext {
 
 				return waitForTerminalExit(new WaitForTerminalExitRequest(sessionId, terminalId))
 						.flatMap(exitResp -> getTerminalOutput(new TerminalOutputRequest(sessionId, terminalId))
-								.map(outputResp -> new CommandResult(outputResp.output(), exitResp.exitCode(), false)))
+								.map(outputResp -> new CommandResult(outputResp.output(), exitResp.exitCode(),
+										exitResp.signal(), false)))
 						// Release terminal after getting result, then return result
 						.flatMap(result -> releaseTerminal(releaseReq).thenReturn(result))
 						// On error, still release terminal before propagating error

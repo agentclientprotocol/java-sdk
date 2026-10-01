@@ -22,6 +22,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Handles direct protocol response types that need no conversion.
@@ -58,7 +59,8 @@ public class DirectResponseHandler implements ReturnValueHandler {
 	}
 
 	@Override
-	public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context) {
+	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context) {
 		// Direct passthrough - no conversion needed
 		return returnValue;
 	}

@@ -10,6 +10,8 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Metadata about a method parameter. Implements equals/hashCode
  * for use as cache key in argument resolver lookup.
@@ -25,14 +27,15 @@ public final class AcpMethodParameter {
 
 	private final int index;
 
-	private final Parameter parameter;
+	/** The reflected parameter; null for a return type. */
+	private final @Nullable Parameter parameter;
 
 	// Lazy-initialized caches
-	private volatile Annotation[] annotations;
+	private volatile Annotation @Nullable [] annotations;
 
-	private volatile Class<?> parameterType;
+	private volatile @Nullable Class<?> parameterType;
 
-	private volatile Type genericType;
+	private volatile @Nullable Type genericType;
 
 	/**
 	 * Create a new AcpMethodParameter for a method parameter.
@@ -74,7 +77,7 @@ public final class AcpMethodParameter {
 	 * Get the parameter name (requires -parameters compiler flag).
 	 * @return the parameter name, or null for return type
 	 */
-	public String getName() {
+	public @Nullable String getName() {
 		return parameter != null ? parameter.getName() : null;
 	}
 
@@ -84,7 +87,7 @@ public final class AcpMethodParameter {
 	 */
 	public Class<?> getParameterType() {
 		if (parameterType == null) {
-			parameterType = (index >= 0)
+			parameterType = (parameter != null)
 					? parameter.getType()
 					: method.getReturnType();
 		}
@@ -97,7 +100,7 @@ public final class AcpMethodParameter {
 	 */
 	public Type getGenericType() {
 		if (genericType == null) {
-			genericType = (index >= 0)
+			genericType = (parameter != null)
 					? parameter.getParameterizedType()
 					: method.getGenericReturnType();
 		}
@@ -123,7 +126,7 @@ public final class AcpMethodParameter {
 	 * @param <A> the annotation type
 	 * @return the annotation, or null if not present
 	 */
-	public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
+	public <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationType) {
 		for (Annotation ann : getAnnotations()) {
 			if (annotationType.isInstance(ann)) {
 				return annotationType.cast(ann);

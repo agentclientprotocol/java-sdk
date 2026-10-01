@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Default implementation of {@link SyncPromptContext} that wraps an async {@link PromptContext}
@@ -42,48 +43,48 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public AcpSchema.ReadTextFileResponse readTextFile(AcpSchema.ReadTextFileRequest request) {
-		return asyncContext.readTextFile(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.readTextFile(request));
 	}
 
 	@Override
 	public AcpSchema.WriteTextFileResponse writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		return asyncContext.writeTextFile(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.writeTextFile(request));
 	}
 
 	@Override
 	public AcpSchema.RequestPermissionResponse requestPermission(AcpSchema.RequestPermissionRequest request) {
-		return asyncContext.requestPermission(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.requestPermission(request));
 	}
 
 	@Override
 	public AcpSchema.CreateTerminalResponse createTerminal(AcpSchema.CreateTerminalRequest request) {
-		return asyncContext.createTerminal(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.createTerminal(request));
 	}
 
 	@Override
 	public AcpSchema.TerminalOutputResponse getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		return asyncContext.getTerminalOutput(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.getTerminalOutput(request));
 	}
 
 	@Override
 	public AcpSchema.ReleaseTerminalResponse releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		return asyncContext.releaseTerminal(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.releaseTerminal(request));
 	}
 
 	@Override
 	public AcpSchema.WaitForTerminalExitResponse waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request) {
-		return asyncContext.waitForTerminalExit(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.waitForTerminalExit(request));
 	}
 
 	@Override
 	public AcpSchema.KillTerminalCommandResponse killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		return asyncContext.killTerminal(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.killTerminal(request));
 	}
 
 	@Override
 	public AcpSchema.CreateElicitationResponse createElicitation(
 			AcpSchema.CreateElicitationRequest request) {
-		return asyncContext.createElicitation(request).block();
+		return SyncBlocking.awaitResponse(asyncContext.createElicitation(request));
 	}
 
 	@Override
@@ -92,7 +93,7 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	}
 
 	@Override
-	public NegotiatedCapabilities getClientCapabilities() {
+	public @Nullable NegotiatedCapabilities getClientCapabilities() {
 		return asyncContext.getClientCapabilities();
 	}
 
@@ -117,12 +118,12 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public String readFile(String path) {
-		return asyncContext.readFile(path).block();
+		return SyncBlocking.awaitResponse(asyncContext.readFile(path));
 	}
 
 	@Override
-	public String readFile(String path, Integer startLine, Integer lineCount) {
-		return asyncContext.readFile(path, startLine, lineCount).block();
+	public String readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount) {
+		return SyncBlocking.awaitResponse(asyncContext.readFile(path, startLine, lineCount));
 	}
 
 	@Override
@@ -148,18 +149,18 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	}
 
 	@Override
-	public String askChoice(String question, String... options) {
-		return asyncContext.askChoice(question, options).block();
+	public Optional<String> askChoice(String question, String... options) {
+		return Optional.ofNullable(asyncContext.askChoice(question, options).block());
 	}
 
 	@Override
 	public CommandResult execute(String... commandAndArgs) {
-		return asyncContext.execute(commandAndArgs).block();
+		return SyncBlocking.awaitResponse(asyncContext.execute(commandAndArgs));
 	}
 
 	@Override
 	public CommandResult execute(Command command) {
-		return asyncContext.execute(command).block();
+		return SyncBlocking.awaitResponse(asyncContext.execute(command));
 	}
 
 }

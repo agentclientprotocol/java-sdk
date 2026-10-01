@@ -15,6 +15,7 @@ import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -69,12 +70,36 @@ public class MockAcpClient {
 
 	private volatile CountDownLatch updateLatch = new CountDownLatch(0);
 
-	private volatile String currentSessionId;
+	private volatile @Nullable String currentSessionId;
 
-	private MockAcpClient(AcpAsyncClient delegate, AcpClientTransport transport, Duration timeout) {
-		this.delegate = delegate;
-		this.transport = transport;
-		this.timeout = timeout;
+	private MockAcpClient(Builder builder) {
+		this.transport = builder.transport;
+		this.timeout = builder.requestTimeout;
+		Function<AcpSchema.RequestPermissionRequest, AcpSchema.RequestPermissionResponse> permissionHandler = builder.permissionHandler;
+		Function<AcpSchema.ReadTextFileRequest, AcpSchema.ReadTextFileResponse> readFileHandler = builder.readFileHandler;
+		Function<AcpSchema.WriteTextFileRequest, AcpSchema.WriteTextFileResponse> writeFileHandler = builder.writeFileHandler;
+		// The handlers record into this mock's fields, which are initialized before this body runs
+		this.delegate = AcpClient.async(builder.transport)
+			.requestTimeout(builder.requestTimeout)
+			.sessionUpdateConsumer(notification -> {
+				receivedUpdates.add(notification);
+				updateLatch.countDown();
+				return Mono.empty();
+			})
+			// Using typed handlers (no manual unmarshalling needed)
+			.requestPermissionHandler((AcpSchema.RequestPermissionRequest request) -> {
+				receivedPermissionRequests.add(request);
+				return Mono.just(permissionHandler.apply(request));
+			})
+			.readTextFileHandler((AcpSchema.ReadTextFileRequest request) -> {
+				receivedFileReadRequests.add(request);
+				return Mono.just(readFileHandler.apply(request));
+			})
+			.writeTextFileHandler((AcpSchema.WriteTextFileRequest request) -> {
+				receivedFileWriteRequests.add(request);
+				return Mono.just(writeFileHandler.apply(request));
+			})
+			.build();
 	}
 
 	/**
@@ -104,7 +129,7 @@ public class MockAcpClient {
 		// Mock client advertises all capabilities by default
 		AcpSchema.FileSystemCapability fs = new AcpSchema.FileSystemCapability(true, true);
 		AcpSchema.ClientCapabilities caps = new AcpSchema.ClientCapabilities(fs, true);
-		return delegate.initialize(new AcpSchema.InitializeRequest(1, caps)).block(timeout);
+		return await(delegate.initialize(new AcpSchema.InitializeRequest(1, caps)));
 	}
 
 	/**
@@ -113,11 +138,9 @@ public class MockAcpClient {
 	 * @return The new session response
 	 */
 	public AcpSchema.NewSessionResponse newSession(String cwd) {
-		AcpSchema.NewSessionResponse response = delegate.newSession(new AcpSchema.NewSessionRequest(cwd, List.of()))
-			.block(timeout);
-		if (response != null) {
-			this.currentSessionId = response.sessionId();
-		}
+		AcpSchema.NewSessionResponse response = await(
+				delegate.newSession(new AcpSchema.NewSessionRequest(cwd, List.of())));
+		this.currentSessionId = response.sessionId();
 		return response;
 	}
 
@@ -127,12 +150,7 @@ public class MockAcpClient {
 	 * @return The prompt response
 	 */
 	public AcpSchema.PromptResponse prompt(String text) {
-		if (currentSessionId == null) {
-			throw new IllegalStateException("No session created. Call newSession() first.");
-		}
-		return delegate
-			.prompt(new AcpSchema.PromptRequest(currentSessionId, List.of(new AcpSchema.TextContent(text))))
-			.block(timeout);
+		return prompt(requireSessionId(), text);
 	}
 
 	/**
@@ -142,18 +160,31 @@ public class MockAcpClient {
 	 * @return The prompt response
 	 */
 	public AcpSchema.PromptResponse prompt(String sessionId, String text) {
-		return delegate.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(text))))
-			.block(timeout);
+		return await(delegate.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(text)))));
 	}
 
 	/**
 	 * Cancels operations for the current session.
 	 */
 	public void cancel() {
-		if (currentSessionId == null) {
+		delegate.cancel(new AcpSchema.CancelNotification(requireSessionId())).block(timeout);
+	}
+
+	private String requireSessionId() {
+		String sessionId = this.currentSessionId;
+		if (sessionId == null) {
 			throw new IllegalStateException("No session created. Call newSession() first.");
 		}
-		delegate.cancel(new AcpSchema.CancelNotification(currentSessionId)).block(timeout);
+		return sessionId;
+	}
+
+	/** Blocks for a response; a request's Mono emits its response or fails, never completes empty. */
+	private <T> T await(Mono<T> response) {
+		T value = response.block(timeout);
+		if (value == null) {
+			throw new IllegalStateException("ACP request completed without a response");
+		}
+		return value;
 	}
 
 	/**
@@ -210,7 +241,7 @@ public class MockAcpClient {
 	 * Gets the current session ID.
 	 * @return The session ID, or null if no session created
 	 */
-	public String getCurrentSessionId() {
+	public @Nullable String getCurrentSessionId() {
 		return currentSessionId;
 	}
 
@@ -325,42 +356,7 @@ public class MockAcpClient {
 		 * @return The configured mock client
 		 */
 		public MockAcpClient build() {
-			// We need to create the mock first to capture updates
-			MockAcpClient mockClient = new MockAcpClient(null, transport, requestTimeout);
-
-			AcpAsyncClient delegate = AcpClient.async(transport)
-				.requestTimeout(requestTimeout)
-				.sessionUpdateConsumer(notification -> {
-					mockClient.receivedUpdates.add(notification);
-					mockClient.updateLatch.countDown();
-					return Mono.empty();
-				})
-				// Using typed handlers (no manual unmarshalling needed)
-				.requestPermissionHandler((AcpSchema.RequestPermissionRequest request) -> {
-					mockClient.receivedPermissionRequests.add(request);
-					return Mono.just(permissionHandler.apply(request));
-				})
-				.readTextFileHandler((AcpSchema.ReadTextFileRequest request) -> {
-					mockClient.receivedFileReadRequests.add(request);
-					return Mono.just(readFileHandler.apply(request));
-				})
-				.writeTextFileHandler((AcpSchema.WriteTextFileRequest request) -> {
-					mockClient.receivedFileWriteRequests.add(request);
-					return Mono.just(writeFileHandler.apply(request));
-				})
-				.build();
-
-			// Replace the delegate using reflection
-			try {
-				var field = MockAcpClient.class.getDeclaredField("delegate");
-				field.setAccessible(true);
-				field.set(mockClient, delegate);
-			}
-			catch (Exception e) {
-				throw new RuntimeException("Failed to set delegate", e);
-			}
-
-			return mockClient;
+			return new MockAcpClient(this);
 		}
 
 	}

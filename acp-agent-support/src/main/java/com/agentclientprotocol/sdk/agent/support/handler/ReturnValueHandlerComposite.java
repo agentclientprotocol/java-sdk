@@ -9,6 +9,7 @@ import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Composite that chains multiple return value handlers.
@@ -57,7 +58,8 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 	}
 
 	@Override
-	public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context) {
+	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context) {
 		ReturnValueHandler handler = findHandler(returnType);
 		if (handler == null) {
 			throw new ReturnValueHandlingException(
@@ -66,7 +68,7 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 		return handler.handleReturnValue(returnValue, returnType, context);
 	}
 
-	private ReturnValueHandler findHandler(AcpMethodParameter returnType) {
+	private @Nullable ReturnValueHandler findHandler(AcpMethodParameter returnType) {
 		for (ReturnValueHandler handler : handlers) {
 			if (handler.supportsReturnType(returnType)) {
 				return handler;

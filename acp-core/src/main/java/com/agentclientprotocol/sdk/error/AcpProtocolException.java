@@ -4,7 +4,8 @@
 
 package com.agentclientprotocol.sdk.error;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
+
 
 /**
  * Exception representing a JSON-RPC protocol error from the peer.
@@ -42,17 +43,7 @@ public class AcpProtocolException extends AcpException {
 
 	private final int code;
 
-	private final Object data;
-
-	/**
-	 * Constructs a new protocol exception from a JSON-RPC error.
-	 * @param error the JSON-RPC error from the protocol response
-	 */
-	public AcpProtocolException(AcpSchema.JSONRPCError error) {
-		super(formatMessage(error.code(), error.message()));
-		this.code = error.code();
-		this.data = error.data();
-	}
+	private final @Nullable Object data;
 
 	/**
 	 * Constructs a new protocol exception with the specified code and message.
@@ -71,7 +62,7 @@ public class AcpProtocolException extends AcpException {
 	 * @param message the error message
 	 * @param data optional additional error data
 	 */
-	public AcpProtocolException(int code, String message, Object data) {
+	public AcpProtocolException(int code, String message, @Nullable Object data) {
 		super(formatMessage(code, message));
 		this.code = code;
 		this.data = data;
@@ -90,16 +81,8 @@ public class AcpProtocolException extends AcpException {
 	 * Returns the optional additional error data.
 	 * @return the error data, or null if none was provided
 	 */
-	public Object getData() {
+	public @Nullable Object getData() {
 		return data;
-	}
-
-	/**
-	 * Converts this exception to a JSON-RPC error object for sending over the wire.
-	 * @return a JSON-RPC error object
-	 */
-	public AcpSchema.JSONRPCError toJsonRpcError() {
-		return new AcpSchema.JSONRPCError(code, getMessage(), data);
 	}
 
 	/**

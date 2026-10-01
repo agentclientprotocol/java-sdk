@@ -30,29 +30,53 @@ Three API styles for building agents:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.16.0</version>
+    <version>0.18.0</version>
 </dependency>
 ```
+
+From 0.18.0, `acp-core` contains no JSON implementation. If you depend on `acp-core` alone, add one
+JSON module next to it; `acp-agent-support`, `acp-test`, `acp-websocket-jetty` and
+`acp-streamable-http-jetty` already bring `acp-json-jackson2`, so users of those need nothing more:
+```xml
+<!-- Jackson 2 (com.fasterxml.jackson.databind) -->
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-json-jackson2</artifactId>
+    <version>0.18.0</version>
+</dependency>
+<!-- or Jackson 3 (tools.jackson.databind), for example alongside Spring Boot 4 -->
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-json-jackson3</artifactId>
+    <version>0.18.0</version>
+</dependency>
+```
+
+Both write the same bytes on the wire. `AcpJsonMapper.createDefault()` chooses by
+`AcpJsonMapperSupplier.priority()`: with both modules on the classpath Jackson 3 (-100) wins over
+Jackson 2 (-200), and an application's own supplier (default 0) wins over both. To force one, set
+the system property `acp.json.mapper.supplier` to the supplier's class name, for example
+`com.agentclientprotocol.sdk.json.JacksonAcpJsonMapperSupplier`.
 
 For annotation-based agent development:
 ```xml
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.16.0</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 
-For WebSocket server support (agents accepting WebSocket connections):
+For Streamable HTTP server support (agents accepting remote HTTP/SSE connections):
 ```xml
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
-    <artifactId>acp-websocket-jetty</artifactId>
-    <version>0.16.0</version>
+    <artifactId>acp-streamable-http-jetty</artifactId>
+    <version>0.18.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.17.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.19.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -344,21 +368,22 @@ var transport = new WebSocketAcpClientTransport(
 AcpSyncClient client = AcpClient.sync(transport).build();
 ```
 
-**Agent (requires acp-websocket-jetty module):**
+**Agent (requires acp-streamable-http-jetty module):** `StreamableHttpAcpAgentTransport` serves the
+WebSocket upgrade and the Streamable HTTP profile on the same path, one agent per connection.
 ```java
-import com.agentclientprotocol.sdk.agent.transport.WebSocketAcpAgentTransport;
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 
-var transport = new WebSocketAcpAgentTransport(
-    8080,                           // port
-    "/acp",                         // path
-    AcpJsonMapper.createDefault()
-);
-AcpAsyncAgent agent = AcpAgent.async(transport)
+AcpAgentFactory agents = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
     // ... handlers ...
-    .build();
+    .build());
 
-agent.start().block();  // Starts WebSocket server on port 8080
+var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefault(), agents);
+server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/acp
 ```
+
+`WebSocketAcpAgentTransport` in `acp-websocket-jetty` is deprecated for removal: it serves a single
+client. Existing `WebSocketAcpClientTransport` clients connect to the transport above unchanged.
 
 ---
 
@@ -380,18 +405,22 @@ agent.start().block();  // Starts WebSocket server on port 8080
 
 | Artifact | Description |
 |----------|-------------|
-| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio and WebSocket client transports |
+| [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports; needs one JSON module |
+| `acp-json-jackson2` | JSON implementation on Jackson 2 (`JacksonAcpJsonMapper`); brought in by the transport and agent-support modules |
+| `acp-json-jackson3` | JSON implementation on Jackson 3 (`Jackson3AcpJsonMapper`) |
+| `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
-| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | Jetty-based WebSocket server transport for agents |
+| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | **Deprecated** single-client WebSocket agent transport; use `acp-streamable-http-jetty` |
 
 ### Transports
 
 | Transport | Client | Agent | Module |
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
-| WebSocket | `WebSocketAcpClientTransport` | `WebSocketAcpAgentTransport` | acp-core / acp-websocket-jetty |
+| WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
+| Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 
 ---
 
@@ -465,7 +494,28 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
-### 0.16.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.18.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, contributed by
+@kamikaz1k, on plain `http://` (HTTP/2 over cleartext) and `https://`, with a new
+`acp-streamable-http-jetty` module for the agent side. Single-turn enforcement is per session.
+Fixes the Spring Boot "unicast" client failure (a second client on one transport now fails fast)
+and the multi-prompt wedge under CPU contention (#14). Unknown-field handling moved to the mapper
+(#10): a bare `new ObjectMapper()` is now strict. `acp-core` no longer contains a JSON
+implementation: choose `acp-json-jackson2` or `acp-json-jackson3` (see [Installation](#installation)).
+
+### 0.17.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Wire-format correction with no API change: every polymorphic discriminator (`type`, `sessionUpdate`,
+`outcome`) was written twice, which Jackson-based peers tolerated and strict parsers rejected. It is
+now written exactly once and still populated on deserialization.
+
+### 0.16.1 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Release-tooling patch preserving the 0.16 protocol and public API surface: every artifact ships a
+consumer-scoped CycloneDX SBOM, and release tags point at commits carrying the released version.
+
+### 0.16.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Maintenance release preserving the 0.15 protocol and public API surface while advancing Reactor to
 3.8.7, Jackson to 2.22.2, Jetty to 12.1.12, and the compatible stable test and release toolchain.

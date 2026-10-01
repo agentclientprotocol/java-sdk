@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Strategy interface for handling method return values and converting
@@ -35,6 +36,7 @@ public interface ReturnValueHandler {
 	 * @return the protocol response
 	 * @throws ReturnValueHandlingException if handling fails
 	 */
-	Object handleReturnValue(Object returnValue, AcpMethodParameter returnType, AcpInvocationContext context);
+	@Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
+			AcpInvocationContext context);
 
 }

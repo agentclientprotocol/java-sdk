@@ -63,10 +63,13 @@ import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,14 +118,14 @@ public class AcpAgentSupport {
 
 	private final AcpSyncAgent agent;
 
-	private AcpAgentSupport(Builder builder) {
+	private AcpAgentSupport(Builder builder, AcpAgentTransport transport) {
 		this.handlers = builder.handlers;
 		this.argumentResolvers = builder.argumentResolvers;
 		this.returnValueHandlers = builder.returnValueHandlers;
 		this.interceptors = builder.interceptors;
 
 		// Build the underlying sync agent
-		var agentBuilder = AcpAgent.sync(builder.transport)
+		var agentBuilder = AcpAgent.sync(transport)
 				.requestTimeout(builder.requestTimeout);
 
 		// Wire discovered handlers to the agent builder
@@ -194,7 +197,7 @@ public class AcpAgentSupport {
 		// Initialize handler
 		AcpHandlerMethod initHandler = handlers.get("initialize");
 		if (initHandler != null) {
-			agentBuilder.initializeHandler(req -> invokeHandler(initHandler, req, null, null, null));
+			agentBuilder.initializeHandler(req -> respond(initHandler, req, null, null, null));
 		}
 		else {
 			// Default initialize handler
@@ -204,7 +207,7 @@ public class AcpAgentSupport {
 		// NewSession handler
 		AcpHandlerMethod newSessionHandler = handlers.get("session/new");
 		if (newSessionHandler != null) {
-			agentBuilder.newSessionHandler(req -> invokeHandler(newSessionHandler, req, null, null, null));
+			agentBuilder.newSessionHandler(req -> respond(newSessionHandler, req, null, null, null));
 		}
 		else {
 			// Default new session handler
@@ -215,13 +218,13 @@ public class AcpAgentSupport {
 		// Logout handler
 		AcpHandlerMethod logoutHandler = handlers.get("logout");
 		if (logoutHandler != null) {
-			agentBuilder.logoutHandler(req -> invokeHandler(logoutHandler, req, null, null, null));
+			agentBuilder.logoutHandler(req -> respond(logoutHandler, req, null, null, null));
 		}
 
 		// LoadSession handler
 		AcpHandlerMethod loadSessionHandler = handlers.get("session/load");
 		if (loadSessionHandler != null) {
-			agentBuilder.loadSessionHandler(req -> invokeHandler(loadSessionHandler, req, req.sessionId(), null, null));
+			agentBuilder.loadSessionHandler(req -> respond(loadSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// Prompt handler
@@ -229,93 +232,115 @@ public class AcpAgentSupport {
 		if (promptHandler != null) {
 			agentBuilder.promptHandler((req, syncContext) -> {
 				NegotiatedCapabilities caps = syncContext.getClientCapabilities();
-				return invokeHandler(promptHandler, req, req.sessionId(), syncContext, caps);
+				return respond(promptHandler, req, req.sessionId(), syncContext, caps);
 			});
 		}
 
 		// SetSessionMode handler
 		AcpHandlerMethod setModeHandler = handlers.get("session/set_mode");
 		if (setModeHandler != null) {
-			agentBuilder.setSessionModeHandler(req -> invokeHandler(setModeHandler, req, req.sessionId(), null, null));
+			agentBuilder.setSessionModeHandler(req -> respond(setModeHandler, req, req.sessionId(), null, null));
 		}
 
 		// SetSessionModel handler
 		AcpHandlerMethod setModelHandler = handlers.get("session/set_model");
 		if (setModelHandler != null) {
-			agentBuilder.setSessionModelHandler(req -> invokeHandler(setModelHandler, req, req.sessionId(), null, null));
+			agentBuilder.setSessionModelHandler(req -> respond(setModelHandler, req, req.sessionId(), null, null));
 		}
 
 		// ListSessions handler
 		AcpHandlerMethod listSessionsHandler = handlers.get("session/list");
 		if (listSessionsHandler != null) {
-			agentBuilder.listSessionsHandler(req -> invokeHandler(listSessionsHandler, req, null, null, null));
+			agentBuilder.listSessionsHandler(req -> respond(listSessionsHandler, req, null, null, null));
 		}
 
 		// CloseSession handler
 		AcpHandlerMethod closeSessionHandler = handlers.get("session/close");
 		if (closeSessionHandler != null) {
 			agentBuilder.closeSessionHandler(
-					req -> invokeHandler(closeSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(closeSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// DeleteSession handler
 		AcpHandlerMethod deleteSessionHandler = handlers.get("session/delete");
 		if (deleteSessionHandler != null) {
 			agentBuilder.deleteSessionHandler(
-					req -> invokeHandler(deleteSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(deleteSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// ResumeSession handler
 		AcpHandlerMethod resumeSessionHandler = handlers.get("session/resume");
 		if (resumeSessionHandler != null) {
 			agentBuilder.resumeSessionHandler(
-					req -> invokeHandler(resumeSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(resumeSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// ForkSession handler
 		AcpHandlerMethod forkSessionHandler = handlers.get("session/fork");
 		if (forkSessionHandler != null) {
 			agentBuilder.forkSessionHandler(
-					req -> invokeHandler(forkSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(forkSessionHandler, req, req.sessionId(), null, null));
 		}
 
 		// SetSessionConfigOption handler
 		AcpHandlerMethod setConfigOptionHandler = handlers.get("session/set_config_option");
 		if (setConfigOptionHandler != null) {
 			agentBuilder.setSessionConfigOptionHandler(
-					req -> invokeHandler(setConfigOptionHandler, req, req.sessionId(), null, null));
+					req -> respond(setConfigOptionHandler, req, req.sessionId(), null, null));
 		}
 
 		// ListProviders handler (unstable)
 		AcpHandlerMethod listProvidersHandler = handlers.get("providers/list");
 		if (listProvidersHandler != null) {
-			agentBuilder.listProvidersHandler(req -> invokeHandler(listProvidersHandler, req, null, null, null));
+			agentBuilder.listProvidersHandler(req -> respond(listProvidersHandler, req, null, null, null));
 		}
 
 		// SetProvider handler (unstable)
 		AcpHandlerMethod setProviderHandler = handlers.get("providers/set");
 		if (setProviderHandler != null) {
-			agentBuilder.setProviderHandler(req -> invokeHandler(setProviderHandler, req, null, null, null));
+			agentBuilder.setProviderHandler(req -> respond(setProviderHandler, req, null, null, null));
 		}
 
 		// DisableProvider handler (unstable)
 		AcpHandlerMethod disableProviderHandler = handlers.get("providers/disable");
 		if (disableProviderHandler != null) {
-			agentBuilder.disableProviderHandler(req -> invokeHandler(disableProviderHandler, req, null, null, null));
+			agentBuilder.disableProviderHandler(req -> respond(disableProviderHandler, req, null, null, null));
 		}
 
 		// Cancel handler
 		AcpHandlerMethod cancelHandler = handlers.get("session/cancel");
 		if (cancelHandler != null) {
 			agentBuilder.cancelHandler(notification -> {
-				invokeHandler(cancelHandler, notification, notification.sessionId(), null, null);
+				invoke(cancelHandler, notification, notification.sessionId(), null, null);
 			});
 		}
 	}
 
+	/**
+	 * Invokes the handler for a request, whose JSON-RPC response must carry a result. A
+	 * handler that produces none (it returned null, returned void for a method other than
+	 * session/prompt, or an interceptor vetoed the call) is answered with an error: an
+	 * empty handler result would otherwise leave the request without any response.
+	 */
 	@SuppressWarnings("unchecked")
-	private <T> T invokeHandler(AcpHandlerMethod handler, Object request, String sessionId,
-			SyncPromptContext syncContext, NegotiatedCapabilities capabilities) {
+	private <T> T respond(AcpHandlerMethod handler, Object request, @Nullable String sessionId,
+			@Nullable SyncPromptContext syncContext, @Nullable NegotiatedCapabilities capabilities) {
+		Object result = invoke(handler, request, sessionId, syncContext, capabilities);
+		if (result == null) {
+			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "The " + handler.getAcpMethod()
+					+ " handler produced no response (it returned nothing, or an interceptor vetoed the call)");
+		}
+		return (T) result;
+	}
+
+	/**
+	 * Runs the interceptor chain, argument resolution, the handler and its return value
+	 * handling.
+	 * @return the handler's result, or null when it produced none or an interceptor vetoed
+	 * the call
+	 */
+	private @Nullable Object invoke(AcpHandlerMethod handler, Object request, @Nullable String sessionId,
+			@Nullable SyncPromptContext syncContext, @Nullable NegotiatedCapabilities capabilities) {
 
 		AcpInvocationContext context = AcpInvocationContext.builder()
 				.acpMethod(handler.getAcpMethod())
@@ -334,7 +359,7 @@ public class AcpAgentSupport {
 			}
 
 			// Resolve arguments
-			Object[] args = resolveArguments(handler, context);
+			@Nullable Object[] args = resolveArguments(handler, context);
 
 			// Invoke
 			Object result = handler.invoke(args);
@@ -343,14 +368,14 @@ public class AcpAgentSupport {
 			result = chain.applyPostInvoke(context, result);
 
 			// Handle return value
-			return (T) returnValueHandlers.handleReturnValue(result, handler.getReturnType(), context);
+			return returnValueHandlers.handleReturnValue(result, handler.getReturnType(), context);
 
 		}
 		catch (Exception e) {
 			// On-error
 			Object replacement = chain.applyOnError(context, e);
 			if (replacement != null) {
-				return (T) replacement;
+				return replacement;
 			}
 			if (e instanceof RuntimeException re) {
 				throw re;
@@ -362,9 +387,9 @@ public class AcpAgentSupport {
 		}
 	}
 
-	private Object[] resolveArguments(AcpHandlerMethod handler, AcpInvocationContext context) {
+	private @Nullable Object[] resolveArguments(AcpHandlerMethod handler, AcpInvocationContext context) {
 		AcpMethodParameter[] params = handler.getParameters();
-		Object[] args = new Object[params.length];
+		@Nullable Object[] args = new Object[params.length];
 		for (int i = 0; i < params.length; i++) {
 			args[i] = argumentResolvers.resolveArgument(params[i], context);
 		}
@@ -386,7 +411,7 @@ public class AcpAgentSupport {
 
 		private final List<AcpInterceptor> interceptors = new ArrayList<>();
 
-		private AcpAgentTransport transport;
+		private @Nullable AcpAgentTransport transport;
 
 		private Duration requestTimeout = Duration.ofSeconds(30);
 
@@ -484,6 +509,7 @@ public class AcpAgentSupport {
 		 * @return the configured instance
 		 */
 		public AcpAgentSupport build() {
+			AcpAgentTransport transport = this.transport;
 			if (transport == null) {
 				throw new IllegalStateException("Transport must be configured");
 			}
@@ -492,7 +518,7 @@ public class AcpAgentSupport {
 			addDefaultResolvers();
 			addDefaultReturnValueHandlers();
 
-			return new AcpAgentSupport(this);
+			return new AcpAgentSupport(this, transport);
 		}
 
 		@SuppressWarnings("removal") // discovers the deprecated-for-removal @SetSessionModel

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2025 the original author or authors.
+ * Copyright 2025-2026 the original author or authors.
  */
 
 package com.agentclientprotocol.sdk.json;
@@ -7,14 +7,17 @@ package com.agentclientprotocol.sdk.json;
 import java.io.IOException;
 import java.util.ServiceLoader;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Abstraction for JSON serialization/deserialization to decouple the SDK from any
  * specific JSON library.
  *
  * <p>
- * A default implementation is discovered at runtime via {@link ServiceLoader} using the
- * {@link AcpJsonMapperSupplier} SPI. The built-in Jackson-based implementation is
- * registered automatically.
+ * {@code acp-core} contains no implementation. One comes from a JSON module on the
+ * classpath: {@code acp-json-jackson2} (Jackson 2, which the transport and agent-support
+ * modules bring in) or {@code acp-json-jackson3} (Jackson 3). Each registers an
+ * {@link AcpJsonMapperSupplier} discovered via {@link ServiceLoader}.
  * </p>
  *
  * <p>
@@ -28,58 +31,65 @@ import java.util.ServiceLoader;
 public interface AcpJsonMapper {
 
 	/**
-	 * Creates a default AcpJsonMapper by discovering an {@link AcpJsonMapperSupplier}
-	 * via {@link ServiceLoader}. The first available supplier on the classpath is used.
+	 * Creates a default AcpJsonMapper from the {@link AcpJsonMapperSupplier}s found via
+	 * {@link ServiceLoader}. The choice is deterministic:
+	 * <ol>
+	 * <li>if the system property {@code acp.json.mapper.supplier} is set, the supplier
+	 * with exactly that fully qualified class name is used (and it is an error if there is
+	 * none);</li>
+	 * <li>otherwise the supplier with the highest {@link AcpJsonMapperSupplier#priority()}
+	 * is used, ties broken by class name. With both SDK modules present,
+	 * {@code acp-json-jackson3} (priority -100) wins over {@code acp-json-jackson2}
+	 * (-200); an application supplier that keeps the default priority (0) wins over
+	 * both.</li>
+	 * </ol>
 	 * @return a new AcpJsonMapper instance
-	 * @throws java.util.ServiceConfigurationError if no supplier is found
+	 * @throws java.util.ServiceConfigurationError if no supplier is found, or none
+	 * matches the system property
 	 */
 	static AcpJsonMapper createDefault() {
-		return ServiceLoader.load(AcpJsonMapperSupplier.class)
-			.findFirst()
-			.orElseThrow(() -> new java.util.ServiceConfigurationError(
-					"No AcpJsonMapperSupplier found on the classpath"))
-			.get();
+		return AcpJsonMapperSelector.select().get();
 	}
 
 	/**
 	 * Deserialize JSON string into a target type.
 	 * @param content JSON as String
 	 * @param type target class
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(String content, Class<T> type) throws IOException;
+	<T> @Nullable T readValue(String content, Class<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON bytes into a target type.
 	 * @param content JSON as bytes
 	 * @param type target class
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(byte[] content, Class<T> type) throws IOException;
+	<T> @Nullable T readValue(byte[] content, Class<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON string into a parameterized target type.
 	 * @param content JSON as String
 	 * @param type parameterized type reference
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(String content, TypeRef<T> type) throws IOException;
+	<T> @Nullable T readValue(String content, TypeRef<T> type) throws IOException;
 
 	/**
 	 * Deserialize JSON bytes into a parameterized target type.
 	 * @param content JSON as bytes
 	 * @param type parameterized type reference
-	 * @return deserialized instance
+	 * @return deserialized instance, or {@code null} when the JSON is the {@code null} literal
 	 * @param <T> generic type
 	 * @throws IOException on parse errors
 	 */
-	<T> T readValue(byte[] content, TypeRef<T> type) throws IOException;
+	<T> @Nullable T readValue(byte[] content, TypeRef<T> type) throws IOException;
 
 	/**
 	 * Convert a value to a given type, useful for mapping nested JSON structures.

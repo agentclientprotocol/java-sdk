@@ -25,6 +25,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PermissionCancelled;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PermissionSelected;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
@@ -430,7 +431,7 @@ class ConvenienceApiTest {
 			.initializeHandler(req -> InitializeResponse.ok())
 			.newSessionHandler(req -> new NewSessionResponse("choice-session", null, null))
 			.promptHandler((request, context) -> {
-				String choice = context.askChoice("How to proceed?", "Overwrite", "Skip", "Cancel");
+				String choice = context.askChoice("How to proceed?", "Overwrite", "Skip", "Cancel").orElseThrow();
 				choiceResult.set(choice);
 				return PromptResponse.endTurn();
 			})
@@ -457,6 +458,40 @@ class ConvenienceApiTest {
 		client.prompt(new PromptRequest("choice-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
 		assertThat(choiceResult.get()).isEqualTo("Skip");
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
+	@Test
+	void askChoiceIsEmptyWhenCancelled() throws Exception {
+		// A cancelled choice used to fail the prompt with a NullPointerException: the
+		// async askChoice mapped the cancellation to null inside Mono.map.
+		AtomicReference<Object> choiceResult = new AtomicReference<>();
+
+		AcpSyncAgent agent = AcpAgent.sync(transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("cancel-choice-session", null, null))
+			.promptHandler((request, context) -> {
+				choiceResult.set(context.askChoice("How to proceed?", "Overwrite", "Skip"));
+				return PromptResponse.endTurn();
+			})
+			.build();
+
+		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.requestPermissionHandler(req -> Mono.just(new RequestPermissionResponse(new PermissionCancelled())))
+			.build();
+
+		agent.start();
+		Thread.sleep(100);
+
+		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+		client.prompt(new PromptRequest("cancel-choice-session", List.of(new TextContent("test")))).block(TIMEOUT);
+
+		assertThat(choiceResult.get()).isEqualTo(java.util.Optional.empty());
 
 		client.closeGracefully().block(TIMEOUT);
 		agent.closeGracefully();
@@ -511,6 +546,47 @@ class ConvenienceApiTest {
 		assertThat(cmdResult.get().output()).isEqualTo("hello\n");
 		assertThat(cmdResult.get().exitCode()).isEqualTo(0);
 		assertThat(cmdResult.get().success()).isTrue();
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
+	@Test
+	void executeReportsACommandKilledBySignal() throws Exception {
+		// A command killed by a signal has no exit code; execute() used to unbox the
+		// absent exit code and fail the prompt with a NullPointerException.
+		AtomicReference<Object> cmdResult = new AtomicReference<>();
+
+		AcpSyncAgent agent = AcpAgent.sync(transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("signal-session", null, null))
+			.promptHandler((request, context) -> {
+				cmdResult.set(context.execute("sleep", "100"));
+				return PromptResponse.endTurn();
+			})
+			.build();
+
+		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.createTerminalHandler(req -> Mono.just(new CreateTerminalResponse("term-killed")))
+			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(null, "SIGKILL")))
+			.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("", false, null)))
+			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.build();
+
+		agent.start();
+		Thread.sleep(100);
+
+		client.initialize(new InitializeRequest(1, new ClientCapabilities(null, true))).block(TIMEOUT);
+		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+		client.prompt(new PromptRequest("signal-session", List.of(new TextContent("test")))).block(TIMEOUT);
+
+		assertThat(cmdResult.get()).isInstanceOf(CommandResult.class);
+		CommandResult result = (CommandResult) cmdResult.get();
+		assertThat(result.exitCode()).isNull();
+		assertThat(result.signal()).isEqualTo("SIGKILL");
+		assertThat(result.success()).isFalse();
 
 		client.closeGracefully().block(TIMEOUT);
 		agent.closeGracefully();
@@ -653,7 +729,7 @@ class ConvenienceApiTest {
 		assertThat(cmd.executable()).isEqualTo("git");
 		assertThat(cmd.args()).containsExactly("status", "-s");
 		assertThat(cmd.cwd()).isNull();
-		assertThat(cmd.env()).isNull();
+		assertThat(cmd.env()).isEmpty();
 	}
 
 	@Test
@@ -668,7 +744,7 @@ class ConvenienceApiTest {
 
 		assertThat(withEnv).isNotSameAs(original);
 		assertThat(withEnv.env()).containsEntry("DEBUG", "true");
-		assertThat(original.env()).isNull();
+		assertThat(original.env()).isEmpty();
 	}
 
 	@Test

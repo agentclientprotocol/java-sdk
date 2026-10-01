@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.spec;
 
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -73,7 +74,7 @@ public interface AcpSession {
 	 * @param params parameters to be sent with the notification
 	 * @return a Mono that completes when the notification has been sent
 	 */
-	Mono<Void> sendNotification(String method, Object params);
+	Mono<Void> sendNotification(String method, @Nullable Object params);
 
 	/**
 	 * Closes the session and releases any associated resources asynchronously.

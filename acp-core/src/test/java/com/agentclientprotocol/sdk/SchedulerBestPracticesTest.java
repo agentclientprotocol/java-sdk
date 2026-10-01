@@ -37,6 +37,31 @@ class SchedulerBestPracticesTest {
 
 	private static final Path SOURCE_ROOT = Paths.get("src/main/java");
 
+	/** The repository root: this test runs with the acp-core module as its working directory. */
+	private static final Path REPO_ROOT = Paths.get("..").toAbsolutePath().normalize();
+
+	/**
+	 * Every module's production sources, not only acp-core's. The HTTP transport module
+	 * once used the global boundedElastic scheduler unnoticed because only acp-core was
+	 * scanned.
+	 */
+	private static Stream<Path> productionSources() throws IOException {
+		List<Path> roots = new ArrayList<>();
+		try (Stream<Path> modules = Files.list(REPO_ROOT)) {
+			modules.filter(Files::isDirectory)
+				.map(module -> module.resolve("src/main/java"))
+				.filter(Files::isDirectory)
+				.forEach(roots::add);
+		}
+		List<Path> files = new ArrayList<>();
+		for (Path root : roots) {
+			try (Stream<Path> paths = Files.walk(root)) {
+				paths.filter(Files::isRegularFile).forEach(files::add);
+			}
+		}
+		return files.stream();
+	}
+
 	/**
 	 * Detects usage of global {@code Schedulers.boundedElastic()} in production code.
 	 *
@@ -64,7 +89,7 @@ class SchedulerBestPracticesTest {
 		// Pattern to detect Schedulers.boundedElastic() usage in actual code (not comments)
 		Pattern pattern = Pattern.compile("Schedulers\\.boundedElastic\\(\\)");
 
-		try (Stream<Path> paths = Files.walk(SOURCE_ROOT)) {
+		try (Stream<Path> paths = productionSources()) {
 			paths.filter(Files::isRegularFile)
 				.filter(p -> p.toString().endsWith(".java"))
 				.forEach(path -> {
@@ -111,7 +136,7 @@ class SchedulerBestPracticesTest {
 		// Pattern to detect Schedulers.parallel() usage
 		Pattern pattern = Pattern.compile("Schedulers\\.parallel\\(\\)");
 
-		try (Stream<Path> paths = Files.walk(SOURCE_ROOT)) {
+		try (Stream<Path> paths = productionSources()) {
 			paths.filter(Files::isRegularFile)
 				.filter(p -> p.toString().endsWith(".java"))
 				.forEach(path -> {
@@ -155,7 +180,7 @@ class SchedulerBestPracticesTest {
 		Pattern cachedPool = Pattern.compile(
 				"Executors\\.newCachedThreadPool\\(\\s*\\)");
 
-		try (Stream<Path> paths = Files.walk(SOURCE_ROOT)) {
+		try (Stream<Path> paths = productionSources()) {
 			paths.filter(Files::isRegularFile)
 				.filter(p -> p.toString().endsWith(".java"))
 				.forEach(path -> {
@@ -283,7 +308,7 @@ class SchedulerBestPracticesTest {
 		// Pattern: .delayElements(something) without scheduler
 		Pattern delayElements = Pattern.compile("\\.delayElements\\([^,)]+\\)");
 
-		try (Stream<Path> paths = Files.walk(SOURCE_ROOT)) {
+		try (Stream<Path> paths = productionSources()) {
 			paths.filter(Files::isRegularFile)
 				.filter(p -> p.toString().endsWith(".java"))
 				.forEach(path -> {
@@ -374,7 +399,7 @@ class SchedulerBestPracticesTest {
 			"WebSocketAcpAgentTransport.java"
 		);
 
-		try (Stream<Path> paths = Files.walk(SOURCE_ROOT)) {
+		try (Stream<Path> paths = productionSources()) {
 			paths.filter(Files::isRegularFile)
 				.filter(p -> p.toString().endsWith(".java"))
 				.filter(p -> excludedFiles.stream().noneMatch(exc -> p.toString().endsWith(exc)))
@@ -428,7 +453,7 @@ class SchedulerBestPracticesTest {
 	 * Returns the path relative to SOURCE_ROOT for cleaner output.
 	 */
 	private String relativePath(Path path) {
-		return SOURCE_ROOT.relativize(path).toString();
+		return REPO_ROOT.relativize(path.toAbsolutePath().normalize()).toString();
 	}
 
 }

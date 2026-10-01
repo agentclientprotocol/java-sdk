@@ -9,9 +9,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.JsonTree;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +34,6 @@ class McpServerConfigurationTest {
 
 	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
-	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	// ---------------------------
 	// Helper Methods
@@ -84,7 +82,7 @@ class McpServerConfigurationTest {
 				List.of("--arg1"), List.of(new AcpSchema.EnvVariable("KEY", "value")));
 
 		String json = jsonMapper.writeValueAsString(stdio);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		// Stdio should NOT have a type field
 		assertThat(node.has("type")).isFalse();
@@ -141,7 +139,7 @@ class McpServerConfigurationTest {
 				List.of(new AcpSchema.HttpHeader("Auth", "token")));
 
 		String json = jsonMapper.writeValueAsString(http);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		// HTTP should have type="http"
 		assertThat(node.has("type")).isTrue();
@@ -196,7 +194,7 @@ class McpServerConfigurationTest {
 				List.of(new AcpSchema.HttpHeader("X-Key", "secret")));
 
 		String json = jsonMapper.writeValueAsString(sse);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		// SSE should have type="sse"
 		assertThat(node.has("type")).isTrue();

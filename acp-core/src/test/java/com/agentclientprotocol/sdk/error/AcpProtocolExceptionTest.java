@@ -18,7 +18,7 @@ class AcpProtocolExceptionTest {
 	void constructFromJsonRpcError() {
 		AcpSchema.JSONRPCError error = new AcpSchema.JSONRPCError(-32601, "Method not found", "session/unknown");
 
-		AcpProtocolException exception = new AcpProtocolException(error);
+		AcpProtocolException exception = error.toException();
 
 		assertThat(exception.getCode()).isEqualTo(-32601);
 		assertThat(exception.getMessage()).contains("-32601");
@@ -52,7 +52,7 @@ class AcpProtocolExceptionTest {
 		AcpProtocolException exception = new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "Unexpected failure",
 				null);
 
-		AcpSchema.JSONRPCError error = exception.toJsonRpcError();
+		AcpSchema.JSONRPCError error = AcpSchema.JSONRPCError.from(exception);
 
 		assertThat(error.code()).isEqualTo(-32603);
 		assertThat(error.message()).contains("Unexpected failure");

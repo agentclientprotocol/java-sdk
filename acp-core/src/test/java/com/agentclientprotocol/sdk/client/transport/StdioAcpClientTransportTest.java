@@ -55,6 +55,17 @@ class StdioAcpClientTransportTest {
 	}
 
 	@Test
+	void awaitForExitBeforeConnectIsRefused() {
+		// No process exists until connect starts one; this used to fail with a
+		// NullPointerException on the unset process field.
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(AgentParameters.builder("gemini").build(),
+				AcpJsonMapper.createDefault());
+
+		assertThatThrownBy(transport::awaitForExit).isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("connect first");
+	}
+
+	@Test
 	void testProtocolVersions() {
 		AgentParameters params = AgentParameters.builder("gemini").build();
 		AcpJsonMapper mapper = AcpJsonMapper.createDefault();
@@ -193,6 +204,46 @@ class StdioAcpClientTransportTest {
 
 		assertThat(result.protocolVersion()).isInstanceOf(Integer.class).isEqualTo(1);
 		assertThat(result.authMethods()).isInstanceOf(List.class).isEmpty();
+	}
+
+	/**
+	 * A transport instance carries exactly one session: a second {@code connect()} must be
+	 * refused before it touches the unicast sinks or starts a second process. Before the
+	 * guard, the second call subscribed the inbound sink again (logged and dropped as
+	 * {@code Sinks.many().unicast() sinks only allow a single Subscriber}) and then
+	 * started a second agent process anyway.
+	 */
+	@Test
+	void secondConnectIsRejectedBeforeTouchingTheSinks() {
+		String javaBinary = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(
+				AgentParameters.builder(javaBinary).arg("-version").build());
+		try {
+			transport.connect(mono -> mono).block();
+
+			assertThatThrownBy(() -> transport.connect(mono -> mono).block()).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("already connected");
+		}
+		finally {
+			transport.closeGracefully().block();
+		}
+	}
+
+	@Test
+	void resubscribingTheSameConnectPublisherIsRejected() {
+		String javaBinary = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(
+				AgentParameters.builder(javaBinary).arg("-version").build());
+		try {
+			var connect = transport.connect(mono -> mono);
+			connect.block();
+
+			assertThatThrownBy(connect::block).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("already connected");
+		}
+		finally {
+			transport.closeGracefully().block();
+		}
 	}
 
 }

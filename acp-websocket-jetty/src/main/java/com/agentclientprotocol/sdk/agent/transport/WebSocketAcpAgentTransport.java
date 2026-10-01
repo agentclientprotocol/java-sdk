@@ -26,6 +26,7 @@ import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
 import org.eclipse.jetty.websocket.api.annotations.OnWebSocketOpen;
 import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -64,7 +65,14 @@ import reactor.core.scheduler.Schedulers;
  * }</pre>
  *
  * @author Mark Pollack
+ * @deprecated since 0.18.0, for removal in a future release. Use
+ * {@code StreamableHttpAcpAgentTransport} from {@code acp-streamable-http-jetty}: it serves
+ * the WebSocket upgrade on the same path ({@code ws://host:port/acp}) for any number of
+ * clients, one agent per connection through an {@code AcpAgentFactory}, plus the
+ * Streamable HTTP profile. Existing {@code WebSocketAcpClientTransport} clients connect
+ * to it unchanged. This transport serves a single client and is no longer developed.
  */
+@Deprecated(since = "0.18.0", forRemoval = true)
 public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(WebSocketAcpAgentTransport.class);
@@ -78,7 +86,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private final String path;
 
-	private Server server;
+	/** The embedded Jetty server; null until {@link #start} creates it. */
+	private volatile @Nullable Server server;
 
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
@@ -96,7 +105,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
-	private volatile Session clientSession;
+	/** The connected client's session; null while no client is connected. */
+	private volatile @Nullable Session clientSession;
 
 	private Duration idleTimeout = Duration.ofMinutes(30);
 
@@ -166,7 +176,8 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			handleIncomingMessages(handler);
 
 			// Create and configure Jetty server
-			server = new Server();
+			Server server = new Server();
+			this.server = server;
 			ServerConnector connector = new ServerConnector(server);
 			connector.setPort(port);
 			server.addConnector(connector);
@@ -193,7 +204,15 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			.flatMap(message -> Mono.just(message).transform(handler))
 			.doOnNext(response -> {
 				if (response != null) {
-					this.outboundSink.tryEmitNext(response);
+					// Responses are emitted from the inbound thread while sendMessage emits
+					// from user threads on the same sink; both must go through the serialising
+					// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
+					try {
+						this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+					}
+					catch (Sinks.EmissionException e) {
+						logger.error("Dropped response {}: {}", response, e.getReason());
+					}
 				}
 			})
 			.doOnTerminate(() -> {
@@ -203,23 +222,43 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	private void startOutboundProcessing() {
+		// Jetty allows one outstanding write per WebSocket session; a second sendText before
+		// the first completes can fail. Each frame therefore waits for Jetty's callback before
+		// the next is written (concatMap, one at a time). A failed send is reported and
+		// skipped; it never ends the outbound stream.
 		this.outboundSink.asFlux()
 			.publishOn(outboundScheduler)
-			.subscribe(message -> {
-				if (message != null && !isClosing.get() && clientSession != null && clientSession.isOpen()) {
-					try {
-						String jsonMessage = jsonMapper.writeValueAsString(message);
-						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
-						clientSession.sendText(jsonMessage, Callback.NOOP);
-					}
-					catch (Exception e) {
-						if (!isClosing.get()) {
-							logger.error("Error sending WebSocket message", e);
-							exceptionHandler.accept(e);
-						}
-					}
-				}
-			});
+			.concatMap(this::sendFrame, 1)
+			.subscribe();
+	}
+
+	private Mono<Void> sendFrame(JSONRPCMessage message) {
+		return Mono.create(sink -> {
+			Session currentSession = clientSession;
+			if (message == null || isClosing.get() || currentSession == null || !currentSession.isOpen()) {
+				sink.success();
+				return;
+			}
+			try {
+				String jsonMessage = jsonMapper.writeValueAsString(message);
+				logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());
+				currentSession.sendText(jsonMessage, Callback.from(sink::success, error -> {
+					reportSendFailure(error);
+					sink.success();
+				}));
+			}
+			catch (Exception e) {
+				reportSendFailure(e);
+				sink.success();
+			}
+		});
+	}
+
+	private void reportSendFailure(Throwable error) {
+		if (!isClosing.get()) {
+			logger.error("Error sending WebSocket message", error);
+			exceptionHandler.accept(error);
+		}
 	}
 
 	@Override
@@ -239,9 +278,11 @@ public class WebSocketAcpAgentTransport implements AcpAgentTransport {
 			inboundSink.tryEmitComplete();
 			outboundSink.tryEmitComplete();
 		}).then(Mono.fromCallable(() -> {
-			if (clientSession != null && clientSession.isOpen()) {
-				clientSession.close();
+			Session currentSession = clientSession;
+			if (currentSession != null && currentSession.isOpen()) {
+				currentSession.close();
 			}
+			Server server = this.server;
 			if (server != null) {
 				server.stop();
 			}

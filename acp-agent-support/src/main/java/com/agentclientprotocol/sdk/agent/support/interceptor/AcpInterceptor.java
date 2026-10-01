@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.agent.support.interceptor;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Interceptor interface for ACP handler invocations.
@@ -56,7 +57,7 @@ public interface AcpInterceptor {
 	 * @param result the handler result
 	 * @return the (possibly modified) result
 	 */
-	default Object postInvoke(AcpInvocationContext context, Object result) {
+	default @Nullable Object postInvoke(AcpInvocationContext context, @Nullable Object result) {
 		return result;
 	}
 
@@ -66,7 +67,7 @@ public interface AcpInterceptor {
 	 * @param ex the exception
 	 * @return replacement result (non-null to suppress exception), or null to propagate
 	 */
-	default Object onError(AcpInvocationContext context, Throwable ex) {
+	default @Nullable Object onError(AcpInvocationContext context, Throwable ex) {
 		return null;
 	}
 

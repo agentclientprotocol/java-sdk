@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Synchronous context provided to prompt handlers for accessing agent capabilities.
@@ -164,7 +165,7 @@ public interface SyncPromptContext {
 	 *
 	 * @return the negotiated client capabilities, or null if not yet initialized
 	 */
-	NegotiatedCapabilities getClientCapabilities();
+	@Nullable NegotiatedCapabilities getClientCapabilities();
 
 	// ========================================================================
 	// Convenience API
@@ -191,7 +192,7 @@ public interface SyncPromptContext {
 	 * @param text The message text to send
 	 * @param messageId The message identifier, or {@code null} for none
 	 */
-	default void sendMessage(String text, String messageId) {
+	default void sendMessage(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
 				new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent(text), messageId));
 	}
@@ -210,7 +211,7 @@ public interface SyncPromptContext {
 	 * @param text The thought text to send
 	 * @param messageId The message identifier, or {@code null} for none
 	 */
-	default void sendThought(String text, String messageId) {
+	default void sendThought(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
 				new AcpSchema.AgentThoughtChunk("agent_thought_chunk", new AcpSchema.TextContent(text), messageId));
 	}
@@ -231,7 +232,7 @@ public interface SyncPromptContext {
 	 * @return The file content
 	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
 	 */
-	String readFile(String path, Integer startLine, Integer lineCount);
+	String readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount);
 
 	/**
 	 * Attempts to read a text file, returning empty if the file cannot be read
@@ -261,9 +262,9 @@ public interface SyncPromptContext {
 	 * Asks the client to choose from multiple options.
 	 * @param question The question to ask
 	 * @param options The available options (at least 2)
-	 * @return The selected option text, or null if cancelled
+	 * @return the selected option text, or empty if the client cancelled the choice
 	 */
-	String askChoice(String question, String... options);
+	Optional<String> askChoice(String question, String... options);
 
 	/**
 	 * Executes a command in a terminal and waits for completion.

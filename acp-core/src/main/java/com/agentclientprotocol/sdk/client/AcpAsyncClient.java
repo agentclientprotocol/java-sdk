@@ -12,6 +12,7 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -160,7 +161,7 @@ public class AcpAsyncClient {
 	/**
 	 * Capabilities negotiated with the agent during initialization.
 	 */
-	private final AtomicReference<NegotiatedCapabilities> agentCapabilities = new AtomicReference<>();
+	private final AtomicReference<@Nullable NegotiatedCapabilities> agentCapabilities = new AtomicReference<>();
 
 	/**
 	 * Creates a new AcpAsyncClient with the given session and transport. Uses default
@@ -180,7 +181,8 @@ public class AcpAsyncClient {
 	 * @param clientCapabilities the client capabilities to use during initialization (may
 	 * be null for defaults)
 	 */
-	AcpAsyncClient(AcpSession session, AcpClientTransport transport, AcpSchema.ClientCapabilities clientCapabilities) {
+	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
+			AcpSchema.@Nullable ClientCapabilities clientCapabilities) {
 		Assert.notNull(session, "Session must not be null");
 		Assert.notNull(transport, "Transport must not be null");
 		this.session = session;
@@ -245,7 +247,7 @@ public class AcpAsyncClient {
 	 * </p>
 	 * @return the negotiated agent capabilities, or null if not initialized
 	 */
-	public NegotiatedCapabilities getAgentCapabilities() {
+	public @Nullable NegotiatedCapabilities getAgentCapabilities() {
 		return agentCapabilities.get();
 	}
 

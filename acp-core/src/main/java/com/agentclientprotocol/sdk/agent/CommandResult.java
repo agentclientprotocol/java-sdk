@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Result of executing a terminal command via the convenience API.
  *
@@ -16,7 +18,7 @@ package com.agentclientprotocol.sdk.agent;
  * Example usage:
  * <pre>{@code
  * CommandResult result = context.execute("make", "build");
- * if (result.exitCode() == 0) {
+ * if (result.success()) {
  *     context.sendMessage("Build succeeded!");
  * } else {
  *     context.sendMessage("Build failed: " + result.output());
@@ -24,7 +26,9 @@ package com.agentclientprotocol.sdk.agent;
  * }</pre>
  *
  * @param output The combined stdout/stderr output from the command
- * @param exitCode The exit code (0 typically means success)
+ * @param exitCode The exit code (0 typically means success), or null if the process was
+ * terminated by a signal
+ * @param signal The signal that terminated the process, or null if it exited normally
  * @param timedOut Whether the command was terminated due to timeout
  * @author Mark Pollack
  * @since 0.9.2
@@ -33,7 +37,8 @@ package com.agentclientprotocol.sdk.agent;
  */
 public record CommandResult(
 		String output,
-		int exitCode,
+		@Nullable Integer exitCode,
+		@Nullable String signal,
 		boolean timedOut
 ) {
 
@@ -44,15 +49,25 @@ public record CommandResult(
 	 * @param exitCode The exit code
 	 */
 	public CommandResult(String output, int exitCode) {
-		this(output, exitCode, false);
+		this(output, exitCode, null, false);
+	}
+
+	/**
+	 * Creates a CommandResult for a process that exited with the given code.
+	 * @param output The command output
+	 * @param exitCode The exit code
+	 * @param timedOut Whether the command was terminated due to timeout
+	 */
+	public CommandResult(String output, int exitCode, boolean timedOut) {
+		this(output, exitCode, null, timedOut);
 	}
 
 	/**
 	 * Returns true if the command completed successfully (exit code 0).
-	 * @return true if exit code is 0 and command did not time out
+	 * @return true if the process exited with code 0 and did not time out
 	 */
 	public boolean success() {
-		return exitCode == 0 && !timedOut;
+		return exitCode != null && exitCode == 0 && !timedOut;
 	}
 
 }

@@ -20,6 +20,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -189,7 +190,7 @@ public interface AcpClient {
 
 		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
 
-		private AcpSchema.ClientCapabilities clientCapabilities;
+		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
 
 		private final Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = new HashMap<>();
 
@@ -568,7 +569,7 @@ public interface AcpClient {
 
 		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
 
-		private AcpSchema.ClientCapabilities clientCapabilities;
+		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
 
 		private final Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = new HashMap<>();
 

@@ -6,11 +6,13 @@ package com.agentclientprotocol.sdk.agent.support;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Context for a single method invocation, holding request data and
@@ -25,19 +27,19 @@ public final class AcpInvocationContext {
 
 	private final Object request;
 
-	private final String sessionId;
+	private final @Nullable String sessionId;
 
-	private final PromptContext promptContext;
+	private final @Nullable PromptContext promptContext;
 
-	private final SyncPromptContext syncPromptContext;
+	private final @Nullable SyncPromptContext syncPromptContext;
 
-	private final NegotiatedCapabilities capabilities;
+	private final @Nullable NegotiatedCapabilities capabilities;
 
 	private final Map<String, Object> attributes = new HashMap<>();
 
 	private AcpInvocationContext(Builder builder) {
-		this.acpMethod = builder.acpMethod;
-		this.request = builder.request;
+		this.acpMethod = Objects.requireNonNull(builder.acpMethod, "acpMethod is required");
+		this.request = Objects.requireNonNull(builder.request, "request is required");
 		this.sessionId = builder.sessionId;
 		this.promptContext = builder.promptContext;
 		this.syncPromptContext = builder.syncPromptContext;
@@ -153,17 +155,17 @@ public final class AcpInvocationContext {
 	 */
 	public static class Builder {
 
-		private String acpMethod;
+		private @Nullable String acpMethod;
 
-		private Object request;
+		private @Nullable Object request;
 
-		private String sessionId;
+		private @Nullable String sessionId;
 
-		private PromptContext promptContext;
+		private @Nullable PromptContext promptContext;
 
-		private SyncPromptContext syncPromptContext;
+		private @Nullable SyncPromptContext syncPromptContext;
 
-		private NegotiatedCapabilities capabilities;
+		private @Nullable NegotiatedCapabilities capabilities;
 
 		public Builder acpMethod(String acpMethod) {
 			this.acpMethod = acpMethod;
@@ -175,22 +177,22 @@ public final class AcpInvocationContext {
 			return this;
 		}
 
-		public Builder sessionId(String sessionId) {
+		public Builder sessionId(@Nullable String sessionId) {
 			this.sessionId = sessionId;
 			return this;
 		}
 
-		public Builder promptContext(PromptContext promptContext) {
+		public Builder promptContext(@Nullable PromptContext promptContext) {
 			this.promptContext = promptContext;
 			return this;
 		}
 
-		public Builder syncPromptContext(SyncPromptContext syncPromptContext) {
+		public Builder syncPromptContext(@Nullable SyncPromptContext syncPromptContext) {
 			this.syncPromptContext = syncPromptContext;
 			return this;
 		}
 
-		public Builder capabilities(NegotiatedCapabilities capabilities) {
+		public Builder capabilities(@Nullable NegotiatedCapabilities capabilities) {
 			this.capabilities = capabilities;
 			return this;
 		}

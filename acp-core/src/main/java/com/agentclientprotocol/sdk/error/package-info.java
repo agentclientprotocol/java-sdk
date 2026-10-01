@@ -27,4 +27,7 @@
  *
  * @see com.agentclientprotocol.sdk.error.AcpErrorCodes
  */
+@NullMarked
 package com.agentclientprotocol.sdk.error;
+
+import org.jspecify.annotations.NullMarked;

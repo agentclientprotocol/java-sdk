@@ -9,9 +9,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.JsonTree;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +25,6 @@ class SessionManagementTest {
 
 	private final AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 
-	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	// ---------------------------
 	// Helper Methods
@@ -203,7 +201,7 @@ class SessionManagementTest {
 		AcpSchema.SessionModeState modeState = new AcpSchema.SessionModeState("architect", modes);
 
 		String json = jsonMapper.writeValueAsString(modeState);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("currentModeId").asText()).isEqualTo("architect");
 		assertThat(node.get("availableModes").isArray()).isTrue();
@@ -215,7 +213,7 @@ class SessionManagementTest {
 		AcpSchema.SessionMode mode = new AcpSchema.SessionMode("custom", "Custom Mode", null);
 
 		String json = jsonMapper.writeValueAsString(mode);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		assertThat(node.get("id").asText()).isEqualTo("custom");
 		assertThat(node.get("name").asText()).isEqualTo("Custom Mode");
@@ -263,7 +261,7 @@ class SessionManagementTest {
 		AcpSchema.LoadSessionResponse response = new AcpSchema.LoadSessionResponse(null, null);
 
 		String json = jsonMapper.writeValueAsString(response);
-		JsonNode node = objectMapper.readTree(json);
+		JsonTree node = JsonTree.parse(jsonMapper, json);
 
 		// Null fields should not be serialized
 		assertThat(node.has("modes")).isFalse();

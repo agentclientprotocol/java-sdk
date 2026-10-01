@@ -151,4 +151,13 @@ class AcpJsonRpcMessageTest {
 			.hasMessageContaining("Cannot deserialize JSONRPCMessage");
 	}
 
+	@Test
+	void deserializeJsonNullLiteralThrowsException() {
+		// "null" is valid JSON but no JSON-RPC message; it must be rejected like any other
+		// unrecognized structure, not fail with a NullPointerException.
+		assertThatThrownBy(() -> AcpSchema.deserializeJsonRpcMessage(jsonMapper, "null"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("Cannot deserialize JSONRPCMessage");
+	}
+
 }

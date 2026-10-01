@@ -1,0 +1,9 @@
+# Peer SDK checkouts and per-ref build outputs
+.cache/
+# Per-scenario logs (uploaded as a CI artifact)
+logs/
+programs/java/target/
+programs/rust/target/
+programs/rust/Cargo.lock
+# The repository .gitignore ignores README.md (for plans/ research checkouts); keep ours.
+!README.md

@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Strategy interface for resolving method arguments during handler invocation.
@@ -37,6 +38,6 @@ public interface ArgumentResolver {
 	 * @return the resolved argument value (may be null)
 	 * @throws ArgumentResolutionException if resolution fails
 	 */
-	Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context);
+	@Nullable Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context);
 
 }

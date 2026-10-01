@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -33,8 +34,9 @@ import reactor.core.publisher.Mono;
  *     // Send an update
  *     context.sendUpdate(sessionId, update);
  *
- *     // Read a file (if client supports it)
- *     if (context.getClientCapabilities().supportsReadTextFile()) {
+ *     // Read a file (if client supports it; capabilities are null before initialize)
+ *     NegotiatedCapabilities caps = context.getClientCapabilities();
+ *     if (caps != null && caps.supportsReadTextFile()) {
  *         var content = context.readTextFile(new ReadTextFileRequest(...)).block();
  *     }
  *
@@ -167,7 +169,7 @@ public interface PromptContext {
 	 *
 	 * @return the negotiated client capabilities, or null if not yet initialized
 	 */
-	NegotiatedCapabilities getClientCapabilities();
+	@Nullable NegotiatedCapabilities getClientCapabilities();
 
 	// ========================================================================
 	// Convenience API
@@ -196,7 +198,7 @@ public interface PromptContext {
 	 * @param messageId The message identifier, or {@code null} for none
 	 * @return A Mono that completes when the message is sent
 	 */
-	default Mono<Void> sendMessage(String text, String messageId) {
+	default Mono<Void> sendMessage(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
 				new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent(text), messageId));
 	}
@@ -217,7 +219,7 @@ public interface PromptContext {
 	 * @param messageId The message identifier, or {@code null} for none
 	 * @return A Mono that completes when the thought is sent
 	 */
-	default Mono<Void> sendThought(String text, String messageId) {
+	default Mono<Void> sendThought(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
 				new AcpSchema.AgentThoughtChunk("agent_thought_chunk", new AcpSchema.TextContent(text), messageId));
 	}
@@ -238,7 +240,7 @@ public interface PromptContext {
 	 * @return A Mono containing the file content
 	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
 	 */
-	Mono<String> readFile(String path, Integer startLine, Integer lineCount);
+	Mono<String> readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount);
 
 	/**
 	 * Writes content to a text file on the client's file system.
@@ -261,7 +263,8 @@ public interface PromptContext {
 	 * Asks the client to choose from multiple options.
 	 * @param question The question to ask
 	 * @param options The available options (at least 2)
-	 * @return A Mono containing the selected option text, or null if cancelled
+	 * @return A Mono emitting the selected option text, or completing empty if the
+	 * client cancelled the choice
 	 */
 	Mono<String> askChoice(String question, String... options);
 

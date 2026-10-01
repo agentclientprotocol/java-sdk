@@ -6,19 +6,20 @@ package com.agentclientprotocol.sdk.spec;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -55,7 +56,7 @@ public class AcpAgentSession implements AcpSession {
 	private final Duration requestTimeout;
 
 	/**
-	 * Per-session daemon scheduler for timeout operations. Disposed when session closes.
+	 * The JVM-wide daemon timer shared by every session (see AcpSchedulers); never disposed here.
 	 */
 	private final Scheduler timeoutScheduler;
 
@@ -78,15 +79,28 @@ public class AcpAgentSession implements AcpSession {
 	private final AtomicLong requestCounter = new AtomicLong(0);
 
 	/**
-	 * Active prompt tracking for single-turn enforcement.
-	 * Only ONE prompt can be active at a time per ACP session.
+	 * Active prompt tracking for single-turn enforcement, keyed by logical ACP
+	 * sessionId.
+	 *
+	 * <p>
+	 * Kotlin SDK precedent: its Agent.SessionWrapper owns a single active prompt guard
+	 * per logical session wrapper. This Java session can multiplex multiple logical ACP
+	 * sessionIds over one transport connection, so the same single-turn rule needs to
+	 * be applied per sessionId instead of once for the whole connection.
+	 * </p>
 	 */
-	private final AtomicReference<ActivePrompt> activePrompt = new AtomicReference<>(null);
+	private final ConcurrentHashMap<String, ActivePrompt> activePrompts = new ConcurrentHashMap<>();
+
+	/**
+	 * Set when the transport's {@code start()} fails (already started, port in use, ...).
+	 * Requests to the client are then failed immediately with the cause.
+	 */
+	private volatile @Nullable Throwable startFailure;
 
 	/**
 	 * Represents an active prompt session for single-turn enforcement.
 	 */
-	private record ActivePrompt(String sessionId, Object requestId) {
+	private record ActivePrompt(String sessionId, @Nullable Object requestId) {
 	}
 
 	/**
@@ -100,8 +114,9 @@ public class AcpAgentSession implements AcpSession {
 
 		/**
 		 * Handles an incoming request with the given parameters.
-		 * @param params The request parameters
-		 * @return A Mono containing the response object
+		 * @param params The request parameters; an omitted params arrives as an empty
+		 * object
+		 * @return A Mono containing the response object; it must not complete empty
 		 */
 		Mono<T> handle(Object params);
 
@@ -116,7 +131,8 @@ public class AcpAgentSession implements AcpSession {
 
 		/**
 		 * Handles an incoming notification with the given parameters.
-		 * @param params The notification parameters
+		 * @param params The notification parameters; an omitted params arrives as an empty
+		 * object
 		 * @return A Mono that completes when the notification is processed
 		 */
 		Mono<Void> handle(Object params);
@@ -143,21 +159,39 @@ public class AcpAgentSession implements AcpSession {
 		this.requestHandlers.putAll(requestHandlers);
 		this.notificationHandlers.putAll(notificationHandlers);
 
-		// Create per-session timeout scheduler with daemon thread
-		this.timeoutScheduler = Schedulers.fromExecutorService(
-				Executors.newScheduledThreadPool(1, r -> {
-					Thread t = new Thread(r, "acp-agent-timeout-" + sessionPrefix);
-					t.setDaemon(true);
-					return t;
-				}), "acp-agent-timeout-" + sessionPrefix);
+		// One shared daemon timer for every session in the JVM (see AcpSchedulers).
+		this.timeoutScheduler = AcpSchedulers.timeouts();
 
-		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe();
+		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe(v -> {
+		}, this::onStartFailure);
+
+		// A transport that refuses synchronously (every transport does when asked to start
+		// twice) fails construction rather than handing back a session that can never talk.
+		Throwable failure = this.startFailure;
+		if (failure != null) {
+			throw notStarted(failure);
+		}
+	}
+
+	private void onStartFailure(Throwable error) {
+		this.startFailure = error;
+		logger.error("ACP agent transport failed to start; every request on this session will fail: {}",
+				error.getMessage());
+		dismissPendingResponses(error);
+	}
+
+	private static IllegalStateException notStarted(Throwable cause) {
+		return new IllegalStateException("ACP agent transport is not started: " + cause.getMessage(), cause);
 	}
 
 	private void dismissPendingResponses() {
+		dismissPendingResponses(null);
+	}
+
+	private void dismissPendingResponses(@Nullable Throwable cause) {
 		this.pendingResponses.forEach((id, sink) -> {
 			logger.warn("Abruptly terminating exchange for request {}", id);
-			sink.error(new RuntimeException("ACP session with client terminated"));
+			sink.error(new RuntimeException("ACP session with client terminated", cause));
 		});
 		this.pendingResponses.clear();
 	}
@@ -200,7 +234,7 @@ public class AcpAgentSession implements AcpSession {
 					errorCode = AcpErrorCodes.INTERNAL_ERROR;
 				}
 				var errorResponse = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-						new AcpSchema.JSONRPCError(errorCode, error.getMessage(), errorData));
+						new AcpSchema.JSONRPCError(errorCode, errorMessage(error), errorData));
 				return Mono.just(errorResponse);
 			}).map(response -> (AcpSchema.JSONRPCMessage) response);
 		}
@@ -235,35 +269,60 @@ public class AcpAgentSession implements AcpSession {
 				String sessionId = extractSessionId(request.params());
 				ActivePrompt newPrompt = new ActivePrompt(sessionId, request.id());
 
-				// Try to set as active prompt - fails if another prompt is active
-				if (!activePrompt.compareAndSet(null, newPrompt)) {
-					ActivePrompt current = activePrompt.get();
-					logger.warn("Rejected concurrent prompt request. Active prompt: sessionId={}, requestId={}",
-							current != null ? current.sessionId() : "unknown",
-							current != null ? current.requestId() : "unknown");
+				// Try to set as active prompt - fails if this logical session already has
+				// a prompt active.
+				ActivePrompt current = activePrompts.putIfAbsent(sessionId, newPrompt);
+				if (current != null) {
+					logger.warn("Rejected concurrent prompt request for sessionId={}. Active requestId={}", sessionId,
+							current.requestId());
 					return Mono.just(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
 							new AcpSchema.JSONRPCError(-32000, "There is already an active prompt execution", null)));
 				}
 
-				// Execute handler and clear active prompt when done
-				return handler.handle(request.params())
+				// The prompt response ends the turn (ACP semantics), so the lock is released
+				// *before* the response is handed downstream to the transport. Releasing in
+				// doFinally instead ran after the response had already reached the client;
+				// under CPU contention the client's next prompt then arrived before the
+				// release and was rejected with -32000 (#14). doOnNext and doOnError run before
+				// the signal propagates, and a Mono emits at most once, so the release is
+				// ordered before publication on every path; doFinally covers cancellation.
+				// Mono.defer keeps a handler that throws synchronously from holding the lock
+				// forever: the throw becomes an error signal that passes through the release.
+				return requireResult(Mono.defer(() -> handler.handle(paramsOrEmpty(request.params()))), request.method())
 					.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null))
-					.doFinally(signal -> {
-						activePrompt.compareAndSet(newPrompt, null);
-						logger.debug("Prompt completed with signal: {}", signal);
-					});
+					.doOnNext(response -> releasePrompt(sessionId, newPrompt, "response"))
+					.doOnError(error -> releasePrompt(sessionId, newPrompt, "error"))
+					.doFinally(signal -> releasePrompt(sessionId, newPrompt, signal.toString()));
 			}
 
-			return handler.handle(request.params())
+			return requireResult(Mono.defer(() -> handler.handle(paramsOrEmpty(request.params()))), request.method())
 				.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
 		});
 	}
 
 	/**
-	 * Extracts the sessionId from request parameters.
+	 * Releases the single-turn lock if {@code prompt} still holds it. Idempotent: the
+	 * release is attempted on the response, on an error and on the terminal signal, and
+	 * only the first attempt does anything.
 	 */
-	@SuppressWarnings("unchecked")
-	private String extractSessionId(Object params) {
+	private void releasePrompt(String sessionId, ActivePrompt prompt, String reason) {
+		if (activePrompts.remove(sessionId, prompt)) {
+			logger.debug("Prompt lock released for sessionId={} requestId={} ({})", sessionId, prompt.requestId(),
+					reason);
+		}
+	}
+
+	/**
+	 * Extracts the sessionId from request parameters, which arrive as a {@code Map} from
+	 * the JSON transports and as the typed record from in-process transports.
+	 */
+	private String extractSessionId(@Nullable Object params) {
+		if (params instanceof AcpSchema.PromptRequest promptRequest) {
+			return promptRequest.sessionId() != null ? promptRequest.sessionId() : "unknown";
+		}
+		if (params instanceof AcpSchema.CancelNotification cancelNotification) {
+			return cancelNotification.sessionId() != null ? cancelNotification.sessionId() : "unknown";
+		}
 		if (params instanceof Map<?, ?> map) {
 			Object sessionId = map.get("sessionId");
 			return sessionId != null ? sessionId.toString() : "unknown";
@@ -271,7 +330,7 @@ public class AcpAgentSession implements AcpSession {
 		return "unknown";
 	}
 
-	record MethodNotFoundError(String method, String message, Object data) {
+	record MethodNotFoundError(String method, String message, @Nullable Object data) {
 	}
 
 	private MethodNotFoundError getMethodNotFoundError(String method) {
@@ -289,9 +348,8 @@ public class AcpAgentSession implements AcpSession {
 			// Handle cancel notification specially
 			if (AcpSchema.METHOD_SESSION_CANCEL.equals(notification.method())) {
 				String sessionId = extractSessionId(notification.params());
-				ActivePrompt current = activePrompt.get();
-				if (current != null && sessionId.equals(current.sessionId())) {
-					activePrompt.compareAndSet(current, null);
+				ActivePrompt current = activePrompts.remove(sessionId);
+				if (current != null) {
 					logger.debug("Cancelled active prompt for session: {}", sessionId);
 				}
 			}
@@ -301,7 +359,7 @@ public class AcpAgentSession implements AcpSession {
 				logger.warn("No handler registered for notification method: {}", notification.method());
 				return Mono.empty();
 			}
-			return handler.handle(notification.params());
+			return handler.handle(paramsOrEmpty(notification.params()));
 		});
 	}
 
@@ -328,8 +386,21 @@ public class AcpAgentSession implements AcpSession {
 		String requestId = this.generateRequestId();
 
 		return Mono.deferContextual(ctx -> Mono.<AcpSchema.JSONRPCResponse>create(pendingResponseSink -> {
+			Throwable failure = this.startFailure;
+			if (failure != null) {
+				pendingResponseSink.error(notStarted(failure));
+				return;
+			}
 			logger.debug("Sending request for method {} with id {}", method, requestId);
 			this.pendingResponses.put(requestId, pendingResponseSink);
+			// Re-check after registering: a failure recorded between the check above and the
+			// put may already have dismissed the map without seeing this request.
+			Throwable lateFailure = this.startFailure;
+			if (lateFailure != null) {
+				this.pendingResponses.remove(requestId);
+				pendingResponseSink.error(notStarted(lateFailure));
+				return;
+			}
 			AcpSchema.JSONRPCRequest jsonrpcRequest = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
 					method, requestParams);
 			this.transport.sendMessage(jsonrpcRequest).contextWrite(ctx).subscribe(v -> {
@@ -337,7 +408,7 @@ public class AcpAgentSession implements AcpSession {
 				this.pendingResponses.remove(requestId);
 				pendingResponseSink.error(error);
 			});
-		})).timeout(this.requestTimeout, timeoutScheduler).handle((jsonRpcResponse, deliveredResponseSink) -> {
+		})).transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout)).handle((jsonRpcResponse, deliveredResponseSink) -> {
 			if (jsonRpcResponse.error() != null) {
 				logger.error("Error handling request: {}", jsonRpcResponse.error());
 				deliveredResponseSink.error(new AcpError(jsonRpcResponse.error()));
@@ -347,7 +418,14 @@ public class AcpAgentSession implements AcpSession {
 					deliveredResponseSink.complete();
 				}
 				else {
-					deliveredResponseSink.next(this.transport.unmarshalFrom(jsonRpcResponse.result(), typeRef));
+					Object result = jsonRpcResponse.result();
+					if (result == null) {
+						deliveredResponseSink.error(new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+								"The response to " + method + " carried no result"));
+					}
+					else {
+						deliveredResponseSink.next(this.transport.unmarshalFrom(result, typeRef));
+					}
 				}
 			}
 		});
@@ -361,10 +439,16 @@ public class AcpAgentSession implements AcpSession {
 	 * @return a Mono that completes when the notification is sent
 	 */
 	@Override
-	public Mono<Void> sendNotification(String method, Object params) {
-		AcpSchema.JSONRPCNotification jsonrpcNotification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
-				method, params);
-		return this.transport.sendMessage(jsonrpcNotification);
+	public Mono<Void> sendNotification(String method, @Nullable Object params) {
+		return Mono.defer(() -> {
+			Throwable failure = this.startFailure;
+			if (failure != null) {
+				return Mono.error(notStarted(failure));
+			}
+			AcpSchema.JSONRPCNotification jsonrpcNotification = new AcpSchema.JSONRPCNotification(
+					AcpSchema.JSONRPC_VERSION, method, params);
+			return this.transport.sendMessage(jsonrpcNotification);
+		});
 	}
 
 	/**
@@ -372,16 +456,39 @@ public class AcpAgentSession implements AcpSession {
 	 * @return true if a prompt is currently active
 	 */
 	public boolean hasActivePrompt() {
-		return activePrompt.get() != null;
+		return !activePrompts.isEmpty();
 	}
 
 	/**
-	 * Gets the session ID of the active prompt, if any.
-	 * @return the session ID or null if no prompt is active
+	 * Checks if there is an active prompt being processed for the specified logical
+	 * ACP session.
+	 * @param sessionId the logical ACP session ID
+	 * @return true if a prompt is currently active for the session
 	 */
-	public String getActivePromptSessionId() {
-		ActivePrompt current = activePrompt.get();
-		return current != null ? current.sessionId() : null;
+	public boolean hasActivePrompt(String sessionId) {
+		Assert.hasText(sessionId, "The sessionId can not be empty");
+		return activePrompts.containsKey(sessionId);
+	}
+
+	/**
+	 * Gets one active prompt session ID, if any.
+	 *
+	 * <p>
+	 * This is a legacy aggregate view. When multiple logical ACP sessions are active on
+	 * the same transport connection, the returned session ID is arbitrary.
+	 * </p>
+	 * @return one active session ID or null if no prompt is active
+	 */
+	public @Nullable String getActivePromptSessionId() {
+		return activePrompts.keySet().stream().findFirst().orElse(null);
+	}
+
+	/**
+	 * Gets the logical ACP session IDs that currently have active prompts.
+	 * @return an immutable snapshot of active prompt session IDs
+	 */
+	public Set<String> getActivePromptSessionIds() {
+		return Set.copyOf(activePrompts.keySet());
 	}
 
 	/**
@@ -391,9 +498,8 @@ public class AcpAgentSession implements AcpSession {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
-			activePrompt.set(null);
+			activePrompts.clear();
 			dismissPendingResponses();
-			timeoutScheduler.dispose();
 		}).then(this.transport.closeGracefully());
 	}
 
@@ -402,10 +508,30 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	@Override
 	public void close() {
-		activePrompt.set(null);
+		activePrompts.clear();
 		dismissPendingResponses();
-		timeoutScheduler.dispose();
 		transport.close();
+	}
+
+	/**
+	 * The params a handler receives. JSON-RPC lets a request or notification omit them;
+	 * an omitted params reads as an empty object, which is what a peer sending {@code {}}
+	 * would deliver, so handlers never see null.
+	 */
+	private static Object paramsOrEmpty(@Nullable Object params) {
+		return (params != null) ? params : Map.of();
+	}
+
+	/** JSON-RPC requires an error message; an exception without one is named by its type. */
+	private static String errorMessage(Throwable error) {
+		String message = error.getMessage();
+		return (message != null) ? message : error.getClass().getName();
+	}
+
+	/** A request always gets a response: a handler that completes empty is answered with an error. */
+	private static <T> Mono<T> requireResult(Mono<T> result, String method) {
+		return result.switchIfEmpty(Mono.error(() -> new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+				"The " + method + " handler produced no response")));
 	}
 
 	/**
@@ -454,7 +580,7 @@ public class AcpAgentSession implements AcpSession {
 			return error.code();
 		}
 
-		public Object getData() {
+		public @Nullable Object getData() {
 			return error.data();
 		}
 

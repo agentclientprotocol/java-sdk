@@ -208,8 +208,17 @@ class CleanShutdownIT {
 	private Set<String> getAcpThreadNames() {
 		return Thread.getAllStackTraces().keySet().stream()
 			.map(Thread::getName)
-			.filter(name -> name.startsWith("acp-"))
+			.filter(name -> name.startsWith("acp-") && !isSharedJvmTimer(name))
 			.collect(Collectors.toSet());
+	}
+
+	/**
+	 * The one thread the SDK keeps for the life of the JVM: the shared request-timeout timer
+	 * ({@code AcpSchedulers.timeouts()}), a daemon that serves every session and is never
+	 * disposed. It appears on first use and is not a per-session leak.
+	 */
+	private static boolean isSharedJvmTimer(String name) {
+		return "acp-timeout".equals(name);
 	}
 
 }

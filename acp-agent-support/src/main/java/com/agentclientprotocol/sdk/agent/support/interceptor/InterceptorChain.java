@@ -10,6 +10,7 @@ import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +72,7 @@ public class InterceptorChain {
 	 * @param result the handler result
 	 * @return the (possibly modified) result
 	 */
-	public Object applyPostInvoke(AcpInvocationContext context, Object result) {
+	public @Nullable Object applyPostInvoke(AcpInvocationContext context, @Nullable Object result) {
 		for (int i = interceptors.size() - 1; i >= 0; i--) {
 			try {
 				result = interceptors.get(i).postInvoke(context, result);
@@ -90,7 +91,7 @@ public class InterceptorChain {
 	 * @param ex the exception
 	 * @return replacement result, or null to propagate exception
 	 */
-	public Object applyOnError(AcpInvocationContext context, Throwable ex) {
+	public @Nullable Object applyOnError(AcpInvocationContext context, Throwable ex) {
 		for (int i = interceptors.size() - 1; i >= 0; i--) {
 			try {
 				Object replacement = interceptors.get(i).onError(context, ex);
@@ -112,7 +113,7 @@ public class InterceptorChain {
 	 * @param context the invocation context
 	 * @param ex the exception (may be null)
 	 */
-	public void triggerAfterCompletion(AcpInvocationContext context, Throwable ex) {
+	public void triggerAfterCompletion(AcpInvocationContext context, @Nullable Throwable ex) {
 		for (int i = this.interceptorIndex; i >= 0; i--) {
 			try {
 				interceptors.get(i).afterCompletion(context);

@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -94,6 +95,24 @@ public class InMemoryTransportPair {
 		return Mono.when(clientTransport.closeGracefully(), agentTransport.closeGracefully());
 	}
 
+
+	/**
+	 * Emits on a sink that several threads share. {@code Sinks.many()} sinks reject a
+	 * concurrent emission from another thread with {@code FAIL_NON_SERIALIZED}; the busy
+	 * loop serialises emitters the same way the shipped transports do.
+	 */
+	private static Mono<Void> emit(Sinks.Many<AcpSchema.JSONRPCMessage> sink, AcpSchema.JSONRPCMessage message,
+			String what) {
+		return Mono.fromRunnable(() -> {
+			try {
+				sink.emitNext(message, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+			}
+			catch (Sinks.EmissionException e) {
+				throw new RuntimeException("Failed to send " + what + ": " + e.getReason(), e);
+			}
+		});
+	}
+
 	/**
 	 * In-memory client transport implementation.
 	 */
@@ -134,11 +153,7 @@ public class InMemoryTransportPair {
 
 		@Override
 		public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
-			Sinks.EmitResult result = outbound.tryEmitNext(message);
-			if (result.isFailure()) {
-				return Mono.error(new RuntimeException("Failed to send message: " + result));
-			}
-			return Mono.empty();
+			return emit(outbound, message, "message");
 		}
 
 		@Override
@@ -198,12 +213,11 @@ public class InMemoryTransportPair {
 			return inbound.asFlux()
 				.flatMap(message -> Mono.just(message)
 					.transform(handler)
-					.flatMap(response -> {
-						// Send response back through outbound sink
-						Sinks.EmitResult result = outbound.tryEmitNext(response);
-						if (result.isFailure()) {
-							return Mono.error(new RuntimeException("Failed to send response: " + result));
-						}
+					.flatMap(response -> emit(outbound, response, "response"))
+					// A failed emission is this message's problem, not the transport's: it
+					// must not terminate the inbound subscription and kill the agent.
+					.onErrorResume(error -> {
+						exceptionHandler.accept(error);
 						return Mono.empty();
 					}))
 				.doOnError(exceptionHandler::accept)
@@ -213,11 +227,7 @@ public class InMemoryTransportPair {
 
 		@Override
 		public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
-			Sinks.EmitResult result = outbound.tryEmitNext(message);
-			if (result.isFailure()) {
-				return Mono.error(new RuntimeException("Failed to send message: " + result));
-			}
-			return Mono.empty();
+			return emit(outbound, message, "message");
 		}
 
 		@Override

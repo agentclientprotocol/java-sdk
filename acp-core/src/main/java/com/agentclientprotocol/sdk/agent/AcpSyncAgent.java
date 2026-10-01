@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.agent;
 import java.time.Duration;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Synchronous ACP agent that provides blocking operations for handling client requests.
@@ -104,7 +105,7 @@ public class AcpSyncAgent {
 	 * @return The permission response
 	 */
 	public AcpSchema.RequestPermissionResponse requestPermission(AcpSchema.RequestPermissionRequest request) {
-		return asyncAgent.requestPermission(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.requestPermission(request), blockTimeout);
 	}
 
 	/**
@@ -113,7 +114,7 @@ public class AcpSyncAgent {
 	 * @return The file content
 	 */
 	public AcpSchema.ReadTextFileResponse readTextFile(AcpSchema.ReadTextFileRequest request) {
-		return asyncAgent.readTextFile(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.readTextFile(request), blockTimeout);
 	}
 
 	/**
@@ -122,7 +123,7 @@ public class AcpSyncAgent {
 	 * @return The write response
 	 */
 	public AcpSchema.WriteTextFileResponse writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		return asyncAgent.writeTextFile(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.writeTextFile(request), blockTimeout);
 	}
 
 	/**
@@ -131,7 +132,7 @@ public class AcpSyncAgent {
 	 * @return The terminal ID response
 	 */
 	public AcpSchema.CreateTerminalResponse createTerminal(AcpSchema.CreateTerminalRequest request) {
-		return asyncAgent.createTerminal(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.createTerminal(request), blockTimeout);
 	}
 
 	/**
@@ -140,7 +141,7 @@ public class AcpSyncAgent {
 	 * @return The terminal output
 	 */
 	public AcpSchema.TerminalOutputResponse getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		return asyncAgent.getTerminalOutput(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.getTerminalOutput(request), blockTimeout);
 	}
 
 	/**
@@ -149,7 +150,7 @@ public class AcpSyncAgent {
 	 * @return The release response
 	 */
 	public AcpSchema.ReleaseTerminalResponse releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		return asyncAgent.releaseTerminal(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.releaseTerminal(request), blockTimeout);
 	}
 
 	/**
@@ -158,7 +159,7 @@ public class AcpSyncAgent {
 	 * @return The exit status
 	 */
 	public AcpSchema.WaitForTerminalExitResponse waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request) {
-		return asyncAgent.waitForTerminalExit(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.waitForTerminalExit(request), blockTimeout);
 	}
 
 	/**
@@ -167,7 +168,7 @@ public class AcpSyncAgent {
 	 * @return The kill response
 	 */
 	public AcpSchema.KillTerminalCommandResponse killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		return asyncAgent.killTerminal(request).block(blockTimeout);
+		return SyncBlocking.awaitResponse(asyncAgent.killTerminal(request), blockTimeout);
 	}
 
 	/**
@@ -180,7 +181,7 @@ public class AcpSyncAgent {
 	 * </p>
 	 * @return the negotiated client capabilities, or null if not initialized
 	 */
-	public com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities getClientCapabilities() {
+	public com.agentclientprotocol.sdk.capabilities.@Nullable NegotiatedCapabilities getClientCapabilities() {
 		return asyncAgent.getClientCapabilities();
 	}
 
