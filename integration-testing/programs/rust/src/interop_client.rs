@@ -761,9 +761,21 @@ async fn session_close() -> Result<String, String> {
     }
 }
 
+/// On a connection of its own: the Rust HTTP client ends the whole connection when one POST is
+/// answered with an HTTP error (an agent that 404s the unknown session id), which must not take
+/// the main connection, and every later step, with it.
 async fn session_delete() -> Result<String, String> {
-    let cx = main_cx()?;
-    let sid = new_session(&cx).await?;
+    let conn = Conn::open().await?;
+    let r = delete_twice(&conn.cx).await;
+    let closed = conn.close().await;
+    let r = r?;
+    closed.map_err(|e| format!("both deletes answered, then {e}"))?;
+    Ok(r)
+}
+
+async fn delete_twice(cx: &ConnectionTo<Agent>) -> Result<String, String> {
+    initialize(cx).await?;
+    let sid = new_session(cx).await?;
     cx.send_request::<DeleteSessionRequest>(typed(json!({ "sessionId": sid }))).block_task().await.ctx("session/delete")?;
     cx.send_request::<DeleteSessionRequest>(typed(json!({ "sessionId": "no-such-session" })))
         .block_task()
@@ -976,8 +988,8 @@ async fn chunk_step(text: &str, within: Duration, check: impl Fn(&str) -> bool) 
     let sid = new_session(&cx).await?;
     let t0 = Instant::now();
     let r = tokio::time::timeout(within, prompt(&cx, &sid, text)).await.map_err(|_| format!("TIMEOUT after {} ms", within.as_millis()))??;
-    let left = within.saturating_sub(t0.elapsed()).max(UPDATE_GRACE);
-    let t = wait_chunk(&sid, left, &check).await;
+    let _ = t0;
+    let t = wait_chunk(&sid, UPDATE_GRACE, &check).await;
     ensure(t.is_some(), format!("stopReason {}; chunks {:?}", stop_reason(&r), one_line(&agent_text(&sid))))?;
     Ok(format!("chunk {}", one_line(&t.unwrap_or_default())))
 }
