@@ -107,6 +107,24 @@
       "reason": "The Python agent cannot send $/cancel_request for its pending fs/read_text_file (no API)"
     },
     {
+      "step": "agent.cancel-request.agent",
+      "when": {
+        "client": "python"
+      },
+      "contains": "",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python client routes no $/cancel_request, so the agent's cancelled fs/read_text_file is never answered -32800: the read handler answers the content after 10 s"
+    },
+    {
+      "step": "cancel-request.agent",
+      "when": {
+        "client": "python"
+      },
+      "contains": "",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python client routes no $/cancel_request, so its fs read of slow.txt runs its full 10 s instead of ending -32800: the prompt ends late"
+    },
+    {
       "step": "big.update-1m",
       "when": {
         "client": "python",

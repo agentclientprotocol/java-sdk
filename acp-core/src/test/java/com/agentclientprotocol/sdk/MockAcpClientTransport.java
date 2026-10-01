@@ -37,7 +37,7 @@ public class MockAcpClientTransport implements AcpClientTransport {
 
 	private final Sinks.Many<AcpSchema.JSONRPCMessage> inbound = Sinks.many().unicast().onBackpressureBuffer();
 
-	private final List<AcpSchema.JSONRPCMessage> sent = new ArrayList<>();
+	private final List<AcpSchema.JSONRPCMessage> sent = new java.util.concurrent.CopyOnWriteArrayList<>();
 
 	private final BiConsumer<MockAcpClientTransport, AcpSchema.JSONRPCMessage> interceptor;
 

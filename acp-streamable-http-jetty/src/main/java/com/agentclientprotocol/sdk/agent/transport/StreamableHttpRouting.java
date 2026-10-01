@@ -67,7 +67,7 @@ final class StreamableHttpRouting {
 				Map.entry(AcpSchema.METHOD_PROVIDERS_LIST, connection),
 				Map.entry(AcpSchema.METHOD_PROVIDERS_SET, connection),
 				Map.entry(AcpSchema.METHOD_PROVIDERS_DISABLE, connection), Map.entry("nes/start", connection),
-				Map.entry("mcp/message", connection), Map.entry("$/cancel_request", connection),
+				Map.entry("mcp/message", connection), Map.entry(AcpSchema.METHOD_CANCEL_REQUEST, connection),
 				Map.entry(AcpSchema.METHOD_SESSION_LOAD, this::loadRoute),
 				Map.entry(AcpSchema.METHOD_SESSION_RESUME, this::loadRoute),
 				// Scoped to the parent session; the reply names the forked session.
@@ -192,6 +192,11 @@ final class StreamableHttpRouting {
 	}
 
 	RouteScope resolveAgentRequestOrNotificationScope(String method, @Nullable Object params) {
+		// Protocol-level ($/) messages, $/cancel_request included, are connection-scoped
+		// whatever their params name, as in the Rust SDK; the client's table agrees.
+		if (method.startsWith("$/")) {
+			return RouteScope.connection();
+		}
 		if (SESSION_SCOPED_AGENT_METHODS.contains(method)) {
 			return RouteScope.session(requireSessionId(params, method));
 		}

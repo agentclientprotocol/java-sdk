@@ -64,6 +64,9 @@ public class AcpClientSession implements AcpSession {
 	/** Requests and notifications sent to the agent, and the requests waiting for a response */
 	private final OutboundMessages outbound;
 
+	/** Requests from the agent still being handled, which a $/cancel_request can cancel */
+	private final InboundRequests inbound = new InboundRequests();
+
 	/** Map of request handlers keyed by method name */
 	private final ConcurrentHashMap<String, RequestHandler<?>> requestHandlers = new ConcurrentHashMap<>();
 
@@ -233,18 +236,29 @@ public class AcpClientSession implements AcpSession {
 			respondTo(request);
 		}
 		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
-			enqueue(notification);
+			if (AcpSchema.METHOD_CANCEL_REQUEST.equals(notification.method())) {
+				// Not queued behind the ordered notification drain: a slow session/update
+				// consumer must not delay cancelling a pending request.
+				this.inbound.cancel(notification);
+			}
+			else {
+				enqueue(notification);
+			}
 		}
 		else {
 			logger.warn("Received unknown message type: {}", message.getClass().getName());
 		}
 	}
 
-	/** Answers a request from the agent; a failed handler is answered with an error response. */
+	/**
+	 * Answers a request from the agent; a failed handler is answered with an error response,
+	 * a request cancelled by $/cancel_request with -32800 unless it already answered.
+	 */
 	private void respondTo(AcpSchema.JSONRPCRequest request) {
 		logger.debug("Received request method={} id={}", request.method(), request.id());
 		logger.trace("Incoming request method='{}' id={}", request.method(), request.id());
-		handleIncomingRequest(request).onErrorResume(error -> Mono.just(InboundMessages.error(request, error)))
+		this.inbound.track(request, handleIncomingRequest(request))
+			.onErrorResume(error -> Mono.just(InboundMessages.error(request, error)))
 			.flatMap(this.transport::sendMessage)
 			.onErrorComplete(t -> {
 				logger.warn("Issue sending response to the agent, ", t);
@@ -376,6 +390,7 @@ public class AcpClientSession implements AcpSession {
 	public Mono<Void> closeGracefully() {
 		return Mono.<Void>fromRunnable(() -> {
 			this.closing = true;
+			this.inbound.cancelAll();
 			dismissPendingResponses();
 			// Never lost to a notification being delivered concurrently (NotificationQueue).
 			this.notifications.complete();
@@ -396,6 +411,7 @@ public class AcpClientSession implements AcpSession {
 	@Override
 	public void close() {
 		this.closing = true;
+		this.inbound.cancelAll();
 		dismissPendingResponses();
 		this.notifications.complete();
 		notificationSubscription.dispose();

@@ -839,7 +839,7 @@ public interface AcpAgent {
 
 		/**
 		 * Sets how long a prompt handler has to answer after {@code session/cancel}. When it
-		 * passes, the agent cancels the handler (a sync handler blocked on its thread is not interrupted; what it sends afterwards is its own) and answers the prompt itself with stop
+		 * passes, the agent cancels the handler (a sync handler blocked on its thread is interrupted; what it sends if it keeps running is its own) and answers the prompt itself with stop
 		 * reason {@code cancelled}, as ACP requires of a cancelled prompt, which ends the
 		 * turn so the session accepts a new prompt. Updates the handler sent before that
 		 * answer reach the client first. Default: 60 seconds

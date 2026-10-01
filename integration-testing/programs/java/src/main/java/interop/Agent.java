@@ -21,7 +21,9 @@ import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpError;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.RequestCancellation;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.RequestLog;
@@ -51,9 +53,9 @@ import reactor.core.publisher.Mono;
  * </p>
  *
  * <p>
- * What the Java SDK cannot do yet is answered honestly, never faked: no {@code $/cancel_request}
- * (P2) and no generic send or receive of extension methods (P9). The unknown update is an
- * {@code AcpSchema.UnknownSessionUpdate}, which writes the type and fields it is given.
+ * What the Java SDK cannot do yet is answered honestly, never faked: no generic send or receive of
+ * extension methods (P9). The unknown update is an {@code AcpSchema.UnknownSessionUpdate}, which
+ * writes the type and fields it is given.
  * </p>
  */
 public class Agent {
@@ -389,12 +391,7 @@ public class Agent {
 			case "#fs" -> switch (sub) {
 				case "write" -> fsWrite(s.id, context, caps, rest(text, 2));
 				case "read" -> fsRead(s.id, context, caps, words);
-				case "read-slow" -> {
-					// The catalogue's agent sends $/cancel_request for its own fs read; the Java SDK
-					// has no $/cancel_request (P2), so the read is not even started.
-					step("cancel-request.agent", false, System.nanoTime(), "P2: the Java agent cannot send $/cancel_request");
-					yield context.sendMessage("cancel-request unsupported (P2)").thenReturn(endTurn());
-				}
+				case "read-slow" -> readSlow(s.id, context, words);
 				default -> unknown(text);
 			};
 			case "#emit" -> emit(context, words);
@@ -552,6 +549,32 @@ public class Agent {
 		}).flatMap(context::sendMessage).thenReturn(endTurn());
 	}
 
+	/**
+	 * {@code #fs read-slow <path>} (cancel-request.agent): reads a file the client holds for up to
+	 * 10 s, cancels the read with $/cancel_request after 300 ms, gracefully (it keeps waiting), and
+	 * expects the client's answer: -32800 within 5 s of the cancel.
+	 */
+	static Mono<AcpSchema.PromptResponse> readSlow(String sessionId, PromptContext context, String[] words) {
+		long t0 = System.nanoTime();
+		String path = words.length > 2 ? words[2] : "";
+		return context.readTextFile(new AcpSchema.ReadTextFileRequest(sessionId, path, null, null))
+			.contextWrite(RequestCancellation.cancelWhen(Mono.delay(Duration.ofMillis(300))))
+			.timeout(Duration.ofMillis(5_300))
+			.doOnNext(r -> step("cancel-request.agent", false, t0, "the read answered content, not -32800"))
+			.then()
+			.onErrorResume(e -> {
+				int code = codeOf(e);
+				long ms = (System.nanoTime() - t0) / 1_000_000;
+				String outcome = e instanceof java.util.concurrent.TimeoutException
+						? "TIMEOUT: no answer within 5 s of $/cancel_request" : "ended with " + (code != 0 ? code : e.toString());
+				step("cancel-request.agent", code == AcpErrorCodes.REQUEST_CANCELLED, t0,
+						"fs/read_text_file " + outcome + " after " + ms + " ms");
+				return Mono.empty();
+			})
+			.then(context.sendMessage("cancel-request sent"))
+			.thenReturn(endTurn());
+	}
+
 	static Mono<AcpSchema.PromptResponse> emit(PromptContext context, String[] words) {
 		String kind = words.length > 1 ? words[1] : "";
 		String sid = context.getSessionId();
@@ -632,6 +655,13 @@ public class Agent {
 					|| System.nanoTime() - t0 >= 10_000_000_000L)
 			.concatMap(i -> turn.cancelled() && System.nanoTime() - turn.cancelledAtNanos >= grace ? Mono.just(i)
 					: context.sendMessage("tick").thenReturn(i))
+			// cancel-request.client: a $/cancel_request cancels this handler's subscription; a
+			// session/cancel or close does not (the turn answers cancelled itself).
+			.doOnCancel(() -> {
+				if (!turn.cancelled() && !turn.closed) {
+					step("cancel-request.client", true, t0, "the handler was cancelled by $/cancel_request");
+				}
+			})
 			.then(Mono.fromCallable(() -> {
 				if (!turn.cancelled()) {
 					return endTurn();

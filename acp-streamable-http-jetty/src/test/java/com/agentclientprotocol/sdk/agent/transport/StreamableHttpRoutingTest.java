@@ -58,6 +58,17 @@ class StreamableHttpRoutingTest {
 		assertThat(route.responseScope()).isEqualTo(RouteScope.connection());
 	}
 
+	/**
+	 * The agent sends $/cancel_request on the connection stream, even when its params name a
+	 * session, matching the client's table and the Rust SDK.
+	 */
+	@Test
+	void anAgentCancelRequestGoesOnTheConnectionStream() {
+		assertThat(routing.resolveAgentRequestOrNotificationScope(AcpSchema.METHOD_CANCEL_REQUEST,
+				Map.of("requestId", 3, "sessionId", SESSION)))
+			.isEqualTo(RouteScope.connection());
+	}
+
 	@ParameterizedTest
 	@MethodSource("sessionScopedMethods")
 	void sessionScopedMethodIsRoutedInItsSession(String method) {

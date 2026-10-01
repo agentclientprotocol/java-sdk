@@ -2,33 +2,6 @@
   "comment": "Expected failures caused by the Java SDK (programs/java): the Java client (when.client java) and the Java agent (when.agent java). Each entry names the Phase B item that closes it; that item's commit deletes its entries. Client entries come first, so in a Java<->Java cell the client's (more specific) contains wins.",
   "expectations": [
     {
-      "step": "cancel-request.client",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P2:",
-      "see": "P2",
-      "reason": "The Java client has no $/cancel_request send"
-    },
-    {
-      "step": "cancel-request.agent",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P2:",
-      "see": "P2",
-      "reason": "The Java client does not honour $/cancel_request from the agent; its fs read is never cancelled"
-    },
-    {
-      "step": "cancel-request.unknown",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P2:",
-      "see": "P2",
-      "reason": "The Java client has no $/cancel_request send"
-    },
-    {
       "step": "ext.client-request",
       "when": {
         "client": "java"
@@ -45,33 +18,6 @@
       "contains": "P9:",
       "see": "P9",
       "reason": "AcpAsyncClient has no generic notification send"
-    },
-    {
-      "step": "cancel-request.client",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P2",
-      "reason": "The Java agent ignores $/cancel_request: the #slow prompt runs its full 10 s and answers end_turn"
-    },
-    {
-      "step": "cancel-request.agent",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P2",
-      "reason": "The Java agent cannot send $/cancel_request; it answers #fs read-slow with the chunk \"cancel-request unsupported (P2)\""
-    },
-    {
-      "step": "agent.cancel-request.agent",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "P2:",
-      "see": "P2",
-      "reason": "The Java agent cannot send $/cancel_request"
     },
     {
       "step": "ext.agent-request",
@@ -117,21 +63,6 @@
       "contains": "",
       "see": "P9",
       "reason": "The Java agent cannot register an extension notification handler, so #ext last-notification answers \"ext last: none\""
-    },
-    {
-      "step": "agent.cancel-request.agent",
-      "when": {
-        "client": "java",
-        "agent": [
-          "typescript",
-          "rust",
-          "python",
-          "kotlin"
-        ]
-      },
-      "contains": "",
-      "see": "P2",
-      "reason": "The Java client does not honour the agent's $/cancel_request, so the fs read never ends with -32800"
     }
   ]
 }

@@ -78,7 +78,7 @@ final class StreamableHttpRoutes {
 			Map.entry(AcpSchema.METHOD_PROVIDERS_SET, MethodScope.CONNECTION),
 			Map.entry(AcpSchema.METHOD_PROVIDERS_DISABLE, MethodScope.CONNECTION),
 			Map.entry("nes/start", MethodScope.CONNECTION), Map.entry("mcp/message", MethodScope.CONNECTION),
-			Map.entry("$/cancel_request", MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_CANCEL_REQUEST, MethodScope.CONNECTION),
 			Map.entry(AcpSchema.METHOD_SESSION_LOAD, MethodScope.SESSION_ANSWERED_ON_CONNECTION),
 			Map.entry(AcpSchema.METHOD_SESSION_RESUME, MethodScope.SESSION_ANSWERED_ON_CONNECTION),
 			Map.entry(AcpSchema.METHOD_SESSION_PROMPT, MethodScope.SESSION),

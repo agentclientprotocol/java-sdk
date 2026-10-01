@@ -463,8 +463,8 @@ public class AcpAgentSupport {
 
 		/**
 		 * Set how long a {@code @Prompt} method has to return after {@code session/cancel}
-		 * before the agent answers the prompt with stop reason {@code cancelled} itself. The
-		 * method's thread is not interrupted. Default 60 seconds; {@link Duration#ZERO} for
+		 * before the agent answers the prompt with stop reason {@code cancelled} itself and
+		 * interrupts the method's thread. Default 60 seconds; {@link Duration#ZERO} for
 		 * none. See {@code AcpAgent.SyncAgentBuilder#cancelGracePeriod}.
 		 * @param gracePeriod the grace period; zero for none, not negative
 		 * @return this builder

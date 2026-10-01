@@ -138,6 +138,23 @@ class StreamableHttpRoutesTest {
 			.isEqualTo(RouteScope.connection());
 	}
 
+	/**
+	 * $/cancel_request is protocol-level: posted on the connection, without the session
+	 * header, even while the prompt it cancels was posted in its session (the Rust SDK's rule).
+	 */
+	@Test
+	void aCancelRequestIsPostedOnTheConnectionEvenForASessionRequest() {
+		StreamableHttpRoutes routes = new StreamableHttpRoutes(AcpJsonMapper.createDefault());
+		routes.resolveOutbound(new AcpSchema.JSONRPCRequest(AcpSchema.METHOD_SESSION_PROMPT, 7,
+				Map.of("sessionId", SESSION, "prompt", java.util.List.of())));
+
+		RouteScope scope = routes.resolveOutbound(new AcpSchema.JSONRPCNotification(AcpSchema.METHOD_CANCEL_REQUEST,
+				new AcpSchema.CancelRequestNotification(7)));
+
+		assertThat(scope).isEqualTo(RouteScope.connection());
+		assertNoFallback();
+	}
+
 	private void assertNoFallback() {
 		assertThat(this.appender.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
 			.extracting(ILoggingEvent::getFormattedMessage)

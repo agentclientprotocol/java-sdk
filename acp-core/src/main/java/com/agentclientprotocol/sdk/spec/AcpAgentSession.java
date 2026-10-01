@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
@@ -59,6 +60,9 @@ public class AcpAgentSession implements AcpSession {
 
 	/** Map of notification handlers keyed by method name */
 	private final ConcurrentHashMap<String, NotificationHandler> notificationHandlers = new ConcurrentHashMap<>();
+
+	/** Requests from the client still being handled, which a $/cancel_request can cancel */
+	private final InboundRequests inbound = new InboundRequests();
 
 	/** Single-turn enforcement: the active prompt of each logical ACP sessionId. */
 	private final ActivePrompts activePrompts = new ActivePrompts();
@@ -197,7 +201,11 @@ public class AcpAgentSession implements AcpSession {
 		if (message instanceof AcpSchema.JSONRPCRequest request) {
 			logger.debug("Received request method={} id={}", request.method(), request.id());
 			// Mono.from widens the response Mono to the message type without an operator.
-			return Mono.from(handleIncomingRequest(request)
+			// The whole answer is tracked, so a $/cancel_request races it inside one Mono.
+			AtomicReference<ActivePrompts.@Nullable Turn> promptTurn = new AtomicReference<>();
+			return Mono.from(this.inbound
+				.track(request, handleIncomingRequest(request, promptTurn),
+						() -> whenCancelled(request, promptTurn.get()))
 				.onErrorResume(error -> Mono.just(InboundMessages.error(request, error))));
 		}
 		if (message instanceof AcpSchema.JSONRPCNotification notification) {
@@ -214,7 +222,8 @@ public class AcpAgentSession implements AcpSession {
 	 * @param request The incoming JSON-RPC request
 	 * @return A Mono containing the JSON-RPC response
 	 */
-	private Mono<AcpSchema.JSONRPCResponse> handleIncomingRequest(AcpSchema.JSONRPCRequest request) {
+	private Mono<AcpSchema.JSONRPCResponse> handleIncomingRequest(AcpSchema.JSONRPCRequest request,
+			AtomicReference<ActivePrompts.@Nullable Turn> promptTurn) {
 		return Mono.defer(() -> {
 			var handler = this.requestHandlers.get(request.method());
 			if (handler == null) {
@@ -233,6 +242,7 @@ public class AcpAgentSession implements AcpSession {
 							"There is already an active prompt on session " + sessionId,
 							Map.of("sessionId", sessionId)));
 				}
+				promptTurn.set(turn);
 
 				// The turn ends before the response is published (#14): see
 				// ActivePrompts.endBeforePublishing. Mono.defer keeps a handler that throws
@@ -240,16 +250,37 @@ public class AcpAgentSession implements AcpSession {
 				// signal that passes through the release.
 				// The deadlines may answer instead of the handler; either answer passes
 				// through the release.
+				// A handler whose work was aborted after session/cancel answers cancelled, not
+				// an error (ACP v1, prompt turn, Cancellation).
 				return activePrompts.endBeforePublishing(turn, promptDeadlines.answer(turn, request,
 						InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 								request.method())
-							.map(result -> InboundMessages.result(request, result))));
+							.map(result -> InboundMessages.result(request, result))
+							.onErrorResume(error -> InboundMessages.isCancellation(error) && turn.answer().isCancelling(),
+									error -> Mono.just(cancelledPrompt(request)))));
 			}
 
 			return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 						request.method())
 				.map(result -> InboundMessages.result(request, result));
 		});
+	}
+
+	/**
+	 * The answer to a request a $/cancel_request cancelled: -32800, except for a prompt
+	 * already cancelled by session/cancel, which must answer stop reason cancelled (ACP v1,
+	 * prompt turn, Cancellation).
+	 */
+	private static AcpSchema.JSONRPCResponse whenCancelled(AcpSchema.JSONRPCRequest request,
+			ActivePrompts.@Nullable Turn promptTurn) {
+		if (promptTurn != null && promptTurn.answer().isCancelling()) {
+			return cancelledPrompt(request);
+		}
+		return InboundRequests.cancelled(request);
+	}
+
+	private static AcpSchema.JSONRPCResponse cancelledPrompt(AcpSchema.JSONRPCRequest request) {
+		return InboundMessages.result(request, new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
 	}
 
 	/**
@@ -282,12 +313,20 @@ public class AcpAgentSession implements AcpSession {
 	/**
 	 * Handles an incoming JSON-RPC notification by routing it to the appropriate handler.
 	 * A session/cancel notification does not end the active prompt's turn: the cancelled
-	 * prompt's response does (see ActivePrompts#cancel).
+	 * prompt's response does (see ActivePrompts#cancel). A $/cancel_request cancels the
+	 * request it names, which is then answered with -32800 unless it already answered; a
+	 * cancelled prompt's turn ends before that answer is published.
 	 * @param notification The incoming JSON-RPC notification
 	 * @return A Mono that completes when the notification is processed
 	 */
 	private Mono<Void> handleIncomingNotification(AcpSchema.JSONRPCNotification notification) {
 		return Mono.defer(() -> {
+			// $/cancel_request: answered by the session itself, never by a handler
+			if (AcpSchema.METHOD_CANCEL_REQUEST.equals(notification.method())) {
+				this.inbound.cancel(notification);
+				return Mono.empty();
+			}
+
 			// session/cancel: the turn stays until the cancelled prompt answers
 			if (AcpSchema.METHOD_SESSION_CANCEL.equals(notification.method())) {
 				activePrompts.cancel(extractSessionId(notification.params()));
@@ -371,6 +410,7 @@ public class AcpAgentSession implements AcpSession {
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
+			this.inbound.cancelAll();
 			activePrompts.clear();
 			dismissPendingResponses();
 		}).then(this.transport.closeGracefully());
@@ -381,6 +421,7 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	@Override
 	public void close() {
+		this.inbound.cancelAll();
 		activePrompts.clear();
 		dismissPendingResponses();
 		transport.close();

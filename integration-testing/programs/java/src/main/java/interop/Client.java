@@ -37,6 +37,7 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.RequestCancellation;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -234,9 +235,9 @@ public class Client {
 		STEPS.put("cancel.prompt", Client::cancelPrompt);
 		STEPS.put("cancel.prompt-while-cancelling", Client::cancelWhileCancelling);
 		STEPS.put("cancel.grace", Client::cancelGrace);
-		STEPS.put("cancel-request.client", () -> gap("P2", "the Java client cannot send $/cancel_request"));
-		STEPS.put("cancel-request.agent", gapped("P2", Client::cancelRequestAgent));
-		STEPS.put("cancel-request.unknown", () -> gap("P2", "the Java client cannot send $/cancel_request"));
+		STEPS.put("cancel-request.client", Client::cancelRequestClient);
+		STEPS.put("cancel-request.agent", Client::cancelRequestAgent);
+		STEPS.put("cancel-request.unknown", Client::cancelRequestUnknown);
 		STEPS.put("ext.agent-request", Client::extAgentRequest);
 		STEPS.put("ext.agent-notification", Client::extAgentNotification);
 		STEPS.put("ext.client-request", () -> gap("P9", "AcpAsyncClient has no generic request send"));
@@ -810,24 +811,75 @@ public class Client {
 	}
 
 	/**
-	 * The agent cancels its own fs read with $/cancel_request; the Java client cannot honour it
-	 * (P2), so the read handler just waits out its 10 s. The prompt still runs, for the agent's
-	 * side of the step, and the step then fails on P2 whatever the agent did.
+	 * The client cancels its #slow prompt with $/cancel_request after the first tick, gracefully
+	 * ({@link RequestCancellation}): it keeps waiting, and the prompt must end within 5 s, with
+	 * -32800 or stopReason cancelled.
+	 */
+	static String cancelRequestClient() {
+		Conn c = main();
+		String sid = c.newSession();
+		AtomicLong cancelAt = new AtomicLong();
+		Mono<Long> firstTick = reactor.core.publisher.Flux.interval(Duration.ofMillis(20))
+			.filter(i -> c.chunks(sid).contains("tick"))
+			.next()
+			.doOnNext(i -> cancelAt.set(System.nanoTime()));
+		CompletableFuture<AcpSchema.PromptResponse> slow = c.client
+			.prompt(new AcpSchema.PromptRequest(sid, List.of(new AcpSchema.TextContent("#slow"))))
+			.contextWrite(RequestCancellation.cancelWhen(firstTick))
+			.timeout(T.plus(T))
+			.toFuture();
+		String outcome;
+		try {
+			AcpSchema.PromptResponse r = get(slow, Duration.ofSeconds(12), "the prompt did not end");
+			check(r.stopReason() == AcpSchema.StopReason.CANCELLED, "the cancelled prompt answered " + r.stopReason());
+			outcome = "stopReason cancelled";
+		}
+		catch (StepFailure e) {
+			throw e;
+		}
+		catch (RuntimeException e) {
+			check(codeOf(e) == -32800, "the cancelled prompt failed with " + describe(e) + ", expected -32800");
+			outcome = "error -32800";
+		}
+		check(cancelAt.get() != 0, "the prompt ended before its first tick");
+		long ms = (System.nanoTime() - cancelAt.get()) / 1_000_000;
+		check(ms < 5_000, "the prompt ended " + ms + " ms after $/cancel_request");
+		return outcome + " " + ms + " ms after $/cancel_request";
+	}
+
+	/**
+	 * The agent cancels its own fs read with $/cancel_request: the client's read handler (it holds
+	 * slow.txt for 10 s) is cancelled and answered -32800, and the prompt ends within 5 s.
 	 */
 	static String cancelRequestAgent() {
 		Conn c = main();
 		String sid = c.newSession();
 		long t0 = System.nanoTime();
-		String outcome;
-		try {
-			outcome = "stopReason " + c.prompt(sid, "#fs read-slow " + dir.resolve("slow.txt")).stopReason();
-		}
-		catch (RuntimeException e) {
-			outcome = describe(e);
-		}
+		AcpSchema.PromptResponse r = c.prompt(sid, "#fs read-slow " + dir.resolve("slow.txt"));
 		long ms = (System.nanoTime() - t0) / 1_000_000;
-		throw new StepFailure("the Java client cannot honour $/cancel_request; the prompt ended after " + ms + " ms ("
-				+ outcome + ") with chunks " + quoteAll(c.chunks(sid)));
+		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(c.chunks(sid).contains("cancel-request sent"), "chunks " + quoteAll(c.chunks(sid)));
+		check(ms < 5_000, "the prompt took " + ms + " ms");
+		return "\"cancel-request sent\" and end_turn after " + ms + " ms";
+	}
+
+	/**
+	 * $/cancel_request for an id the agent never saw, and for the id of a request it already
+	 * answered: neither gets an answer or breaks the connection.
+	 */
+	static String cancelRequestUnknown() {
+		Conn c = main();
+		String done = c.newSession();
+		Object answeredId = c.wire.lastRequestId();
+		check(answeredId != null, "no request id recorded");
+		block(c.wire.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
+				AcpSchema.METHOD_CANCEL_REQUEST, new AcpSchema.CancelRequestNotification(999999))));
+		block(c.wire.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
+				AcpSchema.METHOD_CANCEL_REQUEST, new AcpSchema.CancelRequestNotification(answeredId))));
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "after cancel-request");
+		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		return "cancelled 999999 and answered " + answeredId + " (session " + done + "); the next prompt answered end_turn";
 	}
 
 	// ---------------------------------------------------------------- extensions, _meta, errors, big
@@ -1001,9 +1053,75 @@ public class Client {
 	}
 
 	/** One client connection, with what it received. */
+	/**
+	 * Delegates to the real transport and remembers the id of the last request sent, so a step
+	 * can name an answered request in a raw $/cancel_request.
+	 */
+	static final class RecordingTransport implements AcpClientTransport {
+
+		private final AcpClientTransport delegate;
+
+		private final AtomicReference<Object> lastRequestId = new AtomicReference<>();
+
+		RecordingTransport(AcpClientTransport delegate) {
+			this.delegate = delegate;
+		}
+
+		Object lastRequestId() {
+			return this.lastRequestId.get();
+		}
+
+		@Override
+		public Mono<Void> connect(
+				java.util.function.Function<Mono<AcpSchema.JSONRPCMessage>, Mono<AcpSchema.JSONRPCMessage>> handler) {
+			return this.delegate.connect(handler);
+		}
+
+		@Override
+		public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
+			if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null) {
+				this.lastRequestId.set(request.id());
+			}
+			return this.delegate.sendMessage(message);
+		}
+
+		@Override
+		public Mono<Void> closeGracefully() {
+			return this.delegate.closeGracefully();
+		}
+
+		@Override
+		public void close() {
+			this.delegate.close();
+		}
+
+		@Override
+		public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
+			return this.delegate.unmarshalFrom(data, typeRef);
+		}
+
+		@Override
+		public List<Integer> protocolVersions() {
+			return this.delegate.protocolVersions();
+		}
+
+		@Override
+		public void setExceptionHandler(java.util.function.Consumer<Throwable> handler) {
+			this.delegate.setExceptionHandler(handler);
+		}
+
+		@Override
+		public Mono<Void> awaitTermination() {
+			return this.delegate.awaitTermination();
+		}
+
+	}
+
 	static final class Conn {
 
 		final AcpAsyncClient client;
+
+		final RecordingTransport wire;
 
 		final Map<String, List<AcpSchema.SessionUpdate>> updates = new ConcurrentHashMap<>();
 
@@ -1036,7 +1154,8 @@ public class Client {
 					yield stdio;
 				}
 			};
-			this.client = AcpClient.async(t)
+			this.wire = new RecordingTransport(t);
+			this.client = AcpClient.async(this.wire)
 				.requestTimeout(T)
 				.clientCapabilities(capabilities())
 				.sessionUpdateConsumer(n -> {
@@ -1139,8 +1258,8 @@ public class Client {
 				}
 				return new AcpSchema.ReadTextFileResponse(content);
 			}).subscribeOn(Schedulers.boundedElastic());
-			// cancel-request.agent: a read of slow.txt waits up to 10 s; it is never cancelled, the
-			// Java client has no $/cancel_request (P2).
+			// cancel-request.agent: a read of slow.txt waits up to 10 s, unless the agent cancels
+			// it with $/cancel_request, which cancels this Mono and answers -32800.
 			return req.path().endsWith("slow.txt") ? Mono.delay(Duration.ofSeconds(10)).then(read) : read;
 		}
 

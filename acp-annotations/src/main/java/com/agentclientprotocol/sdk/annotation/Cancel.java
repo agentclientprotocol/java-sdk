@@ -23,8 +23,8 @@ import java.lang.annotation.Target;
  * send any last updates, and return stop reason {@code cancelled}. Until it has returned
  * (or failed), the session rejects a new prompt (ACP v1, prompt turn, Cancellation). If it
  * has not returned within the cancel grace period (60 seconds unless configured on the
- * agent builder), the agent answers the prompt {@code cancelled} itself; the method's
- * thread is not interrupted.
+ * agent builder), the agent answers the prompt {@code cancelled} itself and interrupts the
+ * method's thread.
  *
  * <p>The method can have the following parameters (all optional):
  * <ul>

@@ -4,7 +4,12 @@
 
 package com.agentclientprotocol.sdk.spec;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -23,6 +28,15 @@ import reactor.core.publisher.MonoSink;
  * entry before signalling it, so two paths never both signal one request, and no path drops an
  * entry without signalling it.
  * </p>
+ *
+ * <p>
+ * A request whose caller gave up before any signal (its subscription was cancelled, by the
+ * caller or by its timeout) is reported once to its cancel callback, which tells the peer
+ * ({@code $/cancel_request}). Only the cancel callback can still find the entry then: every
+ * other path removed it first, so a request that was answered, dismissed or failed to send
+ * is never reported. The peer still answers a cancelled request; that late response is
+ * expected and is discarded quietly.
+ * </p>
  */
 final class PendingResponses {
 
@@ -39,6 +53,21 @@ final class PendingResponses {
 	/** Names the peer in the error a dismissed request fails with ("agent", "client"). */
 	private final String peer;
 
+	/** How many cancelled ids are remembered, so their late responses are not reported. */
+	static final int REMEMBERED_CANCELLATIONS = 1024;
+
+	/**
+	 * The most recently cancelled ids, whose late response is expected. Bounded: a peer that
+	 * never answers a cancelled request must not grow it.
+	 */
+	private final Set<Object> recentlyCancelled = Collections.synchronizedSet(Collections
+		.newSetFromMap(new LinkedHashMap<Object, Boolean>(16, 0.75f, false) {
+			@Override
+			protected boolean removeEldestEntry(Map.Entry<Object, Boolean> eldest) {
+				return size() > REMEMBERED_CANCELLATIONS;
+			}
+		}));
+
 	PendingResponses(Supplier<@Nullable Throwable> transportFailure, Function<Throwable, RuntimeException> unavailable,
 			String peer) {
 		this.transportFailure = transportFailure;
@@ -50,17 +79,45 @@ final class PendingResponses {
 	 * Records the request as waiting for its response, or fails it at once when the
 	 * transport cannot deliver. A sink that is disposed before its response arrives (the
 	 * request timed out or was cancelled) is removed, so it does not stay here until the
-	 * session ends.
+	 * session ends; one cancelled before any signal is reported to {@code onCancelled}.
 	 * @return whether the request was registered and should be sent
 	 */
-	boolean register(Object requestId, MonoSink<AcpSchema.JSONRPCResponse> sink) {
+	boolean register(Object requestId, MonoSink<AcpSchema.JSONRPCResponse> sink, Runnable onCancelled) {
 		Throwable failure = this.transportFailure.get();
 		if (failure != null) {
 			sink.error(this.unavailable.apply(failure));
 			return false;
 		}
 		this.pending.put(requestId, sink);
-		sink.onDispose(() -> abandon(requestId, sink));
+		AtomicBoolean registered = new AtomicBoolean();
+		AtomicBoolean cancelledEarly = new AtomicBoolean();
+		// A subscriber that cancelled before the request was created runs these callbacks
+		// as they are installed, before the flag is set: the request is dropped unsent, and
+		// the peer, which never saw it, is not told to cancel it. A cancel after the flag
+		// is set is reported. Only a cancellation is: a request that failed (its send
+		// threw, say) is disposed too, after its error signal. Reactor runs onCancel before
+		// onDispose, so the entry is still here on a cancel.
+		sink.onCancel(() -> {
+			if (!registered.get()) {
+				cancelledEarly.set(true);
+			}
+			else {
+				// Remembered before the removal, so a response racing the cancel finds
+				// either the entry or the memory, and is never reported as unknown.
+				this.recentlyCancelled.add(requestId);
+				if (this.pending.remove(requestId, sink)) {
+					onCancelled.run();
+				}
+				else {
+					this.recentlyCancelled.remove(requestId);
+				}
+			}
+		});
+		sink.onDispose(() -> this.pending.remove(requestId, sink));
+		registered.set(true);
+		if (cancelledEarly.get()) {
+			return false;
+		}
 		// Re-check after registering: a failure recorded between the check above and the
 		// put may already have dismissed the map without seeing this request.
 		Throwable lateFailure = this.transportFailure.get();
@@ -73,7 +130,7 @@ final class PendingResponses {
 		return true;
 	}
 
-	/** Forgets the request without signalling it: it failed to send, timed out or was cancelled. */
+	/** Forgets the request without signalling it: it failed to send. */
 	void abandon(Object requestId, MonoSink<AcpSchema.JSONRPCResponse> sink) {
 		this.pending.remove(requestId, sink);
 	}
@@ -95,7 +152,12 @@ final class PendingResponses {
 		}
 		MonoSink<AcpSchema.JSONRPCResponse> sink = this.pending.remove(response.id());
 		if (sink == null) {
-			logger.warn("Unexpected response for unknown id {}", response.id());
+			if (this.recentlyCancelled.remove(response.id())) {
+				logger.debug("Discarded the response to cancelled request {}", response.id());
+			}
+			else {
+				logger.warn("Unexpected response for unknown id {}", response.id());
+			}
 		}
 		else {
 			logger.trace("Completing pending response for id {}", response.id());
@@ -109,6 +171,7 @@ final class PendingResponses {
 	 * for its response, never dropped unsignalled.
 	 */
 	void dismissAll(@Nullable Throwable cause) {
+		this.recentlyCancelled.clear();
 		for (Object requestId : this.pending.keySet()) {
 			MonoSink<AcpSchema.JSONRPCResponse> sink = this.pending.remove(requestId);
 			if (sink != null) {
@@ -116,6 +179,11 @@ final class PendingResponses {
 				sink.error(new RuntimeException("ACP session with " + this.peer + " terminated", cause));
 			}
 		}
+	}
+
+	/** Whether this request still waits for its response. */
+	boolean isPending(Object requestId) {
+		return this.pending.containsKey(requestId);
 	}
 
 	/** The number of requests waiting for a response. */

@@ -15,6 +15,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`$/cancel_request` (ACP v1, Cancellation), both directions.** Client and agent sessions alike:
+  - **Cancelling a request you sent:** dispose (cancel) the subscription to its `Mono` before the
+    response arrives, directly or through `timeout(...)`, `take...`, or the SDK's own request
+    timeout, and the session sends `$/cancel_request {"requestId": ...}` to the peer, once, after
+    the request itself was written (never for a request that failed to send, was already answered,
+    or was dismissed by closing the session). The caller's `Mono` is cancelled at once (Reactor
+    semantics); the peer's late answer is expected and discarded at DEBUG. An agent prompt handler
+    whose subscription is cancelled cancels the `fs/*`, `terminal/*` and
+    `session/request_permission` requests it is waiting on the same way. Interrupting a thread
+    blocked in a sync client or agent call cancels its request too.
+  - **Graceful cancel:** `request.contextWrite(RequestCancellation.cancelWhen(trigger))` sends
+    `$/cancel_request` when `trigger` emits or completes but keeps waiting, so the request ends with
+    the peer's answer: its result, or an `AcpError` with code `-32800`. Works for every typed request
+    method on both sides; at most one `$/cancel_request` per request either way.
+  - **Answering a cancelled request:** on `$/cancel_request` the session cancels the handler's
+    subscription and answers the request with error `-32800` (`Request cancelled`), unless the
+    handler answered first; exactly one response either way (model checked with Lincheck,
+    `InboundRequestsLincheckTest`). An unknown or already answered id is ignored. A cancelled
+    `session/prompt` ends its turn before the answer is published; one already cancelled with
+    `session/cancel` is answered with stop reason `cancelled` instead, as ACP v1 requires of a
+    cancelled prompt. `$/cancel_request` is handled by the session and never reaches notification
+    handlers; on the client it is not queued behind slow `session/update` consumers.
+  - **Internal cancellation:** a handler that fails with `CancellationException`, an interrupt, or
+    an `AcpProtocolException` with code `-32800` is answered `-32800` (a prompt being cancelled:
+    stop reason `cancelled`). Closing a session cancels the requests it is still handling and
+    answers them `-32800` where the transport still delivers.
+  - Over Streamable HTTP, `$/cancel_request` is connection-scoped both ways, like every `$/`
+    method and as in the Rust SDK: the client posts it without `Acp-Session-Id`, the agent sends
+    it on the connection stream. It can therefore overtake a request still on a session stream;
+    the receiver then ignores it as an unknown id (the spec's MAY) and the request completes.
+  - Params of a received `$/cancel_request` without a string or integer `requestId` are ignored
+    (a notification has no response to carry `-32602`).
+  - `AcpSchema.METHOD_CANCEL_REQUEST`, `AcpSchema.CancelRequestNotification`,
+    `RequestCancellation`, `AcpSchedulers.timeoutDelivery()`.
+  - Cross-SDK suite: the Java programs run `cancel-request.client`, `cancel-request.agent` and
+    `cancel-request.unknown`; their `P2` expected failures are gone.
+
 - **Prompt timeouts on the agent builders** (`AcpAgent.async(...)`, `AcpAgent.sync(...)` and
   `AcpAgentSupport.builder()`), also as `PromptTimeouts` on the `AcpAgentSession` constructor:
   - `cancelGracePeriod(Duration)`: how long a prompt handler has to answer after `session/cancel`
@@ -30,9 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer leaves through the normal path: the turn ends just before it is published, it follows
   every update the handler had already sent, and exactly one answer is sent when the handler
   answers just as a timer fires (model checked with Lincheck, `PromptAnswerLincheckTest`). The
-  timers run on the SDK's shared timeout timer, with no new threads. A handler that keeps running
-  after its subscription is cancelled (a blocking sync handler is not interrupted) and sends more
-  updates sends them after the answer. `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
+  timers run on the SDK's shared timeout timer, with no new threads. Cancelling a sync handler
+  interrupts its thread (the SDK's sync handler scheduler interrupts on cancel); a handler that
+  ignores the interrupt, or any handler that keeps running after its subscription is cancelled,
+  and sends more updates sends them after the answer. `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
 - **`session_info_update`** (`AcpSchema.SessionInfoUpdate`): the agent tells the client the
   session's title and last activity time. Stable in ACP v1. Known limit: the schema lets a peer
   send `null` to clear a field; the record reads an explicit `null` like a missing field and never
@@ -71,7 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   common permission-request case (migration: use it, or add `null` for `_meta`). A test walks a copy of the v1.9.1 schema
   (`acp-core/src/test/resources/schema/v1/schema.json`) and fails on any object with `_meta`
   whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
-  presence markers typed `Object` (they keep `_meta` as a map entry) and `$/cancel_request`.
+  presence markers typed `Object` (they keep `_meta` as a map entry). `CancelRequestNotification`
+  carries `_meta` (with `$/cancel_request`, below).
 
 ### Changed
 
@@ -156,6 +195,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor. Migration: `new AgentCapabilities(loadSession, session, mcp, prompt, providers,
   meta)` becomes `new AgentCapabilities(loadSession, session, mcp, prompt, auth, providers, meta)`
   (`auth` may be `null`); the shorter constructors are unchanged.
+- **Behaviour change: a request whose caller gives up is cancelled at the peer.** Disposing a
+  request `Mono`, or its timeout firing (the client's default request timeout is 30 seconds, the
+  agent's 60), now sends `$/cancel_request`, so a peer that supports it stops the work and answers
+  `-32800`. A `session/prompt` that times out on the client is therefore cancelled at an agent that
+  supports `$/cancel_request` (the Java agent answers it at once and ends the turn), where before
+  the agent kept running the turn. Migration: raise `requestTimeout` for long prompts, or send
+  `session/cancel` for the graceful prompt cancel with stop reason `cancelled`.
+- **Fix: a resubscribed request is a new request.** Subscribing twice to one `sendRequest` `Mono`
+  (a `retry()`, say) reused the request id, so the first response completed both. Each
+  subscription now gets its own id.
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's

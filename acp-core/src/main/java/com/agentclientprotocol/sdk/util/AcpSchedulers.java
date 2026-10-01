@@ -68,6 +68,16 @@ public final class AcpSchedulers {
 	}
 
 	/**
+	 * The daemon threads timeouts are delivered on, for work a timeout triggers that must not
+	 * run on (and so delay) the shared timer, such as telling the peer a request was given
+	 * up on.
+	 * @return a scheduler that must not be disposed by callers
+	 */
+	public static Scheduler timeoutDelivery() {
+		return TimeoutHolder.DELIVERY;
+	}
+
+	/**
 	 * Emits once after {@code delay}, timed on the shared timer and delivered on the same
 	 * separate daemon threads as a timeout, so what runs on it cannot delay other sessions'
 	 * timeouts. Cancelling the subscription cancels the timer.
