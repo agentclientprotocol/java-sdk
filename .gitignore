@@ -1,7 +1,6 @@
 ### Maven/Gradle Builds ###
 target/
 .m2repo/
-!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 build/
@@ -58,6 +57,8 @@ derby.log
 
 ### Package Files ###
 *.jar
+# The Maven wrapper jar is committed so mvnw needs no download; this must follow *.jar to win.
+!.mvn/wrapper/maven-wrapper.jar
 *.war
 *.nar
 *.ear

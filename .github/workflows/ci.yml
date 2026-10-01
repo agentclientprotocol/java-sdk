@@ -27,6 +27,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build with Maven
         run: ./mvnw clean verify -B
@@ -55,6 +60,11 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Build with Maven (Error Prone and NullAway enforced)
         run: ./mvnw -B clean verify
@@ -75,6 +85,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       - name: Contention tests pinned to one CPU
         run: taskset -c 0 ./mvnw -B -pl acp-core -am test -Dtest='MultiPromptSyncSessionTest,AcpAgentSessionPromptLockTest' -Dsurefire.failIfNoSpecifiedTests=false
@@ -97,6 +112,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+      - name: Cache the Maven distribution the wrapper uses
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
       # Install first rather than -am: a -Dtest filter would also reach the JSON modules,
       # which scan acp-core's test-jar for their contract tests.
