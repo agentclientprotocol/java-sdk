@@ -288,9 +288,16 @@ class InteropAgent:
             return {"stopReason": "cancelled" if not selected else "end_turn"}
         agent_step("perm.selected", selected and outcome.get("optionId") == "allow", started,
                    f"outcome {compact(outcome)}")
+        # perm.selected and meta.permission share this directive, so the agent cannot tell which
+        # step it serves: it asserts meta.permission only when the response carries a _meta
+        # (absent, the client is not echoing it: perm.selected, or a client without _meta support,
+        # whose meta.permission client step then fails on its own).
         rmeta = resp.field_meta or {}
-        agent_step("meta.permission", rmeta.get(META_KEY) == META_VALUE, started,
-                   f"RequestPermissionResponse _meta {compact(rmeta) if rmeta else 'absent'}")
+        if rmeta:
+            agent_step("meta.permission", rmeta.get(META_KEY) == META_VALUE, started,
+                       f"RequestPermissionResponse _meta {compact(rmeta)}")
+        else:
+            log("[agent] RequestPermissionResponse carried no _meta")
         return {"stopReason": "end_turn"}
 
     async def _d_fs(self, s: Session, turn: Turn, rest: str, meta: dict):
