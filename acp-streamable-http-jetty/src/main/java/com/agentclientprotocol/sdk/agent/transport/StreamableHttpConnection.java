@@ -75,17 +75,24 @@ final class StreamableHttpConnection {
 
 	private final Consumer<StreamableHttpConnection> deregister;
 
+	/**
+	 * What a connection needs from the servlet that holds it.
+	 * @param deregister removes the connection from the servlet once it closes
+	 * @param exceptionHandler receives the connection's transport errors
+	 */
+	record Owner(Consumer<StreamableHttpConnection> deregister, Consumer<Throwable> exceptionHandler) {
+	}
+
 	StreamableHttpConnection(String id, AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory,
-			StreamableHttpRouting routing, StreamableHttpAcpAgentTransportOptions options,
-			Consumer<StreamableHttpConnection> deregister) {
+			StreamableHttpRouting routing, StreamableHttpAcpAgentTransportOptions options, Owner owner) {
 		this.id = id;
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
 		this.routing = routing;
-		this.deregister = deregister;
+		this.deregister = owner.deregister();
 		this.connectionStream = new SseOutboundStream(options.mailboxCapacity(), options.maxPendingSseEvents());
 		this.sessions = new StreamableHttpSessions(id, options);
-		this.connection = new RemoteAcpConnection(id, jsonMapper, this::routeAgentMessage);
+		this.connection = new RemoteAcpConnection(id, jsonMapper, this::routeAgentMessage, owner.exceptionHandler());
 	}
 
 	String id() {

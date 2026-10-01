@@ -273,14 +273,29 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 				}
 				catch (Exception e) {
 					if (!isClosing.get()) {
-						logger.error("Error processing inbound message", e);
+						logger.error("Skipped an inbound message that is not a JSON-RPC message", e);
 						exceptionHandler.accept(e);
+						answerUnreadable(message);
 					}
 				}
 			}
 
 			webSocket.request(1);
 			return CompletableFuture.completedFuture(null);
+		}
+
+		/**
+		 * Answers a message that could not be read with the JSON-RPC error for it (its id
+		 * is unknown, so null): the agent may send requests, so this side is the server
+		 * for them.
+		 */
+		private void answerUnreadable(String message) {
+			try {
+				OutboundSinks.emit(outboundSink, AcpSchema.unreadableMessageResponse(jsonMapper, message));
+			}
+			catch (Sinks.EmissionException emission) {
+				logger.error("Failed to answer an unreadable inbound message", emission);
+			}
 		}
 
 		@Override

@@ -108,6 +108,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Both stdio transports stopped reading on the first line that was not a JSON-RPC message.**
+  `StdioAcpAgentTransport` and `StdioAcpClientTransport` ended their inbound stream on one malformed
+  line, so the peer's later messages were never read; the client did so without telling anyone. Such
+  a line is now logged, reported to the transport's exception handler, answered, and skipped, and
+  reading goes on; a blank line is skipped silently. The answer is the one JSON-RPC 2.0 prescribes
+  when the receiver cannot read a message, so cannot know whether it was a request: an error
+  response with `"id": null` and code `-32700` (`Parse error`) for text that is not JSON, or
+  `-32600` (`Invalid Request`) for JSON that is no JSON-RPC message. Both stdio sides answer, since
+  each serves the requests of the other; the TypeScript SDK's stdio and WebSocket streams do the
+  same. `StdioAcpClientTransport` now implements `setExceptionHandler` (it inherited the no-op
+  default), and also reports read and write failures to it.
+- **The WebSocket transports now answer a malformed message the same way.**
+  `WebSocketAcpClientTransport` already skipped and reported one, and now also answers it.
+  `StreamableHttpAcpAgentTransport`'s WebSocket upgrade closed the whole connection (code 1002) on
+  one; it now answers, reports and skips it, and the connection stays open. A Streamable HTTP POST
+  with a malformed body is still refused with 400, the HTTP answer, and a malformed SSE event is
+  skipped unanswered (an SSE stream has no reply channel) but is now reported to the client
+  transport's exception handler. `AcpSchema.unreadableMessageResponse(jsonMapper, text)` builds the
+  answer, and `JSONRPCResponse` now writes a null id as `"id": null` (it omitted it), as JSON-RPC 2.0
+  requires of a response.
+- **The transport errors of a Streamable HTTP or WebSocket connection were only logged.** The agent
+  runtime installs no exception handler on the transport `RemoteAcpConnection` gives it, and the
+  listener offered no way to install one, so a host never saw a connection's transport errors.
+  `StreamableHttpAcpAgentTransport.setExceptionHandler` and `StreamableHttpAcpServlet.setExceptionHandler`
+  now receive them for every connection, HTTP/SSE and WebSocket alike, as
+  `StdioAcpAgentTransport.setExceptionHandler` does for stdio; the default still logs them, and an
+  agent factory may still install its own on the transport it is given. `RemoteAcpConnection` takes
+  the handler as a new constructor argument.
 - **A request that timed out or was cancelled stayed registered until the session closed.** Both
   session sides kept the entry for every request still awaiting a response, and removed it only when
   the response arrived or the session ended. A request that hit the request timeout, or whose

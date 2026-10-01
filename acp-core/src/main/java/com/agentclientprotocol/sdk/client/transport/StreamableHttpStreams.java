@@ -68,9 +68,10 @@ final class StreamableHttpStreams {
 	 * @param inbound delivers each message read from a stream
 	 * @param closing whether the transport is closing
 	 * @param onFailure ends the transport after a stream failure it cannot recover from
+	 * @param onError reports an error the streams recover from, such as a skipped event
 	 */
 	record Owner(BiFunction<RouteScope, JSONRPCMessage, Mono<Void>> inbound, BooleanSupplier closing,
-			Consumer<Throwable> onFailure) {
+			Consumer<Throwable> onFailure, Consumer<Throwable> onError) {
 	}
 
 	StreamableHttpStreams(StreamableHttpRequests requests, StreamableHttpRoutes routes, AcpJsonMapper jsonMapper,
@@ -88,6 +89,11 @@ final class StreamableHttpStreams {
 			@Override
 			public Mono<Void> onMessage(RouteScope scope, JSONRPCMessage message) {
 				return owner.inbound().apply(scope, message);
+			}
+
+			@Override
+			public void onUnreadable(Throwable error) {
+				owner.onError().accept(error);
 			}
 
 			@Override

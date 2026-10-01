@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -44,6 +45,29 @@ public final class AcpSchema {
 	public static final String JSONRPC_VERSION = "2.0";
 
 	public static final int LATEST_PROTOCOL_VERSION = 1;
+
+	/**
+	 * The answer JSON-RPC 2.0 prescribes for a message that could not be read: -32700
+	 * {@code Parse error} when the text is not JSON, -32600 {@code Invalid Request} when
+	 * it is JSON but no JSON-RPC message. Its id is null, since the id of a message that
+	 * could not be read is unknown; it is written as {@code "id": null}.
+	 * @param jsonMapper the JSON mapper that failed to read the message
+	 * @param jsonText the text that {@link #deserializeJsonRpcMessage} refused
+	 * @return the error response to send to the peer
+	 */
+	public static JSONRPCResponse unreadableMessageResponse(AcpJsonMapper jsonMapper, String jsonText) {
+		boolean isJson;
+		try {
+			jsonMapper.readValue(jsonText, Object.class);
+			isJson = true;
+		}
+		catch (IOException e) {
+			isJson = false;
+		}
+		JSONRPCError error = isJson ? new JSONRPCError(AcpErrorCodes.INVALID_REQUEST, "Invalid Request", null)
+				: new JSONRPCError(AcpErrorCodes.PARSE_ERROR, "Parse error", null);
+		return new JSONRPCResponse(JSONRPC_VERSION, null, null, error);
+	}
 
 	/**
 	 * Deserializes a JSON-RPC message from a JSON string into the appropriate message
@@ -194,12 +218,14 @@ public final class AcpSchema {
 	 * A JSON-RPC response to a request.
 	 *
 	 * @param jsonrpc The JSON-RPC version (must be "2.0")
-	 * @param id The request ID this response corresponds to
+	 * @param id The request ID this response corresponds to; null, and written as
+	 * {@code "id": null} as JSON-RPC 2.0 requires, when the request could not be read
 	 * @param result The result of the method call (null if error occurred)
 	 * @param error The error information (null if successful)
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record JSONRPCResponse(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("id") @Nullable Object id,
+	public record JSONRPCResponse(@JsonProperty("jsonrpc") String jsonrpc,
+			@JsonProperty("id") @JsonInclude(JsonInclude.Include.ALWAYS) @Nullable Object id,
 			@JsonProperty("result") @Nullable Object result,
 			@JsonProperty("error") @Nullable JSONRPCError error) implements JSONRPCMessage {
 	}

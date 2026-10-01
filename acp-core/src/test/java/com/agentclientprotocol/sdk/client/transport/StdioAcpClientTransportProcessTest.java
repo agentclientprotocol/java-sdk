@@ -15,6 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCNotification;
@@ -78,6 +79,46 @@ class StdioAcpClientTransportProcessTest {
 		assertThat(stderr).contains(EchoAgent.READY);
 	}
 
+	/**
+	 * A malformed line from the agent is reported to the exception handler, answered with
+	 * -32700 and a null id (which the echo agent sends back), and skipped: the message after
+	 * it still arrives. Before, the first such line stopped the reader for good, silently.
+	 */
+	@Test
+	void aMalformedLineIsReportedAnsweredAndSkipped() throws InterruptedException {
+		List<JSONRPCMessage> received = new CopyOnWriteArrayList<>();
+		CountDownLatch receivedThree = new CountDownLatch(3);
+		List<Throwable> reported = new CopyOnWriteArrayList<>();
+		transport = new StdioAcpClientTransport(echoAgent());
+		transport.setStdErrorHandler(line -> {
+		});
+		transport.setExceptionHandler(reported::add);
+		transport.connect(message -> message.doOnNext(m -> {
+			received.add(m);
+			receivedThree.countDown();
+		}).then(Mono.empty())).block(TIMEOUT);
+
+		try (QuietLoggers quiet = QuietLoggers.of(StdioAcpClientTransport.class)) {
+			transport.sendMessage(new JSONRPCNotification("note/one", null)).block(TIMEOUT);
+			transport.sendMessage(new JSONRPCNotification(EchoAgent.MALFORMED, null)).block(TIMEOUT);
+			transport.sendMessage(new JSONRPCNotification("note/two", null)).block(TIMEOUT);
+			assertThat(receivedThree.await(30, TimeUnit.SECONDS)).as("received: %s", received).isTrue();
+		}
+
+		assertThat(received).filteredOn(JSONRPCNotification.class::isInstance)
+			.extracting(m -> ((JSONRPCNotification) m).method())
+			.containsExactly("note/one", "note/two");
+		assertThat(received).filteredOn(AcpSchema.JSONRPCResponse.class::isInstance)
+			.singleElement()
+			.satisfies(m -> {
+				AcpSchema.JSONRPCResponse answer = (AcpSchema.JSONRPCResponse) m;
+				assertThat(answer.id()).isNull();
+				assertThat(answer.error()).isNotNull();
+				assertThat(answer.error().code()).isEqualTo(-32700);
+			});
+		assertThat(reported).hasSize(1);
+	}
+
 	@Test
 	void awaitForExitReturnsWhenTheAgentExits() {
 		transport = new StdioAcpClientTransport(echoAgent());
@@ -106,6 +147,9 @@ class StdioAcpClientTransportProcessTest {
 
 		static final String EXIT = "test/exit";
 
+		/** Answered with a line that is not JSON instead of its echo. */
+		static final String MALFORMED = "test/malformed";
+
 		private EchoAgent() {
 		}
 
@@ -118,7 +162,8 @@ class StdioAcpClientTransportProcessTest {
 				if (line.contains("\"" + EXIT + "\"")) {
 					return;
 				}
-				System.out.write((line + "\n").getBytes(StandardCharsets.UTF_8));
+				String echo = line.contains("\"" + MALFORMED + "\"") ? "{not json" : line;
+				System.out.write((echo + "\n").getBytes(StandardCharsets.UTF_8));
 				System.out.flush();
 			}
 		}

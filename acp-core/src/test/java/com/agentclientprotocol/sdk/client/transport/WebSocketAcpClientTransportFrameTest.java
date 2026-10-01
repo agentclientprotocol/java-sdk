@@ -96,7 +96,7 @@ class WebSocketAcpClientTransportFrameTest {
 	}
 
 	@Test
-	void aMalformedFrameIsReportedAndTheNextFrameStillArrives() {
+	void aMalformedFrameIsReportedAnsweredAndTheNextFrameStillArrives() {
 		connect();
 		WebSocket.Listener listener = httpClient.listener();
 
@@ -106,8 +106,10 @@ class WebSocketAcpClientTransportFrameTest {
 		listener.onText(webSocket, REQUEST, true);
 
 		assertThat(reported.get()).isNotNull();
-		awaitSentFrames(1);
+		awaitSentFrames(2);
 		assertThat(received).hasSize(1);
+		assertThat(webSocket.sent).anySatisfy(frame -> assertThat(frame).contains("\"id\":null").contains("-32700"));
+		assertThat(webSocket.sent).anySatisfy(frame -> assertThat(frame).contains("\"id\":7"));
 	}
 
 	@Test

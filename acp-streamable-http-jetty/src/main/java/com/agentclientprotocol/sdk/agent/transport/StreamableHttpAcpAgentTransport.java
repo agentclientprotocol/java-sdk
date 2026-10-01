@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
@@ -213,6 +214,17 @@ public class StreamableHttpAcpAgentTransport {
 	}
 
 	/**
+	 * Sets the handler for the transport errors of every remote connection this listener
+	 * holds, over HTTP/SSE and WebSocket alike, including those opened before the call. The
+	 * default logs them. An agent factory may still install its own handler on the
+	 * transport it is given.
+	 * @param handler receives the connections' transport errors
+	 */
+	public void setExceptionHandler(Consumer<Throwable> handler) {
+		servlet.setExceptionHandler(handler);
+	}
+
+	/**
 	 * Returns the bound port.
 	 * @return listener port
 	 */
@@ -270,7 +282,7 @@ public class StreamableHttpAcpAgentTransport {
 	private StreamableHttpWebSocketConnection createWebSocketConnection() {
 		String connectionId = UUID.randomUUID().toString();
 		return new StreamableHttpWebSocketConnection(connectionId, jsonMapper, agentFactory, options,
-				connection -> webSocketConnections.remove(connection.id(), connection));
+				connection -> webSocketConnections.remove(connection.id(), connection), servlet::reportException);
 	}
 
 }

@@ -89,6 +89,8 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 */
 	private final AtomicBoolean isConnected = new AtomicBoolean(false);
 
+	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
+
 	// visible for tests
 	private Consumer<String> stdErrorHandler = error -> logger.info("STDERR Message received: {}", error);
 
@@ -212,6 +214,12 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		this.stdErrorHandler = errorHandler;
 	}
 
+	@Override
+	public void setExceptionHandler(Consumer<Throwable> handler) {
+		Assert.notNull(handler, "The handler can not be null");
+		this.exceptionHandler = handler;
+	}
+
 	/**
 	 * Waits for the agent process to exit.
 	 * @throws IllegalStateException if {@link #connect} has not started the process
@@ -275,6 +283,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			catch (IOException e) {
 				if (!isClosing) {
 					logger.error("Error reading from " + streamName, e);
+					this.exceptionHandler.accept(e);
 				}
 			}
 			finally {
@@ -313,23 +322,51 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 				this.inboundSink::tryEmitComplete);
 	}
 
+	/**
+	 * Emits the message a line of the agent's output carries. A line that is not a JSON-RPC
+	 * message is reported, answered, and skipped; a blank line is skipped.
+	 * @return whether to go on reading
+	 */
 	private boolean emitInbound(String line) {
+		if (line.isBlank()) {
+			return true;
+		}
+		logger.trace("RECV: {}", line);
+		JSONRPCMessage message;
 		try {
-			logger.trace("RECV: {}", line);
-			JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(this.jsonMapper, line);
-			if (this.inboundSink.tryEmitNext(message).isSuccess()) {
-				return true;
-			}
-			if (!isClosing) {
-				logger.error("Failed to enqueue inbound message: {}", message);
-			}
+			message = AcpSchema.deserializeJsonRpcMessage(this.jsonMapper, line);
 		}
 		catch (Exception e) {
-			if (!isClosing) {
-				logger.error("Error processing inbound message for line: {}", line, e);
-			}
+			rejectUnreadable(line, e);
+			return true;
+		}
+		if (this.inboundSink.tryEmitNext(message).isSuccess()) {
+			return true;
+		}
+		if (!isClosing) {
+			logger.error("Failed to enqueue inbound message: {}", message);
 		}
 		return false;
+	}
+
+	/**
+	 * Reports a line that is not a JSON-RPC message to the exception handler and answers it
+	 * with the JSON-RPC error for an unreadable message (its id is unknown, so null): the
+	 * agent may send requests, so this side is the server for them.
+	 */
+	private void rejectUnreadable(String line, Exception e) {
+		if (!isClosing) {
+			logger.error("Skipped an inbound line that is not a JSON-RPC message: {}", line, e);
+		}
+		this.exceptionHandler.accept(e);
+		try {
+			OutboundSinks.emit(this.outboundSink, AcpSchema.unreadableMessageResponse(this.jsonMapper, line));
+		}
+		catch (Sinks.EmissionException emission) {
+			if (!isClosing) {
+				logger.error("Failed to answer an unreadable inbound line", emission);
+			}
+		}
 	}
 
 	/**
@@ -380,6 +417,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		}).doOnError(e -> {
 			if (!isClosing) {
 				logger.error("Error in outbound processing", e);
+				this.exceptionHandler.accept(e);
 				isClosing = true;
 				outboundSink.tryEmitComplete();
 			}

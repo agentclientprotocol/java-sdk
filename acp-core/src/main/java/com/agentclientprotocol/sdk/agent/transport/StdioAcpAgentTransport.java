@@ -177,7 +177,10 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		});
 	}
 
-	/** Reads one message per line until stdin ends, the transport closes, or a message fails. */
+	/**
+	 * Reads one message per line until stdin ends, the transport closes, or the inbound
+	 * sink refuses a message. A line that is not a JSON-RPC message does not stop it.
+	 */
 	private void readMessages(BufferedReader reader) {
 		boolean reading = true;
 		while (reading && !isClosing.get()) {
@@ -195,26 +198,48 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 			line = reader.readLine();
 		}
 		catch (IOException e) {
-			logIfNotClosing("Error reading from stdin", e);
-			exceptionHandler.accept(e);
+			// Closing interrupts the read: that is the expected end, not an error to report.
+			if (!isClosing.get()) {
+				logger.error("Error reading from stdin", e);
+				exceptionHandler.accept(e);
+			}
 			return false;
 		}
 		if (line == null || isClosing.get()) {
 			return false;
 		}
-		logger.debug("Received JSON message ({} characters)", line.length());
-		try {
-			JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, line);
-			if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
-				logIfNotClosing("Failed to enqueue inbound message");
-				return false;
-			}
+		if (line.isBlank()) {
 			return true;
 		}
+		logger.debug("Received JSON message ({} characters)", line.length());
+		JSONRPCMessage message;
+		try {
+			message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, line);
+		}
 		catch (Exception e) {
-			logIfNotClosing("Error processing inbound message", e);
-			exceptionHandler.accept(e);
+			rejectUnreadable(line, e);
+			return true;
+		}
+		if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
+			logIfNotClosing("Failed to enqueue inbound message");
 			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Reports a line that is not a JSON-RPC message, answers it with the JSON-RPC error for
+	 * an unreadable message (its id is unknown, so null), and lets reading go on, as the
+	 * WebSocket and Streamable HTTP transports do.
+	 */
+	private void rejectUnreadable(String line, Exception e) {
+		logIfNotClosing("Skipped an inbound line that is not a JSON-RPC message", e);
+		exceptionHandler.accept(e);
+		try {
+			OutboundSinks.emit(outboundSink, AcpSchema.unreadableMessageResponse(jsonMapper, line));
+		}
+		catch (Sinks.EmissionException emission) {
+			logIfNotClosing("Failed to answer an unreadable inbound line", emission);
 		}
 	}
 

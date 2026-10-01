@@ -140,7 +140,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		this.requests = new StreamableHttpRequests(endpointUri, bundle, options);
 		this.routes = new StreamableHttpRoutes(jsonMapper);
 		this.streams = new StreamableHttpStreams(requests, routes, jsonMapper, options.maxSseStreams(),
-				new StreamableHttpStreams.Owner(this::processInbound, closing::get, this::terminateAfterSseFailure));
+				new StreamableHttpStreams.Owner(this::processInbound, closing::get, this::terminateAfterSseFailure,
+						error -> this.exceptionHandler.accept(error)));
 		this.inbound = new StreamableHttpInbound(routes, streams, jsonMapper);
 	}
 
