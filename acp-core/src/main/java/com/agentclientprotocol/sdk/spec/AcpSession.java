@@ -45,7 +45,10 @@ public interface AcpSession {
 	 * @param method the name of the method to be called on the peer
 	 * @param requestParams the parameters to be sent with the request
 	 * @param typeRef the TypeReference describing the expected response type
-	 * @return a Mono that will emit the response when received
+	 * @return a Mono that will emit the response when received. A response without a
+	 * result ({@code "result": null}) reads as {@code {}} for an
+	 * {@link AcpSchema.DefaultOnNull} type, completes the Mono empty for an extension
+	 * ({@code _}-prefixed) method, and fails the Mono otherwise.
 	 */
 	<T> Mono<T> sendRequest(String method, Object requestParams, TypeRef<T> typeRef);
 

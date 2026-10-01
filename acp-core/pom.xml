@@ -129,6 +129,7 @@
                                 <include>com/agentclientprotocol/sdk/spec/AcpJsonRpcMessageTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/AcpSchemaDiscriminatorTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/AcpSchemaSerializationTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/DefaultOnNullTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/McpServerConfigurationTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/SessionManagementTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/SessionUpdateDeserializationTest*.class</include>

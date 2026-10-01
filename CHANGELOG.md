@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A response with `"result": null` failed the request** ("carried no result") even where the
+  result is an empty object, a regression in this release: the Python SDK answers
+  `fs/write_text_file` with `"result": null` when its handler returns `None`, so a Java agent could
+  not write files through a Python client. As in the Rust SDK (`default_on_null`, schema 1.9.1), a
+  response type whose every field is optional now reads a null or missing result as `{}`; these types
+  implement the new marker `AcpSchema.DefaultOnNull` (`AuthenticateResponse`, `LogoutResponse`,
+  `LoadSessionResponse`, `ResumeSessionResponse`, `CloseSessionResponse`, `DeleteSessionResponse`,
+  `SetSessionModeResponse`, `SetSessionModelResponse`, `WriteTextFileResponse`,
+  `ReleaseTerminalResponse`, `KillTerminalCommandResponse`, `WaitForTerminalExitResponse`,
+  `SetProviderResponse`, `DisableProviderResponse`). A response type with a required field still
+  fails clearly. A null result of an extension (`_`-prefixed) method completes the request's `Mono`
+  empty, and a message with an `id` but no `method`, `result` or `error` is read as a response
+  without a result instead of being rejected.
+
 Found by the NullAway adoption; each has a test.
 
 - A request or notification that omits `params` (legal JSON-RPC) reached its handler as `null`; it now

@@ -17,7 +17,7 @@ import reactor.core.publisher.Mono;
 /**
  * Interop agent served by the Java Streamable HTTP listener. Each prompt streams two updates
  * ("echo: " and the prompt text); a prompt containing "permission" first asks the client for
- * permission. Prints {@code READY <port>} on stdout once listening, and one {@code [http]} line per
+ * permission, and one containing "write" first writes a file through the client. Prints {@code READY <port>} on stdout once listening, and one {@code [http]} line per
  * request (method, path, protocol, status, ACP headers) so scenarios can assert on HTTP versions.
  */
 public class JavaAgentMain {
@@ -47,11 +47,24 @@ public class JavaAgentMain {
 			.promptHandler((request, context) -> {
 				String text = request.text();
 				System.err.println("[agent] session/prompt " + text);
-				Mono<Void> work = text.contains("permission")
-						? context.askPermission("interop permission")
-							.doOnNext(b -> System.err.println("[agent] permission granted=" + b))
-							.flatMap(b -> context.sendMessage("permission granted=" + b))
-						: Mono.empty();
+				Mono<Void> work;
+				if (text.contains("permission")) {
+					work = context.askPermission("interop permission")
+						.doOnNext(b -> System.err.println("[agent] permission granted=" + b))
+						.flatMap(b -> context.sendMessage("permission granted=" + b));
+				}
+				else if (text.contains("write")) {
+					// A client may answer fs/write_text_file with "result": null (the Python SDK does).
+					work = context
+						.writeTextFile(new AcpSchema.WriteTextFileRequest(request.sessionId(), "/tmp/acp-interop.txt",
+								"written by the Java agent"))
+						.doOnNext(r -> System.err.println("[agent] write_text_file ok " + r))
+						.doOnError(e -> System.err.println("[agent] write_text_file failed " + e))
+						.then();
+				}
+				else {
+					work = Mono.empty();
+				}
 				return work.then(context.sendMessage("echo: "))
 					.then(context.sendMessage(text))
 					.thenReturn(AcpSchema.PromptResponse.endTurn());

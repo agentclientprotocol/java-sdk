@@ -12,7 +12,7 @@ import time
 from acp import connect_to_agent
 from acp.http import create_http_stream
 from acp.interfaces import Client
-from acp.schema import TextContentBlock
+from acp.schema import ClientCapabilities, FileSystemCapabilities, TextContentBlock
 
 UPDATES = 0
 TOTAL = 0
@@ -26,6 +26,11 @@ class C(Client):
         oid = o["optionId"] if isinstance(o, dict) else o.option_id
         print("  permission request", oid, flush=True)
         return {"outcome": {"outcome": "selected", "optionId": oid}}
+
+    async def write_text_file(self, session_id, path, content, **kw):
+        # Returning None is how the SDK's own examples answer: the response is "result": null.
+        print("  write_text_file", path, flush=True)
+        return None
 
     async def session_update(self, session_id, update, **kw):
         global UPDATES, TOTAL
@@ -55,10 +60,12 @@ async def step(name, coro):
 async def main():
     tr = create_http_stream(sys.argv[1])
     conn = connect_to_agent(C(), tr)
-    await step("initialize", conn.initialize(protocol_version=1))
+    await step("initialize", conn.initialize(
+        protocol_version=1, client_capabilities=ClientCapabilities(fs=FileSystemCapabilities(write_text_file=True))))
     s = await step("session/new", conn.new_session(cwd="/tmp", mcp_servers=[]))
     sid = s.session_id if s else "missing"
-    for n, t in (("prompt1", "hello one"), ("prompt2", "hello two"), ("prompt3-permission", "please ask permission")):
+    for n, t in (("prompt1", "hello one"), ("prompt2", "hello two"), ("prompt3-permission", "please ask permission"),
+                 ("prompt4-write", "please write a file")):
         await step(n, conn.prompt(session_id=sid, prompt=[TextContentBlock(type="text", text=t)]))
     await step("session/load", conn.load_session(cwd="/tmp", session_id=sid, mcp_servers=[]))
     await step("prompt-after-load", conn.prompt(session_id=sid, prompt=[TextContentBlock(type="text", text="after load")]))

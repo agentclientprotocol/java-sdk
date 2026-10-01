@@ -40,12 +40,15 @@
         "STEP prompt1 PASS",
         "STEP prompt2 PASS",
         "STEP prompt3-permission PASS",
+        "write_text_file /tmp/acp-interop.txt",
+        "STEP prompt4-write PASS",
         "STEP session/load PASS",
         "STEP prompt-after-load PASS",
         "STEP close PASS"
       ],
       "server": [
         "[agent] permission granted=true",
+        "[agent] write_text_file ok",
         "[agent] session/load java-sess-1"
       ]
     },
@@ -61,9 +64,9 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 8",
+      "client RESULT pass == 9",
       "client RESULT fail == 0",
-      "client RESULT updates_total == 9"
+      "client RESULT updates_total == 11"
     ]
   }
 }

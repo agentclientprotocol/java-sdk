@@ -13,10 +13,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -387,6 +389,84 @@ class AcpAgentSessionTest {
 		finally {
 			transportPair.closeGracefully().block(TIMEOUT);
 		}
+	}
+
+	@Test
+	void nullResultForAnEmptyResponseTypeYieldsAnEmptyResponse() throws Exception {
+		// The Python SDK client answers fs/write_text_file with "result": null when its handler
+		// returns None. Like the Rust SDK, a response type that defaults on null reads it as {}.
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			var session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
+			allowAgentTransportSubscription();
+			answerEveryRequestWithNullResult(transportPair);
+
+			AcpSchema.WriteTextFileResponse response = session
+				.sendRequest(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, new AcpSchema.WriteTextFileRequest("s", "/f", "x"),
+						new TypeRef<AcpSchema.WriteTextFileResponse>() {
+						})
+				.block(TIMEOUT);
+
+			assertThat(response).isEqualTo(new AcpSchema.WriteTextFileResponse());
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	@Test
+	void nullResultForANonEmptyResponseTypeFailsClearly() throws Exception {
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			var session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
+			allowAgentTransportSubscription();
+			answerEveryRequestWithNullResult(transportPair);
+
+			Mono<AcpSchema.ReadTextFileResponse> response = session.sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE,
+					new AcpSchema.ReadTextFileRequest("s", "/f", null, null),
+					new TypeRef<AcpSchema.ReadTextFileResponse>() {
+					});
+
+			StepVerifier.create(response)
+				.expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result"))
+				.verify(TIMEOUT);
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	@Test
+	void nullResultForAnExtensionMethodCompletesEmpty() throws Exception {
+		// An extension method's result is free-form, and null is a legal value of it.
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			var session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
+			allowAgentTransportSubscription();
+			answerEveryRequestWithNullResult(transportPair);
+
+			Mono<Object> response = session.sendRequest("_vendor/ping", Map.of(), new TypeRef<Object>() {
+			});
+
+			StepVerifier.create(response).verifyComplete();
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	private static void answerEveryRequestWithNullResult(InMemoryTransportPair transportPair)
+			throws InterruptedException {
+		var clientTransport = transportPair.clientTransport();
+		clientTransport.connect(mono -> mono.flatMap(msg -> {
+			if (msg instanceof AcpSchema.JSONRPCRequest request) {
+				return clientTransport
+					.sendMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null))
+					.then(Mono.<AcpSchema.JSONRPCMessage>empty());
+			}
+			return Mono.<AcpSchema.JSONRPCMessage>empty();
+		})).subscribe();
+		allowClientTransportSubscription();
 	}
 
 	private static AcpSchema.JSONRPCRequest promptRequest(String id, String sessionId, String text) {

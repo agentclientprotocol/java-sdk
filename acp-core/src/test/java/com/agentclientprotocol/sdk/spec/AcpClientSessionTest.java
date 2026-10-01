@@ -483,4 +483,80 @@ class AcpClientSessionTest {
 		session.close();
 	}
 
+
+	@Test
+	void nullResultForAnEmptyResponseTypeYieldsAnEmptyResponse() {
+		// JSON-RPC allows "result": null, and the Python SDK sends it when a handler returns None.
+		// Like the Rust SDK, a response type that defaults on null reads it as {}.
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<AcpSchema.SetSessionModeResponse> responseMono = session.sendRequest(AcpSchema.METHOD_SESSION_SET_MODE,
+				new AcpSchema.SetSessionModeRequest("s", "m"), new TypeRef<AcpSchema.SetSessionModeResponse>() {
+				});
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
+		}).expectNext(new AcpSchema.SetSessionModeResponse()).verifyComplete();
+
+		session.close();
+	}
+
+	@Test
+	void nullResultForAMetaOnlyResponseTypeYieldsAResponseWithoutMeta() {
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<AcpSchema.LogoutResponse> responseMono = session.sendRequest(AcpSchema.METHOD_LOGOUT,
+				new AcpSchema.LogoutRequest(), new TypeRef<AcpSchema.LogoutResponse>() {
+				});
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
+		}).expectNext(new AcpSchema.LogoutResponse()).verifyComplete();
+
+		session.close();
+	}
+
+	@Test
+	void nullResultForANonEmptyResponseTypeStillFailsClearly() {
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<AcpSchema.NewSessionResponse> responseMono = session.sendRequest(AcpSchema.METHOD_SESSION_NEW,
+				new AcpSchema.NewSessionRequest("/", List.of()), new TypeRef<AcpSchema.NewSessionResponse>() {
+				});
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
+		}).expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result")).verify(TIMEOUT);
+
+		session.close();
+	}
+
+	@Test
+	void nullResultForAnExtensionMethodCompletesEmpty() {
+		// An extension method's result is free-form, and null is a legal value of it.
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<Map<String, Object>> responseMono = session.sendRequest("_vendor/ping", Map.of(),
+				new TypeRef<Map<String, Object>>() {
+				});
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
+		}).verifyComplete();
+
+		session.close();
+	}
+
 }

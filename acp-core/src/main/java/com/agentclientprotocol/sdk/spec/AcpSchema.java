@@ -73,7 +73,8 @@ public final class AcpSchema {
 		else if (map.containsKey("method") && !map.containsKey("id")) {
 			return jsonMapper.convertValue(map, JSONRPCNotification.class);
 		}
-		else if (map.containsKey("result") || map.containsKey("error")) {
+		else if (map.containsKey("result") || map.containsKey("error") || map.containsKey("id")) {
+			// A message with an id and no method answers a request, even without a result.
 			return jsonMapper.convertValue(map, JSONRPCResponse.class);
 		}
 
@@ -228,6 +229,23 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * A response payload whose fields are all optional, so that a peer may answer with
+	 * {@code "result": null} (legal JSON-RPC, and what the Python SDK sends when a handler
+	 * returns {@code None}) or omit the result. Either reads as if the peer had sent
+	 * {@code {}}. A response type that does not implement this interface still fails a
+	 * request answered with no result.
+	 *
+	 * <p>
+	 * This is the rule of the Rust SDK's {@code default_on_null} payloads
+	 * (agent-client-protocol-schema 1.9.1): opt-in per type, and declared exactly by the
+	 * response types whose every component is optional.
+	 * </p>
+	 */
+	public interface DefaultOnNull {
+
+	}
+
+	/**
 	 * Base type for all JSON-RPC messages.
 	 */
 	public sealed interface JSONRPCMessage permits JSONRPCRequest, JSONRPCNotification, JSONRPCResponse {
@@ -297,7 +315,7 @@ public final class AcpSchema {
 	 * Authenticate response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AuthenticateResponse() {
+	public record AuthenticateResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -315,7 +333,7 @@ public final class AcpSchema {
 	 * Logout response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record LogoutResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+	public record LogoutResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public LogoutResponse() {
 			this(null);
 		}
@@ -376,7 +394,7 @@ public final class AcpSchema {
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record LoadSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("models") @Nullable SessionModelState models,
-			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public LoadSessionResponse(@Nullable SessionModeState modes, @Nullable SessionModelState models) {
 			this(modes, models, null);
 		}
@@ -459,7 +477,7 @@ public final class AcpSchema {
 	 * Set session mode response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetSessionModeResponse() {
+	public record SetSessionModeResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -484,7 +502,7 @@ public final class AcpSchema {
 	@Deprecated(forRemoval = true)
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetSessionModelResponse() {
+	public record SetSessionModelResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -536,7 +554,7 @@ public final class AcpSchema {
 	 * Close session response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record CloseSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+	public record CloseSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public CloseSessionResponse() {
 			this(null);
 		}
@@ -560,7 +578,7 @@ public final class AcpSchema {
 	 * Delete session response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record DeleteSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+	public record DeleteSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public DeleteSessionResponse() {
 			this(null);
 		}
@@ -591,7 +609,7 @@ public final class AcpSchema {
 	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record ResumeSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("models") @Nullable SessionModelState models,
-			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public ResumeSessionResponse(@Nullable SessionModeState modes, @Nullable SessionModelState models) {
 			this(modes, models, null);
 		}
@@ -727,7 +745,7 @@ public final class AcpSchema {
 	 * Write text file response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record WriteTextFileResponse() {
+	public record WriteTextFileResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -775,7 +793,7 @@ public final class AcpSchema {
 	 * Release terminal response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ReleaseTerminalResponse() {
+	public record ReleaseTerminalResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -791,7 +809,7 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitResponse(@JsonProperty("exitCode") @Nullable Integer exitCode,
-			@JsonProperty("signal") @Nullable String signal) {
+			@JsonProperty("signal") @Nullable String signal) implements DefaultOnNull {
 	}
 
 	/**
@@ -806,7 +824,7 @@ public final class AcpSchema {
 	 * Kill terminal response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record KillTerminalCommandResponse() {
+	public record KillTerminalCommandResponse() implements DefaultOnNull {
 	}
 
 	// ---------------------------
@@ -1379,7 +1397,7 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+	public record SetProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public SetProviderResponse() {
 			this((Map<String, Object>) null);
 		}
@@ -1402,7 +1420,7 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record DisableProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+	public record DisableProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public DisableProviderResponse() {
 			this((Map<String, Object>) null);
 		}

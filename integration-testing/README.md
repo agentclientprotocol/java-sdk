@@ -80,6 +80,9 @@ The interop steps are the same in every cell: `initialize`, `session/new`, two p
 stream two updates, a prompt that triggers a permission round trip, `session/load` on the same
 connection, a prompt after the load, and the DELETE on close (checked in the server's request log).
 The Java client then reconnects on a new connection, loads the same session and prompts again.
+The Python client also advertises `fs.writeTextFile` and sends a prompt on which the Java agent
+writes a file through it; its handler returns `None`, which the Python SDK sends as
+`"result": null`.
 
 **Expected failure.** Java client -> Python server: reconnect-then-load gets a 404. The RFD
 contradicts itself: its reconnect diagram opens the session stream before `session/load`, and it

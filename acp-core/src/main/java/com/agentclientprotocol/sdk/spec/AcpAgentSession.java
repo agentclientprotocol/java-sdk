@@ -418,14 +418,8 @@ public class AcpAgentSession implements AcpSession {
 					deliveredResponseSink.complete();
 				}
 				else {
-					Object result = jsonRpcResponse.result();
-					if (result == null) {
-						deliveredResponseSink.error(new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
-								"The response to " + method + " carried no result"));
-					}
-					else {
-						deliveredResponseSink.next(this.transport.unmarshalFrom(result, typeRef));
-					}
+					ResponseResults.deliver(method, jsonRpcResponse.result(), typeRef, this.transport,
+							deliveredResponseSink);
 				}
 			}
 		});
