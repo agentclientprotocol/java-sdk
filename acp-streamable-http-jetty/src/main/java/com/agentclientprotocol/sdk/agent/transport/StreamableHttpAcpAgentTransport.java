@@ -23,6 +23,8 @@ import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.util.Callback;
+import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -148,46 +150,9 @@ public class StreamableHttpAcpAgentTransport {
 				throw new IllegalStateException("Already started");
 			}
 			Server jettyServer = new Server();
-			HttpConfiguration httpConfig = new HttpConfiguration();
-			HTTP2CServerConnectionFactory h2c = new HTTP2CServerConnectionFactory(httpConfig);
-			// Every SSE stream is a long-lived HTTP/2 stream: one ACP client holds one per
-			// session plus the connection stream. Jetty's default of 128 per connection
-			// is reached by a client with ~120 sessions, and the server then answers with
-			// GOAWAY, which takes down every exchange on the connection.
-			h2c.setMaxConcurrentStreams(options.maxConcurrentStreamsPerConnection());
-			ServerConnector jettyConnector = new ServerConnector(jettyServer,
-					new HttpConnectionFactory(httpConfig), h2c);
-			jettyConnector.setPort(configuredPort);
+			ServerConnector jettyConnector = createConnector(jettyServer);
 			jettyServer.addConnector(jettyConnector);
-
-			ServletContextHandler context = new ServletContextHandler();
-			context.setContextPath("/");
-			ServletHolder holder = new ServletHolder(servlet);
-			holder.setAsyncSupported(true);
-			context.addServlet(holder, path);
-
-			WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
-				container.setIdleTimeout(Duration.ofMinutes(30));
-				// Jetty's default is 64 KB; a prompt or file content is often larger. One inbound
-				// limit for both profiles: the POST body cap also bounds a WebSocket text message.
-				container.setMaxTextMessageSize(options.maxPostBodyBytes());
-				container.addMapping(path, (request, response, callback) -> {
-					StreamableHttpWebSocketConnection connection = createWebSocketConnection();
-					try {
-						connection.start();
-						webSocketConnections.put(connection.id(), connection);
-						response.getHeaders().put(StreamableHttpRouting.HEADER_CONNECTION_ID, connection.id());
-						return new StreamableHttpWebSocketConnection.AcpWebSocketEndpoint(connection, jsonMapper);
-					}
-					catch (Exception e) {
-						connection.close();
-						callback.failed(e);
-						return null;
-					}
-				});
-			});
-			context.insertHandler(webSocketHandler);
-			jettyServer.setHandler(context);
+			jettyServer.setHandler(createContext(jettyServer));
 
 			jettyServer.start();
 			this.server = jettyServer;
@@ -195,6 +160,56 @@ public class StreamableHttpAcpAgentTransport {
 			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
 			return null;
 		}).then();
+	}
+
+	/** HTTP/1.1 and cleartext HTTP/2 on the configured port. */
+	private ServerConnector createConnector(Server jettyServer) {
+		HttpConfiguration httpConfig = new HttpConfiguration();
+		HTTP2CServerConnectionFactory h2c = new HTTP2CServerConnectionFactory(httpConfig);
+		// Every SSE stream is a long-lived HTTP/2 stream: one ACP client holds one per
+		// session plus the connection stream. Jetty's default of 128 per connection
+		// is reached by a client with ~120 sessions, and the server then answers with
+		// GOAWAY, which takes down every exchange on the connection.
+		h2c.setMaxConcurrentStreams(options.maxConcurrentStreamsPerConnection());
+		ServerConnector jettyConnector = new ServerConnector(jettyServer, new HttpConnectionFactory(httpConfig), h2c);
+		jettyConnector.setPort(configuredPort);
+		return jettyConnector;
+	}
+
+	/** The servlet at the endpoint path, with WebSocket upgrades accepted on the same path. */
+	private ServletContextHandler createContext(Server jettyServer) {
+		ServletContextHandler context = new ServletContextHandler();
+		context.setContextPath("/");
+		ServletHolder holder = new ServletHolder(servlet);
+		holder.setAsyncSupported(true);
+		context.addServlet(holder, path);
+
+		WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
+			container.setIdleTimeout(Duration.ofMinutes(30));
+			// Jetty's default is 64 KB; a prompt or file content is often larger. One inbound
+			// limit for both profiles: the POST body cap also bounds a WebSocket text message.
+			container.setMaxTextMessageSize(options.maxPostBodyBytes());
+			container.addMapping(path, (request, response, callback) -> acceptWebSocket(response, callback));
+		});
+		context.insertHandler(webSocketHandler);
+		return context;
+	}
+
+	/** Starts a connection for an accepted WebSocket upgrade; null (refused) when it fails to start. */
+	private StreamableHttpWebSocketConnection.@Nullable AcpWebSocketEndpoint acceptWebSocket(
+			ServerUpgradeResponse response, Callback callback) {
+		StreamableHttpWebSocketConnection connection = createWebSocketConnection();
+		try {
+			connection.start();
+			webSocketConnections.put(connection.id(), connection);
+			response.getHeaders().put(StreamableHttpRouting.HEADER_CONNECTION_ID, connection.id());
+			return new StreamableHttpWebSocketConnection.AcpWebSocketEndpoint(connection, jsonMapper);
+		}
+		catch (Exception e) {
+			connection.close();
+			callback.failed(e);
+			return null;
+		}
 	}
 
 	/**
