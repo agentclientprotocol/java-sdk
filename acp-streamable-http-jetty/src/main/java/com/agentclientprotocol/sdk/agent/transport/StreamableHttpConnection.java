@@ -117,14 +117,18 @@ final class StreamableHttpConnection {
 		}
 
 		ResolvedInboundRoute resolved = routing.resolveInboundRoute(message, sessionHeader);
+		ClientRequestRoute route = resolved.requestRoute();
 		if (resolved.requestScope().isSession()) {
-			ClientRequestRoute route = resolved.requestRoute();
-			sessions.admitInbound(resolved.requestScope().boundSessionId(),
+			boolean hasStream = sessions.admitInbound(resolved.requestScope().boundSessionId(),
 					route != null && route.kind() == RequestKind.SESSION_LOAD);
+			if (!hasStream && route != null && route.responseScope().isSession()) {
+				// A session this connection does not know and has no stream for: answer on the
+				// connection stream, which the client always holds.
+				route = new ClientRequestRoute(route.kind(), route.requestScope(), RouteScope.connection());
+			}
 		}
-		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null
-				&& resolved.requestRoute() != null) {
-			clientRequestRoutes.put(request.id(), resolved.requestRoute());
+		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null && route != null) {
+			clientRequestRoutes.put(request.id(), route);
 		}
 		connection.acceptInbound(message);
 	}

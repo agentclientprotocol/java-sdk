@@ -73,21 +73,20 @@ final class StreamableHttpSessions {
 
 	/**
 	 * Admits a client message scoped to a session: a {@code session/load} may name a new
-	 * session, which becomes provisional; anything else must name a known one.
-	 * @throws UnknownSessionException otherwise, or when the provisional bound is reached
+	 * session, which becomes provisional. Any other message is admitted whatever it names:
+	 * the RFD's POST decision tree has no 404 for a session the connection does not know, so
+	 * the agent decides (a {@code session/delete} of a session that never existed succeeds,
+	 * session-delete.mdx).
+	 * @return whether the session has a stream to answer on; otherwise its reply belongs on
+	 * the connection stream, and no state is kept for an id the agent never confirmed
+	 * @throws UnknownSessionException when a load would exceed the provisional bound
 	 */
-	synchronized void admitInbound(String sessionId, boolean isLoad) {
-		SessionState current = sessions.get(sessionId);
-		if (isLoad) {
-			if (current == null) {
-				addProvisional(sessionId);
-				stream(sessionId);
-			}
-			return;
+	synchronized boolean admitInbound(String sessionId, boolean isLoad) {
+		if (isLoad && !sessions.containsKey(sessionId)) {
+			addProvisional(sessionId);
+			stream(sessionId);
 		}
-		if (current != SessionState.KNOWN) {
-			throw new UnknownSessionException("Unknown session " + sessionId);
-		}
+		return sessions.containsKey(sessionId);
 	}
 
 	synchronized void markKnown(String sessionId) {

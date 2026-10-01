@@ -236,7 +236,10 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return Mono.defer(() -> {
 			RouteScope scope = routes.resolveOutbound(message);
 			return streams.prepare(message, scope)
-				.then(post(message, scope))
+				.flatMap(postScope -> {
+					routes.postedIn(message, postScope);
+					return post(message, postScope);
+				})
 				.doOnSuccess(ignored -> routes.posted(message))
 				.doOnError(error -> routes.postFailed(message));
 		});

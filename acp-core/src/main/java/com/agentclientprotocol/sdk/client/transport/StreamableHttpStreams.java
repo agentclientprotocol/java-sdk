@@ -117,9 +117,11 @@ final class StreamableHttpStreams {
 	}
 
 	/**
-	 * Opens the session stream a message posted in {@code scope} needs, unless it is open.
+	 * Opens the session stream a message posted in {@code scope} needs, unless it is open,
+	 * and emits the scope to post the message in: {@code scope}, or the connection when the
+	 * server knows no stream for the session.
 	 */
-	Mono<Void> prepare(JSONRPCMessage message, RouteScope scope) {
+	Mono<RouteScope> prepare(JSONRPCMessage message, RouteScope scope) {
 		if (message instanceof AcpSchema.JSONRPCRequest request
 				&& AcpSchema.METHOD_SESSION_LOAD.equals(request.method())) {
 			// Open the session stream first (the RFD's reconnect order) unless it is already
@@ -127,14 +129,32 @@ final class StreamableHttpStreams {
 			// answer a second GET with 409.
 			SseStream existing = sessionStreams.get(scope.boundSessionId());
 			if (existing != null && !existing.isClosed()) {
-				return Mono.empty();
+				return Mono.just(scope);
 			}
-			return openSessionStream(scope.boundSessionId());
+			return openSessionStreamIfKnown(scope);
 		}
 		if (scope.isSession() && !sessionStreams.containsKey(scope.boundSessionId())) {
-			return openSessionStream(scope.boundSessionId());
+			return openSessionStreamIfKnown(scope);
 		}
-		return Mono.empty();
+		return Mono.just(scope);
+	}
+
+	/**
+	 * Opens a session's stream before a message in that session. A server that knows no
+	 * stream for the session answers 404, as the RFD's GET tree says; the Python server does
+	 * for a session/load on a new connection or a session/delete of an unknown id, and also
+	 * answers 404 to a POST naming such a session. The message is then posted on the
+	 * connection, without {@code Acp-Session-Id}, and its reply comes on the connection
+	 * stream. The stream is opened again before the next message in the session.
+	 */
+	private Mono<RouteScope> openSessionStreamIfKnown(RouteScope scope) {
+		String sessionId = scope.boundSessionId();
+		return openSessionStream(sessionId).thenReturn(scope)
+			.onErrorResume(StreamableHttpStreams::isConnectionGone, error -> {
+				logger.debug("Server has no stream for session {}; posting on the connection: {}", sessionId,
+						error.getMessage());
+				return Mono.just(RouteScope.connection());
+			});
 	}
 
 	Mono<Void> openSessionStream(String sessionId) {
@@ -220,7 +240,7 @@ final class StreamableHttpStreams {
 		return connectionStream.compareAndSet(old, reopened);
 	}
 
-	/** 404 on reconnect: the server no longer knows this connection or session. */
+	/** 404: the server does not know this connection or session. */
 	private static boolean isConnectionGone(Throwable error) {
 		// AcpException.getMessage() is non-null, unlike Throwable's.
 		return error instanceof AcpConnectionException connectionError

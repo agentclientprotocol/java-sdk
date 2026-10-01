@@ -1,12 +1,4 @@
 {
   "comment": "Expected failures caused by the Rust SDK or the Rust interop programs (programs/rust). See README.md in this directory.",
-  "expectations": [
-    {
-      "step": "session.delete",
-      "when": { "client": "rust", "agent": "java", "transport": "http" },
-      "contains": "never received",
-      "see": "peer:rust-sdk src/agent-client-protocol-http/src/client.rs:393",
-      "reason": "The Java agent answers the session-scoped POST of session/delete for an unknown Acp-Session-Id with 404 (RFD rule); the Rust HTTP client treats any non-2xx POST as fatal (handle_completed_post, client.rs:393-396, from :236-239), ends the whole connection, and the request fails with 'response never received'"
-    }
-  ]
+  "expectations": []
 }

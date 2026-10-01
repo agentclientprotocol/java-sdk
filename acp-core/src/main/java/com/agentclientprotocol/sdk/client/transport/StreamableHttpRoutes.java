@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.client.transport;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +39,59 @@ final class StreamableHttpRoutes {
 		GENERIC
 
 	}
+
+	/** The HTTP scope a method is posted in, before its session id is known. */
+	private enum MethodScope {
+
+		/** {@code initialize}: no connection exists yet. */
+		BOOTSTRAP,
+
+		/** Posted with {@code Acp-Connection-Id} only, answered on the connection stream. */
+		CONNECTION,
+
+		/** Posted with {@code Acp-Session-Id} naming {@code params.sessionId}, answered on that session's stream. */
+		SESSION,
+
+		/**
+		 * Posted like {@link #SESSION}, answered on the connection stream: the RFD's load
+		 * family, which the client sends before it holds the session.
+		 */
+		SESSION_ANSWERED_ON_CONNECTION
+
+	}
+
+	/**
+	 * Every client-to-agent method of ACP v1, stable and unstable (schema/v1/meta.json,
+	 * meta.unstable.json), and the {@code $/} protocol methods. The transport RFD (Identity
+	 * Model) asks for {@code Acp-Session-Id} on every session-scoped POST; a method is
+	 * session-scoped when its params require a {@code sessionId}, as in the Rust and
+	 * TypeScript SDKs' tables. {@code nes/start} creates its session and is answered on the
+	 * connection, like {@code session/new}.
+	 */
+	private static final Map<String, MethodScope> METHOD_ROUTES = Map.ofEntries(
+			Map.entry(AcpSchema.METHOD_INITIALIZE, MethodScope.BOOTSTRAP),
+			Map.entry(AcpSchema.METHOD_AUTHENTICATE, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_LOGOUT, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_SESSION_NEW, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_SESSION_LIST, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_LIST, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_SET, MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_DISABLE, MethodScope.CONNECTION),
+			Map.entry("nes/start", MethodScope.CONNECTION), Map.entry("mcp/message", MethodScope.CONNECTION),
+			Map.entry("$/cancel_request", MethodScope.CONNECTION),
+			Map.entry(AcpSchema.METHOD_SESSION_LOAD, MethodScope.SESSION_ANSWERED_ON_CONNECTION),
+			Map.entry(AcpSchema.METHOD_SESSION_RESUME, MethodScope.SESSION_ANSWERED_ON_CONNECTION),
+			Map.entry(AcpSchema.METHOD_SESSION_PROMPT, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_CANCEL, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_SET_MODE, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_CLOSE, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_DELETE, MethodScope.SESSION),
+			Map.entry(AcpSchema.METHOD_SESSION_FORK, MethodScope.SESSION), Map.entry("nes/suggest", MethodScope.SESSION),
+			Map.entry("nes/accept", MethodScope.SESSION), Map.entry("nes/reject", MethodScope.SESSION),
+			Map.entry("nes/close", MethodScope.SESSION), Map.entry("document/didOpen", MethodScope.SESSION),
+			Map.entry("document/didChange", MethodScope.SESSION), Map.entry("document/didClose", MethodScope.SESSION),
+			Map.entry("document/didSave", MethodScope.SESSION), Map.entry("document/didFocus", MethodScope.SESSION));
 
 	/** Where a client request was posted, and where its response is expected. */
 	record OutboundRequestRoute(RequestKind kind, RouteScope requestScope, RouteScope responseScope) {
@@ -105,24 +159,26 @@ final class StreamableHttpRoutes {
 	}
 
 	private RouteScope requestScope(String method, @Nullable Object params) {
-		return switch (method) {
-			case AcpSchema.METHOD_INITIALIZE -> RouteScope.bootstrap();
-			case AcpSchema.METHOD_AUTHENTICATE, AcpSchema.METHOD_SESSION_NEW -> RouteScope.connection();
-			case AcpSchema.METHOD_SESSION_LOAD, AcpSchema.METHOD_SESSION_RESUME, AcpSchema.METHOD_SESSION_PROMPT,
-					AcpSchema.METHOD_SESSION_SET_MODE, AcpSchema.METHOD_SESSION_CANCEL ->
-				RouteScope.session(requireSessionId(params, method));
-			default -> inferredScope(method, params);
+		MethodScope methodScope = METHOD_ROUTES.get(method);
+		if (methodScope == null) {
+			return inferredScope(method, params);
+		}
+		return switch (methodScope) {
+			case BOOTSTRAP -> RouteScope.bootstrap();
+			case CONNECTION -> RouteScope.connection();
+			case SESSION, SESSION_ANSWERED_ON_CONNECTION -> RouteScope.session(requireSessionId(params, method));
 		};
 	}
 
+	/**
+	 * A method outside ACP v1, such as an extension method: session-scoped when its params
+	 * name a session, else connection-scoped.
+	 */
 	private RouteScope inferredScope(String method, @Nullable Object params) {
 		Optional<String> sessionId = extractSessionId(params);
-		if (sessionId.isPresent()) {
-			logger.warn("Falling back to inferred session routing for unknown method '{}'", method);
-			return RouteScope.session(sessionId.get());
-		}
-		logger.warn("Falling back to inferred connection routing for unknown method '{}'", method);
-		return RouteScope.connection();
+		logger.debug("Routing method '{}' by its params: {}", method,
+				sessionId.isPresent() ? "session-scoped" : "connection-scoped");
+		return sessionId.map(RouteScope::session).orElseGet(RouteScope::connection);
 	}
 
 	private static RequestKind requestKind(String method) {
@@ -139,10 +195,8 @@ final class StreamableHttpRoutes {
 	 * {@code session/load} and {@code session/resume}, else in the request's own scope.
 	 */
 	private static RouteScope responseScope(String method, RouteScope requestScope) {
-		return switch (method) {
-			case AcpSchema.METHOD_SESSION_LOAD, AcpSchema.METHOD_SESSION_RESUME -> RouteScope.connection();
-			default -> requestScope;
-		};
+		return METHOD_ROUTES.get(method) == MethodScope.SESSION_ANSWERED_ON_CONNECTION ? RouteScope.connection()
+				: requestScope;
 	}
 
 	private Optional<String> extractSessionId(@Nullable Object params) {
@@ -158,6 +212,18 @@ final class StreamableHttpRoutes {
 		return extractSessionId(params)
 			.filter(sessionId -> !sessionId.isBlank())
 			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for outbound method " + method));
+	}
+
+	/**
+	 * The message is posted on the connection although it was routed to a session the
+	 * server does not know: its reply comes on the connection stream.
+	 */
+	void postedIn(JSONRPCMessage message, RouteScope postScope) {
+		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null
+				&& !postScope.isSession()) {
+			outboundRequestRoutes.computeIfPresent(request.id(),
+					(id, route) -> new OutboundRequestRoute(route.kind(), postScope, postScope));
+		}
 	}
 
 	/** The message was posted: an answered agent request needs no route any more. */
@@ -219,6 +285,11 @@ final class StreamableHttpRoutes {
 		return outboundRequestRoutes.values()
 			.stream()
 			.anyMatch(route -> Objects.equals(route.responseScope(), scope));
+	}
+
+	/** The methods routed from {@link #METHOD_ROUTES}; any other method is routed by inference. */
+	static Set<String> routedMethods() {
+		return METHOD_ROUTES.keySet();
 	}
 
 	void clear() {

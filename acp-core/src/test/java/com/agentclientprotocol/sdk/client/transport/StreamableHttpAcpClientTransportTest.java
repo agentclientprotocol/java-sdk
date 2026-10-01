@@ -169,6 +169,65 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	/**
+	 * A server that knows no stream for a session answers its GET with 404, as the RFD's GET
+	 * tree says, and the Python server a POST naming it too. The client opens a session's
+	 * stream before posting in that session; when the server refuses it, the request is still
+	 * posted, on the connection without Acp-Session-Id, and answered there (session/delete of
+	 * an unknown session, session/load on a new connection). Before, the request failed
+	 * without being sent.
+	 */
+	@Test
+	void aSessionRequestIsPostedWhenTheServerRefusesTheSessionStream() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		List<HttpRequest> posts = new CopyOnWriteArrayList<>();
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method()) && request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(response(404, Map.of(), emptyBody()));
+			}
+			posts.add(request);
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.setExceptionHandler(error -> {
+			});
+			transport.connect(message -> Mono.empty()).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_DELETE, "delete-1",
+					new AcpSchema.DeleteSessionRequest("no-such-session")))
+				.block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_LOAD, "load-1",
+					new AcpSchema.LoadSessionRequest("sess-1", "/workspace", List.of())))
+				.block();
+
+			assertThat(posts).hasSize(2)
+				.allSatisfy(post -> assertThat(post.headers().firstValue("Acp-Session-Id")).isEmpty());
+		}
+		finally {
+			transport.close();
+			connectionStreamWriter.close();
+		}
+	}
+
 	@Test
 	void defaultAcpPathIsCorrect() {
 		assertThat(StreamableHttpAcpClientTransport.DEFAULT_ACP_PATH).isEqualTo("/acp");

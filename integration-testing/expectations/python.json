@@ -2,50 +2,6 @@
   "comment": "Expected failures caused by the Python SDK (python-sdk, paths relative to src/acp/) or the Python interop programs. Owned by programs/python. See README.md in this directory.",
   "expectations": [
     {
-      "step": "http.reconnect",
-      "when": {
-        "client": "java",
-        "agent": "python",
-        "transport": "http"
-      },
-      "contains": "404",
-      "see": "peer:python-sdk http/server.py:300",
-      "reason": "RFD gap B: the Java client opens the session stream (GET with Acp-Session-Id) before session/load on the new connection; the Python server knows a session stream only once a load or new created it (:196-199), so the GET is a 404 (the legacy interop-python-server XFAIL)"
-    },
-    {
-      "step": "session.delete",
-      "when": {
-        "client": "java",
-        "agent": "python",
-        "transport": "http"
-      },
-      "contains": "404",
-      "see": "spec:rfds/streamable-http-websocket-transport.mdx:268",
-      "reason": "The Java client opens a session-scoped stream for the unknown id \"no-such-session\" before deleting it; the Python server answers an unknown Acp-Session-Id 404 as the RFD says (http/server.py:300), so delete-unknown-succeeds-silently cannot be observed (as for the Java agent in java.json)"
-    },
-    {
-      "step": "session.delete",
-      "when": {
-        "client": "python",
-        "agent": "java",
-        "transport": "http"
-      },
-      "contains": "400",
-      "see": "spec:rfds/streamable-http-websocket-transport.mdx:124",
-      "reason": "The RFD never lists the session-scoped methods: the Python client sends session/delete without Acp-Session-Id (its list, http/protocol.py:52-58, has no delete) and the Java server requires the header on any request whose params name a session (StreamableHttpRouting defaultRoute), answering 400"
-    },
-    {
-      "step": "session.fork",
-      "when": {
-        "client": "python",
-        "agent": "java",
-        "transport": "http"
-      },
-      "contains": "400",
-      "see": "spec:rfds/streamable-http-websocket-transport.mdx:124",
-      "reason": "The RFD never lists the session-scoped methods: the Python client treats session/fork as minting a session and sends it without Acp-Session-Id (http/protocol.py:52-58), the Java server requires the parent session's header on fork (StreamableHttpRouting, SESSION_FORK rule) and answers 400"
-    },
-    {
       "step": "session.resume",
       "when": {
         "agent": "python",

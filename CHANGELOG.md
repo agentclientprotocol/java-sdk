@@ -268,6 +268,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor `StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream, Duration)`; a request
   still unanswered then is answered with `-32800` (request cancelled) and the transport terminates
   without it. `closeGracefully()` now also completes `awaitTermination()`.
+- **Streamable HTTP routed `session/delete`, `session/close`, `session/list`,
+  `session/set_config_option`, `session/fork` and `logout` by guesswork, and the server refused a
+  session it did not know with 404.** The client had rules for only seven methods and inferred the
+  rest from their params with a WARN per call; the server likewise. Both now route every
+  client-to-agent method of ACP v1, stable and unstable, from a table: `authenticate`, `logout`,
+  `session/new`, `session/list`, `providers/*`, `nes/start`, `mcp/message` and `$/cancel_request` on
+  the connection; every method whose params require a `sessionId` (`session/prompt`, `cancel`,
+  `set_mode`, `set_config_option`, `close`, `delete`, `fork`, `load`, `resume`, `nes/suggest`,
+  `accept`, `reject`, `close`, `document/*`) session-scoped with `Acp-Session-Id`, as the transport
+  RFD's Identity Model asks and the Rust and TypeScript SDKs do. Only methods outside v1, such as
+  extension methods, are still routed by their params (logged at DEBUG). The server no longer
+  answers a session-scoped POST naming a session the connection does not know with 404: the RFD's
+  POST decision tree has none, so the request goes to the agent, which decides; a `session/delete`
+  of a session that never existed succeeds, as `session-delete.mdx` asks. Its reply comes on that
+  session's stream when it has one, else on the connection stream. `session/delete` and
+  `session/fork` are accepted without `Acp-Session-Id`, as `session/load` was, and answered on the
+  connection stream: the RFD names no session-scoped method and the Python client sends neither
+  with the header.
+  A session-scoped GET for a session the connection does not know still opens a bounded
+  provisional stream: the RFD's GET tree says 404, but its own resume flow opens the session stream
+  before `session/load`, and the TypeScript client does so for `session/load` and `session/delete`
+  (it fails against a server that answers 404). The client now copes with a server that does answer
+  404 (the Python server): it posts the request on the connection without `Acp-Session-Id`, and the
+  reply comes on the connection stream.
 - **A stdio client did not notice its agent process exiting.** `StdioAcpClientTransport` did not
   implement `awaitTermination()`, so when the agent exited or crashed, pending requests waited out the
   request timeout. It now completes when the transport is closed, and errors with an

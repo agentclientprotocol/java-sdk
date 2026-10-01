@@ -767,6 +767,82 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	/**
+	 * The RFD's POST decision tree has no 404 for a session the connection does not know: a
+	 * session-scoped POST with both headers is forwarded to the agent and accepted. The agent
+	 * decides; session/delete of a session that never existed succeeds silently
+	 * (session-delete.mdx). With no stream for that session, the reply comes on the
+	 * connection stream.
+	 */
+	@Test
+	void sessionDeleteOfAnUnknownSessionIsForwardedAndAnsweredOnTheConnectionStream() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, "never-existed",
+						"""
+								{"jsonrpc":"2.0","id":"delete-unknown","method":"session/delete","params":{"sessionId":"never-existed"}}
+								""");
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse response = connectionStream.nextResponse();
+				assertThat(response.id()).isEqualTo("delete-unknown");
+				assertThat(response.error()).isNull();
+			}
+		}
+	}
+
+	/**
+	 * The RFD names no method as session-scoped; the Python client posts session/delete and
+	 * session/fork without Acp-Session-Id, as it posts session/load. Like load, they are
+	 * accepted without the header, routed by params.sessionId, and answered on the
+	 * connection stream. Before, the server answered 400.
+	 */
+	@Test
+	void deleteAndForkWithoutTheSessionHeaderAreAnsweredOnTheConnectionStream() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> fork = postJson(rawClient, server.endpoint(), connectionId, null, """
+						{"jsonrpc":"2.0","id":"fork-no-header","method":"session/fork","params":{"sessionId":"%s","cwd":"/workspace"}}
+						""".formatted(sessionId));
+				assertThat(fork.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse forked = connectionStream.nextResponse();
+				assertThat(forked.id()).isEqualTo("fork-no-header");
+				assertThat(forked.error()).isNull();
+
+				HttpResponse<String> delete = postJson(rawClient, server.endpoint(), connectionId, null, """
+						{"jsonrpc":"2.0","id":"delete-no-header","method":"session/delete","params":{"sessionId":"%s"}}
+						""".formatted(sessionId));
+				assertThat(delete.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse deleted = connectionStream.nextResponse();
+				assertThat(deleted.id()).isEqualTo("delete-no-header");
+				assertThat(deleted.error()).isNull();
+			}
+		}
+	}
+
+	/** A client that opened the unknown session's stream first gets the reply there. */
+	@Test
+	void aPostForAnUnknownSessionWithAnOpenStreamIsAnsweredOnThatStream() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader sessionStream = SseReader.open(rawClient, server.endpoint(), connectionId, "unknown-1")) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, "unknown-1",
+						"""
+								{"jsonrpc":"2.0","id":"close-unknown","method":"session/close","params":{"sessionId":"unknown-1"}}
+								""");
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse response = sessionStream.nextResponse();
+				assertThat(response.id()).isEqualTo("close-unknown");
+				assertThat(response.error()).isNull();
+			}
+		}
+	}
+
 	private static HttpRequest sessionGet(URI endpoint, String connectionId, String sessionId) {
 		return HttpRequest.newBuilder(endpoint)
 			.header("Accept", "text/event-stream")
@@ -940,6 +1016,11 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 						"sess-" + sessionCounter.incrementAndGet(), null, null)))
 				.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, null)))
 				.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, null)))
+				// session/delete of any id succeeds, as docs/protocol/v1/session-delete.mdx asks
+				.deleteSessionHandler(request -> Mono.just(new AcpSchema.DeleteSessionResponse()))
+				.closeSessionHandler(request -> Mono.just(new AcpSchema.CloseSessionResponse()))
+				.forkSessionHandler(request -> Mono.just(new AcpSchema.ForkSessionResponse(
+						"sess-" + sessionCounter.incrementAndGet(), null)))
 				.promptHandler((request, context) -> {
 					Mono<Void> work = request.text().contains("permission")
 							? context.askPermission("fixture permission").then()
