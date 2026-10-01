@@ -561,6 +561,61 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	/** JSON-RPC's answer to a request the agent could not parse carries "id": null. */
+	@Test
+	void responseWithNullIdIsDeliveredAndTheReaderContinues() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method())
+					&& request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"),
+						initializeResponse));
+			}
+			if ("GET".equals(request.method())
+					&& request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+			awaitResponse(inboundMessages, "init-1");
+
+			transport.sendMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "ping-1",
+					"extension/ping", Map.of()))
+				.block();
+			writeRawSse(connectionStreamWriter,
+					"{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"Parse error\"}}");
+			writeSse(connectionStreamWriter, AcpTestFixtures.createJsonRpcResponse("ping-1", Map.of()));
+
+			AcpSchema.JSONRPCMessage first = inboundMessages.poll(2, TimeUnit.SECONDS);
+			assertThat(first).isInstanceOfSatisfying(AcpSchema.JSONRPCResponse.class, nullId -> {
+				assertThat(nullId.id()).isNull();
+				assertThat(nullId.error()).isNotNull();
+			});
+			assertThat(awaitResponse(inboundMessages, "ping-1")).isNotNull();
+		}
+		finally {
+			connectionStreamWriter.close();
+			transport.close();
+		}
+	}
+
 	@Test
 	void connectionSseClosureTerminatesTransport() throws Exception {
 		HttpClient httpClient = mock(HttpClient.class);

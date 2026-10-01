@@ -437,12 +437,12 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			Mono<Void> preparation = prepareRoute(resolved);
 			return preparation.then(postAccepted(message, resolved.scope()))
 				.doOnSuccess(ignored -> {
-					if (message instanceof AcpSchema.JSONRPCResponse response) {
+					if (message instanceof AcpSchema.JSONRPCResponse response && response.id() != null) {
 						inboundRequestRoutes.remove(response.id());
 					}
 				})
 				.doOnError(error -> {
-					if (message instanceof AcpSchema.JSONRPCRequest request) {
+					if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null) {
 						outboundRequestRoutes.remove(request.id());
 					}
 				});
@@ -575,6 +575,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private ResolvedOutboundRoute resolveOutboundRoute(JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
+			if (response.id() == null) {
+				// The answer to an agent request posted with "id": null, which was never
+				// routed (a ConcurrentMap holds no null key).
+				return new ResolvedOutboundRoute(message, RouteScope.connection(), null);
+			}
 			RouteScope scope = inboundRequestRoutes.get(response.id());
 			if (scope == null) {
 				throw new AcpConnectionException("Cannot route outbound response with unknown id " + response.id());
@@ -664,7 +669,12 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private Mono<Void> processInbound(RouteScope actualScope, JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			OutboundRequestRoute expectedRoute = outboundRequestRoutes.get(response.id());
+			Object responseId = response.id();
+			if (responseId == null) {
+				// JSON-RPC's answer to a request the agent could not parse: no route to match.
+				return emitInbound(message);
+			}
+			OutboundRequestRoute expectedRoute = outboundRequestRoutes.get(responseId);
 			if (expectedRoute != null) {
 				Mono<Void> processedResponse;
 				if (!Objects.equals(expectedRoute.responseScope(), actualScope)) {
@@ -682,7 +692,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				else {
 					processedResponse = emitInbound(message);
 				}
-				return processedResponse.doFinally(signal -> outboundRequestRoutes.remove(response.id()));
+				return processedResponse.doFinally(signal -> outboundRequestRoutes.remove(responseId));
 			}
 			return emitInbound(message);
 		}
