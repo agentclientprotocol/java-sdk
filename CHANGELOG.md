@@ -134,6 +134,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`closeGracefully()` could wait out the whole request timeout when a notification arrived
+  as it closed.** Found by the real-agent smoke tier: Claude's ACP agent sends a
+  `session_info_update` about 10 ms after a prompt answers, and closing the client right after the
+  turn hung for the request timeout in 4 of 9 runs. A notification handler runs on the inbound
+  thread inside the emission on the session's notification sink; the close's completion of that
+  sink collided with it, was refused (`FAIL_NON_SERIALIZED`) and dropped, and the close then waited
+  for a drain that never ended. Completion is now never lost: the close records that completion is
+  wanted, and an emission it collided with completes the sink once it returns (model checked with
+  Lincheck, `NotificationQueueLincheckTest`). A bounded busy-loop retry would not do: a handler
+  that works synchronously holds the sink for as long as it runs. Notifications are still delivered
+  in order through one drain, `closeGracefully()` still waits for it at most the request timeout,
+  and `close()` still interrupts it.
 - **Both stdio transports stopped reading on the first line that was not a JSON-RPC message.**
   `StdioAcpAgentTransport` and `StdioAcpClientTransport` ended their inbound stream on one malformed
   line, so the peer's later messages were never read; the client did so without telling anyone. Such

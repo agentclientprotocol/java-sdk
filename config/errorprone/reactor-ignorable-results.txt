@@ -17,7 +17,8 @@ reactor.core.publisher.Flux#subscribe(java.util.function.Consumer,java.util.func
 reactor.core.publisher.Flux#subscribe(java.util.function.Consumer,java.util.function.Consumer,java.lang.Runnable,java.util.function.Consumer)
 reactor.core.publisher.Flux#subscribe(java.util.function.Consumer,java.util.function.Consumer,java.lang.Runnable,reactor.util.context.Context)
 # Terminal signals: a failed emit almost always means the sink already terminated, which is the
-# outcome the caller wants (a racing emission could also refuse it; accepted for terminal signals).
+# outcome the caller wants. A racing emission can also refuse it (FAIL_NON_SERIALIZED); where a
+# lost completion leaves someone waiting, the caller must handle that (see NotificationQueue).
 # tryEmitNext is NOT listed: dropping its result silently loses a message.
 reactor.core.publisher.Sinks.Empty#tryEmitEmpty()
 reactor.core.publisher.Sinks.Empty#tryEmitError(java.lang.Throwable)
