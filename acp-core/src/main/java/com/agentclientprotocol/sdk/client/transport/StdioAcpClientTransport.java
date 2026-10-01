@@ -153,7 +153,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 						+ "A transport instance carries exactly one session and cannot be reused: build one client per "
 						+ "transport, or share one AcpAsyncClient by wrapping it with new AcpSyncClient(asyncClient)."));
 			}
-			return Mono.<Void>fromRunnable(() -> {
+			return Mono.fromRunnable(() -> {
 				logger.info("ACP agent starting.");
 				handleIncomingMessages(handler);
 				handleIncomingErrors();

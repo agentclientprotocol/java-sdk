@@ -166,7 +166,7 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
 			if (!closing.compareAndSet(false, true)) {
-				return Mono.<Void>empty();
+				return Mono.empty();
 			}
 			Disposable task = this.keepAliveTask;
 			if (task != null) {

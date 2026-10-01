@@ -5,7 +5,6 @@
 package com.agentclientprotocol.sdk.test;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -134,11 +133,6 @@ public class InMemoryTransportPair {
 		}
 
 		@Override
-		public List<Integer> protocolVersions() {
-			return List.of(AcpSchema.LATEST_PROTOCOL_VERSION);
-		}
-
-		@Override
 		public Mono<Void> connect(Function<Mono<AcpSchema.JSONRPCMessage>, Mono<AcpSchema.JSONRPCMessage>> handler) {
 			if (connected) {
 				return Mono.error(new IllegalStateException("Already connected"));
@@ -197,11 +191,6 @@ public class InMemoryTransportPair {
 				Sinks.Many<AcpSchema.JSONRPCMessage> inbound) {
 			this.outbound = outbound;
 			this.inbound = inbound;
-		}
-
-		@Override
-		public List<Integer> protocolVersions() {
-			return List.of(AcpSchema.LATEST_PROTOCOL_VERSION);
 		}
 
 		@Override

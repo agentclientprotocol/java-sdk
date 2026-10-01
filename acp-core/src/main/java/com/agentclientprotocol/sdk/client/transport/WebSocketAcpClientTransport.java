@@ -72,7 +72,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	/** Set once the WebSocket opens; null before connect. */
 	private volatile @Nullable WebSocket webSocket;
 
-	private Scheduler outboundScheduler;
+	private final Scheduler outboundScheduler;
 
 	private final AtomicBoolean isClosing = new AtomicBoolean(false);
 
@@ -146,11 +146,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			handleIncomingMessages(handler);
 
 			// Build WebSocket connection with listener
-			CompletableFuture<WebSocket> wsFuture = httpClient.newWebSocketBuilder()
+			return httpClient.newWebSocketBuilder()
 				.connectTimeout(connectTimeout)
 				.buildAsync(serverUri, new AcpWebSocketListener());
-
-			return wsFuture;
 		}).doOnSuccess(ws -> {
 			this.webSocket = ws;
 			startOutboundProcessing();

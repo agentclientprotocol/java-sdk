@@ -14,7 +14,6 @@ import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
-import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
@@ -93,7 +92,7 @@ public final class RemoteAcpConnection {
 		// the second time and one that is never subscribed does not consume the start.
 		return Mono.defer(() -> {
 			if (!started.compareAndSet(false, true)) {
-				return Mono.<Void>error(new IllegalStateException("Already started"));
+				return Mono.error(new IllegalStateException("Already started"));
 			}
 			AcpAsyncAgent created = agentFactory.create(transport);
 			this.agent = created;

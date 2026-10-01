@@ -776,7 +776,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 							return Mono.<Void>error(new AcpConnectionException(
 									"Expected 202 for DELETE, got " + response.statusCode()));
 						}
-						return Mono.<Void>empty();
+						return Mono.empty();
 					})
 					// A dead or unresponsive server must not hang shutdown; the connection is
 					// released server-side by its own close or idle handling.
@@ -860,7 +860,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	/** 404 on reconnect: the server no longer knows this connection or session. */
 	private static boolean isConnectionGone(Throwable error) {
-		return error instanceof AcpConnectionException && String.valueOf(error.getMessage()).contains("got 404");
+		// AcpException.getMessage() is non-null, unlike Throwable's.
+		return error instanceof AcpConnectionException connectionError
+				&& connectionError.getMessage().contains("got 404");
 	}
 
 	/** The old behaviour: a dead connection stream, or a session stream owing a response, ends the transport. */

@@ -213,7 +213,7 @@ public class StreamableHttpAcpAgentTransport {
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
 			if (!closing.compareAndSet(false, true)) {
-				return Mono.<Void>empty();
+				return Mono.empty();
 			}
 			List<Mono<Void>> connectionClosures = new ArrayList<>();
 			connectionClosures.add(servlet.closeGracefully());

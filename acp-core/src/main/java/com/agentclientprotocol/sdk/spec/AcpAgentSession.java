@@ -212,7 +212,8 @@ public class AcpAgentSession implements AcpSession {
 		}
 		else if (message instanceof AcpSchema.JSONRPCRequest request) {
 			logger.debug("Received request method={} id={}", request.method(), request.id());
-			return handleIncomingRequest(request).onErrorResume(error -> {
+			// Mono.from widens the response Mono to the message type without an operator.
+			return Mono.from(handleIncomingRequest(request).onErrorResume(error -> {
 				// Preserve error codes from AcpProtocolException, wrap others in INTERNAL_ERROR
 				int errorCode;
 				Object errorData = null;
@@ -226,7 +227,7 @@ public class AcpAgentSession implements AcpSession {
 				var errorResponse = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
 						new AcpSchema.JSONRPCError(errorCode, errorMessage(error), errorData));
 				return Mono.just(errorResponse);
-			}).map(response -> (AcpSchema.JSONRPCMessage) response);
+			}));
 		}
 		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
 			logger.debug("Received notification method={}", notification.method());

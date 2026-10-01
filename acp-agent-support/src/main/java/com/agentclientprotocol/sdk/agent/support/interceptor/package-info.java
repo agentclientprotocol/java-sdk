@@ -14,4 +14,3 @@
 package com.agentclientprotocol.sdk.agent.support.interceptor;
 
 import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.Nullable;
