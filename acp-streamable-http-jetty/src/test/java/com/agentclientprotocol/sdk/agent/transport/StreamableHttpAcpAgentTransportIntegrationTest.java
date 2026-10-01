@@ -795,6 +795,50 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	/**
+	 * JSON-RPC allows "id": null. The agent answers such a request with "id": null, and
+	 * routing that answer must not take the connection down.
+	 */
+	@Test
+	void requestWithNullIdIsAnsweredAndTheConnectionSurvives() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> nullId = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":null,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+								""");
+				assertThat(nullId.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse nullIdResponse = connectionStream.nextResponse();
+				assertThat(nullIdResponse.id()).isNull();
+
+				HttpResponse<String> next = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":"after-null","method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}
+								""");
+				assertThat(next.statusCode()).isEqualTo(202);
+				assertThat(connectionStream.nextResponse().id()).isEqualTo("after-null");
+			}
+		}
+	}
+
+	/** A client that cannot parse an agent request answers with "id": null (JSON-RPC 2.0, 5.1). */
+	@Test
+	void clientErrorResponseWithNullIdIsAccepted() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
+					"""
+							{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}
+							""");
+			assertThat(accepted.statusCode()).isEqualTo(202);
+			String sessionId = createSession(rawClient, server.endpoint(), connectionId);
+			assertThat(sessionId).isNotBlank();
+		}
+	}
+
 	private static String initializeRaw(HttpClient client, URI endpoint) throws Exception {
 		HttpResponse<String> initialize = client.send(HttpRequest.newBuilder(endpoint)
 			.header("Content-Type", "application/json")

@@ -184,10 +184,16 @@ final class StreamableHttpConnection {
 
 	private RouteScope resolveAgentOutboundScope(JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			ClientRequestRoute route = clientRequestRoutes.remove(response.id());
+			Object responseId = response.id();
+			if (responseId == null) {
+				// The answer to a request posted with "id": null, which was never routed (a
+				// ConcurrentMap holds no null key); only the connection stream can carry it.
+				return RouteScope.connection();
+			}
+			ClientRequestRoute route = clientRequestRoutes.remove(responseId);
 			if (route == null) {
 				logger.warn("Agent emitted response for unknown client request id {}; routing to connection stream",
-						response.id());
+						responseId);
 				return RouteScope.connection();
 			}
 			if ((route.kind() == RequestKind.SESSION_NEW || route.kind() == RequestKind.SESSION_FORK)
@@ -245,26 +251,32 @@ final class StreamableHttpConnection {
 	}
 
 	private void validateClientResponseScope(AcpSchema.JSONRPCResponse response, @Nullable String sessionHeader) {
-		RouteScope expected = agentRequestRoutes.get(response.id());
+		Object responseId = response.id();
+		if (responseId == null) {
+			// JSON-RPC's answer to a request the client could not parse: it names no agent
+			// request, so there is no scope to check. The session logs and drops it.
+			return;
+		}
+		RouteScope expected = agentRequestRoutes.get(responseId);
 		if (expected == null) {
-			logger.warn("Client posted response for unknown agent request id {}", response.id());
+			logger.warn("Client posted response for unknown agent request id {}", responseId);
 			return;
 		}
 		if (sessionHeader == null) {
 			// The RFD asks for Acp-Session-Id on permission responses; the Rust and Python
 			// clients omit it on every response. The id alone identifies the exchange, so a
 			// missing header is accepted. A header naming a different scope is still an error.
-			logger.debug("Client response {} carried no {}; accepting it for {}", response.id(),
+			logger.debug("Client response {} carried no {}; accepting it for {}", responseId,
 					HEADER_SESSION_ID, expected);
-			agentRequestRoutes.remove(response.id(), expected);
+			agentRequestRoutes.remove(responseId, expected);
 			return;
 		}
 		RouteScope actual = RouteScope.session(sessionHeader);
 		if (!Objects.equals(expected, actual)) {
 			throw new AcpConnectionException(
-					"Response id " + response.id() + " arrived on " + actual + " but expected " + expected);
+					"Response id " + responseId + " arrived on " + actual + " but expected " + expected);
 		}
-		agentRequestRoutes.remove(response.id(), expected);
+		agentRequestRoutes.remove(responseId, expected);
 	}
 
 	private SseOutboundStream openSessionStream(String sessionId) {
