@@ -45,7 +45,8 @@ class MetaCoverageTest {
 			Map.entry("SelectedPermissionOutcome", List.of("PermissionSelected")),
 			Map.entry("UnstructuredCommandInput", List.of("AvailableCommandInput")),
 			Map.entry("ToolCallUpdate", List.of("ToolCallUpdate", "ToolCallUpdateNotification")),
-			Map.entry("SessionConfigOption", List.of("SessionConfigSelect", "SessionConfigBoolean")));
+			Map.entry("SessionConfigOption", List.of("SessionConfigSelect", "SessionConfigBoolean")),
+			Map.entry("StringMultiSelectItems", List.of("UntitledMultiSelectItems")));
 
 	/**
 	 * Schema definitions with {@code _meta} that have no record of their own, and why.
@@ -56,19 +57,7 @@ class MetaCoverageTest {
 			Map.entry("SessionResumeCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
 			Map.entry("SessionDeleteCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
 			Map.entry("SessionAdditionalDirectoriesCapabilities",
-					"presence marker typed Object: keeps _meta as a map entry"),
-			Map.entry("ElicitationFormCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
-			Map.entry("ElicitationUrlCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
-			// Elicitation records: parity item P4 owns them; it adds _meta and drops these entries
-			Map.entry("ElicitationSchema", "elicitation record without _meta, added with P4"),
-			Map.entry("StringPropertySchema", "elicitation record without _meta, added with P4"),
-			Map.entry("NumberPropertySchema", "elicitation record without _meta, added with P4"),
-			Map.entry("IntegerPropertySchema", "elicitation record without _meta, added with P4"),
-			Map.entry("BooleanPropertySchema", "elicitation record without _meta, added with P4"),
-			Map.entry("MultiSelectPropertySchema", "elicitation record without _meta, added with P4"),
-			Map.entry("StringMultiSelectItems", "elicitation record without _meta, added with P4"),
-			Map.entry("TitledMultiSelectItems", "elicitation record without _meta, added with P4"),
-			Map.entry("EnumOption", "elicitation record without _meta, added with P4"));
+					"presence marker typed Object: keeps _meta as a map entry"));
 
 	@Test
 	void everySchemaObjectWithMetaHasItInJava() throws Exception {

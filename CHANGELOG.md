@@ -108,9 +108,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before `_meta`), which instead gains `ToolCallUpdate(toolCallId, title, kind, status)` for the
   common permission-request case (migration: use it, or add `null` for `_meta`). A test walks a copy of the v1.9.1 schema
   (`acp-core/src/test/resources/schema/v1/schema.json`) and fails on any object with `_meta`
-  whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
+  whose record lacks it; the elicitation records are covered too (below). Not covered yet: the
   presence markers typed `Object` (they keep `_meta` as a map entry). `CancelRequestNotification`
   carries `_meta` (with `$/cancel_request`, below).
+
+- **`elicitation/complete` reaches a typed client handler:** `AcpClient.async(...)
+  .completeElicitationHandler(Function<CompleteElicitationNotification, Mono<Void>>)` and
+  `AcpClient.sync(...).completeElicitationHandler(Consumer<CompleteElicitationNotification>)`. Before,
+  the agent could send the notification but a client could only read it as raw params through
+  `notificationHandler`. The spec requires clients to ignore unknown or already-completed
+  elicitation IDs; the handler sees every notification and does that check.
+- `AcpSyncAgent.createElicitation` and `AcpSyncAgent.completeElicitation`, matching the async agent.
+- `CreateElicitationResponse.accept()` without content (for an accepted URL elicitation), and the
+  mode constants `CreateElicitationRequest.MODE_FORM` and `MODE_URL`.
+- The elicitation records carry every field of the stable schema: `_meta` on `ElicitationSchema`,
+  the five property schemas, both multi-select item types and `EnumOption`, and `description` on
+  `EnumOption`. The constructors without them remain, except for the two that would take seven or
+  more arguments.
 
 ### Changed
 
@@ -130,6 +144,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`-32005`) are removed: the SDK made them up inside the range ACP reserves for itself.
     `AcpCapabilityException.toProtocolException()` now answers `-32600` with the capability name as
     data.
+- **Elicitation is stable (the ACP schema promoted it on 2026-07-24, in protocol v1.7.0), and its
+  API is no longer `@UnstableAcpApi`:** `CreateElicitationRequest`, `CreateElicitationResponse`,
+  `ElicitationAction`, `CompleteElicitationNotification`, `ElicitationSchema`, the property schemas,
+  the multi-select items, `EnumOption`, `ElicitationCapabilities` and
+  `ClientCapabilities.elicitation`.
+- **Breaking: the elicitation capability's modes are typed, and the no-argument
+  `ElicitationCapabilities()` constructor is removed.** `form` and `url` were `Object`; they are now
+  `ElicitationFormCapabilities` and `ElicitationUrlCapabilities` (each with `_meta`), as in the
+  schema. The removed constructor advertised form mode, although the spec says an empty capability
+  (`{}`) advertises no mode. Migration: `new ElicitationCapabilities()` becomes
+  `ElicitationCapabilities.formOnly()`; `urlOnly()` and `formAndUrl()` advertise the other modes, and
+  code that read `form()` or `url()` as `Object` gets the typed records.
+- **Breaking: `ElicitationAction` is an open value, not an enum,** by the rule for the schema's
+  closed string unions (see the `AcpSchema` Javadoc): a record over the wire string with the
+  constants `ACCEPT`, `DECLINE` and `CANCEL`, `of(String)`, `known()` and `isKnown()`. An action
+  this SDK does not know (a newer peer) is kept and written back instead of failing the response.
+  Migration: compare with `equals`, not `==`, and replace a `switch` over the enum with `if`/`else`
+  or a switch over `action().value()`.
+- **Elicitation form properties of an unknown type and multi-select items of an unknown shape no
+  longer fail the request:** they read as `UnknownElicitationPropertySchema` (keeping `type` and
+  every other field) and `UnknownMultiSelectItems`, and are written back unchanged, as for the
+  other discriminated unions. The five property schemas now write their own `type` discriminator:
+  their canonical constructors accept `null` for it (it becomes the record's type) and reject a
+  different type, which they used to accept and ignore.
+- **Breaking: `StringPropertySchema` and `MultiSelectPropertySchema` have only their canonical
+  constructors,** which end with `_meta`. Migration: pass `null` as the last argument, or use
+  `StringPropertySchema.text(...)` and `singleSelect(...)`.
+- **Behaviour change: the agent checks the requested elicitation mode, not only elicitation.**
+  `createElicitation` fails with `AcpCapabilityException` (`elicitation.form` or `elicitation.url`)
+  when the client did not advertise the request's mode; before, any `elicitation` object, even `{}`,
+  let both modes through. The spec says agents must not request a mode the client did not advertise.
+  A mode the SDK does not know still needs only `elicitation`.
+- **Behaviour change: a client with a typed `createElicitationHandler` answers a request for a mode
+  it did not advertise at initialization with `-32602` (invalid params)**, as the spec says, without
+  calling the handler. Before initialization, and for a mode the SDK does not know, the handler is
+  called. Migration: advertise the modes the handler supports in `clientCapabilities.elicitation`.
+  A raw `requestHandler("elicitation/create", ...)` is not checked.
 
 - **Unknown union variants no longer fail the message** (ACP forward compatibility). A newer agent's
   `sessionUpdate` type used to fail the whole `session/update` notification, which the client then

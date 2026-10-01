@@ -747,12 +747,13 @@ public class Agent {
 			return context.sendMessage("elicit error capability").thenReturn(endTurn());
 		}
 		Map<String, AcpSchema.ElicitationPropertySchema> props = Map.of("name",
-				new AcpSchema.StringPropertySchema("string", null, null, null, null, null, null, null, null, null));
+				new AcpSchema.StringPropertySchema("string", null, null, null, null, null, null, null, null, null,
+						null));
 		return context
 			.createElicitation(AcpSchema.CreateElicitationRequest.form(sid, "interop form",
 					new AcpSchema.ElicitationSchema(props, List.of("name"))))
 			.map(r -> {
-				String action = r.action() == null ? "null" : r.action().name().toLowerCase();
+				String action = String.valueOf(r.action());
 				Object name = r.content() == null ? null : r.content().get("name");
 				step("elicit.form", "accept".equals(action) && "interop".equals(name), t0,
 						"action " + action + " content " + r.content());

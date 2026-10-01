@@ -1179,15 +1179,13 @@ public class Client {
 				.releaseTerminalHandler(this.terminals::release)
 				.createElicitationHandler(req -> {
 					System.out.println("  elicitation/create " + req.mode() + " " + req.message());
-					return Mono.just("url".equals(req.mode()) ? new AcpSchema.CreateElicitationResponse(
-							AcpSchema.ElicitationAction.ACCEPT, null, null)
+					return Mono.just(AcpSchema.CreateElicitationRequest.MODE_URL.equals(req.mode())
+							? AcpSchema.CreateElicitationResponse.accept()
 							: AcpSchema.CreateElicitationResponse.accept(Map.of("name", "interop")));
 				})
-				// No typed handler for elicitation/complete yet (P4); the generic one receives it.
-				.notificationHandler(AcpSchema.METHOD_ELICITATION_COMPLETE, params -> {
-					Object id = params instanceof Map<?, ?> m ? m.get("elicitationId") : null;
-					System.out.println("  elicitation/complete " + params);
-					this.completedElicitations.add(String.valueOf(id));
+				.completeElicitationHandler(notification -> {
+					System.out.println("  elicitation/complete " + notification);
+					this.completedElicitations.add(notification.elicitationId());
 					return Mono.empty();
 				})
 				.requestHandler("_interop/ping", params -> {
@@ -1210,7 +1208,7 @@ public class Client {
 		static AcpSchema.ClientCapabilities capabilities() {
 			return new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true,
 					new AcpSchema.ClientSessionCapabilities(AcpSchema.SessionConfigOptionsCapabilities.withBoolean()),
-					new AcpSchema.AuthCapabilities(true), new AcpSchema.ElicitationCapabilities(Map.of(), Map.of(), null),
+					new AcpSchema.AuthCapabilities(true), AcpSchema.ElicitationCapabilities.formAndUrl(),
 					null);
 		}
 

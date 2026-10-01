@@ -592,13 +592,13 @@ class AcpSchemaSerializationTest {
 		// All 5 property types should round-trip correctly
 		Map<String, AcpSchema.ElicitationPropertySchema> props = Map.of(
 				"text", new AcpSchema.StringPropertySchema("string", "Name", null, "default", null, null,
-						null, null, null, null),
+						null, null, null, null, null),
 				"count", new AcpSchema.IntegerPropertySchema("integer", "Count", null, 5L, 1L, 100L),
 				"ratio", new AcpSchema.NumberPropertySchema("number", "Ratio", null, 0.5, 0.0, 1.0),
 				"agree", new AcpSchema.BooleanPropertySchema("boolean", "Agree?", null, false),
 				"tags", new AcpSchema.MultiSelectPropertySchema("array", "Tags", null, null,
 						new AcpSchema.UntitledMultiSelectItems("string", List.of("a", "b", "c")),
-						null, null));
+						null, null, null));
 
 		var schema = new AcpSchema.ElicitationSchema("object", props, null, null, null);
 		String json = jsonMapper.writeValueAsString(schema);
@@ -741,7 +741,7 @@ class AcpSchemaSerializationTest {
 	void elicitationCapabilitiesOnClientCapabilities() throws IOException {
 		var caps = new AcpSchema.ClientCapabilities(
 				new AcpSchema.FileSystemCapability(true, true), true,
-				null, null, new AcpSchema.ElicitationCapabilities(), null);
+				null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
 
 		String json = jsonMapper.writeValueAsString(caps);
 		assertThat(json).contains("\"elicitation\"");
