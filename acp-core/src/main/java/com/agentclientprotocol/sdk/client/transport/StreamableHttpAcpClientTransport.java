@@ -4,38 +4,20 @@
 
 package com.agentclientprotocol.sdk.client.transport;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpRequests.HttpClientBundle;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
-import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
@@ -43,7 +25,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -59,6 +40,14 @@ import reactor.core.publisher.Sinks;
  * JSON-RPC messages.
  * </p>
  *
+ * <p>
+ * This class owns the transport's lifecycle (connect, initialize, send, close) and
+ * delegates the rest: {@link StreamableHttpRequests} the HTTP exchanges,
+ * {@link StreamableHttpRoutes} the routing of each message to an HTTP scope,
+ * {@link StreamableHttpStreams} the SSE streams and their reconnection, and
+ * {@link StreamableHttpInbound} the ordered delivery of what the streams read.
+ * </p>
+ *
  * @author Kaiser Dandangi
  */
 public class StreamableHttpAcpClientTransport implements AcpClientTransport {
@@ -68,118 +57,23 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	/** Default ACP path used by the remote transport RFD. */
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
-	private static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
-
-	private static final String HEADER_SESSION_ID = "Acp-Session-Id";
-
-	private static final String CONTENT_TYPE_JSON = "application/json";
-
-	private static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
-
 	private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
-
-	private enum ScopeKind {
-
-		BOOTSTRAP,
-
-		CONNECTION,
-
-		SESSION
-
-	}
-
-	private enum RequestKind {
-
-		INITIALIZE,
-
-		SESSION_NEW,
-
-		SESSION_LOAD,
-
-		GENERIC
-
-	}
-
-	private record RouteScope(ScopeKind kind, @Nullable String sessionId) {
-
-		static RouteScope bootstrap() {
-			return new RouteScope(ScopeKind.BOOTSTRAP, null);
-		}
-
-		static RouteScope connection() {
-			return new RouteScope(ScopeKind.CONNECTION, null);
-		}
-
-		static RouteScope session(String sessionId) {
-			return new RouteScope(ScopeKind.SESSION, sessionId);
-		}
-
-		boolean isSession() {
-			return kind == ScopeKind.SESSION;
-		}
-
-		/**
-		 * The session id this scope routes to. Only session scopes carry one, and every
-		 * caller has already established that the scope is one.
-		 */
-		String boundSessionId() {
-			if (sessionId == null) {
-				throw new IllegalStateException("A " + kind + " route scope has no session id");
-			}
-			return sessionId;
-		}
-
-	}
-
-	private record OutboundRequestRoute(RequestKind kind, RouteScope requestScope, RouteScope responseScope) {
-	}
-
-	private record HttpClientBundle(HttpClient httpClient, @Nullable ExecutorService ownedExecutor) {
-	}
-
-	private final URI endpointUri;
 
 	private final AcpJsonMapper jsonMapper;
 
-	private final HttpClient httpClient;
+	private final StreamableHttpRequests requests;
 
-	private final @Nullable ExecutorService ownedHttpExecutor;
+	private final StreamableHttpRoutes routes;
 
-	private final ExecutorService httpSignalExecutor;
+	private final StreamableHttpStreams streams;
 
-	private final ExecutorService sseExecutor;
-
-	private final int maxSseStreams;
-
-	private final Sinks.Many<JSONRPCMessage> inboundSink;
-
-	/*
-	 * A streamable HTTP client may have one connection SSE reader and multiple session
-	 * SSE readers active at the same time. Reactor unicast sinks require serialized
-	 * producers, so every SSE reader emits through this monitor.
-	 */
-	private final Object inboundEmitMonitor = new Object();
+	private final StreamableHttpInbound inbound;
 
 	private final AtomicBoolean connected = new AtomicBoolean(false);
 
 	private final AtomicBoolean initialized = new AtomicBoolean(false);
 
 	private final AtomicBoolean closing = new AtomicBoolean(false);
-
-	// Client-originated request id -> where the eventual SSE response is expected.
-	private final Map<Object, OutboundRequestRoute> outboundRequestRoutes = new ConcurrentHashMap<>();
-
-	// Agent-originated request id -> HTTP scope required for the later client POST response.
-	private final Map<Object, RouteScope> inboundRequestRoutes = new ConcurrentHashMap<>();
-
-	private final Map<String, SseStream> sessionStreams = new ConcurrentHashMap<>();
-
-	// Session id -> shared open operation so callers reuse one GET while opening.
-	private final Map<String, Mono<Void>> sessionStreamOpenOperations = new ConcurrentHashMap<>();
-
-	private final AtomicReference<@Nullable SseStream> connectionStream = new AtomicReference<>();
-
-	private volatile @Nullable String connectionId;
 
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
@@ -242,42 +136,17 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				|| "https".equalsIgnoreCase(endpointUri.getScheme()),
 				"The endpointUri must use http or https");
 
-		this.endpointUri = endpointUri;
 		this.jsonMapper = jsonMapper;
-		this.httpClient = bundle.httpClient();
-		this.ownedHttpExecutor = bundle.ownedExecutor();
-		this.httpSignalExecutor = boundedExecutor(options.httpSignalThreads(), options.httpQueueCapacity(),
-				"acp-streamable-http-signal");
-		this.maxSseStreams = options.maxSseStreams();
-		this.sseExecutor = new ThreadPoolExecutor(options.maxSseStreams(), options.maxSseStreams(), 0,
-				TimeUnit.MILLISECONDS, new SynchronousQueue<>(), daemonThreadFactory("acp-streamable-http-sse"),
-				new ThreadPoolExecutor.AbortPolicy());
-		this.inboundSink = Sinks.many().unicast().onBackpressureBuffer();
+		this.requests = new StreamableHttpRequests(endpointUri, bundle, options);
+		this.routes = new StreamableHttpRoutes(jsonMapper);
+		this.streams = new StreamableHttpStreams(requests, routes, jsonMapper, options.maxSseStreams(),
+				new StreamableHttpStreams.Owner(this::processInbound, closing::get, this::terminateAfterSseFailure));
+		this.inbound = new StreamableHttpInbound(routes, streams, jsonMapper);
 	}
 
 	private static HttpClientBundle createDefaultHttpClient(StreamableHttpAcpClientTransportOptions options) {
 		Assert.notNull(options, "The transport options can not be null");
-		ExecutorService executor = boundedExecutor(options.httpWorkerThreads(), options.httpQueueCapacity(),
-				"acp-streamable-http-client");
-		HttpClient client = HttpClient.newBuilder()
-			.version(HttpClient.Version.HTTP_2)
-			.cookieHandler(new CookieManager())
-			.executor(executor)
-			.build();
-		return new HttpClientBundle(client, executor);
-	}
-
-	private static ExecutorService boundedExecutor(int threads, int queueCapacity, String threadName) {
-		return new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
-				new ArrayBlockingQueue<>(queueCapacity), daemonThreadFactory(threadName), new ThreadPoolExecutor.AbortPolicy());
-	}
-
-	private static ThreadFactory daemonThreadFactory(String threadName) {
-		return runnable -> {
-			Thread thread = new Thread(runnable, threadName);
-			thread.setDaemon(true);
-			return thread;
-		};
+		return HttpClientBundle.createDefault(options);
 	}
 
 	@Override
@@ -286,15 +155,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		if (!connected.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Already connected"));
 		}
-
-		handleIncomingMessages(handler);
+		inbound.messages().flatMap(message -> Mono.just(message).transform(handler)).subscribe();
 		return Mono.empty();
-	}
-
-	private void handleIncomingMessages(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
-		this.inboundSink.asFlux()
-			.flatMap(message -> Mono.just(message).transform(handler))
-			.subscribe();
 	}
 
 	@Override
@@ -312,70 +174,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return routeAndPost(message);
 	}
 
-	/**
-	 * HTTP version pinned for every request after the cleartext probe, or {@code null} to
-	 * use the client's own setting. Set to HTTP/1.1 when an {@code http://} server does not
-	 * speak h2c, so later requests stop carrying {@code Upgrade: h2c}: some servers hand any
-	 * request with an Upgrade header to their WebSocket handler and answer 405 (the
-	 * TypeScript SDK's example server does).
-	 */
-	private volatile HttpClient.@Nullable Version pinnedVersion;
-
-	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
-
-	/**
-	 * The transport requires HTTP/2 (RFD). Over {@code https} ALPN negotiates it. Over
-	 * cleartext {@code http} the JDK offers an h2c upgrade on every request, but servers
-	 * (Jetty among them) only honour it on a request without a body, and {@code initialize}
-	 * is a POST. A bodiless GET first upgrades the connection when the server speaks
-	 * h2c; every later request reuses it over HTTP/2. When it does not (answer on HTTP/1.1,
-	 * an error, or no answer within five seconds), every later request is pinned to HTTP/1.1.
-	 * A GET rather than OPTIONS because some h2c servers (Hypercorn) upgrade a GET but answer
-	 * OPTIONS with 405 on HTTP/1.1. It carries no connection id, so servers answer it with a
-	 * 4xx without opening a stream; only the negotiated version is used.
-	 */
-	private Mono<Void> upgradeCleartextToHttp2() {
-		if (!"http".equalsIgnoreCase(endpointUri.getScheme()) || httpClient.version() != HttpClient.Version.HTTP_2) {
-			return Mono.empty();
-		}
-		HttpRequest probe = HttpRequest.newBuilder(endpointUri)
-			.GET()
-			.build();
-		// Cancelling the Mono on timeout cancels the HTTP exchange (see sendAsync).
-		return sendAsync(probe, HttpResponse.BodyHandlers.discarding())
-			.timeout(PROBE_TIMEOUT, AcpSchedulers.timeouts())
-			.doOnNext(response -> {
-				logger.debug("Cleartext probe to {} negotiated {}", endpointUri, response.version());
-				if (response.version() != HttpClient.Version.HTTP_2) {
-					this.pinnedVersion = HttpClient.Version.HTTP_1_1;
-				}
-			})
-			.then()
-			.onErrorResume(error -> {
-				logger.debug("Cleartext HTTP/2 probe to {} failed ({}); using HTTP/1.1", endpointUri, error.getMessage());
-				this.pinnedVersion = HttpClient.Version.HTTP_1_1;
-				return Mono.empty();
-			});
-	}
-
-	/** Re-stamps a request built before the probe with the version the probe settled on. */
-	private HttpRequest pinned(HttpRequest request) {
-		HttpClient.Version version = this.pinnedVersion;
-		if (version == null) {
-			return request;
-		}
-		return HttpRequest.newBuilder(request, (name, value) -> true).version(version).build();
-	}
-
-	private HttpRequest.Builder newRequest() {
-		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpointUri);
-		HttpClient.Version version = this.pinnedVersion;
-		if (version != null) {
-			requestBuilder.version(version);
-		}
-		return requestBuilder;
-	}
-
 	private Mono<Void> initialize(AcpSchema.JSONRPCRequest request) {
 		if (!initialized.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Transport is already initialized"));
@@ -383,375 +181,79 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 		HttpRequest httpRequest;
 		try {
-			httpRequest = jsonPostBuilder(RouteScope.bootstrap())
-				.POST(HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(request), StandardCharsets.UTF_8))
-				.build();
+			httpRequest = requests.jsonPost(RouteScope.bootstrap(), jsonMapper.writeValueAsString(request));
 		}
 		catch (IOException e) {
 			initialized.set(false);
 			return Mono.error(new AcpConnectionException("Failed to serialize initialize request", e));
 		}
 
-		HttpRequest initializeRequest = httpRequest;
-		return upgradeCleartextToHttp2()
-			.then(Mono.defer(() -> sendAsync(pinned(initializeRequest), HttpResponse.BodyHandlers.ofString())))
-			.flatMap(response -> {
-				if (response.statusCode() != 200) {
-					return Mono.error(new AcpConnectionException(
-							"Expected 200 for initialize, got " + response.statusCode()));
-				}
-				String contentType = response.headers().firstValue("Content-Type").orElse("");
-				if (!contentType.toLowerCase(Locale.ROOT).contains(CONTENT_TYPE_JSON)) {
-					return Mono.error(new AcpConnectionException(
-							"Expected " + CONTENT_TYPE_JSON + " initialize response, got " + contentType));
-				}
-				JSONRPCMessage responseMessage;
-				try {
-					responseMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, response.body());
-				}
-				catch (Exception e) {
-					return Mono.error(new AcpConnectionException("Failed to deserialize initialize response", e));
-				}
-				if (!(responseMessage instanceof AcpSchema.JSONRPCResponse initializeResponse)) {
-					return Mono.error(new AcpConnectionException("ACP initialize response was not a JSON-RPC response"));
-				}
-				if (!Objects.equals(request.id(), initializeResponse.id())) {
-					return Mono.error(
-							new AcpConnectionException("ACP initialize response id did not match initialize request"));
-				}
-				this.connectionId = response.headers()
-					.firstValue(HEADER_CONNECTION_ID)
-					.orElseThrow(() -> new AcpConnectionException(
-							"Initialize response missing " + HEADER_CONNECTION_ID));
-				return openConnectionStream().then(emitInbound(responseMessage));
-			})
+		return requests.upgradeCleartextToHttp2()
+			.then(Mono.defer(() -> requests.sendAsync(requests.pinned(httpRequest), HttpResponse.BodyHandlers.ofString())))
+			.flatMap(response -> readInitializeResponse(request, response))
+			.flatMap(responseMessage -> streams.openConnectionStream().then(inbound.emit(responseMessage)))
 			.doOnError(error -> {
 				initialized.set(false);
 				exceptionHandler.accept(error);
 			});
 	}
 
+	/**
+	 * Checks the answer to {@code initialize} and records the connection id it assigns.
+	 * Emits the JSON-RPC response it carries.
+	 */
+	private Mono<JSONRPCMessage> readInitializeResponse(AcpSchema.JSONRPCRequest request,
+			HttpResponse<String> response) {
+		return StreamableHttpRequests.expectStatus(response, 200, "for initialize")
+			.then(StreamableHttpRequests.expectContentType(response, StreamableHttpRequests.CONTENT_TYPE_JSON,
+					"initialize response"))
+			.then(Mono.fromCallable(() -> deserializeInitializeResponse(request, response.body())))
+			.doOnNext(ignored -> requests.connectionId(response.headers()
+				.firstValue(StreamableHttpRequests.HEADER_CONNECTION_ID)
+				.orElseThrow(() -> new AcpConnectionException(
+						"Initialize response missing " + StreamableHttpRequests.HEADER_CONNECTION_ID))));
+	}
+
+	private JSONRPCMessage deserializeInitializeResponse(AcpSchema.JSONRPCRequest request, String body) {
+		JSONRPCMessage responseMessage;
+		try {
+			responseMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, body);
+		}
+		catch (Exception e) {
+			throw new AcpConnectionException("Failed to deserialize initialize response", e);
+		}
+		if (!(responseMessage instanceof AcpSchema.JSONRPCResponse initializeResponse)) {
+			throw new AcpConnectionException("ACP initialize response was not a JSON-RPC response");
+		}
+		if (!Objects.equals(request.id(), initializeResponse.id())) {
+			throw new AcpConnectionException("ACP initialize response id did not match initialize request");
+		}
+		return responseMessage;
+	}
+
 	private Mono<Void> routeAndPost(JSONRPCMessage message) {
 		return Mono.defer(() -> {
-			ResolvedOutboundRoute resolved = resolveOutboundRoute(message);
-			Mono<Void> preparation = prepareRoute(resolved);
-			return preparation.then(postAccepted(message, resolved.scope()))
-				.doOnSuccess(ignored -> {
-					if (message instanceof AcpSchema.JSONRPCResponse response && response.id() != null) {
-						inboundRequestRoutes.remove(response.id());
-					}
-				})
-				.doOnError(error -> {
-					if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null) {
-						outboundRequestRoutes.remove(request.id());
-					}
-				});
+			RouteScope scope = routes.resolveOutbound(message);
+			return streams.prepare(message, scope)
+				.then(post(message, scope))
+				.doOnSuccess(ignored -> routes.posted(message))
+				.doOnError(error -> routes.postFailed(message));
 		});
 	}
 
-	private Mono<Void> prepareRoute(ResolvedOutboundRoute resolved) {
-		if (resolved.message() instanceof AcpSchema.JSONRPCRequest request
-				&& AcpSchema.METHOD_SESSION_LOAD.equals(request.method())) {
-			// Open the session stream first (the RFD's reconnect order) unless it is already
-			// open: servers allow one receiver per stream, and the TypeScript and Rust servers
-			// answer a second GET with 409.
-			String sessionId = resolved.scope().boundSessionId();
-			SseStream existing = sessionStreams.get(sessionId);
-			if (existing != null && !existing.closed.get()) {
-				return Mono.empty();
-			}
-			return openSessionStream(sessionId);
-		}
-		if (resolved.scope().isSession() && !sessionStreams.containsKey(resolved.scope().boundSessionId())) {
-			return openSessionStream(resolved.scope().boundSessionId());
-		}
-		return Mono.empty();
-	}
-
-	private Mono<Void> postAccepted(JSONRPCMessage message, RouteScope scope) {
-		HttpRequest request;
+	private Mono<Void> post(JSONRPCMessage message, RouteScope scope) {
+		String json;
 		try {
-			request = jsonPostBuilder(scope)
-				.POST(HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(message), StandardCharsets.UTF_8))
-				.build();
+			json = jsonMapper.writeValueAsString(message);
 		}
 		catch (IOException e) {
 			return Mono.error(new AcpConnectionException("Failed to serialize outbound message", e));
 		}
-
-		return sendAsync(request, HttpResponse.BodyHandlers.discarding())
-			.flatMap(response -> {
-				if (response.statusCode() != 202) {
-					return Mono.error(new AcpConnectionException(
-							"Expected 202 for POST, got " + response.statusCode()));
-				}
-				return Mono.empty();
-			});
-	}
-
-	private HttpRequest.Builder jsonPostBuilder(RouteScope scope) {
-		HttpRequest.Builder builder = newRequest()
-			.header("Content-Type", CONTENT_TYPE_JSON)
-			.header("Accept", CONTENT_TYPE_JSON);
-		addScopeHeaders(builder, scope);
-		return builder;
-	}
-
-	private Mono<Void> openConnectionStream() {
-		return openSseStream(RouteScope.connection()).doOnNext(stream -> {
-			this.connectionStream.set(stream);
-			stream.start();
-		}).then();
-	}
-
-	private Mono<Void> openSessionStream(String sessionId) {
-		return sessionStreamOpenOperations.computeIfAbsent(sessionId, this::createSessionStreamOpenMono);
-	}
-
-	private Mono<Void> createSessionStreamOpenMono(String sessionId) {
-		AtomicReference<@Nullable Mono<Void>> operation = new AtomicReference<>();
-		Mono<Void> openOperation = openSseStream(RouteScope.session(sessionId))
-			.doOnNext(stream -> {
-				SseStream existing = sessionStreams.putIfAbsent(sessionId, stream);
-				if (existing == null) {
-					try {
-						stream.start();
-					}
-					catch (RuntimeException e) {
-						// Otherwise a later request for this session would skip the
-						// reopen and post into a stream that never reads.
-						sessionStreams.remove(sessionId, stream);
-						throw e;
-					}
-				}
-				else {
-					stream.close();
-				}
-			})
-			.then()
-			.doFinally(signal -> sessionStreamOpenOperations.remove(sessionId, operation.get()))
-			.cache();
-		operation.set(openOperation);
-		return openOperation;
-	}
-
-	/** Emits the opened stream or an error; it never completes empty. */
-	private Mono<SseStream> openSseStream(RouteScope scope) {
-		HttpRequest.Builder builder = newRequest().GET().header("Accept", CONTENT_TYPE_EVENT_STREAM);
-		addScopeHeaders(builder, scope);
-		HttpRequest request = builder.build();
-
-		return sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
-			.flatMap(response -> {
-				if (response.statusCode() != 200) {
-					return Mono.error(new AcpConnectionException(
-							"Expected 200 when opening SSE stream, got " + response.statusCode()));
-				}
-				String contentType = response.headers().firstValue("Content-Type").orElse("");
-				if (!contentType.toLowerCase(Locale.ROOT).contains(CONTENT_TYPE_EVENT_STREAM)) {
-					return Mono.error(new AcpConnectionException(
-							"Expected " + CONTENT_TYPE_EVENT_STREAM + " response, got " + contentType));
-				}
-				return Mono.just(new SseStream(scope, response.body()));
-			});
-	}
-
-	private void addScopeHeaders(HttpRequest.Builder builder, RouteScope scope) {
-		if (scope.kind() != ScopeKind.BOOTSTRAP) {
-			String currentConnectionId = requireConnectionId();
-			builder.header(HEADER_CONNECTION_ID, currentConnectionId);
-		}
-		if (scope.isSession()) {
-			builder.header(HEADER_SESSION_ID, scope.boundSessionId());
-		}
-	}
-
-	private String requireConnectionId() {
-		String currentConnectionId = this.connectionId;
-		if (currentConnectionId == null || currentConnectionId.isBlank()) {
-			throw new AcpConnectionException("Missing " + HEADER_CONNECTION_ID);
-		}
-		return currentConnectionId;
-	}
-
-	private ResolvedOutboundRoute resolveOutboundRoute(JSONRPCMessage message) {
-		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			if (response.id() == null) {
-				// The answer to an agent request posted with "id": null, which was never
-				// routed (a ConcurrentMap holds no null key).
-				return new ResolvedOutboundRoute(message, RouteScope.connection(), null);
-			}
-			RouteScope scope = inboundRequestRoutes.get(response.id());
-			if (scope == null) {
-				throw new AcpConnectionException("Cannot route outbound response with unknown id " + response.id());
-			}
-			return new ResolvedOutboundRoute(message, scope, null);
-		}
-
-		if (message instanceof AcpSchema.JSONRPCRequest request) {
-			ResolvedOutboundRoute resolved = resolveRequestOrNotificationRoute(message, request.method(), request.params());
-			if (resolved.requestRoute() != null && request.id() != null) {
-				outboundRequestRoutes.put(request.id(), resolved.requestRoute());
-			}
-			return resolved;
-		}
-
-		if (message instanceof AcpSchema.JSONRPCNotification notification) {
-			return resolveRequestOrNotificationRoute(message, notification.method(), notification.params());
-		}
-
-		throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
-	}
-
-	private ResolvedOutboundRoute resolveRequestOrNotificationRoute(JSONRPCMessage message, String method,
-			@Nullable Object params) {
-		RouteScope requestScope;
-		RequestKind requestKind = RequestKind.GENERIC;
-		RouteScope responseScope;
-
-		switch (method) {
-			case AcpSchema.METHOD_INITIALIZE:
-				requestScope = RouteScope.bootstrap();
-				requestKind = RequestKind.INITIALIZE;
-				responseScope = RouteScope.bootstrap();
-				break;
-			case AcpSchema.METHOD_AUTHENTICATE:
-			case AcpSchema.METHOD_SESSION_NEW:
-				requestScope = RouteScope.connection();
-				requestKind = AcpSchema.METHOD_SESSION_NEW.equals(method) ? RequestKind.SESSION_NEW : RequestKind.GENERIC;
-				responseScope = RouteScope.connection();
-				break;
-			case AcpSchema.METHOD_SESSION_LOAD:
-			case AcpSchema.METHOD_SESSION_RESUME:
-				requestScope = RouteScope.session(requireSessionId(params, method));
-				requestKind = RequestKind.SESSION_LOAD;
-				responseScope = RouteScope.connection();
-				break;
-			case AcpSchema.METHOD_SESSION_PROMPT:
-			case AcpSchema.METHOD_SESSION_SET_MODE:
-			case AcpSchema.METHOD_SESSION_CANCEL:
-				requestScope = RouteScope.session(requireSessionId(params, method));
-				responseScope = requestScope;
-				break;
-			default:
-				Optional<String> sessionId = extractSessionId(params);
-				if (sessionId.isPresent()) {
-					logger.warn("Falling back to inferred session routing for unknown method '{}'", method);
-					requestScope = RouteScope.session(sessionId.get());
-				}
-				else {
-					logger.warn("Falling back to inferred connection routing for unknown method '{}'", method);
-					requestScope = RouteScope.connection();
-				}
-				responseScope = requestScope;
-		}
-
-		OutboundRequestRoute requestRoute = null;
-		if (message instanceof AcpSchema.JSONRPCRequest) {
-			requestRoute = new OutboundRequestRoute(requestKind, requestScope, responseScope);
-		}
-		return new ResolvedOutboundRoute(message, requestScope, requestRoute);
-	}
-
-	private Optional<String> extractSessionId(@Nullable Object params) {
-		if (params == null) {
-			return Optional.empty();
-		}
-		Map<?, ?> paramsMap = jsonMapper.convertValue(params, Map.class);
-		Object sessionId = paramsMap.get("sessionId");
-		return sessionId == null ? Optional.empty() : Optional.of(sessionId.toString());
-	}
-
-	private String requireSessionId(@Nullable Object params, String method) {
-		return extractSessionId(params)
-			.filter(sessionId -> !sessionId.isBlank())
-			.orElseThrow(() -> new AcpConnectionException("Missing sessionId for outbound method " + method));
+		return requests.postAccepted(scope, json);
 	}
 
 	private Mono<Void> processInbound(RouteScope actualScope, JSONRPCMessage message) {
-		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			Object responseId = response.id();
-			if (responseId == null) {
-				// JSON-RPC's answer to a request the agent could not parse: no route to match.
-				return emitInbound(message);
-			}
-			OutboundRequestRoute expectedRoute = outboundRequestRoutes.get(responseId);
-			if (expectedRoute != null) {
-				Mono<Void> processedResponse;
-				if (!Objects.equals(expectedRoute.responseScope(), actualScope)) {
-					// Peers differ on which stream carries session/load and session/resume
-					// replies (the Rust server uses the session stream, TypeScript the
-					// connection stream). The reply is still ours by id: deliver it.
-					logger.warn("Response id {} arrived on {} but was expected on {}; delivering it anyway",
-							response.id(), actualScope, expectedRoute.responseScope());
-					processedResponse = expectedRoute.kind() == RequestKind.SESSION_NEW
-							? processNewSessionResponse(response) : emitInbound(message);
-				}
-				else if (expectedRoute.kind() == RequestKind.SESSION_NEW) {
-					processedResponse = processNewSessionResponse(response);
-				}
-				else {
-					processedResponse = emitInbound(message);
-				}
-				return processedResponse.doFinally(signal -> outboundRequestRoutes.remove(responseId));
-			}
-			return emitInbound(message);
-		}
-
-		if (message instanceof AcpSchema.JSONRPCRequest request) {
-			if (request.id() != null) {
-				inboundRequestRoutes.put(request.id(), actualScope);
-			}
-			return emitInbound(message);
-		}
-
-		return emitInbound(message);
-	}
-
-	private Mono<Void> processNewSessionResponse(AcpSchema.JSONRPCResponse response) {
-		if (response.error() != null) {
-			return emitInbound(response);
-		}
-
-		Object result = response.result();
-		if (result == null) {
-			return emitInbound(errorResponse(response.id(), "session/new response carried no result", null));
-		}
-		String sessionId;
-		try {
-			AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(result,
-					new TypeRef<AcpSchema.NewSessionResponse>() {
-					});
-			sessionId = sessionResponse.sessionId();
-		}
-		catch (Exception e) {
-			return emitInbound(errorResponse(response.id(), "Failed to read session/new response", e));
-		}
-		// Required by the schema, but Jackson does not enforce it: the agent can omit it.
-		if (sessionId == null || sessionId.isBlank()) {
-			return emitInbound(errorResponse(response.id(), "session/new response missing sessionId", null));
-		}
-		return openSessionStream(sessionId)
-			.then(emitInbound(response))
-			.onErrorResume(error -> emitInbound(errorResponse(response.id(),
-					"Failed to open session SSE stream for session " + sessionId, error)));
-	}
-
-	private AcpSchema.JSONRPCResponse errorResponse(@Nullable Object id, String message, @Nullable Throwable error) {
-		Object data = error == null ? null : error.getMessage();
-		return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
-				new AcpSchema.JSONRPCError(AcpErrorCodes.INTERNAL_ERROR, message, data));
-	}
-
-	private Mono<Void> emitInbound(JSONRPCMessage message) {
-		return Mono.fromRunnable(() -> {
-			synchronized (inboundEmitMonitor) {
-				Sinks.EmitResult result = inboundSink.tryEmitNext(message);
-				if (result.isFailure()) {
-					throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
-				}
-			}
-		});
+		return inbound.process(actualScope, message);
 	}
 
 	@Override
@@ -761,34 +263,24 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				return Mono.empty();
 			}
 			terminationSink.tryEmitEmpty();
-			Optional.ofNullable(connectionStream.get()).ifPresent(SseStream::close);
-			sessionStreams.values().forEach(SseStream::close);
-
-			Mono<Void> deleteRequest = Mono.empty();
-			if (connectionId != null) {
-				HttpRequest request = newRequest()
-					.DELETE()
-					.header(HEADER_CONNECTION_ID, connectionId)
-					.build();
-				deleteRequest = sendAsync(request, HttpResponse.BodyHandlers.discarding())
-					.flatMap(response -> {
-						if (response.statusCode() != 202) {
-							return Mono.<Void>error(new AcpConnectionException(
-									"Expected 202 for DELETE, got " + response.statusCode()));
-						}
-						return Mono.empty();
-					})
-					// A dead or unresponsive server must not hang shutdown; the connection is
-					// released server-side by its own close or idle handling.
-					.timeout(PROBE_TIMEOUT, AcpSchedulers.timeouts())
-					.onErrorResume(error -> {
-						logger.debug("DELETE of connection {} did not complete: {}", connectionId, error.getMessage());
-						return Mono.empty();
-					});
-			}
-
-			return deleteRequest.doFinally(signal -> clearState());
+			streams.closeAll();
+			return deleteConnection().doFinally(signal -> clearState());
 		});
+	}
+
+	private Mono<Void> deleteConnection() {
+		String connectionId = requests.connectionId();
+		if (connectionId == null) {
+			return Mono.empty();
+		}
+		return requests.deleteConnection(connectionId)
+			// A dead or unresponsive server must not hang shutdown; the connection is
+			// released server-side by its own close or idle handling.
+			.timeout(StreamableHttpRequests.PROBE_TIMEOUT, AcpSchedulers.timeouts())
+			.onErrorResume(error -> {
+				logger.debug("DELETE of connection {} did not complete: {}", connectionId, error.getMessage());
+				return Mono.empty();
+			});
 	}
 
 	@Override
@@ -797,93 +289,10 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private void clearState() {
-		Optional.ofNullable(connectionStream.getAndSet(null)).ifPresent(SseStream::close);
-		sessionStreams.values().forEach(SseStream::close);
-		sessionStreams.clear();
-		sessionStreamOpenOperations.clear();
-		inboundRequestRoutes.clear();
-		outboundRequestRoutes.clear();
-		connectionId = null;
-		inboundSink.tryEmitComplete();
-		sseExecutor.shutdownNow();
-		httpSignalExecutor.shutdownNow();
-		if (ownedHttpExecutor != null) {
-			ownedHttpExecutor.shutdownNow();
-		}
-	}
-
-	/** Reconnects in a row that delivered nothing before the transport gives up on a stream. */
-	private static final int MAX_BARREN_RECONNECTS = 3;
-
-	private static final Duration RECONNECT_BACKOFF = Duration.ofMillis(200);
-
-	/**
-	 * A stream closed that this client did not close: the server detached it (backpressure,
-	 * a restart of the proxy in between), or the network dropped it. The server keeps what
-	 * it has not delivered in the stream's mailbox, so reopening loses nothing: reconnect
-	 * with a short backoff. Give up, as before, when the server answers that the connection
-	 * is gone, or after {@value #MAX_BARREN_RECONNECTS} reconnects in a row that delivered no
-	 * event (a server that keeps closing must not cause an endless loop).
-	 */
-	private void handleUnexpectedSseClosure(SseStream stream, Throwable error) {
-		if (closing.get()) {
-			return;
-		}
-		RouteScope scope = stream.scope;
-		int barren = stream.delivered ? 0 : stream.barrenReconnects + 1;
-		if (barren > MAX_BARREN_RECONNECTS) {
-			giveUpOn(stream, error);
-			return;
-		}
-		logger.info("SSE stream closed unexpectedly; reconnecting: {}", scope);
-		Mono.defer(() -> openSseStream(scope))
-			.retryWhen(reactor.util.retry.Retry.backoff(2, RECONNECT_BACKOFF)
-				.scheduler(AcpSchedulers.timeouts())
-				.filter(e -> !isConnectionGone(e)))
-			.subscribe(reopened -> {
-				reopened.barrenReconnects = barren;
-				if (closing.get() || !replaceStream(stream, reopened)) {
-					reopened.close();
-					return;
-				}
-				reopened.start();
-				logger.info("SSE stream reconnected: {}", scope);
-			}, reconnectError -> giveUpOn(stream, reconnectError));
-	}
-
-	private boolean replaceStream(SseStream old, SseStream reopened) {
-		if (old.scope.isSession()) {
-			return sessionStreams.replace(old.scope.boundSessionId(), old, reopened);
-		}
-		return connectionStream.compareAndSet(old, reopened);
-	}
-
-	/** 404 on reconnect: the server no longer knows this connection or session. */
-	private static boolean isConnectionGone(Throwable error) {
-		// AcpException.getMessage() is non-null, unlike Throwable's.
-		return error instanceof AcpConnectionException connectionError
-				&& connectionError.getMessage().contains("got 404");
-	}
-
-	/** The old behaviour: a dead connection stream, or a session stream owing a response, ends the transport. */
-	private void giveUpOn(SseStream stream, Throwable error) {
-		if (closing.get()) {
-			return;
-		}
-		RouteScope scope = stream.scope;
-		if (!scope.isSession() || hasPendingResponseFor(scope)) {
-			terminateAfterSseFailure(error);
-			return;
-		}
-		if (sessionStreams.remove(scope.boundSessionId(), stream)) {
-			sessionStreamOpenOperations.remove(scope.boundSessionId());
-			logger.info("Session SSE stream closed; it will be reopened before the next session request: {}", scope);
-		}
-	}
-
-	private boolean hasPendingResponseFor(RouteScope scope) {
-		return outboundRequestRoutes.values().stream()
-			.anyMatch(route -> Objects.equals(route.responseScope(), scope));
+		streams.clear();
+		routes.clear();
+		inbound.complete();
+		requests.shutdown();
 	}
 
 	private void terminateAfterSseFailure(Throwable error) {
@@ -908,138 +317,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	@Override
 	public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
 		return jsonMapper.convertValue(data, typeRef);
-	}
-
-	private record ResolvedOutboundRoute(JSONRPCMessage message, RouteScope scope,
-			@Nullable OutboundRequestRoute requestRoute) {
-	}
-
-	private <T> Mono<HttpResponse<T>> sendAsync(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
-		return Mono.create(sink -> {
-			CompletableFuture<HttpResponse<T>> future = httpClient.sendAsync(request, bodyHandler);
-			sink.onCancel(() -> future.cancel(true));
-			try {
-				future.whenCompleteAsync((response, error) -> {
-					if (error != null) {
-						sink.error(error);
-					}
-					else {
-						sink.success(response);
-					}
-				}, httpSignalExecutor).exceptionally(error -> {
-					// The signal executor rejected the completion callback: the HTTP call
-					// finished but nobody would have told the caller.
-					sink.error(error);
-					return null;
-				});
-			}
-			catch (RejectedExecutionException e) {
-				future.cancel(true);
-				sink.error(e);
-			}
-		});
-	}
-
-	private class SseStream {
-
-		private final RouteScope scope;
-
-		private final InputStream body;
-
-		private final AtomicBoolean closed = new AtomicBoolean(false);
-
-		private volatile @Nullable Future<?> readerTask;
-
-		/** Whether this stream carried at least one event; resets the reconnect budget. */
-		private volatile boolean delivered;
-
-		/** Reconnects in a row, ending with this stream, that delivered nothing. */
-		private volatile int barrenReconnects;
-
-		SseStream(RouteScope scope, InputStream body) {
-			this.scope = scope;
-			this.body = body;
-		}
-
-		void start() {
-			try {
-				this.readerTask = sseExecutor.submit(this::readLoop);
-			}
-			catch (RejectedExecutionException e) {
-				close();
-				throw new AcpConnectionException("Maximum active SSE streams exceeded: " + maxSseStreams, e);
-			}
-		}
-
-		void close() {
-			if (closed.compareAndSet(false, true)) {
-				try {
-					body.close();
-				}
-				catch (IOException ignored) {
-					// Best effort: the stream is abandoned either way, and cancelling the
-					// reader below stops the read loop.
-				}
-				Future<?> readerTask = this.readerTask;
-				if (readerTask != null) {
-					readerTask.cancel(true);
-				}
-			}
-		}
-
-		private void readLoop() {
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
-				StringBuilder dataBuffer = new StringBuilder();
-				String line;
-				while (!closed.get() && (line = reader.readLine()) != null) {
-					if (line.isEmpty()) {
-						dispatchEvent(dataBuffer);
-						dataBuffer.setLength(0);
-						continue;
-					}
-					if (line.startsWith(":")) {
-						continue;
-					}
-					if (line.startsWith("data:")) {
-						if (!dataBuffer.isEmpty()) {
-							dataBuffer.append('\n');
-						}
-						dataBuffer.append(line.substring(5).stripLeading());
-					}
-				}
-				dispatchEvent(dataBuffer);
-				if (!closed.get() && !closing.get()) {
-					throw new AcpConnectionException("SSE stream closed unexpectedly: " + scope);
-				}
-			}
-			catch (Exception e) {
-				if (!closed.get()) {
-					handleUnexpectedSseClosure(this, e);
-				}
-			}
-		}
-
-		private void dispatchEvent(StringBuilder dataBuffer) {
-			if (dataBuffer.isEmpty()) {
-				return;
-			}
-			try {
-				JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, dataBuffer.toString());
-				delivered = true;
-				processInbound(scope, message).subscribe(v -> {
-				}, error -> {
-					if (!closed.get() && !closing.get()) {
-						logger.warn("Failed to process SSE event from {}", scope, error);
-					}
-				});
-			}
-			catch (Exception e) {
-				if (!closed.get() && !closing.get()) {
-					logger.warn("Failed to deserialize SSE event from {}", scope, e);
-				}
-			}
-		}
-
 	}
 
 }
