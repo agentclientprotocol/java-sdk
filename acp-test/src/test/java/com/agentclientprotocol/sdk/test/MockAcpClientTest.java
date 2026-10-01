@@ -113,7 +113,7 @@ class MockAcpClientTest {
 					.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 				.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("perm-session", null, null)))
 				.promptHandler((request, updater) -> {
-					AcpSchema.ToolCallUpdate toolCall = new AcpSchema.ToolCallUpdate("tool-1", "Edit File",
+					AcpSchema.ToolCallUpdate toolCall = new AcpSchema.ToolCallUpdate("tool-1", "Edit File", null,
 							AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null);
 					List<AcpSchema.PermissionOption> options = List.of(new AcpSchema.PermissionOption("allow", "Allow",
 							AcpSchema.PermissionOptionKind.ALLOW_ONCE));

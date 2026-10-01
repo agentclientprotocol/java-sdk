@@ -85,11 +85,11 @@ class WireFormatTest {
 
 	@Test
 	void toolCallWithEnums() throws IOException {
-		var toolCall = new AcpSchema.ToolCall("tool_call", "t1", "Read file", AcpSchema.ToolKind.READ,
+		var toolCall = new AcpSchema.ToolCall("tool_call", "t1", "Read file", "read_file", AcpSchema.ToolKind.READ,
 				AcpSchema.ToolCallStatus.IN_PROGRESS, List.of(), List.of(), null, null, null);
 
 		assertThat(mapper.writeValueAsString(toolCall)).isEqualTo("{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"t1\","
-				+ "\"title\":\"Read file\",\"kind\":\"read\",\"status\":\"in_progress\",\"content\":[],\"locations\":[]}");
+				+ "\"title\":\"Read file\",\"name\":\"read_file\",\"kind\":\"read\",\"status\":\"in_progress\",\"content\":[],\"locations\":[]}");
 	}
 
 	@Test

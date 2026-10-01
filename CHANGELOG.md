@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loaded or resumed, and the client reads them from the response. New constructors
   `NewSessionResponse(sessionId, modes, configOptions)` and `LoadSessionResponse(modes,
   configOptions)` / `ResumeSessionResponse(modes, configOptions)`.
+- **Tool call `name`** on `ToolCall`, `ToolCallUpdateNotification` and `ToolCallUpdate` (stable in
+  ACP v1 since 2026-09-17): the programmatic name of the tool being invoked, next to the
+  human-readable `title`. Optional; absent and `null` both mean no name.
 
 ### Changed
 
@@ -53,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   null)` and `new LoadSessionResponse(modes, null)` still compile (the `null` is now the config
   options); a call that passed a `_meta` map in that position no longer compiles. Migration: pass
   `(id, modes, configOptions, meta)` or `(modes, configOptions, meta)`.
+- **Breaking: `ToolCall`, `ToolCallUpdate` and `ToolCallUpdateNotification` take `name` after
+  `title`.** Migration: insert the tool's name, or `null`, after the title argument of the
+  canonical constructor.
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's
