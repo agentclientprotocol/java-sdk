@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
  * Metadata about a method parameter. Implements equals/hashCode
  * for use as cache key in argument resolver lookup.
  *
- * <p>Pre-computes and caches parameter metadata for performance.
+ * <p>Computes the parameter metadata once, at construction.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -30,12 +30,11 @@ public final class AcpMethodParameter {
 	/** The reflected parameter; null for a return type. */
 	private final @Nullable Parameter parameter;
 
-	// Lazy-initialized caches
-	private volatile Annotation @Nullable [] annotations;
+	private final Annotation[] annotations;
 
-	private volatile @Nullable Class<?> parameterType;
+	private final Class<?> parameterType;
 
-	private volatile @Nullable Type genericType;
+	private final Type genericType;
 
 	/**
 	 * Create a new AcpMethodParameter for a method parameter.
@@ -45,7 +44,11 @@ public final class AcpMethodParameter {
 	public AcpMethodParameter(Method method, int index) {
 		this.method = method;
 		this.index = index;
-		this.parameter = (index >= 0) ? method.getParameters()[index] : null;
+		Parameter reflected = (index >= 0) ? method.getParameters()[index] : null;
+		this.parameter = reflected;
+		this.parameterType = (reflected != null) ? reflected.getType() : method.getReturnType();
+		this.genericType = (reflected != null) ? reflected.getParameterizedType() : method.getGenericReturnType();
+		this.annotations = (reflected != null) ? reflected.getAnnotations() : new Annotation[0];
 	}
 
 	/**
@@ -86,11 +89,6 @@ public final class AcpMethodParameter {
 	 * @return the type
 	 */
 	public Class<?> getParameterType() {
-		if (parameterType == null) {
-			parameterType = (parameter != null)
-					? parameter.getType()
-					: method.getReturnType();
-		}
 		return parameterType;
 	}
 
@@ -99,11 +97,6 @@ public final class AcpMethodParameter {
 	 * @return the generic type
 	 */
 	public Type getGenericType() {
-		if (genericType == null) {
-			genericType = (parameter != null)
-					? parameter.getParameterizedType()
-					: method.getGenericReturnType();
-		}
 		return genericType;
 	}
 
@@ -112,11 +105,6 @@ public final class AcpMethodParameter {
 	 * @return the annotations, or empty array for return type
 	 */
 	public Annotation[] getAnnotations() {
-		if (annotations == null) {
-			annotations = (parameter != null)
-					? parameter.getAnnotations()
-					: new Annotation[0];
-		}
 		return annotations;
 	}
 
