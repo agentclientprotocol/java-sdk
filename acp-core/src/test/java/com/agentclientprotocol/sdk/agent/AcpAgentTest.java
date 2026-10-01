@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link AcpAgent} factory and the high-level agent API.
@@ -41,6 +42,34 @@ class AcpAgentTest {
 			assertThat(agent).isNotNull();
 			assertThat(agent).isInstanceOf(DefaultAcpAsyncAgent.class);
 
+			agent.close();
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	@Test
+	void callsToTheClientBeforeStartFailWithIllegalState() {
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).build();
+			List<Mono<?>> calls = List.of(
+					agent.sendSessionUpdate("s", new AcpSchema.AgentMessageChunk("agent_message_chunk",
+							new AcpSchema.TextContent("hi"))),
+					agent.readTextFile(new AcpSchema.ReadTextFileRequest("s", "/f", null, null)),
+					agent.writeTextFile(new AcpSchema.WriteTextFileRequest("s", "/f", "x")),
+					agent.createTerminal(new AcpSchema.CreateTerminalRequest("s", "ls", null, null, null, null)),
+					agent.getTerminalOutput(new AcpSchema.TerminalOutputRequest("s", "t")),
+					agent.releaseTerminal(new AcpSchema.ReleaseTerminalRequest("s", "t")),
+					agent.waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest("s", "t")),
+					agent.killTerminal(new AcpSchema.KillTerminalCommandRequest("s", "t")),
+					agent.completeElicitation(new AcpSchema.CompleteElicitationNotification("e")));
+			for (Mono<?> call : calls) {
+				assertThatThrownBy(() -> call.block(TIMEOUT)).isInstanceOf(IllegalStateException.class)
+					.hasMessage("Agent not started");
+			}
+			agent.closeGracefully().block(TIMEOUT);
 			agent.close();
 		}
 		finally {

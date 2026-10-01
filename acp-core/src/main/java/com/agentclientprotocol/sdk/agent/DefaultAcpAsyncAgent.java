@@ -73,7 +73,10 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.@Nullable CancelHandler cancelHandler;
 
-	/** The session serving this agent; null until {@link #start()}. */
+	/**
+	 * The session serving this agent; null until {@link #start()}, then never null again.
+	 * Each method reads it once into a local, so its null check and its call see one value.
+	 */
 	private volatile @Nullable AcpAgentSession session;
 
 	/**
@@ -321,26 +324,29 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	@Override
 	public Mono<Void> sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		AcpSchema.SessionNotification notification = new AcpSchema.SessionNotification(sessionId, update);
-		return session.sendNotification(AcpSchema.METHOD_SESSION_UPDATE, notification);
+		return current.sendNotification(AcpSchema.METHOD_SESSION_UPDATE, notification);
 	}
 
 	@Override
 	public Mono<AcpSchema.RequestPermissionResponse> requestPermission(AcpSchema.RequestPermissionRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, request,
+		return current.sendRequest(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, request,
 				new TypeRef<AcpSchema.RequestPermissionResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		// Validate client supports file reading
@@ -348,14 +354,15 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		if (caps != null && !caps.supportsReadTextFile()) {
 			return Mono.error(new AcpCapabilityException("fs.readTextFile"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE, request,
+		return current.sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE, request,
 				new TypeRef<AcpSchema.ReadTextFileResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.WriteTextFileResponse> writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		// Validate client supports file writing
@@ -363,14 +370,15 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		if (caps != null && !caps.supportsWriteTextFile()) {
 			return Mono.error(new AcpCapabilityException("fs.writeTextFile"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, request,
+		return current.sendRequest(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, request,
 				new TypeRef<AcpSchema.WriteTextFileResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.CreateTerminalResponse> createTerminal(AcpSchema.CreateTerminalRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		// Validate client supports terminal
@@ -378,27 +386,29 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		if (caps != null && !caps.supportsTerminal()) {
 			return Mono.error(new AcpCapabilityException("terminal"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_TERMINAL_CREATE, request,
+		return current.sendRequest(AcpSchema.METHOD_TERMINAL_CREATE, request,
 				new TypeRef<AcpSchema.CreateTerminalResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_TERMINAL_OUTPUT, request,
+		return current.sendRequest(AcpSchema.METHOD_TERMINAL_OUTPUT, request,
 				new TypeRef<AcpSchema.TerminalOutputResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_TERMINAL_RELEASE, request,
+		return current.sendRequest(AcpSchema.METHOD_TERMINAL_RELEASE, request,
 				new TypeRef<AcpSchema.ReleaseTerminalResponse>() {
 				});
 	}
@@ -406,20 +416,22 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.WaitForTerminalExitResponse> waitForTerminalExit(
 			AcpSchema.WaitForTerminalExitRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, request,
+		return current.sendRequest(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, request,
 				new TypeRef<AcpSchema.WaitForTerminalExitResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_TERMINAL_KILL, request,
+		return current.sendRequest(AcpSchema.METHOD_TERMINAL_KILL, request,
 				new TypeRef<AcpSchema.KillTerminalCommandResponse>() {
 				});
 	}
@@ -427,32 +439,35 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.CreateElicitationResponse> createElicitation(
 			AcpSchema.CreateElicitationRequest request) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		NegotiatedCapabilities caps = clientCapabilities.get();
 		if (caps != null && !caps.supportsElicitation()) {
 			return Mono.error(new AcpCapabilityException("elicitation"));
 		}
-		return session.sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request,
+		return current.sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request,
 				new TypeRef<AcpSchema.CreateElicitationResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
-		if (session == null) {
+		AcpAgentSession current = this.session;
+		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return session.sendNotification(AcpSchema.METHOD_ELICITATION_COMPLETE, notification);
+		return current.sendNotification(AcpSchema.METHOD_ELICITATION_COMPLETE, notification);
 	}
 
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
 			logger.info("Closing ACP async agent gracefully");
-			if (session != null) {
-				return session.closeGracefully();
+			AcpAgentSession current = this.session;
+			if (current != null) {
+				return current.closeGracefully();
 			}
 			return Mono.empty();
 		});
@@ -461,8 +476,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public void close() {
 		logger.info("Closing ACP async agent");
-		if (session != null) {
-			session.close();
+		AcpAgentSession current = this.session;
+		if (current != null) {
+			current.close();
 		}
 	}
 
