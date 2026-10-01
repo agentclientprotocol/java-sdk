@@ -16,6 +16,12 @@
     <name>ACP Test Utilities</name>
     <description>Test utilities for ACP SDK - InMemoryTransportPair, MockAcpAgent, MockAcpClient</description>
 
+    <properties>
+        <!-- Coverage floors: measured line 78.60%, branch 40.00% (4 of 10), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.76</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.38</jacoco.minimum.branch>
+    </properties>
+
     <dependencies>
         <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
         <dependency>

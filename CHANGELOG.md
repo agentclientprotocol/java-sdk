@@ -297,6 +297,26 @@ Found by measuring coverage with JaCoCo; each has a test.
   both: a second `check` execution with its own filter does not work, since `check` analyses with
   the plugin-level configuration and the second execution would pass on a report never written.
 
+- A coverage gate fails `verify`: JaCoCo's `check` requires each module's line and branch
+  coverage to stay at or above floors declared in its `pom.xml` (`jacoco.minimum.line`,
+  `jacoco.minimum.branch`). Each floor is the coverage measured from a clean `verify`, less a margin
+  of 2 points, rounded down to a whole percent: line / branch floors are acp-core 82 / 70,
+  acp-agent-support 85 / 76, acp-streamable-http-jetty 86 / 76, acp-json-jackson2 98 / 60,
+  acp-json-jackson3 94 / 60 and acp-test 76 / 38; acp-annotations has no executable code. Each
+  module counts only its own classes, exercised by its own tests (and, in acp-core, its integration
+  tests); the JSON modules run acp-core's contract suite but count only their mapper classes. Nothing
+  is excluded, `AcpSchema`'s records included: they are covered like the rest (80 % of their lines).
+  The parent's default floor is full coverage, so a new module fails until it declares measured
+  floors. The per-module HTML report, now written in `verify` so it shows what the gate checks, is
+  at `<module>/target/site/jacoco/index.html`. The measurement found code no test in its own module
+  reached, now tested: `RemoteAcpConnection`, the per-connection core of the remote agent
+  transports (0 %, exercised only through acp-streamable-http-jetty); the WebSocket client
+  transport's listener (fragmented and malformed frames, server close, socket errors, failed sends);
+  the stdio client transport's reader and writer, which only a child JVM had run; and in
+  acp-agent-support the fork, session-config and disable-provider handlers, `Mono` return values,
+  and the errors a client gets when a handler cannot be invoked or answered (which found the bug
+  above). acp-core moved from 77 % to 84 % of lines, acp-agent-support from 70 % to 88 %.
+
 ## [0.18.0] - 2026-09-25
 
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, on plain `http://` and

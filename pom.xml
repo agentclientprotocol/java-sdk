@@ -91,6 +91,9 @@
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <!-- Coverage floors; each module overrides them with its own (see the JaCoCo plugin) -->
+        <jacoco.minimum.line>1.00</jacoco.minimum.line>
+        <jacoco.minimum.branch>1.00</jacoco.minimum.branch>
         <owasp.version>13.0.0</owasp.version>
         <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
@@ -454,7 +457,21 @@
                 </executions>
             </plugin>
 
-            <!-- JaCoCo code coverage -->
+            <!-- JaCoCo code coverage. Each module's report (target/site/jacoco/index.html) and
+                 gate count that module's own classes, exercised by that module's own tests:
+                 acp-core code reached only from another module's tests is not counted, and the
+                 JSON modules, which run acp-core's contract suite against their mapper, count
+                 only their mapper classes. Nothing is excluded. The integration harness
+                 (integration-testing/) is outside the Maven build and is not counted.
+
+                 The gate (check, in verify) fails when a module's LINE or BRANCH covered ratio
+                 falls below its floor. Every module declares jacoco.minimum.line and
+                 jacoco.minimum.branch; the default below is full coverage, so a new module
+                 fails until it declares measured floors. A floor is the coverage measured from a clean verify less a margin of
+                 2 points, rounded down to a whole percent: enough for the run-to-run variation
+                 of the concurrent tests (a branch or two), too little to lose a test class
+                 unnoticed. Raise a floor when coverage rises; lower one only with a reason in
+                 the commit. -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -466,12 +483,41 @@
                             <goal>prepare-agent</goal>
                         </goals>
                     </execution>
+                    <!-- In verify, after the integration tests (failsafe appends to the same
+                         execution data) and before the gate, so the report shows what the
+                         gate checks. -->
                     <execution>
                         <id>report</id>
-                        <phase>test</phase>
+                        <phase>verify</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>coverage-gate</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.minimum.line}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.minimum.branch}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

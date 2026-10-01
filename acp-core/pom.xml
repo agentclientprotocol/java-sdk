@@ -17,6 +17,9 @@
     <description>Core ACP implementation with stdio transport; needs one JSON module (acp-json-jackson2 or acp-json-jackson3) at runtime</description>
 
     <properties>
+        <!-- Coverage floors: measured line 84.21%, branch 72.16-72.33%, less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.82</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.70</jacoco.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>

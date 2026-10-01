@@ -20,6 +20,14 @@
     without pulling in the full ACP runtime.
     -->
 
+    <properties>
+        <!-- Coverage floors: annotation types only, no executable code. JaCoCo counts no
+             lines or branches here and an empty ratio passes, so the floors stay at the
+             parent's full coverage: code added to this module must be covered or measured. -->
+        <jacoco.minimum.line>1.00</jacoco.minimum.line>
+        <jacoco.minimum.branch>1.00</jacoco.minimum.branch>
+    </properties>
+
     <dependencies>
         <!-- The only compile dependency, and optional so consumers inherit nothing: JSpecify's
              annotations null-mark this module's package for the build's NullAway check.
