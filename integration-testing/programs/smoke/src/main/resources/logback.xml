@@ -1,0 +1,10 @@
+<configuration>
+  <!-- One stream with the STEP lines (the client stdout is not the protocol). WARN keeps SDK
+       deserialization problems (an update type the SDK does not know) visible. -->
+  <appender name="E" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.out</target>
+    <encoder><pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{0} - %msg%n</pattern></encoder>
+  </appender>
+  <logger name="com.agentclientprotocol" level="${acp.level:-WARN}"/>
+  <root level="WARN"><appender-ref ref="E"/></root>
+</configuration>
