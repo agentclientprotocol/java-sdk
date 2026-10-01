@@ -32,10 +32,29 @@ public class Peers {
 		});
 	}
 
-	public static Checkout prepare(String name, Peer peer, String ref, Path cacheDir, Path logDir) throws Exception {
+	/**
+	 * Clone or fetch, check out and build the peer at {@code ref}, then point
+	 * {@code .cache/peers/<name>} at the checkout. With {@code prepared}, a run that must not touch
+	 * shared state (parallel runs): resolve the ref locally and require the checkout to be at it
+	 * and built already; no git fetch, checkout, build or symlink change.
+	 */
+	public static Checkout prepare(String name, Peer peer, String ref, Path cacheDir, Path logDir, boolean prepared)
+			throws Exception {
 		Path peersDir = cacheDir.resolve("peers");
 		Files.createDirectories(peersDir);
 		Path dir = peersDir.resolve(name + "@" + ref.replaceAll("[^A-Za-z0-9._-]", "_"));
+		if (prepared) {
+			if (!Files.exists(dir.resolve(".git"))) {
+				throw new IllegalStateException(name + " @ " + ref + " was not prepared (no checkout at " + dir + ")");
+			}
+			String sha = resolve(dir, ref);
+			Path stamp = dir.resolve(".harness-built");
+			if (!Files.exists(stamp) || !Files.readString(stamp).trim().equals(sha)) {
+				throw new IllegalStateException(name + " @ " + ref + " was not prepared (not built at " + sha + ")");
+			}
+			System.out.println("  " + name + " @ " + ref + " (" + sha.substring(0, 12) + ") prepared");
+			return new Checkout(name, ref, sha, dir.toAbsolutePath());
+		}
 		Path log = logDir.resolve("peer-" + name + ".log");
 		String sha;
 		try (OutputStream out = Files.newOutputStream(log)) {

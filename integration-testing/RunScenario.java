@@ -38,6 +38,8 @@ import java.util.stream.Stream;
  *   jbang RunScenario.java interop-ts-server --peer typescript-sdk=v0.5.0
  *   jbang RunScenario.java load-300 --skip-sdk-install
  *   jbang RunScenario.java --list
+ *   jbang RunScenario.java --prepare x-java-java-http x-java-rust-ws   (peers and builds only)
+ *   jbang RunScenario.java x-java-rust-ws --prepared                  (no install, fetch or build)
  * </pre>
  *
  * Flow: install the SDK from this checkout (unless --skip-sdk-install), prepare the peer SDKs
@@ -46,12 +48,22 @@ import java.util.stream.Stream;
  * tear down every process tree (always, in a finally) and evaluate the assertions. Logs go to
  * logs/&lt;scenario&gt;/. Exit 0 = pass (declared expected failures included), 1 = fail,
  * 2 = the scenario could not be set up.
+ *
+ * <p>Parallel runs (run-all.sh --jobs) split this in two: {@code --prepare} clones, fetches and
+ * builds every peer and process of a list of scenarios once, serially; each scenario then runs
+ * with {@code --prepared}, which touches no shared state (no install, no git, no build). Each
+ * scenario has its own log directory, its own {@code ${TMP}} (also {@code TMPDIR} for every
+ * process), and takes {@code ${PORT}} from {@code IT_PORT_RANGE} (e.g. 20000-20099) when set, so
+ * concurrent scenarios given disjoint ranges never race for a port.
  */
 public class RunScenario {
 
 	public static void main(String... args) throws Exception {
 		String scenario = null;
 		boolean skipInstall = false;
+		boolean prepared = false;
+		boolean prepare = false;
+		List<String> scenarios = new ArrayList<>();
 		String peersRef = null;
 		Map<String, String> peerRefs = new HashMap<>();
 		for (int i = 0; i < args.length; i++) {
@@ -66,6 +78,8 @@ public class RunScenario {
 					return;
 				}
 				case "--skip-sdk-install" -> skipInstall = true;
+				case "--prepared" -> prepared = true;
+				case "--prepare" -> prepare = true;
 				case "--peers-ref" -> peersRef = args[++i];
 				case "--peer" -> {
 					String[] kv = args[++i].split("=", 2);
@@ -87,6 +101,7 @@ public class RunScenario {
 					}
 					else {
 						scenario = a;
+						scenarios.add(a);
 					}
 				}
 			}
@@ -95,7 +110,13 @@ public class RunScenario {
 			usage();
 			System.exit(2);
 		}
-		System.exit(new RunScenario(root(), scenario).run(skipInstall, peersRef, peerRefs));
+		if (prepare) {
+			System.exit(prepareAll(root(), scenarios, peersRef, peerRefs));
+		}
+		if (scenarios.size() > 1) {
+			throw new IllegalArgumentException("One scenario at a time (several only with --prepare): " + scenarios);
+		}
+		System.exit(new RunScenario(root(), scenario).run(skipInstall || prepared, prepared, peersRef, peerRefs));
 	}
 
 	static void usage() {
@@ -106,6 +127,8 @@ public class RunScenario {
 				  --peer <name>=<ref>   test peer SDK <name> (see peers.json) at <ref> (branch, tag or SHA)
 				  --peers-ref <ref>     test every peer SDK at <ref> (a --peer entry wins)
 				  --skip-sdk-install    do not run ./mvnw install first (run-all.sh installs once)
+				  --prepare <s>...      only prepare the peers and run the builds of the scenarios (no install)
+				  --prepared            the scenario was prepared: no install, no git, no build (parallel runs)
 				  --list                list scenarios
 				""");
 	}
@@ -150,7 +173,7 @@ public class RunScenario {
 		this.logDir = root.resolve("logs").resolve(scenario);
 	}
 
-	int run(boolean skipInstall, String peersRef, Map<String, String> peerRefs) throws Exception {
+	int run(boolean skipInstall, boolean prepared, String peersRef, Map<String, String> peerRefs) throws Exception {
 		long t0 = System.nanoTime();
 		Scenario.Config cfg = Scenario.load(root.resolve("configs").resolve(scenario + ".json"));
 		resetLogDir();
@@ -169,6 +192,8 @@ public class RunScenario {
 			vars.put("ACP_VERSION", acpVersion);
 			vars.put("CACHE", root.resolve(".cache").toString());
 			vars.put("LOG_DIR", logDir.toString());
+			Path tmp = Files.createDirectories(logDir.resolve("tmp"));
+			vars.put("TMP", tmp.toString());
 			vars.put("PORT", Integer.toString(freePort()));
 			if (!cfg.peers().isEmpty()) {
 				step("Preparing peer SDKs");
@@ -179,7 +204,7 @@ public class RunScenario {
 						throw new IllegalArgumentException("Peer '" + name + "' is not in peers.json");
 					}
 					String ref = peerRefs.getOrDefault(name, peersRef != null ? peersRef : peer.ref());
-					Peers.Checkout c = Peers.prepare(name, peer, ref, root.resolve(".cache"), logDir);
+					Peers.Checkout c = Peers.prepare(name, peer, ref, root.resolve(".cache"), logDir, prepared);
 					vars.put("peer." + name, c.dir().toString());
 					vars.put("peerRef." + name, ref);
 					vars.put("peerKey." + name, c.dir().getFileName().toString());
@@ -191,7 +216,9 @@ public class RunScenario {
 					System.out.println("  note: --peer " + name + " ignored; this scenario does not use it");
 				}
 			}
-			build(cfg, vars);
+			if (!prepared) {
+				build(cfg, vars, logDir, new LinkedHashSet<>());
+			}
 		}
 		catch (Exception e) {
 			outcome.failures.add("setup: " + e.getMessage());
@@ -216,8 +243,7 @@ public class RunScenario {
 		return finish(cfg, t0, peerSummary, outcome.failures.isEmpty() ? 0 : 1);
 	}
 
-	void build(Scenario.Config cfg, Map<String, String> vars) throws Exception {
-		Set<String> done = new LinkedHashSet<>();
+	void build(Scenario.Config cfg, Map<String, String> vars, Path buildLogs, Set<String> done) throws Exception {
 		for (Scenario.ProcessSpec p : cfg.processes()) {
 			if (p.build() == null || p.build().isBlank()) {
 				continue;
@@ -226,7 +252,8 @@ public class RunScenario {
 			String cmd = Scenario.subst(p.build(), vars);
 			if (done.add(dir + "\0" + cmd)) {
 				step("Building " + p.name() + " (" + p.language() + ")");
-				exec(logDir.resolve("build-" + p.name() + ".log"), dir, 1200, "bash", "-c", cmd);
+				exec(buildLogs.resolve("build-" + (buildLogs.equals(logDir) ? "" : scenario + "-") + p.name() + ".log"), dir,
+						1200, "bash", "-c", cmd);
 			}
 		}
 	}
@@ -332,6 +359,7 @@ public class RunScenario {
 
 	void start(Proc proc, Scenario.ProcessSpec p, Map<String, String> vars) throws Exception {
 		Map<String, String> env = new LinkedHashMap<>();
+		env.put("TMPDIR", vars.get("TMP"));
 		p.env().forEach((k, v) -> env.put(k, Scenario.subst(v, vars)));
 		proc.start(Scenario.subst(p.run(), vars), Path.of(Scenario.subst(p.dir(), vars)), env);
 	}
@@ -457,11 +485,81 @@ public class RunScenario {
 		return m.group(1).trim();
 	}
 
+	/**
+	 * A free port: the first one that binds in {@code IT_PORT_RANGE} ({@code <from>-<to>}, set by
+	 * run-all.sh so concurrent scenarios use disjoint ranges), else one the OS picks.
+	 */
 	static int freePort() throws Exception {
+		String range = System.getenv("IT_PORT_RANGE");
+		if (range != null && !range.isBlank()) {
+			String[] r = range.trim().split("-");
+			for (int port = Integer.parseInt(r[0]); port <= Integer.parseInt(r[1]); port++) {
+				try (ServerSocket s = new ServerSocket(port)) {
+					return port;
+				}
+				catch (java.io.IOException inUse) {
+					// try the next one
+				}
+			}
+			throw new IllegalStateException("No free port in IT_PORT_RANGE " + range);
+		}
 		try (ServerSocket s = new ServerSocket(0)) {
 			s.setReuseAddress(true);
 			return s.getLocalPort();
 		}
+	}
+
+	/**
+	 * Prepare several scenarios for parallel runs: every peer checkout (fetched and built once per
+	 * peer) and every process build (once per distinct directory and command), serially. Logs go
+	 * to logs/run-all/prepare/. Returns 0, or 2 if anything failed.
+	 */
+	static int prepareAll(Path root, List<String> scenarios, String peersRef, Map<String, String> peerRefs)
+			throws Exception {
+		Path logs = Files.createDirectories(root.resolve("logs").resolve("run-all").resolve("prepare"));
+		Map<String, Peers.Peer> known = Peers.load(root.resolve("peers.json"));
+		Map<String, Peers.Checkout> checkouts = new LinkedHashMap<>();
+		Set<String> builds = new LinkedHashSet<>();
+		int code = 0;
+		for (String name : scenarios) {
+			RunScenario r = new RunScenario(root, name);
+			try {
+				Scenario.Config cfg = Scenario.load(root.resolve("configs").resolve(name + ".json"));
+				Map<String, String> vars = new LinkedHashMap<>();
+				vars.put("ROOT", root.toString());
+				vars.put("REPO", r.repo.toString());
+				vars.put("MVNW", r.repo.resolve("mvnw").toString());
+				vars.put("ACP_VERSION", r.sdkVersion());
+				vars.put("CACHE", root.resolve(".cache").toString());
+				vars.put("LOG_DIR", r.logDir.toString());
+				vars.put("TMP", r.logDir.resolve("tmp").toString());
+				vars.put("PORT", "0");
+				for (String peerName : cfg.peers()) {
+					Peers.Peer peer = known.get(peerName);
+					if (peer == null) {
+						throw new IllegalArgumentException("Peer '" + peerName + "' is not in peers.json");
+					}
+					String ref = peerRefs.getOrDefault(peerName, peersRef != null ? peersRef : peer.ref());
+					Peers.Checkout c = checkouts.get(peerName + "@" + ref);
+					if (c == null) {
+						step("Preparing peer " + peerName + " @ " + ref);
+						c = Peers.prepare(peerName, peer, ref, root.resolve(".cache"), logs, false);
+						checkouts.put(peerName + "@" + ref, c);
+					}
+					vars.put("peer." + peerName, c.dir().toString());
+					vars.put("peerRef." + peerName, ref);
+					vars.put("peerKey." + peerName, c.dir().getFileName().toString());
+				}
+				r.build(cfg, vars, logs, builds);
+			}
+			catch (Exception e) {
+				System.out.println("  FAIL preparing " + name + ": " + e.getMessage());
+				code = 2;
+			}
+		}
+		System.out.println("Prepared " + scenarios.size() + " scenario(s): " + checkouts.size() + " peer checkout(s), "
+				+ builds.size() + " build(s); logs: " + logs);
+		return code;
 	}
 
 	void exec(Path log, Path dir, int timeoutSec, String... cmd) throws Exception {

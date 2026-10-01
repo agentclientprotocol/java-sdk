@@ -56,7 +56,7 @@ public class JavaAgentMain {
 				else if (text.contains("write")) {
 					// A client may answer fs/write_text_file with "result": null (the Python SDK does).
 					work = context
-						.writeTextFile(new AcpSchema.WriteTextFileRequest(request.sessionId(), "/tmp/acp-interop.txt",
+						.writeTextFile(new AcpSchema.WriteTextFileRequest(request.sessionId(), System.getenv().getOrDefault("TMPDIR", "/tmp") + "/acp-interop.txt",
 								"written by the Java agent"))
 						.doOnNext(r -> System.err.println("[agent] write_text_file ok " + r))
 						.doOnError(e -> System.err.println("[agent] write_text_file failed " + e))
