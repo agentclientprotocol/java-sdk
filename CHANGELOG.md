@@ -115,6 +115,17 @@ Found by enabling Error Prone's bug checks; each has a test.
   protocol, protocol under capabilities, capabilities under client and agent, which never depend on each
   other), no package cycles, no Jackson databind in acp-core, and no Jetty types on the path of
   `StreamableHttpAcpServlet`, which must stay mountable in any Servlet 6 container.
+- The architecture rules cover every module. Each module's rules import only that module's main
+  classes and check that the import is non-empty (`archRule.failOnEmptyShould=true`), and every module
+  is free of package cycles at any depth. acp-annotations depends on nothing in the SDK; the JSON
+  modules use only acp-core's JSON SPI and the schema; acp-agent-support layers `AcpAgentSupport` over
+  independent resolver, handler and interceptor packages over the invocation model, and uses only
+  acp-core's public agent API (no session implementations, client code, concrete transports or JSON
+  implementation); acp-test uses only public SDK types and nothing from the annotation layer; and the
+  transports, in acp-core and acp-streamable-http-jetty, see only the protocol (the `spec` transport
+  interfaces and schema) plus, on the agent side, the per-connection seam (`AcpAgentFactory`,
+  `AcpAsyncAgent`), never the session implementations or other client and agent runtime classes. The
+  session (`spec`) and transport packages also have no dependency cycles between classes.
 - Null safety is enforced, not just declared: every package is `@NullMarked` (JSpecify 1.0.0, a
   compile dependency of each module; optional in `acp-annotations`, which keeps no transitive
   dependencies), and NullAway 0.13.8 on Error Prone 2.50.0 checks main sources at ERROR. Error Prone
