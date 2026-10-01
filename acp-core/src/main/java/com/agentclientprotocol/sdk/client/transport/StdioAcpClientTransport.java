@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.client.transport;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -15,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -22,12 +24,14 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.OutboundSinks;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.publisher.SynchronousSink;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -231,35 +235,51 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * Error messages are logged and emitted to the error sink.
 	 */
 	private void startErrorProcessing(Process process) {
-		this.errorScheduler.schedule(() -> {
-			try (BufferedReader processErrorReader = new BufferedReader(
-					new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-				String line;
-				while (!isClosing && (line = processErrorReader.readLine()) != null) {
-					try {
-						if (!this.errorSink.tryEmitNext(line).isSuccess()) {
-							if (!isClosing) {
-								logger.error("Failed to emit error message");
-							}
-							break;
-						}
-					}
-					catch (Exception e) {
-						if (!isClosing) {
-							logger.error("Error processing error message", e);
-						}
+		readLines(this.errorScheduler, process.getErrorStream(), "error stream", this::emitError,
+				this.errorSink::tryEmitComplete);
+	}
+
+	private boolean emitError(String line) {
+		try {
+			if (this.errorSink.tryEmitNext(line).isSuccess()) {
+				return true;
+			}
+			if (!isClosing) {
+				logger.error("Failed to emit error message");
+			}
+		}
+		catch (Exception e) {
+			if (!isClosing) {
+				logger.error("Error processing error message", e);
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Reads one of the process's output streams line by line on its own thread, until the
+	 * stream ends, the transport closes, or {@code accept} refuses a line; then marks the
+	 * transport closing and runs {@code onEnd}.
+	 */
+	private void readLines(Scheduler scheduler, InputStream stream, String streamName, Predicate<String> accept,
+			Runnable onEnd) {
+		scheduler.schedule(() -> {
+			try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+				while (!isClosing) {
+					String line = reader.readLine();
+					if (line == null || !accept.test(line)) {
 						break;
 					}
 				}
 			}
 			catch (IOException e) {
 				if (!isClosing) {
-					logger.error("Error reading from error stream", e);
+					logger.error("Error reading from " + streamName, e);
 				}
 			}
 			finally {
 				isClosing = true;
-				errorSink.tryEmitComplete();
+				onEnd.run();
 			}
 		});
 	}
@@ -280,8 +300,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
-		this.outboundSink.emitNext(message,
-				Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+		OutboundSinks.emit(this.outboundSink, message);
 		return Mono.empty();
 	}
 
@@ -290,39 +309,27 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * process's input stream. Messages are deserialized and emitted to the inbound sink.
 	 */
 	private void startInboundProcessing(Process process) {
-		this.inboundScheduler.schedule(() -> {
-			try (BufferedReader processReader = new BufferedReader(
-					new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-				String line;
-				while (!isClosing && (line = processReader.readLine()) != null) {
-					try {
-						logger.trace("RECV: {}", line);
-						JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(this.jsonMapper, line);
-						if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
-							if (!isClosing) {
-								logger.error("Failed to enqueue inbound message: {}", message);
-							}
-							break;
-						}
-					}
-					catch (Exception e) {
-						if (!isClosing) {
-							logger.error("Error processing inbound message for line: {}", line, e);
-						}
-						break;
-					}
-				}
+		readLines(this.inboundScheduler, process.getInputStream(), "input stream", this::emitInbound,
+				this.inboundSink::tryEmitComplete);
+	}
+
+	private boolean emitInbound(String line) {
+		try {
+			logger.trace("RECV: {}", line);
+			JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(this.jsonMapper, line);
+			if (this.inboundSink.tryEmitNext(message).isSuccess()) {
+				return true;
 			}
-			catch (IOException e) {
-				if (!isClosing) {
-					logger.error("Error reading from input stream", e);
-				}
+			if (!isClosing) {
+				logger.error("Failed to enqueue inbound message: {}", message);
 			}
-			finally {
-				isClosing = true;
-				inboundSink.tryEmitComplete();
+		}
+		catch (Exception e) {
+			if (!isClosing) {
+				logger.error("Error processing inbound message for line: {}", line, e);
 			}
-		});
+		}
+		return false;
 	}
 
 	/**
@@ -335,29 +342,35 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			// this bit is important since writes come from user threads, and we
 			// want to ensure that the actual writing happens on a dedicated thread
 			.publishOn(outboundScheduler)
-			.handle((message, s) -> {
-				if (!isClosing) {
-					try {
-						String jsonMessage = jsonMapper.writeValueAsString(message);
-						// Escape any embedded newlines in the JSON message as per spec:
-						// Messages are delimited by newlines, and MUST NOT contain
-						// embedded newlines.
-						jsonMessage = jsonMessage.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
-						logger.trace("SEND: {}", jsonMessage);
+			.handle((message, sink) -> write(process, message, sink)));
+	}
 
-						var os = process.getOutputStream();
-						synchronized (os) {
-							os.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
-							os.write("\n".getBytes(StandardCharsets.UTF_8));
-							os.flush();
-						}
-						s.next(message);
-					}
-					catch (IOException e) {
-						s.error(new RuntimeException(e));
-					}
-				}
-			}));
+	/**
+	 * Writes one message to the process's standard input as a line of JSON; once the
+	 * transport is closing, drops it.
+	 */
+	private void write(Process process, JSONRPCMessage message, SynchronousSink<JSONRPCMessage> sink) {
+		if (isClosing) {
+			return;
+		}
+		try {
+			// Messages are delimited by newlines, and MUST NOT contain embedded newlines.
+			String jsonMessage = jsonMapper.writeValueAsString(message)
+				.replace("\r\n", "\\n")
+				.replace("\n", "\\n")
+				.replace("\r", "\\n");
+			logger.trace("SEND: {}", jsonMessage);
+			var os = process.getOutputStream();
+			synchronized (os) {
+				os.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
+				os.write("\n".getBytes(StandardCharsets.UTF_8));
+				os.flush();
+			}
+			sink.next(message);
+		}
+		catch (IOException e) {
+			sink.error(new RuntimeException(e));
+		}
 	}
 
 	protected void handleOutbound(Function<Flux<JSONRPCMessage>, Flux<JSONRPCMessage>> outboundConsumer) {
@@ -391,33 +404,9 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			errorSink.tryEmitComplete();
 
 			// Destroy process FIRST - this closes streams and unblocks readLine()
-			// Use blocking waitFor() instead of Mono.fromFuture(process.onExit())
-			// to avoid ForkJoinPool.commonPool (per BEST-PRACTICES-REACTIVE-SCHEDULERS.md Rule 1)
 			Process process = this.process;
 			if (process != null) {
-				logger.debug("Sending TERM to process");
-				process.destroy();
-				try {
-					boolean exited = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-					if (exited) {
-						int exitCode = process.exitValue();
-						// 143 = SIGTERM (128+15), 137 = SIGKILL (128+9) - expected when we destroy
-						if (exitCode == 0 || exitCode == 143 || exitCode == 137) {
-							logger.info("ACP agent process stopped (exit code {})", exitCode);
-						}
-						else {
-							logger.warn("Process terminated unexpectedly with code {}", exitCode);
-						}
-					}
-					else {
-						logger.warn("Process did not exit within timeout, forcing kill");
-						process.destroyForcibly();
-					}
-				}
-				catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					logger.debug("Interrupted while waiting for process exit");
-				}
+				stop(process);
 			}
 
 			// Now that process is dead and streams closed, threads should be unblocked
@@ -431,6 +420,39 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 				logger.error("Error during graceful shutdown", e);
 			}
 		});
+	}
+
+	/**
+	 * Sends TERM to the process and waits up to five seconds for it to exit, then kills it.
+	 * Waits with a blocking waitFor() rather than Mono.fromFuture(process.onExit()), which
+	 * would run on ForkJoinPool.commonPool.
+	 */
+	private static void stop(Process process) {
+		logger.debug("Sending TERM to process");
+		process.destroy();
+		try {
+			if (process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				logExit(process.exitValue());
+			}
+			else {
+				logger.warn("Process did not exit within timeout, forcing kill");
+				process.destroyForcibly();
+			}
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			logger.debug("Interrupted while waiting for process exit");
+		}
+	}
+
+	private static void logExit(int exitCode) {
+		// 143 = SIGTERM (128+15), 137 = SIGKILL (128+9) - expected when we destroy
+		if (exitCode == 0 || exitCode == 143 || exitCode == 137) {
+			logger.info("ACP agent process stopped (exit code {})", exitCode);
+		}
+		else {
+			logger.warn("Process terminated unexpectedly with code {}", exitCode);
+		}
 	}
 
 	public Sinks.Many<String> getErrorSink() {

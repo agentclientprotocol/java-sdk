@@ -19,6 +19,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.OutboundSinks;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
@@ -165,23 +166,8 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	}
 
 	private void handleIncomingMessages(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
-		this.inboundSink.asFlux()
-			.flatMap(message -> Mono.just(message).transform(handler))
-			.doOnNext(response -> {
-				// Responses are emitted from the inbound thread while sendMessage emits
-				// from user threads on the same sink; both must go through the serialising
-				// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
-				try {
-					this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
-				}
-				catch (Sinks.EmissionException e) {
-					logger.error("Dropped response {}: {}", response, e.getReason());
-				}
-			})
-			.doOnTerminate(() -> {
-				this.outboundSink.tryEmitComplete();
-			})
-			.subscribe();
+		OutboundSinks.replyThrough(this.inboundSink, handler, this.outboundSink, () -> {
+		});
 	}
 
 	private void startOutboundProcessing() {
@@ -208,8 +194,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return connectionReady.asMono().then(Mono.defer(() -> {
-			outboundSink.emitNext(message,
-					Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+			OutboundSinks.emit(outboundSink, message);
 			return Mono.empty();
 		}));
 	}

@@ -20,6 +20,7 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.OutboundSinks;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.publisher.SynchronousSink;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -149,24 +151,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	private void handleIncomingMessages(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
-		this.inboundSink.asFlux()
-			.flatMap(message -> Mono.just(message).transform(handler))
-			.doOnNext(response -> {
-				// Responses are emitted from the inbound thread while sendMessage emits
-				// from user threads on the same sink; both must go through the serialising
-				// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
-				try {
-					this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
-				}
-				catch (Sinks.EmissionException e) {
-					logger.error("Dropped response {}: {}", response, e.getReason());
-				}
-			})
-			.doOnTerminate(() -> {
-				this.outboundSink.tryEmitComplete();
-				this.inboundScheduler.dispose();
-			})
-			.subscribe();
+		OutboundSinks.replyThrough(this.inboundSink, handler, this.outboundSink, this.inboundScheduler::dispose);
 	}
 
 	/**
@@ -177,35 +162,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		this.inboundScheduler.schedule(() -> {
 			inboundReady.tryEmitValue(null);
 			try {
-				BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-				while (!isClosing.get()) {
-					try {
-						String line = reader.readLine();
-						if (line == null || isClosing.get()) {
-							break;
-						}
-
-						logger.debug("Received JSON message ({} characters)", line.length());
-
-						try {
-							JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, line);
-							if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
-								logIfNotClosing("Failed to enqueue inbound message");
-								break;
-							}
-						}
-						catch (Exception e) {
-							logIfNotClosing("Error processing inbound message", e);
-							exceptionHandler.accept(e);
-							break;
-						}
-					}
-					catch (IOException e) {
-						logIfNotClosing("Error reading from stdin", e);
-						exceptionHandler.accept(e);
-						break;
-					}
-				}
+				readMessages(new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8)));
 			}
 			catch (Exception e) {
 				logIfNotClosing("Error in inbound processing", e);
@@ -220,45 +177,56 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		});
 	}
 
+	/** Reads one message per line until stdin ends, the transport closes, or a message fails. */
+	private void readMessages(BufferedReader reader) {
+		boolean reading = true;
+		while (reading && !isClosing.get()) {
+			reading = readMessage(reader);
+		}
+	}
+
+	/**
+	 * Reads the next line and emits its message to the inbound sink.
+	 * @return whether to go on reading
+	 */
+	private boolean readMessage(BufferedReader reader) {
+		String line;
+		try {
+			line = reader.readLine();
+		}
+		catch (IOException e) {
+			logIfNotClosing("Error reading from stdin", e);
+			exceptionHandler.accept(e);
+			return false;
+		}
+		if (line == null || isClosing.get()) {
+			return false;
+		}
+		logger.debug("Received JSON message ({} characters)", line.length());
+		try {
+			JSONRPCMessage message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, line);
+			if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
+				logIfNotClosing("Failed to enqueue inbound message");
+				return false;
+			}
+			return true;
+		}
+		catch (Exception e) {
+			logIfNotClosing("Error processing inbound message", e);
+			exceptionHandler.accept(e);
+			return false;
+		}
+	}
+
 	/**
 	 * Starts the outbound processing thread that writes JSON-RPC messages to stdout.
 	 * Messages are serialized to JSON and written with a newline delimiter.
 	 */
 	private void startOutboundProcessing() {
-		Function<Flux<JSONRPCMessage>, Flux<JSONRPCMessage>> outboundConsumer = messages -> messages
+		outboundSink.asFlux()
 			.doOnSubscribe(subscription -> outboundReady.tryEmitValue(null))
 			.publishOn(outboundScheduler)
-			.handle((message, sink) -> {
-				if (!isClosing.get()) {
-					try {
-						String jsonMessage = jsonMapper.writeValueAsString(message);
-						// Escape any embedded newlines in the JSON message as per spec:
-						// Messages are delimited by newlines, and MUST NOT contain embedded newlines.
-						jsonMessage = jsonMessage.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
-
-						synchronized (outputStream) {
-							outputStream.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
-							outputStream.write("\n".getBytes(StandardCharsets.UTF_8));
-							outputStream.flush();
-						}
-						logger.debug("Sent JSON message ({} characters)", jsonMessage.length());
-						sink.next(message);
-					}
-					catch (IOException e) {
-						if (!isClosing.get()) {
-							logger.error("Error writing message", e);
-							exceptionHandler.accept(e);
-							sink.error(new RuntimeException(e));
-						}
-						else {
-							logger.debug("Stream closed during shutdown", e);
-						}
-					}
-				}
-				else {
-					sink.complete();
-				}
-			})
+			.<JSONRPCMessage>handle(this::write)
 			.doOnComplete(() -> {
 				isClosing.set(true);
 				outboundScheduler.dispose();
@@ -270,16 +238,47 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 					outboundScheduler.dispose();
 				}
 			})
-			.map(msg -> (JSONRPCMessage) msg);
+			.subscribe();
+	}
 
-		outboundConsumer.apply(outboundSink.asFlux()).subscribe();
+	/**
+	 * Writes one message to stdout as a line of JSON; once the transport is closing, ends
+	 * the outbound stream instead.
+	 */
+	private void write(JSONRPCMessage message, SynchronousSink<JSONRPCMessage> sink) {
+		if (isClosing.get()) {
+			sink.complete();
+			return;
+		}
+		try {
+			// Messages are delimited by newlines, and MUST NOT contain embedded newlines.
+			String jsonMessage = jsonMapper.writeValueAsString(message)
+				.replace("\r\n", "\\n")
+				.replace("\n", "\\n")
+				.replace("\r", "\\n");
+			synchronized (outputStream) {
+				outputStream.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
+				outputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+				outputStream.flush();
+			}
+			logger.debug("Sent JSON message ({} characters)", jsonMessage.length());
+			sink.next(message);
+		}
+		catch (IOException e) {
+			if (isClosing.get()) {
+				logger.debug("Stream closed during shutdown", e);
+				return;
+			}
+			logger.error("Error writing message", e);
+			exceptionHandler.accept(e);
+			sink.error(new RuntimeException(e));
+		}
 	}
 
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return Mono.zip(inboundReady.asMono(), outboundReady.asMono()).then(Mono.defer(() -> {
-			outboundSink.emitNext(message,
-					Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+			OutboundSinks.emit(outboundSink, message);
 			return Mono.empty();
 		}));
 	}
