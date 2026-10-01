@@ -802,11 +802,11 @@ async def s_cancel_prompt_while_cancelling() -> str:
             await c.prompt(sid, "during cancel")
             raise StepFailed("\"during cancel\" was accepted")
         except RequestError as e:
-            check(e.code == -32000, f"\"during cancel\" failed with {e.code}, expected -32000")
+            check(e.code == -32600, f"\"during cancel\" failed with {e.code}, expected -32600")
         r = await asyncio.wait_for(asyncio.shield(slow), 5)
         check(r.get("stopReason") == "cancelled", f"first prompt stopReason {r.get('stopReason')}")
         end_turn(await c.prompt(sid, "after cancel"))
-        return "cancelled; \"during cancel\" -32000; \"after cancel\" end_turn"
+        return "cancelled; \"during cancel\" -32600; \"after cancel\" end_turn"
     finally:
         await abandon(c, sid, slow)
 
