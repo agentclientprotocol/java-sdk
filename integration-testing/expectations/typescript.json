@@ -1,0 +1,12 @@
+{
+  "comment": "Expected failures of cells with a TypeScript client or agent (programs/node). See README.md in this directory.",
+  "expectations": [
+    {
+      "step": "session.delete",
+      "when": { "client": "typescript", "agent": "java", "transport": "http" },
+      "contains": "404",
+      "see": "spec:rfds/streamable-http-websocket-transport.mdx:124,306-310",
+      "reason": "The TypeScript client posts session/delete session-scoped (Acp-Session-Id: no-such-session, protocol.ts:13) and the Java agent answers 404 for a session it does not know; the RFD's POST tree has no such 404 and the catalogue expects a silent success"
+    }
+  ]
+}
