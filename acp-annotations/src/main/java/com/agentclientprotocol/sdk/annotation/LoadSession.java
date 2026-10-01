@@ -24,7 +24,7 @@ import java.lang.annotation.Target;
  *
  * <p>The method should return one of:
  * <ul>
- *   <li>{@code LoadSessionResponse} - the load session response with modes and models</li>
+ *   <li>{@code LoadSessionResponse} - the load session response with modes</li>
  *   <li>{@code Mono<LoadSessionResponse>} - for async handling</li>
  * </ul>
  *
@@ -33,7 +33,7 @@ import java.lang.annotation.Target;
  * @LoadSession
  * public LoadSessionResponse load(LoadSessionRequest req) {
  *     // Restore session state
- *     return new LoadSessionResponse(modes, models);
+ *     return new LoadSessionResponse(modes);
  * }
  * }</pre>
  *

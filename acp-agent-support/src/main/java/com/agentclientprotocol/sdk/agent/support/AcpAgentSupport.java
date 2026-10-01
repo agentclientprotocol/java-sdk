@@ -46,7 +46,6 @@ import com.agentclientprotocol.sdk.agent.support.resolver.SessionIdResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetProviderRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionConfigOptionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModeRequestResolver;
-import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModelRequestResolver;
 import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
@@ -63,7 +62,6 @@ import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetProvider;
 import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
-import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
@@ -195,7 +193,6 @@ public class AcpAgentSupport {
 		return agent;
 	}
 
-	@SuppressWarnings("removal") // wires the deprecated-for-removal session/set_model handler
 	private void wireHandlers(AcpAgent.SyncAgentBuilder agentBuilder) {
 		// Initialize handler
 		AcpHandlerMethod initHandler = handlers.get("initialize");
@@ -243,12 +240,6 @@ public class AcpAgentSupport {
 		AcpHandlerMethod setModeHandler = handlers.get("session/set_mode");
 		if (setModeHandler != null) {
 			agentBuilder.setSessionModeHandler(req -> respond(setModeHandler, AcpSchema.SetSessionModeResponse.class, req, req.sessionId(), null, null));
-		}
-
-		// SetSessionModel handler
-		AcpHandlerMethod setModelHandler = handlers.get("session/set_model");
-		if (setModelHandler != null) {
-			agentBuilder.setSessionModelHandler(req -> respond(setModelHandler, AcpSchema.SetSessionModelResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// ListSessions handler
@@ -529,7 +520,6 @@ public class AcpAgentSupport {
 			return new AcpAgentSupport(this, transport);
 		}
 
-		@SuppressWarnings("removal") // discovers the deprecated-for-removal @SetSessionModel
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> beanSupplier) {
 			if (!agentClass.isAnnotationPresent(
 					com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
@@ -561,10 +551,6 @@ public class AcpAgentSupport {
 				if (method.isAnnotationPresent(SetSessionMode.class)) {
 					handlers.put("session/set_mode", new AcpHandlerMethod(beanSupplier, method, "session/set_mode"));
 					log.debug("Discovered @SetSessionMode handler: {}", method.getName());
-				}
-				if (method.isAnnotationPresent(SetSessionModel.class)) {
-					handlers.put("session/set_model", new AcpHandlerMethod(beanSupplier, method, "session/set_model"));
-					log.debug("Discovered @SetSessionModel handler: {}", method.getName());
 				}
 				if (method.isAnnotationPresent(ListSessions.class)) {
 					handlers.put("session/list", new AcpHandlerMethod(beanSupplier, method, "session/list"));
@@ -611,7 +597,6 @@ public class AcpAgentSupport {
 			}
 		}
 
-		@SuppressWarnings("removal") // registers the deprecated-for-removal SetSessionModelRequestResolver
 		private void addDefaultResolvers() {
 			// Built-in resolvers (order matters - first match wins)
 			// Custom resolvers added via builder go first
@@ -621,7 +606,6 @@ public class AcpAgentSupport {
 			argumentResolvers.addResolver(new LoadSessionRequestResolver());
 			argumentResolvers.addResolver(new PromptRequestResolver());
 			argumentResolvers.addResolver(new SetSessionModeRequestResolver());
-			argumentResolvers.addResolver(new SetSessionModelRequestResolver());
 			argumentResolvers.addResolver(new ListSessionsRequestResolver());
 			argumentResolvers.addResolver(new CloseSessionRequestResolver());
 			argumentResolvers.addResolver(new DeleteSessionRequestResolver());

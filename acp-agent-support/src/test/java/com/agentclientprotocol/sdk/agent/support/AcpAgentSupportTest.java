@@ -26,7 +26,6 @@ import com.agentclientprotocol.sdk.annotation.SetProvider;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
-import com.agentclientprotocol.sdk.annotation.SetSessionModel;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
@@ -56,8 +55,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
@@ -542,51 +539,6 @@ class AcpAgentSupportTest {
 		client.setSessionMode(new SetSessionModeRequest("mode-session", "code-review")).block(TIMEOUT);
 
 		assertThat(receivedModeId.get()).isEqualTo("code-review");
-	}
-
-	@Test
-	@SuppressWarnings("removal") // exercises the deprecated-for-removal session/set_model handler
-	void setSessionModelHandlerInvoked() throws Exception {
-		AtomicReference<String> receivedModelId = new AtomicReference<>();
-
-		@AcpAgent
-		class SetModelAgent {
-
-			@Initialize
-			InitializeResponse init() {
-				return InitializeResponse.ok();
-			}
-
-			@NewSession
-			NewSessionResponse newSession() {
-				return new NewSessionResponse("model-session", null, null);
-			}
-
-			@SetSessionModel
-			SetSessionModelResponse setModel(SetSessionModelRequest req) {
-				receivedModelId.set(req.modelId());
-				return new SetSessionModelResponse();
-			}
-
-		}
-
-		agentSupport = AcpAgentSupport.create(new SetModelAgent())
-				.transport(transportPair.agentTransport())
-				.requestTimeout(TIMEOUT)
-				.build();
-
-		agentSupport.start();
-		Thread.sleep(100);
-
-		client = AcpClient.async(transportPair.clientTransport())
-				.requestTimeout(TIMEOUT)
-				.build();
-
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
-		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
-		client.setSessionModel(new SetSessionModelRequest("model-session", "gpt-4")).block(TIMEOUT);
-
-		assertThat(receivedModelId.get()).isEqualTo("gpt-4");
 	}
 
 	@Test

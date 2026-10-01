@@ -14,7 +14,6 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 | `@Cancel` | Method | Handles cancel notifications |
 | `@SessionState` | Parameter | Injects session-scoped state |
 | `@SetSessionMode` | Method | Handles mode change requests |
-| `@SetSessionModel` | Method | Handles model change requests |
 
 ## Installation
 

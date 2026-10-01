@@ -602,7 +602,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
 					AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(), null)))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("sess-parent", null, null)))
-			.forkSessionHandler(request -> Mono.just(new AcpSchema.ForkSessionResponse("sess-forked", null, null)))
+			.forkSessionHandler(request -> Mono.just(new AcpSchema.ForkSessionResponse("sess-forked", null)))
 			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build());
 		try (FixtureServer server = FixtureServer.start(factory)) {

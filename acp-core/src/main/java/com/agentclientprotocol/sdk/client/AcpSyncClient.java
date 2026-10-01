@@ -257,24 +257,6 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sets the AI model for the specified session.
-	 * <p>
-	 * This allows changing which AI model is used for subsequent prompts in the session.
-	 * </p>
-	 * @param setModelRequest the set model request with session ID and desired model
-	 * @return the response confirming the model change
-	 * @see AcpSchema#METHOD_SESSION_SET_MODEL
-	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-	 * (June 2026). Use {@link #setSessionConfigOption} with a {@code "model"} category config
-	 * option instead. Slated for removal.
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	public AcpSchema.SetSessionModelResponse setSessionModel(AcpSchema.SetSessionModelRequest setModelRequest) {
-		return awaitResponse(this.delegate.setSessionModel(setModelRequest));
-	}
-
-	/**
 	 * Lists sessions known to the agent, optionally filtered by working directory.
 	 * @param listSessionsRequest the list sessions request with optional cwd filter and cursor
 	 * @return the list sessions response

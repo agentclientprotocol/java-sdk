@@ -265,7 +265,7 @@ class SessionManagementTest {
 
 		// Null fields should not be serialized
 		assertThat(node.has("modes")).isFalse();
-		assertThat(node.has("models")).isFalse();
+		assertThat(node.has("_meta")).isFalse();
 	}
 
 	@Test

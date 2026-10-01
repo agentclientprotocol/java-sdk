@@ -99,16 +99,6 @@ public final class AcpSchema {
 
 	public static final String METHOD_SESSION_SET_MODE = "session/set_mode";
 
-	/**
-	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-	 * (June 2026, v0.13.5). Expose model selection through {@code session/set_config_option}
-	 * with a config option whose {@code category} is {@code "model"} instead. Slated for
-	 * removal in a future release.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	public static final String METHOD_SESSION_SET_MODEL = "session/set_model";
-
 	public static final String METHOD_SESSION_CANCEL = "session/cancel";
 
 	public static final String METHOD_SESSION_LIST = "session/list";
@@ -360,12 +350,11 @@ public final class AcpSchema {
 	 * Create new session response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record NewSessionResponse(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("modes") @Nullable SessionModeState modes, @JsonProperty("models") @Nullable SessionModelState models,
+			@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes, @Nullable SessionModelState models) {
-			this(sessionId, modes, models, null);
+		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes) {
+			this(sessionId, modes, null);
 		}
 	}
 
@@ -391,12 +380,10 @@ public final class AcpSchema {
 	 * Load session response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record LoadSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
-			@JsonProperty("models") @Nullable SessionModelState models,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
-		public LoadSessionResponse(@Nullable SessionModeState modes, @Nullable SessionModelState models) {
-			this(modes, models, null);
+		public LoadSessionResponse(@Nullable SessionModeState modes) {
+			this(modes, null);
 		}
 	}
 
@@ -478,31 +465,6 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeResponse() implements DefaultOnNull {
-	}
-
-	/**
-	 * Set session model request.
-	 *
-	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-	 * (June 2026, v0.13.5). Use {@code session/set_config_option} with a {@code "model"}
-	 * category config option instead. Slated for removal in a future release.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetSessionModelRequest(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("modelId") String modelId) {
-	}
-
-	/**
-	 * Set session model response.
-	 *
-	 * @deprecated See {@link SetSessionModelRequest}. Slated for removal.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetSessionModelResponse() implements DefaultOnNull {
 	}
 
 	/**
@@ -606,12 +568,10 @@ public final class AcpSchema {
 	 * Resume session response
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record ResumeSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
-			@JsonProperty("models") @Nullable SessionModelState models,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
-		public ResumeSessionResponse(@Nullable SessionModeState modes, @Nullable SessionModelState models) {
-			this(modes, models, null);
+		public ResumeSessionResponse(@Nullable SessionModeState modes) {
+			this(modes, null);
 		}
 	}
 
@@ -640,13 +600,12 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	@SuppressWarnings("removal") // 'models' references the deprecated-for-removal SessionModelState
 	public record ForkSessionResponse(@JsonProperty("sessionId") String sessionId,
-			@JsonProperty("modes") @Nullable SessionModeState modes, @JsonProperty("models") @Nullable SessionModelState models,
+			@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		public ForkSessionResponse(String sessionId, @Nullable SessionModeState modes, @Nullable SessionModelState models) {
-			this(sessionId, modes, models, null, null);
+		public ForkSessionResponse(String sessionId, @Nullable SessionModeState modes) {
+			this(sessionId, modes, null, null);
 		}
 	}
 
@@ -1190,33 +1149,6 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionMode(@JsonProperty("id") String id, @JsonProperty("name") String name,
-			@JsonProperty("description") @Nullable String description) {
-	}
-
-	/**
-	 * Session model state.
-	 *
-	 * @deprecated The session-model API (including the {@code models} field on session
-	 * responses) was removed from the ACP spec (June 2026, v0.13.5). Model selection is now
-	 * carried by {@code session/set_config_option} with a {@code "model"} category config
-	 * option. Slated for removal in a future release.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SessionModelState(@JsonProperty("currentModelId") String currentModelId,
-			@JsonProperty("availableModels") List<ModelInfo> availableModels) {
-	}
-
-	/**
-	 * Model info.
-	 *
-	 * @deprecated See {@link SessionModelState}. Slated for removal.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ModelInfo(@JsonProperty("modelId") String modelId, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description) {
 	}
 

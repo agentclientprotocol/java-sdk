@@ -26,12 +26,11 @@ class DefaultOnNullTest {
 
 	@Test
 	void theDefaultOnNullResponsesAreExactlyThoseOfTheRustSchema() {
-		// agent-client-protocol-schema 1.9.1 v1: every response declared with default_on_null!,
-		// plus the deprecated session/set_model response, which Rust no longer has.
+		// agent-client-protocol-schema 1.9.1 v1: every response declared with default_on_null!.
 		assertThat(defaultOnNullTypes()).extracting(Class::getSimpleName)
 			.containsExactlyInAnyOrder("AuthenticateResponse", "LogoutResponse", "LoadSessionResponse",
 					"ResumeSessionResponse", "CloseSessionResponse", "DeleteSessionResponse", "SetSessionModeResponse",
-					"SetSessionModelResponse", "WriteTextFileResponse", "ReleaseTerminalResponse",
+					"WriteTextFileResponse", "ReleaseTerminalResponse",
 					"KillTerminalCommandResponse", "WaitForTerminalExitResponse", "SetProviderResponse",
 					"DisableProviderResponse");
 	}

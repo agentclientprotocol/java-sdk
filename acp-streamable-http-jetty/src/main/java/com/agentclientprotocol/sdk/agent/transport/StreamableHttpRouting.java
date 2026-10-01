@@ -136,7 +136,6 @@ final class StreamableHttpRouting {
 		}
 	}
 
-	@SuppressWarnings("removal") // routes the deprecated-for-removal session/set_model
 	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, @Nullable String sessionHeader) {
 		String method;
 		@Nullable Object params;
@@ -180,7 +179,6 @@ final class StreamableHttpRouting {
 				break;
 			case AcpSchema.METHOD_SESSION_PROMPT:
 			case AcpSchema.METHOD_SESSION_SET_MODE:
-			case AcpSchema.METHOD_SESSION_SET_MODEL:
 			case AcpSchema.METHOD_SESSION_CANCEL:
 				requestScope = requireSessionScope(method, params, sessionHeader);
 				responseScope = requestScope;

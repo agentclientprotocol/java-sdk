@@ -53,9 +53,6 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler;
 
-	@SuppressWarnings("removal")
-	private final AcpAgent.@Nullable SetSessionModelHandler setSessionModelHandler;
-
 	private final AcpAgent.@Nullable ListSessionsHandler listSessionsHandler;
 
 	private final AcpAgent.@Nullable CloseSessionHandler closeSessionHandler;
@@ -84,13 +81,11 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	 */
 	private final AtomicReference<@Nullable NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
-	@SuppressWarnings("removal") // accepts the deprecated-for-removal SetSessionModelHandler
 	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout,
 			AcpAgent.@Nullable InitializeHandler initializeHandler, AcpAgent.@Nullable AuthenticateHandler authenticateHandler,
 			AcpAgent.@Nullable LogoutHandler logoutHandler, AcpAgent.@Nullable NewSessionHandler newSessionHandler,
 			AcpAgent.@Nullable LoadSessionHandler loadSessionHandler,
 			AcpAgent.@Nullable PromptHandler promptHandler, AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler,
-			AcpAgent.@Nullable SetSessionModelHandler setSessionModelHandler,
 			AcpAgent.@Nullable ListSessionsHandler listSessionsHandler, AcpAgent.@Nullable CloseSessionHandler closeSessionHandler,
 			AcpAgent.@Nullable DeleteSessionHandler deleteSessionHandler,
 			AcpAgent.@Nullable ResumeSessionHandler resumeSessionHandler, AcpAgent.@Nullable ForkSessionHandler forkSessionHandler,
@@ -107,7 +102,6 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		this.loadSessionHandler = loadSessionHandler;
 		this.promptHandler = promptHandler;
 		this.setSessionModeHandler = setSessionModeHandler;
-		this.setSessionModelHandler = setSessionModelHandler;
 		this.listSessionsHandler = listSessionsHandler;
 		this.closeSessionHandler = closeSessionHandler;
 		this.deleteSessionHandler = deleteSessionHandler;
@@ -121,7 +115,6 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	}
 
 	@Override
-	@SuppressWarnings("removal") // registers the deprecated-for-removal session/set_model handler
 	public Mono<Void> start() {
 		return Mono.fromRunnable(() -> {
 			logger.info("Starting ACP async agent");
@@ -203,16 +196,6 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 							new TypeRef<AcpSchema.SetSessionModeRequest>() {
 							});
 					return setSessionModeHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Set session model handler
-			if (setSessionModelHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_SET_MODEL, params -> {
-					AcpSchema.SetSessionModelRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.SetSessionModelRequest>() {
-							});
-					return setSessionModelHandler.handle(request).cast(Object.class);
 				});
 			}
 

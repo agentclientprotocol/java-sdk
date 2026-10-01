@@ -26,7 +26,7 @@ import java.lang.annotation.Target;
  *
  * <p>The method should return one of:
  * <ul>
- *   <li>{@code ResumeSessionResponse} - the resume session response with modes and models</li>
+ *   <li>{@code ResumeSessionResponse} - the resume session response with modes</li>
  *   <li>{@code Mono<ResumeSessionResponse>} - for async handling</li>
  * </ul>
  *
@@ -35,7 +35,7 @@ import java.lang.annotation.Target;
  * @ResumeSession
  * public ResumeSessionResponse resume(ResumeSessionRequest req) {
  *     // Reconnect to session without history replay
- *     return new ResumeSessionResponse(modes, models);
+ *     return new ResumeSessionResponse(modes);
  * }
  * }</pre>
  *

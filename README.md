@@ -536,7 +536,7 @@ New stable methods: `logout`, `session/delete`; the session config-option API (`
 
 New unstable methods (marked `@UnstableAcpApi`): provider configuration — `providers/list`, `providers/set`, `providers/disable`.
 
-Also: `additionalDirectories` workspace roots on session requests; per-chunk `messageId` on streamed chunks with `sendMessage`/`sendThought` overloads. The session-model API (`session/set_model`) is deprecated for removal — use `session/set_config_option` with a `"model"` category instead. Jackson aligned to 2.21.2; WebSocket max message size raised to 4 MB.
+Also: `additionalDirectories` workspace roots on session requests; per-chunk `messageId` on streamed chunks with `sendMessage`/`sendThought` overloads. The session-model API is deprecated for removal — use `session/set_config_option` with a `"model"` category instead. Jackson aligned to 2.21.2; WebSocket max message size raised to 4 MB.
 
 ### 0.12.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 

@@ -597,7 +597,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
 	}
 
-	@SuppressWarnings("removal") // routes the deprecated-for-removal session/set_model
 	private ResolvedOutboundRoute resolveRequestOrNotificationRoute(JSONRPCMessage message, String method,
 			@Nullable Object params) {
 		RouteScope requestScope;
@@ -624,7 +623,6 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				break;
 			case AcpSchema.METHOD_SESSION_PROMPT:
 			case AcpSchema.METHOD_SESSION_SET_MODE:
-			case AcpSchema.METHOD_SESSION_SET_MODEL:
 			case AcpSchema.METHOD_SESSION_CANCEL:
 				requestScope = RouteScope.session(requireSessionId(params, method));
 				responseScope = requestScope;

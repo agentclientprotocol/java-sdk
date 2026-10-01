@@ -491,7 +491,7 @@ public abstract class AbstractAcpClientAgentIT {
 						request -> Mono.just(new AcpSchema.NewSessionResponse("session-original", null, null)))
 				.forkSessionHandler(request -> {
 					assertThat(request.sessionId()).isEqualTo("session-original");
-					return Mono.just(new AcpSchema.ForkSessionResponse("session-forked", null, null));
+					return Mono.just(new AcpSchema.ForkSessionResponse("session-forked", null));
 				})
 				.build();
 

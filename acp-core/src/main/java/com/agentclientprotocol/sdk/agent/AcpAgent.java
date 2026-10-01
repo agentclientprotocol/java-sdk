@@ -221,23 +221,6 @@ public interface AcpAgent {
 	}
 
 	/**
-	 * Functional interface for handling set session model requests.
-	 *
-	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-	 * (June 2026). Use {@code session/set_config_option} with a {@code "model"} category
-	 * config option instead. Slated for removal.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@FunctionalInterface
-	@SuppressWarnings("removal")
-	interface SetSessionModelHandler {
-
-		Mono<AcpSchema.SetSessionModelResponse> handle(AcpSchema.SetSessionModelRequest request);
-
-	}
-
-	/**
 	 * Functional interface for handling list sessions requests.
 	 */
 	@FunctionalInterface
@@ -447,24 +430,6 @@ public interface AcpAgent {
 	}
 
 	/**
-	 * Synchronous functional interface for handling set session model requests.
-	 * Returns a plain value instead of Mono for use with sync agents.
-	 *
-	 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-	 * (June 2026). Use {@code session/set_config_option} with a {@code "model"} category
-	 * config option instead. Slated for removal.
-	 */
-	@Deprecated(forRemoval = true)
-	@UnstableAcpApi
-	@FunctionalInterface
-	@SuppressWarnings("removal")
-	interface SyncSetSessionModelHandler {
-
-		AcpSchema.SetSessionModelResponse handle(AcpSchema.SetSessionModelRequest request);
-
-	}
-
-	/**
 	 * Synchronous functional interface for handling list sessions requests.
 	 * Returns a plain value instead of Mono for use with sync agents.
 	 */
@@ -595,9 +560,6 @@ public interface AcpAgent {
 
 		private @Nullable SetSessionModeHandler setSessionModeHandler;
 
-		@SuppressWarnings("removal")
-		private @Nullable SetSessionModelHandler setSessionModelHandler;
-
 		private @Nullable ListSessionsHandler listSessionsHandler;
 
 		private @Nullable CloseSessionHandler closeSessionHandler;
@@ -701,20 +663,6 @@ public interface AcpAgent {
 		 */
 		public AsyncAgentBuilder setSessionModeHandler(SetSessionModeHandler handler) {
 			this.setSessionModeHandler = handler;
-			return this;
-		}
-
-		/**
-		 * Sets the handler for set session model requests.
-		 * @param handler The set session model handler
-		 * @return This builder for chaining
-		 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-		 * (June 2026). Use {@code session/set_config_option} with a {@code "model"} category
-		 * config option instead. Slated for removal.
-		 */
-		@Deprecated(forRemoval = true)
-		public AsyncAgentBuilder setSessionModelHandler(SetSessionModelHandler handler) {
-			this.setSessionModelHandler = handler;
 			return this;
 		}
 
@@ -828,7 +776,7 @@ public interface AcpAgent {
 		public AcpAsyncAgent build() {
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, initializeHandler, authenticateHandler,
 					logoutHandler, newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler,
-					setSessionModelHandler, listSessionsHandler, closeSessionHandler, deleteSessionHandler,
+					listSessionsHandler, closeSessionHandler, deleteSessionHandler,
 					resumeSessionHandler, forkSessionHandler, setSessionConfigOptionHandler, listProvidersHandler,
 					setProviderHandler, disableProviderHandler, cancelHandler);
 		}
@@ -941,21 +889,6 @@ public interface AcpAgent {
 		 */
 		public SyncAgentBuilder setSessionModeHandler(SyncSetSessionModeHandler handler) {
 			asyncBuilder.setSessionModeHandler(fromSync(handler));
-			return this;
-		}
-
-		/**
-		 * Sets the synchronous handler for set session model requests.
-		 * @param handler The sync set session model handler (returns plain value)
-		 * @return This builder for chaining
-		 * @deprecated The {@code session/set_model} method was removed from the ACP spec
-		 * (June 2026). Use {@code session/set_config_option} with a {@code "model"} category
-		 * config option instead. Slated for removal.
-		 */
-		@Deprecated(forRemoval = true)
-		@SuppressWarnings("removal")
-		public SyncAgentBuilder setSessionModelHandler(SyncSetSessionModelHandler handler) {
-			asyncBuilder.setSessionModelHandler(fromSync(handler));
 			return this;
 		}
 
@@ -1099,13 +1032,6 @@ public interface AcpAgent {
 		}
 
 		private static SetSessionModeHandler fromSync(SyncSetSessionModeHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		@Deprecated(forRemoval = true)
-		@SuppressWarnings("removal")
-		private static SetSessionModelHandler fromSync(SyncSetSessionModelHandler syncHandler) {
 			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}

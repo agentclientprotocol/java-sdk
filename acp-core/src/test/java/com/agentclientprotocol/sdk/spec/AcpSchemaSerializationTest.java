@@ -76,7 +76,6 @@ class AcpSchemaSerializationTest {
 	}
 
 	@Test
-	@SuppressWarnings("removal") // asserts on the deprecated-for-removal models field
 	void newSessionResponseSerialization() throws IOException {
 		AcpSchema.NewSessionResponse response = AcpTestFixtures.createNewSessionResponse();
 
@@ -87,7 +86,6 @@ class AcpSchemaSerializationTest {
 
 		assertThat(deserialized.sessionId()).isEqualTo("test-session-id");
 		assertThat(deserialized.modes()).isNotNull();
-		assertThat(deserialized.models()).isNotNull();
 	}
 
 	@Test
@@ -305,21 +303,6 @@ class AcpSchemaSerializationTest {
 		assertThat(deserialized.currentModeId()).isEqualTo("code");
 		assertThat(deserialized.availableModes()).hasSize(1);
 		assertThat(deserialized.availableModes().get(0).id()).isEqualTo("code");
-	}
-
-	@Test
-	@SuppressWarnings("removal") // exercises the deprecated-for-removal SessionModelState
-	void sessionModelStateSerialization() throws IOException {
-		AcpSchema.SessionModelState state = AcpTestFixtures.createSessionModelState();
-
-		String json = jsonMapper.writeValueAsString(state);
-		AcpSchema.SessionModelState deserialized = jsonMapper.readValue(json,
-				new TypeRef<AcpSchema.SessionModelState>() {
-				});
-
-		assertThat(deserialized.currentModelId()).isEqualTo("test-model");
-		assertThat(deserialized.availableModels()).hasSize(1);
-		assertThat(deserialized.availableModels().get(0).modelId()).isEqualTo("test-model");
 	}
 
 	// ---------------------------

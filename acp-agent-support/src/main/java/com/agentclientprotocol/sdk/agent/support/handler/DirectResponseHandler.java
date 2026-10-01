@@ -21,15 +21,14 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Handles direct protocol response types that need no conversion.
  *
  * <p>Supports {@link InitializeResponse}, {@link NewSessionResponse},
- * {@link LoadSessionResponse}, {@link PromptResponse}, {@link SetSessionModeResponse},
- * and {@link SetSessionModelResponse}.
+ * {@link LoadSessionResponse}, {@link PromptResponse}, {@link SetSessionModeResponse}, and the other
+ * session and provider responses.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -37,7 +36,6 @@ import org.jspecify.annotations.Nullable;
 public class DirectResponseHandler implements ReturnValueHandler {
 
 	@Override
-	@SuppressWarnings("removal") // recognizes the deprecated-for-removal SetSessionModelResponse
 	public boolean supportsReturnType(AcpMethodParameter returnType) {
 		Class<?> type = returnType.getParameterType();
 		return InitializeResponse.class.isAssignableFrom(type)
@@ -46,7 +44,6 @@ public class DirectResponseHandler implements ReturnValueHandler {
 				|| LoadSessionResponse.class.isAssignableFrom(type)
 				|| PromptResponse.class.isAssignableFrom(type)
 				|| SetSessionModeResponse.class.isAssignableFrom(type)
-				|| SetSessionModelResponse.class.isAssignableFrom(type)
 				|| ListSessionsResponse.class.isAssignableFrom(type)
 				|| CloseSessionResponse.class.isAssignableFrom(type)
 				|| DeleteSessionResponse.class.isAssignableFrom(type)

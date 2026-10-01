@@ -62,7 +62,6 @@ This module transitively includes `acp-annotations` and `acp-core`.
 | `@LoadSession` | `session/load` | Loads an existing session by ID. |
 | `@Prompt` | `session/prompt` | Handles user prompts within a session. |
 | `@SetSessionMode` | `session/set_mode` | Changes the operational mode of a session. |
-| `@SetSessionModel` | `session/set_model` | Changes the AI model used for a session. |
 | `@Cancel` | `session/cancel` | Handles cancellation notifications (fire-and-forget). |
 
 ### Parameter Annotations
@@ -91,7 +90,6 @@ Handler methods support flexible signatures. The runtime automatically resolves 
 | `LoadSessionRequest` | The raw load session request (in `@LoadSession` handlers). |
 | `PromptRequest` | The raw prompt request (in `@Prompt` handlers). |
 | `SetSessionModeRequest` | The raw set mode request (in `@SetSessionMode` handlers). |
-| `SetSessionModelRequest` | The raw set model request (in `@SetSessionModel` handlers). |
 | `CancelNotification` | The raw cancel notification (in `@Cancel` handlers). |
 | `SyncPromptContext` | Synchronous context for sending messages, file I/O, permissions, etc. |
 | `NegotiatedCapabilities` | The capabilities negotiated with the client. |
@@ -136,7 +134,6 @@ The runtime automatically converts return values to protocol response types:
 | `LoadSessionResponse` | Passed through directly. |
 | `PromptResponse` | Passed through directly. |
 | `SetSessionModeResponse` | Passed through directly. |
-| `SetSessionModelResponse` | Passed through directly. |
 | `String` | Converted to `PromptResponse.text(value)`. |
 | `void` | Converted to `PromptResponse.endTurn()`. |
 | `Mono<PromptResponse>` | Unwrapped and returned (for async handlers). |

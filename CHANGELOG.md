@@ -57,6 +57,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one way. Migration: change the imports in custom `ArgumentResolver`, `ReturnValueHandler` and
   `AcpInterceptor` implementations to `com.agentclientprotocol.sdk.agent.support.invocation.*`.
 
+### Removed
+
+- **Breaking: the session-model API (`session/set_model`) is removed.** Deprecated for removal in
+  0.14.0; the ACP schema 1.9.1 (stable and unstable) no longer defines the method, its request and
+  response, or the `models` field on session responses. Removed: `AcpSchema.METHOD_SESSION_SET_MODEL`,
+  `SetSessionModelRequest`, `SetSessionModelResponse`, `SessionModelState`, `ModelInfo`; the `models`
+  component of `NewSessionResponse`, `LoadSessionResponse`, `ResumeSessionResponse` and
+  `ForkSessionResponse` (and the convenience constructors that took it: they now take the session ID
+  and/or `modes` only); `AcpAgent.SetSessionModelHandler`, `SyncSetSessionModelHandler` and the
+  builders' `setSessionModelHandler`; `AcpAsyncClient.setSessionModel` and
+  `AcpSyncClient.setSessionModel`; the `@SetSessionModel` annotation and
+  `SetSessionModelRequestResolver`; the method's Streamable HTTP routing entries. An agent no longer
+  answers `session/set_model` (a peer that sends it gets "method not found"). Migration: expose model
+  selection as a session config option whose `category` is `"model"`, and change it with
+  `session/set_config_option` (`setSessionConfigOptionHandler`, `@SetSessionConfigOption`,
+  `AcpAsyncClient.setSessionConfigOption`).
+
 ### Fixed
 
 - **A response with `"result": null` failed the request** ("carried no result") even where the
@@ -66,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   response type whose every field is optional now reads a null or missing result as `{}`; these types
   implement the new marker `AcpSchema.DefaultOnNull` (`AuthenticateResponse`, `LogoutResponse`,
   `LoadSessionResponse`, `ResumeSessionResponse`, `CloseSessionResponse`, `DeleteSessionResponse`,
-  `SetSessionModeResponse`, `SetSessionModelResponse`, `WriteTextFileResponse`,
+  `SetSessionModeResponse`, `WriteTextFileResponse`,
   `ReleaseTerminalResponse`, `KillTerminalCommandResponse`, `WaitForTerminalExitResponse`,
   `SetProviderResponse`, `DisableProviderResponse`). A response type with a required field still
   fails clearly. A null result of an extension (`_`-prefixed) method completes the request's `Mono`
