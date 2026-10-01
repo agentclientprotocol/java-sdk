@@ -1,0 +1,514 @@
+{
+  "comment": "The step catalogue: the contract every interop agent and client program implements. README.md (Contracts) explains the conventions; GenConfigs.java reads this file. Step ids are stable: never rename one, add a new id instead. Order matters: the generator runs steps in this order.",
+  "version": 1,
+  "conventions": {
+    "stepTimeoutMs": 15000,
+    "replayGraceMs": 2000,
+    "updateGraceMs": 1000,
+    "placeholders": {
+      "{dir}": "An absolute scratch directory the client creates once per run (no spaces). Agent and client run on the same host, so both can read and write it."
+    },
+    "first": "init.initialize",
+    "last": "conn.close"
+  },
+  "fixtures": {
+    "client": {
+      "protocolVersion": 1,
+      "clientCapabilities": {
+        "fs": { "readTextFile": true, "writeTextFile": true },
+        "terminal": true,
+        "elicitation": { "form": {}, "url": {} },
+        "auth": { "terminal": true },
+        "session": { "configOptions": { "boolean": {} } }
+      },
+      "clientInfo": { "name": "interop-<lang>-client", "version": "1" }
+    },
+    "agent": {
+      "protocolVersion": 1,
+      "agentCapabilities": {
+        "loadSession": true,
+        "promptCapabilities": { "image": false, "audio": false, "embeddedContext": false },
+        "mcpCapabilities": { "http": false, "sse": false },
+        "sessionCapabilities": { "list": {}, "resume": {}, "close": {}, "delete": {} },
+        "auth": { "logout": {} }
+      },
+      "authMethods": [
+        { "id": "interop-auth", "name": "Interop auth", "description": "Accepts any authenticate call" }
+      ],
+      "terminalAuthMethod": { "type": "terminal", "id": "interop-terminal-auth", "name": "Interop terminal auth", "args": ["--login"] },
+      "agentInfo": { "name": "interop-<lang>-agent", "version": "1" }
+    },
+    "modes": {
+      "currentModeId": "interop-mode-a",
+      "availableModes": [
+        { "id": "interop-mode-a", "name": "Mode A" },
+        { "id": "interop-mode-b", "name": "Mode B" }
+      ]
+    },
+    "configOptions": [
+      { "id": "model", "name": "Model", "type": "select", "currentValue": "model-a",
+        "options": [ { "value": "model-a", "name": "Model A" }, { "value": "model-b", "name": "Model B" } ] },
+      { "id": "verbose", "name": "Verbose", "type": "boolean", "currentValue": false, "requires": "client.session.configOptions.boolean" }
+    ],
+    "permission": {
+      "toolCall": { "toolCallId": "perm-1", "title": "interop permission", "kind": "edit", "status": "pending" },
+      "options": [
+        { "optionId": "allow", "name": "Allow", "kind": "allow_once" },
+        { "optionId": "reject", "name": "Reject", "kind": "reject_once" }
+      ],
+      "clientRule": "Answer `cancelled` if this session has a cancel in flight (perm.cancelled); otherwise select the first option whose kind is allow_once, else options[0]."
+    },
+    "fsReadContent": "line1\nline2\nline3\n",
+    "emit": {
+      "user_message_chunk": { "content": { "type": "text", "text": "user-chunk" } },
+      "agent_thought_chunk": { "content": { "type": "text", "text": "thinking" } },
+      "tool_call": { "toolCallId": "call-1", "title": "interop tool", "kind": "read", "status": "pending" },
+      "tool_call_update": { "toolCallId": "call-1", "status": "completed", "content": [ { "type": "content", "content": { "type": "text", "text": "tool output" } } ] },
+      "plan": { "entries": [ { "content": "step one", "priority": "high", "status": "pending" }, { "content": "step two", "priority": "low", "status": "completed" } ] },
+      "available_commands_update": { "availableCommands": [ { "name": "interop", "description": "interop command", "input": { "hint": "args" } } ] },
+      "current_mode_update": { "currentModeId": "interop-mode-b" },
+      "config_option_update": { "configOptions": "fixtures.configOptions with model currentValue model-b" },
+      "session_info_update": { "title": "interop title" },
+      "usage_update": { "used": 100, "size": 1000, "cost": { "amount": 0.01, "currency": "USD" } },
+      "unknown": { "sessionUpdate": "interop_future_update", "payload": { "x": 1 } }
+    },
+    "ext": { "method": "_interop/ping", "notification": "_interop/note", "params": { "n": 1 }, "result": { "pong": 1 } },
+    "meta": { "key": "interop", "value": "m1" },
+    "elicitation": {
+      "form": { "message": "interop form", "requestedSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
+      "formAnswer": { "action": "accept", "content": { "name": "interop" } },
+      "url": { "elicitationId": "elic-1", "url": "https://example.invalid/interop", "message": "interop url" }
+    }
+  },
+  "directives": [
+    { "syntax": "<plain text>", "agent": "Send two agent_message_chunk updates, \"echo: \" then the prompt text, and answer end_turn. Record the turn in the session's history (for session.load-replay)." },
+    { "syntax": "#permission allow", "agent": "session/request_permission with fixtures.permission. Then send the chunk \"permission: selected <optionId>\" (or \"permission: cancelled\") and answer end_turn. Print STEP agent.perm.selected PASS iff the outcome is selected/allow." },
+    { "syntax": "#permission hold", "agent": "As allow, but the client cancels the turn while the request is pending. Print STEP agent.perm.cancelled PASS iff the outcome is cancelled, and answer stopReason cancelled." },
+    { "syntax": "#fs write <path> <content...>", "agent": "Require client.fs.writeTextFile. fs/write_text_file {path, content}; accept {} or a null result. Send the chunk \"fs write ok\" (or \"fs write error <code>\") and answer end_turn." },
+    { "syntax": "#fs read <path> [line=<n>] [limit=<n>]", "agent": "Require client.fs.readTextFile. fs/read_text_file; send the returned content as one chunk (or \"fs read error <code>\") and answer end_turn." },
+    { "syntax": "#fs read-slow <path>", "agent": "fs/read_text_file, then after 200 ms send $/cancel_request for that request. Chunk \"cancel-request sent\"; answer end_turn." },
+    { "syntax": "#emit <kind> [name=<tool name>]", "agent": "Send one session/update of <kind> from fixtures.emit (tool_call_update is preceded by its tool_call; unknown is followed by the chunk \"after-unknown\"; name= sets the tool call name), then answer end_turn." },
+    { "syntax": "#stop <reason>", "agent": "Send the chunk \"stop\" and answer with stopReason <reason>." },
+    { "syntax": "#slow [grace=<ms>]", "agent": "Send the chunk \"tick\" every 100 ms. On session/cancel keep ticking for grace ms (default 0), then answer cancelled. Without a cancel, answer end_turn after 10 s." },
+    { "syntax": "#hang", "agent": "Never answer and ignore session/cancel (the SDK's own cancel grace must answer)." },
+    { "syntax": "#terminal run <cmd> [args...]", "agent": "Require client.terminal. terminal/create, terminal/wait_for_exit, terminal/output, terminal/release. Chunk \"terminal: <output trimmed> exit=<code>\"." },
+    { "syntax": "#terminal kill <cmd> [args...]", "agent": "terminal/create, wait 200 ms, terminal/kill, terminal/wait_for_exit, terminal/release. Chunk \"terminal killed\"." },
+    { "syntax": "#elicit form", "agent": "elicitation/create with fixtures.elicitation.form. Chunk \"elicit: <action> <content as JSON>\"." },
+    { "syntax": "#elicit url", "agent": "elicitation/create (url mode, fixtures.elicitation.url), then elicitation/complete {elicitationId}. Chunk \"elicit url done\"." },
+    { "syntax": "#ext request <method>", "agent": "Send the extension request <method> with fixtures.ext.params to the client; chunk \"ext: <result as JSON>\"." },
+    { "syntax": "#ext notify <method>", "agent": "Send the extension notification <method> with fixtures.ext.params; chunk \"ext notified\"." },
+    { "syntax": "#ext last-notification", "agent": "Chunk \"ext last: <method of the last extension notification received, or none>\"." },
+    { "syntax": "#meta", "agent": "Copy the prompt request's _meta into the _meta of one agent_message_chunk \"meta\" and of the PromptResponse." },
+    { "syntax": "#echo-caps", "agent": "Send the clientCapabilities received at initialize, as compact JSON, in one chunk." },
+    { "syntax": "#len <payload>", "agent": "Chunk \"len=<payload length in characters>\" (the payload is ASCII: everything after \"#len \")." },
+    { "syntax": "#big <bytes>", "agent": "Send one agent_message_chunk of <bytes> ASCII 'x' characters." },
+    { "syntax": "#<anything else>", "agent": "Answer the prompt with a JSON-RPC error, code -32602, message \"unknown directive: #<name>\"." }
+  ],
+  "steps": [
+    {
+      "id": "init.initialize", "group": "init", "seed": true,
+      "client": "Connect, then initialize with fixtures.client (advertise only capabilities the program really implements). This step is always first; the result is kept for the other init.* steps.",
+      "pass": { "client": "The response arrives within the step timeout and protocolVersion == 1." }
+    },
+    {
+      "id": "init.agent-capabilities", "group": "init",
+      "client": "Check the stored initialize response.",
+      "pass": { "client": "agentCapabilities has loadSession true and sessionCapabilities list, resume, close and delete present (fixtures.agent)." }
+    },
+    {
+      "id": "init.client-capabilities", "group": "init", "prompt": "#echo-caps",
+      "client": "session/new, then the prompt.",
+      "agent": "#echo-caps",
+      "pass": { "client": "The chunk parses as JSON and has fs.readTextFile and fs.writeTextFile true and terminal true.", "agent": "STEP agent.init.client-capabilities PASS when the initialize request carried clientCapabilities (any value) and the agent could serialize them." }
+    },
+    {
+      "id": "init.auth-methods", "group": "init",
+      "client": "Check the stored initialize response.",
+      "pass": { "client": "authMethods contains an entry with id interop-auth." }
+    },
+    {
+      "id": "init.agent-info", "group": "init",
+      "client": "Check the stored initialize response.",
+      "pass": { "client": "agentInfo.name starts with \"interop-\"." }
+    },
+    {
+      "id": "init.config-boolean", "group": "init", "prompt": "#echo-caps", "phaseB": "P6",
+      "requires": ["client.session.configOptions.boolean"],
+      "client": "session/new, then the prompt.",
+      "agent": "#echo-caps",
+      "pass": { "client": "The echoed capabilities contain session.configOptions.boolean." }
+    },
+    {
+      "id": "auth.authenticate", "group": "auth",
+      "client": "authenticate {methodId: interop-auth}.",
+      "agent": "Accept and answer {}.",
+      "pass": { "client": "A non-error response.", "agent": "STEP agent.auth.authenticate PASS when methodId == interop-auth." }
+    },
+    {
+      "id": "auth.logout", "group": "auth",
+      "client": "logout {}.",
+      "agent": "Answer {}.",
+      "pass": { "client": "A non-error response." }
+    },
+    {
+      "id": "auth.logout-capability", "group": "auth", "phaseB": "P7",
+      "client": "Check the stored initialize response.",
+      "pass": { "client": "agentCapabilities.auth.logout is present." }
+    },
+    {
+      "id": "auth.terminal", "group": "auth", "phaseB": "P5",
+      "requires": ["client.auth.terminal"],
+      "client": "Check the stored initialize response.",
+      "agent": "List fixtures.agent.terminalAuthMethod in authMethods iff the client advertised auth.terminal.",
+      "pass": { "client": "authMethods contains an entry with type terminal and id interop-terminal-auth." }
+    },
+    {
+      "id": "session.new", "group": "session", "seed": true,
+      "client": "session/new {cwd: {dir}, mcpServers: []}.",
+      "pass": { "client": "A non-empty sessionId." }
+    },
+    {
+      "id": "session.load", "group": "session", "seed": true,
+      "requires": ["agent.loadSession"],
+      "client": "session/new; prompt \"hello load\"; session/load {sessionId, cwd: {dir}, mcpServers: []}; prompt \"after load\".",
+      "agent": "Accept the load of a session it created.",
+      "pass": { "client": "The load answers without error, and the prompt after it answers end_turn with at least one agent_message_chunk for the session." }
+    },
+    {
+      "id": "session.load-replay", "group": "session",
+      "requires": ["agent.loadSession"],
+      "client": "session/new; prompt \"replay me\"; session/load. Count updates for the session from the load request until replayGraceMs after its response (replay may arrive on either side of the response: RFD gaps A/C).",
+      "agent": "Before answering session/load, replay the history: per earlier turn one user_message_chunk with the prompt text, then the agent_message_chunk updates it sent.",
+      "pass": { "client": "A user_message_chunk \"replay me\" and an agent_message_chunk containing \"replay me\" arrived." }
+    },
+    {
+      "id": "session.resume", "group": "session",
+      "requires": ["agent.sessionCapabilities.resume"],
+      "client": "session/new; prompt \"before resume\"; session/resume {sessionId, cwd: {dir}}; prompt \"after resume\".",
+      "agent": "Resume without replay.",
+      "pass": { "client": "The resume answers without error, no update for the session arrives between the resume request and updateGraceMs after its response, and the next prompt answers end_turn." }
+    },
+    {
+      "id": "session.list", "group": "session",
+      "requires": ["agent.sessionCapabilities.list"],
+      "client": "session/new {cwd: {dir}/list}; session/list {cwd: {dir}/list}, following nextCursor (at most 10 pages).",
+      "agent": "List the sessions it created, filtered by cwd; any page size.",
+      "pass": { "client": "The new sessionId is listed, with cwd {dir}/list." }
+    },
+    {
+      "id": "session.close", "group": "session",
+      "requires": ["agent.sessionCapabilities.close"],
+      "client": "session/new; start prompt \"#slow\"; after the first tick, session/close {sessionId}; then prompt \"after close\" on the closed session.",
+      "agent": "Cancel the session's running work and answer {}. Reject later requests for the session.",
+      "pass": { "client": "close answers {}, the #slow prompt ends (cancelled or an error) within 5 s of the close, and the prompt after close fails with an error.", "agent": "STEP agent.session.close PASS when the close named a known session and its running turn was cancelled." }
+    },
+    {
+      "id": "session.delete", "group": "session",
+      "requires": ["agent.sessionCapabilities.delete"],
+      "client": "session/new; session/delete {sessionId}; session/delete {sessionId: \"no-such-session\"}.",
+      "pass": { "client": "Both deletes answer without error (deleting an unknown id succeeds silently)." }
+    },
+    {
+      "id": "session.multi", "group": "session",
+      "client": "Two session/new on the main connection; send prompt \"multi A\" to the first and \"multi B\" to the second concurrently.",
+      "pass": { "client": "Both answer end_turn; the first session's chunks spell \"echo: multi A\" and the second's \"echo: multi B\", with no update routed to the wrong session." }
+    },
+    {
+      "id": "session.fork", "group": "session", "profile": "unstable",
+      "client": "session/new; prompt \"before fork\"; session/fork {sessionId, cwd: {dir}}; prompt \"in fork\" on the new id.",
+      "pass": { "client": "The fork returns a sessionId different from the original, and the prompt on it answers end_turn." }
+    },
+    {
+      "id": "update.agent_message_chunk", "group": "update", "seed": true, "prompt": "hello",
+      "client": "session/new; the prompt.",
+      "agent": "Plain text.",
+      "pass": { "client": "stopReason end_turn, and the agent_message_chunk texts for the session concatenate to \"echo: hello\" (updates may trail the response by updateGraceMs)." }
+    },
+    {
+      "id": "update.user_message_chunk", "group": "update", "prompt": "#emit user_message_chunk",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A user_message_chunk with text \"user-chunk\", and end_turn." }
+    },
+    {
+      "id": "update.agent_thought_chunk", "group": "update", "prompt": "#emit agent_thought_chunk",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "An agent_thought_chunk with text \"thinking\", and end_turn." }
+    },
+    {
+      "id": "update.tool_call", "group": "update", "prompt": "#emit tool_call",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A tool_call with toolCallId call-1, title \"interop tool\", kind read, status pending." }
+    },
+    {
+      "id": "update.tool_call_update", "group": "update", "prompt": "#emit tool_call_update",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "tool_call call-1, then tool_call_update call-1 with status completed and text content \"tool output\"." }
+    },
+    {
+      "id": "update.tool_call-name", "group": "update", "prompt": "#emit tool_call name=read_file", "phaseB": "P3",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "The received tool_call has name \"read_file\"." }
+    },
+    {
+      "id": "update.plan", "group": "update", "prompt": "#emit plan",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A plan with the two fixture entries, in order, with their priority and status." }
+    },
+    {
+      "id": "update.available_commands_update", "group": "update", "prompt": "#emit available_commands_update",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "An available_commands_update with one command named \"interop\" whose input hint is \"args\"." }
+    },
+    {
+      "id": "update.current_mode_update", "group": "update", "prompt": "#emit current_mode_update",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A current_mode_update with currentModeId interop-mode-b." }
+    },
+    {
+      "id": "update.config_option_update", "group": "update", "prompt": "#emit config_option_update",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A config_option_update whose model option has currentValue model-b." }
+    },
+    {
+      "id": "update.session_info_update", "group": "update", "prompt": "#emit session_info_update", "phaseB": "P1",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A session_info_update with title \"interop title\"." }
+    },
+    {
+      "id": "update.usage_update", "group": "update", "prompt": "#emit usage_update",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "A usage_update with used 100, size 1000 and cost 0.01 USD." }
+    },
+    {
+      "id": "update.unknown", "group": "update", "prompt": "#emit unknown", "phaseB": "P1",
+      "client": "session/new; the prompt.",
+      "agent": "Send the unknown variant through an untyped/raw notification send if the typed API refuses it.",
+      "pass": { "client": "The chunk \"after-unknown\" arrives and the prompt answers end_turn: the unknown update was dropped or surfaced, never fatal." }
+    },
+    {
+      "id": "stop.max_tokens", "group": "update", "prompt": "#stop max_tokens",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "stopReason max_tokens." }
+    },
+    {
+      "id": "stop.refusal", "group": "update", "prompt": "#stop refusal",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "stopReason refusal." }
+    },
+    {
+      "id": "stop.max_turn_requests", "group": "update", "prompt": "#stop max_turn_requests",
+      "client": "session/new; the prompt.",
+      "pass": { "client": "stopReason max_turn_requests." }
+    },
+    {
+      "id": "mode.set", "group": "config",
+      "client": "session/new (the response carries fixtures.modes); session/set_mode {modeId: interop-mode-b}.",
+      "agent": "Return fixtures.modes on session/new; accept set_mode for a known mode.",
+      "pass": { "client": "session/new returned availableModes with interop-mode-b, and set_mode answers without error.", "agent": "STEP agent.mode.set PASS when set_mode named a known session and interop-mode-b." }
+    },
+    {
+      "id": "config.on-new", "group": "config", "phaseB": "P1b",
+      "client": "session/new.",
+      "agent": "Return fixtures.configOptions (verbose only if the client advertised configOptions.boolean) on session/new, session/load and session/resume.",
+      "pass": { "client": "The response has a select option model with currentValue model-a." }
+    },
+    {
+      "id": "config.select", "group": "config",
+      "client": "session/new; session/set_config_option {configId: model, value: model-b}.",
+      "pass": { "client": "The response is the complete list of options, with model at currentValue model-b." }
+    },
+    {
+      "id": "config.boolean", "group": "config", "phaseB": "P6",
+      "requires": ["client.session.configOptions.boolean"],
+      "client": "session/new; session/set_config_option {configId: verbose, type: boolean, value: true}.",
+      "pass": { "client": "The response has verbose at currentValue true." }
+    },
+    {
+      "id": "perm.selected", "group": "perm", "seed": true, "prompt": "#permission allow",
+      "client": "session/new; the prompt; answer the permission request per fixtures.permission.clientRule.",
+      "agent": "#permission allow",
+      "pass": { "client": "Exactly one session/request_permission arrived during the turn, with at least one option; the chunk \"permission: selected allow\" arrived; end_turn.", "agent": "STEP agent.perm.selected PASS when the outcome is selected with optionId allow." }
+    },
+    {
+      "id": "perm.cancelled", "group": "perm", "prompt": "#permission hold",
+      "client": "session/new; the prompt; when the permission request arrives, send session/cancel, then answer the request with outcome cancelled.",
+      "agent": "#permission hold",
+      "pass": { "client": "stopReason cancelled within 5 s of the cancel.", "agent": "STEP agent.perm.cancelled PASS when the outcome is cancelled." }
+    },
+    {
+      "id": "fs.write", "group": "fs", "seed": true, "prompt": "#fs write {dir}/fs-write.txt interop write",
+      "requires": ["client.fs.writeTextFile"],
+      "client": "session/new; the prompt. The fs/write_text_file handler writes the file. A client whose SDK answers \"result\": null (Python) is the null-result case, which the agent must accept.",
+      "agent": "#fs write",
+      "pass": { "client": "end_turn, the chunk \"fs write ok\" arrived, and {dir}/fs-write.txt contains exactly \"interop write\".", "agent": "STEP agent.fs.write PASS when fs/write_text_file answered without error ({} or null)." }
+    },
+    {
+      "id": "fs.read", "group": "fs", "prompt": "#fs read {dir}/fs-read.txt",
+      "requires": ["client.fs.readTextFile"],
+      "client": "Write fixtures.fsReadContent to {dir}/fs-read.txt; session/new; the prompt. The fs/read_text_file handler reads the file.",
+      "agent": "#fs read",
+      "pass": { "client": "A chunk equal to fixtures.fsReadContent.", "agent": "STEP agent.fs.read PASS when the content equals fixtures.fsReadContent." }
+    },
+    {
+      "id": "fs.read-range", "group": "fs", "prompt": "#fs read {dir}/fs-read.txt line=2 limit=1",
+      "requires": ["client.fs.readTextFile"],
+      "client": "As fs.read; the handler honours line (1-based) and limit.",
+      "agent": "#fs read",
+      "pass": { "client": "A chunk that, trimmed, equals \"line2\".", "agent": "STEP agent.fs.read-range PASS when the content, trimmed, equals \"line2\"." }
+    },
+    {
+      "id": "fs.read-missing", "group": "fs", "prompt": "#fs read {dir}/no-such-file.txt",
+      "requires": ["client.fs.readTextFile"],
+      "client": "session/new; the prompt. The handler answers a JSON-RPC error for a missing file.",
+      "agent": "#fs read",
+      "pass": { "client": "A chunk starting \"fs read error\" and end_turn: the agent got an error, not a hang.", "agent": "STEP agent.fs.read-missing PASS when fs/read_text_file failed with a JSON-RPC error." }
+    },
+    {
+      "id": "term.run", "group": "term", "prompt": "#terminal run echo hi",
+      "requires": ["client.terminal"],
+      "client": "session/new; the prompt. The terminal handlers run real processes.",
+      "agent": "#terminal run",
+      "pass": { "client": "The chunk \"terminal: hi exit=0\".", "agent": "STEP agent.term.run PASS when the output contains \"hi\" and exitCode is 0." }
+    },
+    {
+      "id": "term.kill", "group": "term", "prompt": "#terminal kill sleep 30",
+      "requires": ["client.terminal"],
+      "client": "session/new; the prompt.",
+      "agent": "#terminal kill",
+      "pass": { "client": "The chunk \"terminal killed\" within 5 s.", "agent": "STEP agent.term.kill PASS when wait_for_exit returned within 5 s of the kill." }
+    },
+    {
+      "id": "elicit.form", "group": "elicit", "prompt": "#elicit form",
+      "requires": ["client.elicitation.form"],
+      "client": "session/new; the prompt; answer elicitation/create with fixtures.elicitation.formAnswer.",
+      "agent": "#elicit form",
+      "pass": { "client": "The chunk \"elicit: accept {\\\"name\\\":\\\"interop\\\"}\" (JSON compared semantically).", "agent": "STEP agent.elicit.form PASS when the action is accept with content name == interop." }
+    },
+    {
+      "id": "elicit.complete", "group": "elicit", "prompt": "#elicit url", "phaseB": "P4",
+      "requires": ["client.elicitation.url"],
+      "client": "session/new; the prompt; accept the url-mode elicitation.",
+      "agent": "#elicit url",
+      "pass": { "client": "An elicitation/complete notification for elic-1 arrived before the response (plus updateGraceMs)." }
+    },
+    {
+      "id": "cancel.prompt", "group": "cancel", "prompt": "#slow",
+      "client": "session/new; the prompt; after the first \"tick\", session/cancel.",
+      "agent": "#slow",
+      "pass": { "client": "stopReason cancelled within 5 s of the cancel (ticks after the cancel and before the response are allowed).", "agent": "STEP agent.cancel.prompt PASS when session/cancel arrived for the running session." }
+    },
+    {
+      "id": "cancel.prompt-while-cancelling", "group": "cancel", "prompt": "#slow grace=1000",
+      "only": { "agent": ["java"] },
+      "client": "session/new; the prompt; after the first tick, session/cancel, then at once prompt \"during cancel\" on the same session; after the first prompt answers, prompt \"after cancel\".",
+      "pass": { "client": "The first prompt answers cancelled, \"during cancel\" fails with -32000, and \"after cancel\" answers end_turn. Java SDK policy (G0e), so only asserted against Java agents." }
+    },
+    {
+      "id": "cancel.grace", "group": "cancel", "prompt": "#hang",
+      "only": { "agent": ["java"] },
+      "client": "session/new; the prompt; after 200 ms, session/cancel.",
+      "agent": "#hang. The Java agent program configures its cancel grace to 1 s.",
+      "pass": { "client": "stopReason cancelled within 6 s of the cancel: the SDK answered for the handler (G0f)." }
+    },
+    {
+      "id": "cancel-request.client", "group": "cancel-request", "prompt": "#slow", "phaseB": "P2",
+      "client": "session/new; the prompt; after the first tick, $/cancel_request {requestId: <the prompt's id>}.",
+      "agent": "#slow; the SDK surfaces the cancel request to the handler.",
+      "pass": { "client": "The prompt ends within 5 s, with error -32800 or stopReason cancelled.", "agent": "STEP agent.cancel-request.client PASS when the handler observed the cancel request." }
+    },
+    {
+      "id": "cancel-request.agent", "group": "cancel-request", "prompt": "#fs read-slow {dir}/slow.txt", "phaseB": "P2",
+      "requires": ["client.fs.readTextFile"],
+      "client": "session/new; the prompt. The fs/read_text_file handler, for a path ending slow.txt, waits up to 10 s or until cancelled.",
+      "agent": "#fs read-slow",
+      "pass": { "client": "The chunk \"cancel-request sent\" and end_turn within 5 s.", "agent": "STEP agent.cancel-request.agent PASS when the fs request ended with error -32800 within 5 s." }
+    },
+    {
+      "id": "cancel-request.unknown", "group": "cancel-request", "phaseB": "P2",
+      "client": "$/cancel_request for requestId 999999, and for the id of a request that already completed; then session/new and prompt \"after cancel-request\".",
+      "pass": { "client": "No error comes back for either cancel request, and the prompt answers end_turn." }
+    },
+    {
+      "id": "ext.agent-request", "group": "ext", "prompt": "#ext request _interop/ping",
+      "client": "Register a handler for _interop/ping that answers fixtures.ext.result; session/new; the prompt.",
+      "agent": "#ext request",
+      "pass": { "client": "The chunk \"ext: {\\\"pong\\\":1}\".", "agent": "STEP agent.ext.agent-request PASS when the result is {pong: 1}." }
+    },
+    {
+      "id": "ext.agent-notification", "group": "ext", "prompt": "#ext notify _interop/note",
+      "client": "Register a handler for _interop/note; session/new; the prompt.",
+      "agent": "#ext notify",
+      "pass": { "client": "The notification arrived with params {n: 1}." }
+    },
+    {
+      "id": "ext.client-request", "group": "ext", "phaseB": "P9",
+      "client": "Send the request _interop/ping {n: 1} to the agent.",
+      "agent": "Answer fixtures.ext.result.",
+      "pass": { "client": "The result is {pong: 1}." }
+    },
+    {
+      "id": "ext.client-notification", "group": "ext", "prompt": "#ext last-notification", "phaseB": "P9",
+      "client": "Send the notification _interop/note {n: 1}; session/new; the prompt.",
+      "agent": "Record extension notifications; #ext last-notification.",
+      "pass": { "client": "The chunk \"ext last: _interop/note\"." }
+    },
+    {
+      "id": "meta.prompt", "group": "meta", "prompt": "#meta",
+      "client": "session/new; the prompt with _meta {\"interop\": \"m1\"} on the PromptRequest.",
+      "agent": "#meta",
+      "pass": { "client": "The \"meta\" chunk's update _meta and the PromptResponse _meta both have interop == m1." }
+    },
+    {
+      "id": "meta.permission", "group": "meta", "prompt": "#permission allow", "phaseB": "P8",
+      "client": "As perm.selected, and put the request's _meta into the RequestPermissionResponse's _meta.",
+      "agent": "Put _meta {\"interop\": \"m1\"} on the permission request.",
+      "pass": { "client": "The request carried _meta interop == m1.", "agent": "STEP agent.meta.permission PASS when the response carried _meta interop == m1." }
+    },
+    {
+      "id": "error.method-not-found", "group": "error",
+      "client": "Send a request for a method no interop agent implements: providers/list (an unstable method) through the typed API, or interop/no_such_method through a generic send. Then session/new.",
+      "pass": { "client": "The request fails with -32601 and the session/new after it succeeds (the connection survived)." }
+    },
+    {
+      "id": "big.prompt-1m", "group": "big",
+      "client": "session/new; prompt \"#len \" followed by 1048576 'x'.",
+      "agent": "#len",
+      "pass": { "client": "The chunk \"len=1048576\"." }
+    },
+    {
+      "id": "big.update-1m", "group": "big", "prompt": "#big 1048576",
+      "client": "session/new; the prompt.",
+      "agent": "#big",
+      "pass": { "client": "One agent_message_chunk of exactly 1048576 characters." }
+    },
+    {
+      "id": "big.prompt-8m", "group": "big",
+      "client": "session/new; prompt \"#len \" followed by 8388608 'x'.",
+      "agent": "#len",
+      "pass": { "client": "The chunk \"len=8388608\"." }
+    },
+    {
+      "id": "big.update-8m", "group": "big", "prompt": "#big 8388608",
+      "client": "session/new; the prompt.",
+      "agent": "#big",
+      "pass": { "client": "One agent_message_chunk of exactly 8388608 characters." }
+    },
+    {
+      "id": "http.reconnect", "group": "http", "seed": true, "transports": ["http"],
+      "requires": ["agent.loadSession"],
+      "client": "On a second connection: initialize, session/new, prompt \"before reconnect\", close it. On a third: initialize, session/load of that session, prompt \"after reconnect\", close it.",
+      "pass": { "client": "Every request answers without error and both prompts answer end_turn." }
+    },
+    {
+      "id": "stdio.eof-exit", "group": "stdio", "transports": ["stdio"],
+      "client": "Spawn a second agent from AGENT_CMD, initialize it, close its stdin and wait.",
+      "agent": "Exit (any code) when stdin reaches EOF.",
+      "pass": { "client": "The child exits within 5 s of the EOF (otherwise kill it and FAIL with \"no exit on EOF\")." }
+    },
+    {
+      "id": "conn.close", "group": "conn", "seed": true,
+      "client": "Close the main connection through the SDK's graceful close (HTTP: DELETE; WS: close frame; stdio: end the child). Always last.",
+      "pass": { "client": "The close completes within the step timeout without an error." }
+    }
+  ]
+}
