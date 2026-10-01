@@ -29,24 +29,6 @@
       "reason": "The Java client has no $/cancel_request send"
     },
     {
-      "step": "ext.client-request",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P9:",
-      "see": "P9",
-      "reason": "AcpAsyncClient has no generic request send"
-    },
-    {
-      "step": "ext.client-notification",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P9:",
-      "see": "P9",
-      "reason": "AcpAsyncClient has no generic notification send"
-    },
-    {
       "step": "cancel-request.client",
       "when": {
         "agent": "java"
@@ -72,51 +54,6 @@
       "contains": "P2:",
       "see": "P2",
       "reason": "The Java agent cannot send $/cancel_request"
-    },
-    {
-      "step": "ext.agent-request",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P9",
-      "reason": "The Java agent has no generic request send; it answers #ext request with the chunk \"ext: unsupported (P9)\""
-    },
-    {
-      "step": "agent.ext.agent-request",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "P9:",
-      "see": "P9",
-      "reason": "The Java agent has no generic request send"
-    },
-    {
-      "step": "ext.agent-notification",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P9",
-      "reason": "The Java agent has no generic notification send"
-    },
-    {
-      "step": "ext.client-request",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P9",
-      "reason": "The Java agent cannot register an extension request handler; it answers -32601"
-    },
-    {
-      "step": "ext.client-notification",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P9",
-      "reason": "The Java agent cannot register an extension notification handler, so #ext last-notification answers \"ext last: none\""
     },
     {
       "step": "agent.cancel-request.agent",

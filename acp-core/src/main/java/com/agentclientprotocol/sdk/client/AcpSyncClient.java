@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
@@ -393,6 +394,45 @@ public class AcpSyncClient implements AutoCloseable {
 	 */
 	public void cancel(AcpSchema.CancelNotification cancelNotification) {
 		this.delegate.cancel(cancelNotification).block();
+	}
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name) to the agent and
+	 * blocks for its result, read as the given type.
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return the result, or null when the agent answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see AcpAsyncClient#sendExtRequest(String, Object, TypeRef)
+	 */
+	public <T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		return this.delegate.sendExtRequest(method, params, resultType).block();
+	}
+
+	/**
+	 * Sends a custom extension request to the agent and blocks for its result, as the
+	 * raw JSON value.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return the result, or null when the agent answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see AcpAsyncClient#sendExtRequest(String, Object)
+	 */
+	public @Nullable Object sendExtRequest(String method, Object params) {
+		return this.delegate.sendExtRequest(method, params).block();
+	}
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
+	 * agent.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public void sendExtNotification(String method, Object params) {
+		this.delegate.sendExtNotification(method, params).block();
 	}
 
 	/**

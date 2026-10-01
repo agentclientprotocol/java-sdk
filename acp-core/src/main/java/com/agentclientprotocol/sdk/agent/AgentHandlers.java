@@ -22,6 +22,10 @@ import reactor.core.publisher.Mono;
  */
 final class AgentHandlers {
 
+	/** Reads params as the raw JSON value, for the untyped extension handlers. */
+	static final TypeRef<Object> RAW_PARAMS = new TypeRef<>() {
+	};
+
 	/**
 	 * Answers one inbound request, already read into its request type.
 	 * @param <T> the request type

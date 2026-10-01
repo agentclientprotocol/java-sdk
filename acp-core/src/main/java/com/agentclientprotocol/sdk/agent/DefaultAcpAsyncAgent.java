@@ -16,7 +16,9 @@ import com.agentclientprotocol.sdk.error.AcpCapabilityException;
 import com.agentclientprotocol.sdk.spec.AcpAgentSession;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
+import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -192,6 +194,26 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
 		return sendNotification(AcpSchema.METHOD_ELICITATION_COMPLETE, notification);
+	}
+
+	@Override
+	public <T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		ExtensionMethods.requireExtension(method);
+		Assert.notNull(params, "Params must not be null");
+		Assert.notNull(resultType, "Result type must not be null");
+		return sendRequest(method, params, resultType);
+	}
+
+	@Override
+	public Mono<Object> sendExtRequest(String method, Object params) {
+		return sendExtRequest(method, params, AgentHandlers.RAW_PARAMS);
+	}
+
+	@Override
+	public Mono<Void> sendExtNotification(String method, Object params) {
+		ExtensionMethods.requireExtension(method);
+		Assert.notNull(params, "Params must not be null");
+		return sendNotification(method, params);
 	}
 
 	private <T> Mono<T> sendRequest(String method, Object request, TypeRef<T> responseType) {

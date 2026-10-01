@@ -37,7 +37,7 @@ final class ResponseResults {
 		else if (AcpSchema.DefaultOnNull.class.isAssignableFrom(rawClass(typeRef.getType()))) {
 			sink.next(transport.unmarshalFrom(Map.of(), typeRef));
 		}
-		else if (method.startsWith("_")) {
+		else if (ExtensionMethods.isExtension(method)) {
 			sink.complete();
 		}
 		else {

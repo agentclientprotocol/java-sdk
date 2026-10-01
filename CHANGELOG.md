@@ -72,6 +72,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`acp-core/src/test/resources/schema/v1/schema.json`) and fails on any object with `_meta`
   whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
   presence markers typed `Object` (they keep `_meta` as a map entry) and `$/cancel_request`.
+  presence markers typed `Object` (they keep `_meta` as a map entry), `$/cancel_request`, and
+  grouped select options (`SessionConfigSelectGroup`), which the SDK does not model: a select
+  option list in grouped form still fails to read.
+- **Custom extension methods (`_`-prefixed), both directions, on all four APIs.** ACP v1
+  (Extensibility) reserves method names that start with `_` for custom requests and notifications.
+  - Agents can now serve them: `AcpAgent.async(..)` and `AcpAgent.sync(..)` builders take
+    `extRequestHandler(method, paramsType, handler)` and
+    `extNotificationHandler(method, paramsType, handler)`, with a `TypeRef` for typed params, or
+    without one for the raw JSON value (`Map`, `List`, `String`, `Number`, `Boolean`).
+    Annotation-driven agents use `@ExtRequest("_name")` and `@ExtNotification("_name")`
+    (`acp-annotations`); the method's one parameter, if any, receives the params read as its type.
+  - Both sides can now send them: `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAsyncClient` and
+    `AcpSyncClient` have `sendExtRequest(method, params, resultType)`, `sendExtRequest(method, params)`
+    (raw result) and `sendExtNotification(method, params)`. A `"result": null` answer completes the
+    async send empty and makes the sync send return `null`.
+  - Every one of these methods rejects a name that does not start with `_` with
+    `IllegalArgumentException`, so a custom handler cannot replace a protocol method and a custom
+    send cannot impersonate one. `ExtensionMethods` (`spec`) holds the rule. The client's untyped
+    `requestHandler(method, ..)` and `notificationHandler(method, ..)`, which take any name, stay
+    until `elicitation/complete` has a typed client handler.
+  - Unhandled ones follow the spec, on both sides: a request is answered with `-32601` (Method not
+    found), a notification is ignored. A handler that produces no result answers with `-32603`; return
+    an empty map when there is nothing to return.
+- `TypeRef.of(Type)`: a type reference for a type known only at runtime.
 
 ### Changed
 

@@ -11,6 +11,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
+import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -131,6 +132,9 @@ public class AcpAsyncClient {
 	};
 
 	private static final TypeRef<AcpSchema.DisableProviderResponse> DISABLE_PROVIDER_RESPONSE_TYPE_REF = new TypeRef<>() {
+	};
+
+	private static final TypeRef<Object> RAW_RESULT_TYPE_REF = new TypeRef<>() {
 	};
 
 	private static final TypeRef<AcpSchema.PromptResponse> PROMPT_RESPONSE_TYPE_REF = new TypeRef<>() {
@@ -534,6 +538,61 @@ public class AcpAsyncClient {
 		Assert.notNull(cancelNotification, "Cancel notification must not be null");
 		logger.debug("Canceling operations for session: {}", cancelNotification.sessionId());
 		return session.sendNotification(AcpSchema.METHOD_SESSION_CANCEL, cancelNotification);
+	}
+
+	// --------------------------
+	// Extension Methods
+	// --------------------------
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name, ACP v1
+	 * Extensibility) to the agent and reads its result as the given type. An agent that
+	 * does not handle the method answers "Method not found" (-32601), which fails the Mono
+	 * with an {@link com.agentclientprotocol.sdk.spec.AcpError}. The SDK does not check
+	 * capabilities for extension methods: agents advertise them in the {@code _meta} of
+	 * their capabilities ({@link #getAgentCapabilities()}).
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return a Mono emitting the result, or completing empty when the agent answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public <T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		ExtensionMethods.requireExtension(method);
+		Assert.notNull(params, "Params must not be null");
+		Assert.notNull(resultType, "Result type must not be null");
+		return session.sendRequest(method, params, resultType);
+	}
+
+	/**
+	 * Sends a custom extension request to the agent and returns its result as the raw
+	 * JSON value: a {@code Map}, {@code List}, {@code String}, {@code Number} or
+	 * {@code Boolean}.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a Mono emitting the result, or completing empty when the agent answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see #sendExtRequest(String, Object, TypeRef)
+	 */
+	public Mono<Object> sendExtRequest(String method, Object params) {
+		return sendExtRequest(method, params, RAW_RESULT_TYPE_REF);
+	}
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
+	 * agent. An agent without a handler for it ignores it.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a Mono that completes when the notification is sent
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public Mono<Void> sendExtNotification(String method, Object params) {
+		ExtensionMethods.requireExtension(method);
+		Assert.notNull(params, "Params must not be null");
+		return session.sendNotification(method, params);
 	}
 
 	// --------------------------

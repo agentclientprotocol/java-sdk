@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.agent;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
@@ -143,6 +144,46 @@ public interface AcpAsyncAgent {
 	 * @return A Mono that completes when the notification is sent
 	 */
 	Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification);
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name, ACP v1
+	 * Extensibility) to the client and reads its result as the given type. A client that
+	 * does not handle the method answers "Method not found" (-32601), which fails the Mono
+	 * with an {@link com.agentclientprotocol.sdk.spec.AcpError}. The SDK does not check
+	 * capabilities for extension methods: advertise and check them in the {@code _meta} of
+	 * the capability objects.
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return a Mono emitting the result, or completing empty when the client answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	<T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType);
+
+	/**
+	 * Sends a custom extension request to the client and returns its result as the raw
+	 * JSON value: a {@code Map}, {@code List}, {@code String}, {@code Number} or
+	 * {@code Boolean}.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a Mono emitting the result, or completing empty when the client answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see #sendExtRequest(String, Object, TypeRef)
+	 */
+	Mono<Object> sendExtRequest(String method, Object params);
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
+	 * client. A client without a handler for it ignores it.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a Mono that completes when the notification is sent
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	Mono<Void> sendExtNotification(String method, Object params);
 
 	/**
 	 * Closes the agent gracefully, allowing pending operations to complete.
