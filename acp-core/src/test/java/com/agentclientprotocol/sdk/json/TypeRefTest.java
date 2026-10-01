@@ -64,4 +64,11 @@ class TypeRefTest {
 		assertThat(ref1.getType()).isEqualTo(ref2.getType());
 	}
 
+	@Test
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	void rawSubclassIsRejected() {
+		assertThatThrownBy(() -> new TypeRef() {
+		}).isInstanceOf(IllegalStateException.class).hasMessageContaining("without actual type information");
+	}
+
 }

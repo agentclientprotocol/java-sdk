@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -118,6 +119,40 @@ class OutboundMessagesTest {
 			.hasMessage("not connected: peer gone");
 
 		assertThat(this.transport.sent).as("nothing goes on the wire of a failed transport").isEmpty();
+		assertThat(outbound.pendingRequests()).isZero();
+	}
+
+	@Test
+	void failureRecordedWhileRegisteringRefusesTheRequestWithoutSendingIt() {
+		// The failure lands between the first check and the registration: the second
+		// check must catch it, or the request waits out its timeout on a dead transport.
+		IllegalStateException late = new IllegalStateException("peer gone");
+		AtomicInteger checks = new AtomicInteger();
+		OutboundMessages outbound = new OutboundMessages(this.transport, TIMEOUT,
+				() -> checks.getAndIncrement() == 0 ? null : late,
+				cause -> new IllegalStateException("not connected: " + cause.getMessage(), cause), "agent");
+
+		assertThatThrownBy(() -> outbound.sendRequest("echo", "params", STRING).block(Duration.ofSeconds(2)))
+			.hasMessage("not connected: peer gone");
+
+		assertThat(this.transport.sent).isEmpty();
+		assertThat(outbound.pendingRequests()).isZero();
+	}
+
+	@Test
+	void requestTheTransportFailsToSendFailsWithThatError() {
+		IllegalStateException sendFailure = new IllegalStateException("broken pipe");
+		RecordingTransport failingTransport = new RecordingTransport() {
+			@Override
+			public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
+				return Mono.error(sendFailure);
+			}
+		};
+		OutboundMessages outbound = new OutboundMessages(failingTransport, TIMEOUT, () -> null,
+				IllegalStateException::new, "agent");
+
+		assertThatThrownBy(() -> outbound.sendRequest("echo", "params", STRING).block(Duration.ofSeconds(2)))
+			.isSameAs(sendFailure);
 		assertThat(outbound.pendingRequests()).isZero();
 	}
 
