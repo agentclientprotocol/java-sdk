@@ -346,8 +346,10 @@
                 </executions>
             </plugin>
 
-            <!-- PMD size, complexity and duplication gate. Rules and thresholds, each with its
-                 reason, are in config/pmd/ruleset.xml. Main sources only. -->
+            <!-- PMD size, complexity and duplication gate: pmd:check and pmd:cpd-check fail
+                 verify on any violation. Rules and thresholds, each with its reason, are in
+                 config/pmd/ruleset.xml; CPD's token threshold is cpd.minimumTokens above. Main
+                 sources only. Fix a violation in the code: there is no baseline. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-pmd-plugin</artifactId>
@@ -372,7 +374,7 @@
                     <includeTests>false</includeTests>
                     <minimumTokens>${cpd.minimumTokens}</minimumTokens>
                     <printFailingErrors>true</printFailingErrors>
-                    <failOnViolation>false</failOnViolation>
+                    <failOnViolation>true</failOnViolation>
                     <linkXRef>false</linkXRef>
                 </configuration>
                 <executions>

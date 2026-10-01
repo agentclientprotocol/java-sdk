@@ -8,9 +8,11 @@
   ordinary code passes. A violation is fixed in the code, never grandfathered: there is no
   baseline or exclusion file. The one exemption is structural and stated next to its rule.
 
-  Duplication is checked by CPD (pmd:cpd-check), configured in the parent pom: 100 tokens, about
-  15 to 20 lines of real code. Below that, CPD reports parallel declarations (record headers,
-  interface signatures) rather than copied logic. CPD runs per module, so the two Jackson
+  Duplication is checked by CPD (pmd:cpd-check), configured in the parent pom: 100 tokens
+  (cpd.minimumTokens), about 15 to 20 lines of real code. Measured: the five blocks at 100 or more
+  were copied logic (the two sessions' request plumbing and error class, the stdio and WebSocket
+  reply pump, the client builders' build()); below 100, CPD mostly reports parallel declarations
+  (record headers, interface signatures). CPD runs per module, so the two Jackson
   modules, which implement one SPI against two incompatible Jackson APIs, are not compared.
 -->
 <ruleset name="acp-java-sdk-size-and-complexity"
@@ -68,6 +70,34 @@
             <property name="classReportLevel" value="300"/>
             <property name="violationSuppressXPath"
                       value="self::ClassDeclaration[pmd-java:modifiers() = 'final'][ClassBody/RecordDeclaration][not(ClassBody/ClassDeclaration[not(@Interface = true())])][not(ClassBody/FieldDeclaration[not(pmd-java:modifiers() = 'static')])]"/>
+        </properties>
+    </rule>
+
+    <!--
+      Long lambda, reported at 30 or more statements in one lambda body (nested lambdas count
+      toward the outer one): the method threshold above, applied where NcssCount does not look.
+      PMD's NCSS does not count the statements inside a lambda body (verified: a method that
+      returns a 40-statement lambda is not reported), and reactive code keeps its logic in
+      lambdas. Measured before the gate: two lambdas had 30 or more, the agent's start() (the
+      150-line handler registration) and the Streamable HTTP listener's start() (Jetty setup);
+      every other lambda had fewer than 25.
+    -->
+    <rule name="LongLambda"
+          language="java"
+          message="A lambda body has 30 or more statements; give it a name: extract a method"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>A lambda body with 30 or more statements, counted the way NCSS counts a method's.</description>
+        <priority>3</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+//LambdaExpression[Block][
+  count(Block//(LocalVariableDeclaration | ExpressionStatement | ReturnStatement | IfStatement
+      | ForStatement | ForeachStatement | WhileStatement | DoStatement | TryStatement
+      | ThrowStatement | SwitchStatement | BreakStatement | ContinueStatement
+      | SynchronizedStatement | YieldStatement | LocalClassStatement)) >= 30]
+]]></value>
+            </property>
         </properties>
     </rule>
 

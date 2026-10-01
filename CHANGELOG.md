@@ -62,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message, `getError()`, `getCode()` and `getData()` are unchanged. Migration: catch or test for
   `AcpError` (import `com.agentclientprotocol.sdk.spec.AcpError`) instead of
   `AcpClientSession.AcpError` or `AcpAgentSession.AcpError`.
+- `com.agentclientprotocol.sdk.util.OutboundSinks` is new: the emission onto a transport's outbound
+  sink that retries while another thread emits (#14), and the reply pump from inbound messages
+  through the session handler to that sink, which the stdio and WebSocket transports shared as
+  copies.
 
 ### Removed
 
@@ -209,6 +213,19 @@ Found by enabling Error Prone's bug checks; each has a test.
   lists lower findings without failing, and uploads SARIF to code scanning. An unfixable finding can be
   accepted in `osv-scanner.toml` with a reason and an `ignoreUntil` date, after which it fails again.
   Run it locally with `.github/scripts/osv-scan.sh`.
+- A size, complexity and duplication gate fails `verify`: maven-pmd-plugin 3.28.0 (PMD 7.28.0) runs
+  `pmd:check` and `pmd:cpd-check` on main sources with the ruleset in `config/pmd/ruleset.xml`, which
+  records each threshold and the measurement behind it. Per method: cognitive complexity 15,
+  cyclomatic complexity 10, 30 statements (NCSS), and 30 statements in one lambda body (a rule of the
+  ruleset's own, since NCSS does not look inside lambdas); per class: 300 statements and cyclomatic
+  complexity 80; 7 parameters; CPD at 100 tokens. There is no baseline: the code was refactored to
+  pass. The one exemption is structural, the class-size limit for a wire record container
+  (`AcpSchema`). Agent handlers are registered as data, so `DefaultAcpAsyncAgent.start()` (150 lines)
+  is a loop; `StreamableHttpAcpClientTransport` (1,045 lines) is a facade over package-private
+  classes for HTTP exchanges, routes, SSE streams and inbound delivery; the two sessions share their
+  request plumbing. The class-cycle rule in acp-core's `ArchitectureTest` now covers every package
+  except `json` (whose default-mapper lookup is a cycle by design), with the `AcpAgent` <->
+  `DefaultAcpAsyncAgent` cycle gone.
 
 ## [0.18.0] - 2026-09-25
 
