@@ -339,6 +339,41 @@ class AcpAgentSupportTest {
 	}
 
 	@Test
+	void handlerReturningWrongTypeAnswersWithNamedError() throws Exception {
+		// A handler whose result is not the method's response type used to fail on an
+		// unchecked cast, answering with an opaque ClassCastException message. The error now
+		// names the method and both types.
+		@AcpAgent
+		class WrongTypeSetModeAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@SetSessionMode
+			String setMode(SetSessionModeRequest req) {
+				return "code";
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new WrongTypeSetModeAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+
+		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
+			.hasMessageContaining("session/set_mode handler produced a java.lang.String")
+			.hasMessageContaining(SetSessionModeResponse.class.getName());
+	}
+
+	@Test
 	void requestVetoedByInterceptorAnswersWithError() throws Exception {
 		// A preInvoke veto on a request used to produce no JSON-RPC response at all.
 		AcpInterceptor vetoSetMode = new AcpInterceptor() {

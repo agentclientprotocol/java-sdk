@@ -66,6 +66,7 @@ import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 
@@ -197,7 +198,7 @@ public class AcpAgentSupport {
 		// Initialize handler
 		AcpHandlerMethod initHandler = handlers.get("initialize");
 		if (initHandler != null) {
-			agentBuilder.initializeHandler(req -> respond(initHandler, req, null, null, null));
+			agentBuilder.initializeHandler(req -> respond(initHandler, AcpSchema.InitializeResponse.class, req, null, null, null));
 		}
 		else {
 			// Default initialize handler
@@ -207,7 +208,7 @@ public class AcpAgentSupport {
 		// NewSession handler
 		AcpHandlerMethod newSessionHandler = handlers.get("session/new");
 		if (newSessionHandler != null) {
-			agentBuilder.newSessionHandler(req -> respond(newSessionHandler, req, null, null, null));
+			agentBuilder.newSessionHandler(req -> respond(newSessionHandler, AcpSchema.NewSessionResponse.class, req, null, null, null));
 		}
 		else {
 			// Default new session handler
@@ -218,13 +219,13 @@ public class AcpAgentSupport {
 		// Logout handler
 		AcpHandlerMethod logoutHandler = handlers.get("logout");
 		if (logoutHandler != null) {
-			agentBuilder.logoutHandler(req -> respond(logoutHandler, req, null, null, null));
+			agentBuilder.logoutHandler(req -> respond(logoutHandler, AcpSchema.LogoutResponse.class, req, null, null, null));
 		}
 
 		// LoadSession handler
 		AcpHandlerMethod loadSessionHandler = handlers.get("session/load");
 		if (loadSessionHandler != null) {
-			agentBuilder.loadSessionHandler(req -> respond(loadSessionHandler, req, req.sessionId(), null, null));
+			agentBuilder.loadSessionHandler(req -> respond(loadSessionHandler, AcpSchema.LoadSessionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// Prompt handler
@@ -232,79 +233,79 @@ public class AcpAgentSupport {
 		if (promptHandler != null) {
 			agentBuilder.promptHandler((req, syncContext) -> {
 				NegotiatedCapabilities caps = syncContext.getClientCapabilities();
-				return respond(promptHandler, req, req.sessionId(), syncContext, caps);
+				return respond(promptHandler, AcpSchema.PromptResponse.class, req, req.sessionId(), syncContext, caps);
 			});
 		}
 
 		// SetSessionMode handler
 		AcpHandlerMethod setModeHandler = handlers.get("session/set_mode");
 		if (setModeHandler != null) {
-			agentBuilder.setSessionModeHandler(req -> respond(setModeHandler, req, req.sessionId(), null, null));
+			agentBuilder.setSessionModeHandler(req -> respond(setModeHandler, AcpSchema.SetSessionModeResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// SetSessionModel handler
 		AcpHandlerMethod setModelHandler = handlers.get("session/set_model");
 		if (setModelHandler != null) {
-			agentBuilder.setSessionModelHandler(req -> respond(setModelHandler, req, req.sessionId(), null, null));
+			agentBuilder.setSessionModelHandler(req -> respond(setModelHandler, AcpSchema.SetSessionModelResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// ListSessions handler
 		AcpHandlerMethod listSessionsHandler = handlers.get("session/list");
 		if (listSessionsHandler != null) {
-			agentBuilder.listSessionsHandler(req -> respond(listSessionsHandler, req, null, null, null));
+			agentBuilder.listSessionsHandler(req -> respond(listSessionsHandler, AcpSchema.ListSessionsResponse.class, req, null, null, null));
 		}
 
 		// CloseSession handler
 		AcpHandlerMethod closeSessionHandler = handlers.get("session/close");
 		if (closeSessionHandler != null) {
 			agentBuilder.closeSessionHandler(
-					req -> respond(closeSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(closeSessionHandler, AcpSchema.CloseSessionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// DeleteSession handler
 		AcpHandlerMethod deleteSessionHandler = handlers.get("session/delete");
 		if (deleteSessionHandler != null) {
 			agentBuilder.deleteSessionHandler(
-					req -> respond(deleteSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(deleteSessionHandler, AcpSchema.DeleteSessionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// ResumeSession handler
 		AcpHandlerMethod resumeSessionHandler = handlers.get("session/resume");
 		if (resumeSessionHandler != null) {
 			agentBuilder.resumeSessionHandler(
-					req -> respond(resumeSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(resumeSessionHandler, AcpSchema.ResumeSessionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// ForkSession handler
 		AcpHandlerMethod forkSessionHandler = handlers.get("session/fork");
 		if (forkSessionHandler != null) {
 			agentBuilder.forkSessionHandler(
-					req -> respond(forkSessionHandler, req, req.sessionId(), null, null));
+					req -> respond(forkSessionHandler, AcpSchema.ForkSessionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// SetSessionConfigOption handler
 		AcpHandlerMethod setConfigOptionHandler = handlers.get("session/set_config_option");
 		if (setConfigOptionHandler != null) {
 			agentBuilder.setSessionConfigOptionHandler(
-					req -> respond(setConfigOptionHandler, req, req.sessionId(), null, null));
+					req -> respond(setConfigOptionHandler, AcpSchema.SetSessionConfigOptionResponse.class, req, req.sessionId(), null, null));
 		}
 
 		// ListProviders handler (unstable)
 		AcpHandlerMethod listProvidersHandler = handlers.get("providers/list");
 		if (listProvidersHandler != null) {
-			agentBuilder.listProvidersHandler(req -> respond(listProvidersHandler, req, null, null, null));
+			agentBuilder.listProvidersHandler(req -> respond(listProvidersHandler, AcpSchema.ListProvidersResponse.class, req, null, null, null));
 		}
 
 		// SetProvider handler (unstable)
 		AcpHandlerMethod setProviderHandler = handlers.get("providers/set");
 		if (setProviderHandler != null) {
-			agentBuilder.setProviderHandler(req -> respond(setProviderHandler, req, null, null, null));
+			agentBuilder.setProviderHandler(req -> respond(setProviderHandler, AcpSchema.SetProviderResponse.class, req, null, null, null));
 		}
 
 		// DisableProvider handler (unstable)
 		AcpHandlerMethod disableProviderHandler = handlers.get("providers/disable");
 		if (disableProviderHandler != null) {
-			agentBuilder.disableProviderHandler(req -> respond(disableProviderHandler, req, null, null, null));
+			agentBuilder.disableProviderHandler(req -> respond(disableProviderHandler, AcpSchema.DisableProviderResponse.class, req, null, null, null));
 		}
 
 		// Cancel handler
@@ -320,17 +321,22 @@ public class AcpAgentSupport {
 	 * Invokes the handler for a request, whose JSON-RPC response must carry a result. A
 	 * handler that produces none (it returned null, returned void for a method other than
 	 * session/prompt, or an interceptor vetoed the call) is answered with an error: an
-	 * empty handler result would otherwise leave the request without any response.
+	 * empty handler result would otherwise leave the request without any response. A result
+	 * that is not the method's response type is answered with an error naming both types.
 	 */
-	@SuppressWarnings("unchecked")
-	private <T> T respond(AcpHandlerMethod handler, Object request, @Nullable String sessionId,
-			@Nullable SyncPromptContext syncContext, @Nullable NegotiatedCapabilities capabilities) {
+	private <T> T respond(AcpHandlerMethod handler, Class<T> responseType, Object request,
+			@Nullable String sessionId, @Nullable SyncPromptContext syncContext,
+			@Nullable NegotiatedCapabilities capabilities) {
 		Object result = invoke(handler, request, sessionId, syncContext, capabilities);
 		if (result == null) {
 			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "The " + handler.getAcpMethod()
 					+ " handler produced no response (it returned nothing, or an interceptor vetoed the call)");
 		}
-		return (T) result;
+		if (!responseType.isInstance(result)) {
+			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "The " + handler.getAcpMethod()
+					+ " handler produced a " + result.getClass().getName() + ", not a " + responseType.getName());
+		}
+		return responseType.cast(result);
 	}
 
 	/**
