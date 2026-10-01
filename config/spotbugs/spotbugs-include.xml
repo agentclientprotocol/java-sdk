@@ -9,7 +9,7 @@
      A RankMatcher matches rank >= value, so "rank 9 or less" is Not(Rank 10).
   2. The multithreaded-correctness patterns below at any rank. SpotBugs ranks most of them 14 to
      17 (IS2_INCONSISTENT_SYNC 17, UW_UNCOND_WAIT and WA_NOT_IN_LOOP 14, measured), so the rank
-     gate alone never sees them, yet a transport library is mostly concurrent code. Each is
+     gate alone never sees them, yet a transport library is mostly concurrent code. Each
      group below says why it is a bug rather than advice. MT_CORRECTNESS patterns left out, and why:
      - AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION, AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE,
        AT_STALE_THREAD_WRITE_OF_PRIMITIVE, AT_NONATOMIC_64BIT_PRIMITIVE,
