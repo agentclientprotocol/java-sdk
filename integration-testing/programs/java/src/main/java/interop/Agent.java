@@ -212,7 +212,7 @@ public class Agent {
 								new AcpSchema.SessionCapabilities(Map.of(), Map.of(), Map.of(), Map.of(), null, null),
 								new AcpSchema.McpCapabilities(false, false), new AcpSchema.PromptCapabilities(false, false, false),
 								null),
-						List.of(new AcpSchema.AuthMethod("interop-auth", "Interop auth", "Accepts any authenticate call")),
+						authMethods(r.clientCapabilities()),
 						new AcpSchema.Implementation("interop-java-agent", "1"), null));
 			})
 			.authenticateHandler(r -> {
@@ -307,6 +307,17 @@ public class Agent {
 			.build();
 		self.set(agent);
 		return agent;
+	}
+
+	/** The interop auth method, plus the terminal one iff the client advertised auth.terminal. */
+	static List<AcpSchema.AuthMethod> authMethods(AcpSchema.ClientCapabilities caps) {
+		List<AcpSchema.AuthMethod> methods = new ArrayList<>();
+		methods.add(new AcpSchema.AuthMethodAgent("interop-auth", "Interop auth", "Accepts any authenticate call"));
+		if (caps != null && caps.auth() != null && Boolean.TRUE.equals(caps.auth().terminal())) {
+			methods.add(new AcpSchema.AuthMethodTerminal("interop-terminal-auth", "Interop terminal auth",
+					List.of("--login"), null));
+		}
+		return methods;
 	}
 
 	static Mono<SessionState> known(String sessionId) {

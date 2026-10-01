@@ -29,15 +29,6 @@
       "reason": "The Java client has no $/cancel_request send"
     },
     {
-      "step": "auth.terminal",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P5:",
-      "see": "P5",
-      "reason": "AcpSchema.AuthMethod has no type and ClientCapabilities cannot advertise auth.terminal"
-    },
-    {
       "step": "init.config-boolean",
       "when": {
         "client": "java"
@@ -117,15 +108,6 @@
       "contains": "P2:",
       "see": "P2",
       "reason": "The Java agent cannot send $/cancel_request"
-    },
-    {
-      "step": "auth.terminal",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P5",
-      "reason": "AcpSchema.AuthMethod has no type, so the Java agent cannot list a terminal auth method"
     },
     {
       "step": "init.config-boolean",

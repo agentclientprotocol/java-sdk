@@ -173,8 +173,7 @@ public class Client {
 		STEPS.put("auth.logout", Client::authLogout);
 		STEPS.put("auth.logout-capability", () -> gap("P7",
 				"AcpSchema.AgentCapabilities has no auth field, so agentCapabilities.auth.logout cannot be read"));
-		STEPS.put("auth.terminal", () -> gap("P5",
-				"AcpSchema.AuthMethod has no type, and ClientCapabilities cannot advertise auth.terminal"));
+		STEPS.put("auth.terminal", Client::authTerminal);
 		STEPS.put("session.new", Client::sessionNew);
 		STEPS.put("session.load", Client::sessionLoad);
 		STEPS.put("session.load-replay", Client::sessionLoadReplay);
@@ -334,6 +333,14 @@ public class Client {
 		List<AcpSchema.AuthMethod> methods = init().authMethods();
 		check(methods != null && methods.stream().anyMatch(m -> "interop-auth".equals(m.id())), "authMethods " + methods);
 		return "authMethods has interop-auth";
+	}
+
+	static String authTerminal() {
+		List<AcpSchema.AuthMethod> methods = init().authMethods();
+		check(methods != null && methods.stream()
+			.anyMatch(m -> m instanceof AcpSchema.AuthMethodTerminal t && "interop-terminal-auth".equals(t.id())),
+				"authMethods " + methods);
+		return "authMethods has the terminal method interop-terminal-auth";
 	}
 
 	static String initAgentInfo() {
@@ -1073,7 +1080,8 @@ public class Client {
 
 		static AcpSchema.ClientCapabilities capabilities() {
 			return new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true,
-					new AcpSchema.ElicitationCapabilities(Map.of(), Map.of(), null), null);
+					new AcpSchema.AuthCapabilities(true), new AcpSchema.ElicitationCapabilities(Map.of(), Map.of(), null),
+					null);
 		}
 
 		Mono<AcpSchema.RequestPermissionResponse> permission(AcpSchema.RequestPermissionRequest req) {

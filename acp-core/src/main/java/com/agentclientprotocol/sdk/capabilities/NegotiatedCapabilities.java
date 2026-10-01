@@ -96,6 +96,8 @@ public final class NegotiatedCapabilities {
 
 	private final boolean mcpSse;
 
+	private final boolean terminalAuth;
+
 	private NegotiatedCapabilities(Builder builder) {
 		this.readTextFile = builder.readTextFile;
 		this.writeTextFile = builder.writeTextFile;
@@ -116,6 +118,7 @@ public final class NegotiatedCapabilities {
 		this.embeddedContext = builder.embeddedContext;
 		this.mcpHttp = builder.mcpHttp;
 		this.mcpSse = builder.mcpSse;
+		this.terminalAuth = builder.terminalAuth;
 	}
 
 	/**
@@ -144,6 +147,9 @@ public final class NegotiatedCapabilities {
 			builder.elicitationForm(elicit.form() != null);
 			builder.elicitationUrl(elicit.url() != null);
 		}
+
+		var auth = caps.auth();
+		builder.terminalAuth(auth != null && Boolean.TRUE.equals(auth.terminal()));
 
 		return builder.build();
 	}
@@ -278,6 +284,24 @@ public final class NegotiatedCapabilities {
 	public void requireElicitation() {
 		if (!elicitation) {
 			throw new AcpCapabilityException("elicitation");
+		}
+	}
+
+	/**
+	 * Returns true if the client supports terminal authentication methods (it can run the agent program itself for an interactive login).
+	 * @return true if auth.terminal was advertised
+	 */
+	public boolean supportsTerminalAuth() {
+		return terminalAuth;
+	}
+
+	/**
+	 * Requires auth.terminal, throwing if the client did not advertise it.
+	 * @throws AcpCapabilityException if the client doesn't support this capability
+	 */
+	public void requireTerminalAuth() {
+		if (!terminalAuth) {
+			throw new AcpCapabilityException("auth.terminal");
 		}
 	}
 
@@ -496,7 +520,7 @@ public final class NegotiatedCapabilities {
 				+ deleteSession + ", additionalDirectories=" + additionalDirectories + ", forkSession="
 				+ forkSession + ", providers=" + providers + ", imageContent="
 				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
-				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + '}';
+				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + '}';
 	}
 
 	/**
@@ -541,6 +565,8 @@ public final class NegotiatedCapabilities {
 		private boolean mcpHttp = false;
 
 		private boolean mcpSse = false;
+
+		private boolean terminalAuth = false;
 
 		public Builder readTextFile(boolean value) {
 			this.readTextFile = value;
@@ -634,6 +660,11 @@ public final class NegotiatedCapabilities {
 
 		public Builder mcpSse(boolean value) {
 			this.mcpSse = value;
+			return this;
+		}
+
+		public Builder terminalAuth(boolean value) {
+			this.terminalAuth = value;
 			return this;
 		}
 
