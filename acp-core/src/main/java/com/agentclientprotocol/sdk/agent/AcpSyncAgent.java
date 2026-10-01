@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.jspecify.annotations.Nullable;
 
@@ -97,6 +98,45 @@ public class AcpSyncAgent {
 	 */
 	public void sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
 		asyncAgent.sendSessionUpdate(sessionId, update).block(blockTimeout);
+	}
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name) to the client and
+	 * blocks for its result, read as the given type.
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return the result, or null when the client answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see AcpAsyncAgent#sendExtRequest(String, Object, TypeRef)
+	 */
+	public <T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		return asyncAgent.sendExtRequest(method, params, resultType).block(blockTimeout);
+	}
+
+	/**
+	 * Sends a custom extension request to the client and blocks for its result, as the
+	 * raw JSON value.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return the result, or null when the client answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see AcpAsyncAgent#sendExtRequest(String, Object)
+	 */
+	public @Nullable Object sendExtRequest(String method, Object params) {
+		return asyncAgent.sendExtRequest(method, params).block(blockTimeout);
+	}
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
+	 * client.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public void sendExtNotification(String method, Object params) {
+		asyncAgent.sendExtNotification(method, params).block(blockTimeout);
 	}
 
 	/**

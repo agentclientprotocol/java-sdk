@@ -35,6 +35,33 @@ public abstract class TypeRef<T> {
 		this.type = ((ParameterizedType) superClass).getActualTypeArguments()[0];
 	}
 
+	private TypeRef(Type type) {
+		this.type = type;
+	}
+
+	/**
+	 * A type reference for a type known only at runtime, such as the reflected generic
+	 * type of a handler method's parameter.
+	 * @param type the type
+	 * @return a type reference to it
+	 * @throws IllegalArgumentException if the type is null
+	 */
+	public static TypeRef<?> of(Type type) {
+		if (type == null) {
+			throw new IllegalArgumentException("Type must not be null");
+		}
+		return new RuntimeTypeRef(type);
+	}
+
+	/** The type reference {@link #of(Type)} returns. */
+	private static final class RuntimeTypeRef extends TypeRef<Object> {
+
+		RuntimeTypeRef(Type type) {
+			super(type);
+		}
+
+	}
+
 	/**
 	 * Returns the captured type information.
 	 * @return the Type representing the actual type argument captured by this TypeRef

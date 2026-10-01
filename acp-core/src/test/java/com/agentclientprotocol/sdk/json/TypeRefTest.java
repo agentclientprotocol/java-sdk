@@ -71,4 +71,22 @@ class TypeRefTest {
 		}).isInstanceOf(IllegalStateException.class).hasMessageContaining("without actual type information");
 	}
 
+	@Test
+	void ofCarriesARuntimeType() throws Exception {
+		Type listOfString = TypeRefTest.class.getDeclaredMethod("listOfString").getGenericReturnType();
+
+		assertThat(TypeRef.of(listOfString).getType()).isEqualTo(listOfString);
+		assertThat(TypeRef.of(String.class).getType()).isEqualTo(String.class);
+	}
+
+	@Test
+	void ofRejectsNull() {
+		assertThatThrownBy(() -> TypeRef.of(null)).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@SuppressWarnings("unused")
+	private static List<String> listOfString() {
+		return List.of();
+	}
+
 }

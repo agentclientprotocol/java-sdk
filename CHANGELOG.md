@@ -13,7 +13,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
   0.18.0 shipped with the affected versions; applications can override the versions now.
 
+### Added
+
+- **Custom extension methods (`_`-prefixed), both directions, on all four APIs.** ACP v1
+  (Extensibility) reserves method names that start with `_` for custom requests and notifications.
+  - Agents can now serve them: `AcpAgent.async(..)` and `AcpAgent.sync(..)` builders take
+    `extRequestHandler(method, paramsType, handler)` and
+    `extNotificationHandler(method, paramsType, handler)`, with a `TypeRef` for typed params, or
+    without one for the raw JSON value (`Map`, `List`, `String`, `Number`, `Boolean`).
+    Annotation-driven agents use `@ExtRequest("_name")` and `@ExtNotification("_name")`
+    (`acp-annotations`); the method's one parameter, if any, receives the params read as its type.
+  - Both sides can now send them: `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAsyncClient` and
+    `AcpSyncClient` have `sendExtRequest(method, params, resultType)`, `sendExtRequest(method, params)`
+    (raw result) and `sendExtNotification(method, params)`. A `"result": null` answer completes the
+    async send empty and makes the sync send return `null`.
+  - Every one of these methods rejects a name that does not start with `_` with
+    `IllegalArgumentException`, so a custom handler cannot replace a protocol method and a custom
+    send cannot impersonate one. `ExtensionMethods` (`spec`) holds the rule.
+  - Unhandled ones follow the spec, on both sides: a request is answered with `-32601` (Method not
+    found), a notification is ignored. A handler that produces no result answers with `-32603`; return
+    an empty map when there is nothing to return.
+- `TypeRef.of(Type)`: a type reference for a type known only at runtime.
+
 ### Changed
+
+- **Breaking: the client's generic `requestHandler(method, handler)` and
+  `notificationHandler(method, handler)` are replaced by `extRequestHandler` and
+  `extNotificationHandler`, which accept only `_`-prefixed names**, and `AcpClient.SyncRequestHandler`
+  is removed. The old methods took any name, so they could silently replace a typed protocol handler
+  (`fs/read_text_file`, `session/update`), and handed the handler untyped params. Migration:
+  `.requestHandler("_x", params -> ...)` becomes `.extRequestHandler("_x", params -> ...)` (raw
+  params) or `.extRequestHandler("_x", new TypeRef<MyParams>() {}, p -> ...)` (typed); the same for
+  notifications. Protocol methods have typed handlers of their own.
 
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the

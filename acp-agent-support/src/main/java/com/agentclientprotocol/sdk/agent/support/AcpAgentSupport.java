@@ -21,6 +21,7 @@ import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.handler.DirectResponseHandler;
+import com.agentclientprotocol.sdk.agent.support.handler.ExtensionResultHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.MonoHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandlerComposite;
@@ -37,6 +38,7 @@ import com.agentclientprotocol.sdk.agent.support.resolver.CapabilitiesResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CloseSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.DeleteSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.DisableProviderRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.ExtensionParamsResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ForkSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.InitializeRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ListProvidersRequestResolver;
@@ -55,6 +57,8 @@ import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
 import com.agentclientprotocol.sdk.annotation.DisableProvider;
+import com.agentclientprotocol.sdk.annotation.ExtNotification;
+import com.agentclientprotocol.sdk.annotation.ExtRequest;
 import com.agentclientprotocol.sdk.annotation.ForkSession;
 import com.agentclientprotocol.sdk.annotation.Initialize;
 import com.agentclientprotocol.sdk.annotation.ListProviders;
@@ -70,8 +74,10 @@ import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 
@@ -242,6 +248,38 @@ public class AcpAgentSupport {
 			.disableProviderHandler(req -> respond(handler, AcpSchema.DisableProviderResponse.class, req, null)));
 		bind(AcpSchema.METHOD_SESSION_CANCEL, handler -> agent.cancelHandler(
 				notification -> invoke(handler, notification, notification.sessionId(), null, null)));
+		handlers.values()
+			.stream()
+			.filter(handler -> ExtensionMethods.isExtension(handler.getAcpMethod()))
+			.forEach(handler -> bindExtension(agent, handler));
+	}
+
+	/**
+	 * Binds an {@link ExtRequest} or {@link ExtNotification} method, its params read as its
+	 * parameter's type ({@code Object}, the raw JSON value, when it takes none).
+	 */
+	private void bindExtension(AcpAgent.SyncAgentBuilder agent, AcpHandlerMethod handler) {
+		Method method = handler.getMethod();
+		TypeRef<?> paramsType = TypeRef
+			.of(method.getParameterCount() == 1 ? method.getGenericParameterTypes()[0] : Object.class);
+		if (method.isAnnotationPresent(ExtNotification.class)) {
+			bindExtNotification(agent, handler, paramsType);
+		}
+		else {
+			bindExtRequest(agent, handler, paramsType);
+		}
+	}
+
+	private <T> void bindExtRequest(AcpAgent.SyncAgentBuilder agent, AcpHandlerMethod handler,
+			TypeRef<T> paramsType) {
+		agent.extRequestHandler(handler.getAcpMethod(), paramsType,
+				params -> respond(handler, Object.class, params, null));
+	}
+
+	private <T> void bindExtNotification(AcpAgent.SyncAgentBuilder agent, AcpHandlerMethod handler,
+			TypeRef<T> paramsType) {
+		agent.extNotificationHandler(handler.getAcpMethod(), paramsType,
+				params -> invoke(handler, params, null, null, null));
 	}
 
 	/** Binds the handler method discovered for an ACP method, if there is one. */
@@ -514,12 +552,39 @@ public class AcpAgentSupport {
 						log.debug("Discovered @{} handler: {}", annotation.getSimpleName(), method.getName());
 					}
 				});
+				String extensionMethod = extensionMethod(method);
+				if (extensionMethod != null) {
+					handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
+					log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
+				}
 			}
+		}
+
+		/**
+		 * The extension method an {@link ExtRequest} or {@link ExtNotification} method
+		 * handles, or null when it has neither annotation.
+		 * @throws IllegalArgumentException if the name does not start with {@code _}, or the
+		 * method takes more than one parameter
+		 */
+		private static @Nullable String extensionMethod(Method method) {
+			ExtRequest request = method.getAnnotation(ExtRequest.class);
+			ExtNotification notification = method.getAnnotation(ExtNotification.class);
+			String name = (request != null) ? request.value() : (notification != null) ? notification.value() : null;
+			if (name == null) {
+				return null;
+			}
+			ExtensionMethods.requireExtension(name);
+			if (method.getParameterCount() > 1) {
+				throw new IllegalArgumentException("Extension handler " + method.getName()
+						+ " must take at most one parameter, which receives the params of " + name);
+			}
+			return name;
 		}
 
 		private void addDefaultResolvers() {
 			// Built-in resolvers (order matters - first match wins)
 			// Custom resolvers added via builder go first
+			argumentResolvers.addResolver(new ExtensionParamsResolver());
 			argumentResolvers.addResolver(new InitializeRequestResolver());
 			argumentResolvers.addResolver(new LogoutRequestResolver());
 			argumentResolvers.addResolver(new NewSessionRequestResolver());
@@ -550,6 +615,9 @@ public class AcpAgentSupport {
 
 			// Async handlers (Reactor is available since acp-core depends on it)
 			returnValueHandlers.addHandler(new MonoHandler());
+
+			// Extension results are any value: last, after Mono and void
+			returnValueHandlers.addHandler(new ExtensionResultHandler());
 		}
 
 	}
