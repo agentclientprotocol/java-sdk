@@ -180,7 +180,7 @@ class NegotiatedCapabilitiesTest {
 	@Test
 	void fromAgentExtractsProvidersCapability() {
 		AcpSchema.AgentCapabilities agentCaps = new AcpSchema.AgentCapabilities(true, null,
-				new AcpSchema.McpCapabilities(), new AcpSchema.PromptCapabilities(),
+				new AcpSchema.McpCapabilities(), new AcpSchema.PromptCapabilities(), null,
 				new AcpSchema.ProvidersCapabilities(), null);
 
 		NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(agentCaps);

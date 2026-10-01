@@ -96,6 +96,8 @@ public final class NegotiatedCapabilities {
 
 	private final boolean mcpSse;
 
+	private final boolean logout;
+
 	private final boolean booleanConfigOptions;
 
 	private final boolean terminalAuth;
@@ -120,6 +122,7 @@ public final class NegotiatedCapabilities {
 		this.embeddedContext = builder.embeddedContext;
 		this.mcpHttp = builder.mcpHttp;
 		this.mcpSse = builder.mcpSse;
+		this.logout = builder.logout;
 		this.booleanConfigOptions = builder.booleanConfigOptions;
 		this.terminalAuth = builder.terminalAuth;
 	}
@@ -198,6 +201,9 @@ public final class NegotiatedCapabilities {
 			builder.mcpHttp(Boolean.TRUE.equals(mcp.http()));
 			builder.mcpSse(Boolean.TRUE.equals(mcp.sse()));
 		}
+
+		var auth = caps.auth();
+		builder.logout(auth != null && auth.logout() != null);
 
 		return builder.build();
 	}
@@ -535,6 +541,24 @@ public final class NegotiatedCapabilities {
 		}
 	}
 
+	/**
+	 * Returns true if the agent supports the logout method.
+	 * @return true if auth.logout was advertised
+	 */
+	public boolean supportsLogout() {
+		return logout;
+	}
+
+	/**
+	 * Requires auth.logout, throwing if the agent did not advertise it.
+	 * @throws AcpCapabilityException if the agent doesn't support this capability
+	 */
+	public void requireLogout() {
+		if (!logout) {
+			throw new AcpCapabilityException("auth.logout");
+		}
+	}
+
 	@Override
 	public String toString() {
 		return "NegotiatedCapabilities{" + "readTextFile=" + readTextFile + ", writeTextFile=" + writeTextFile
@@ -545,7 +569,7 @@ public final class NegotiatedCapabilities {
 				+ deleteSession + ", additionalDirectories=" + additionalDirectories + ", forkSession="
 				+ forkSession + ", providers=" + providers + ", imageContent="
 				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
-				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + ", booleanConfigOptions=" + booleanConfigOptions + '}';
+				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + ", booleanConfigOptions=" + booleanConfigOptions + ", logout=" + logout + '}';
 	}
 
 	/**
@@ -590,6 +614,8 @@ public final class NegotiatedCapabilities {
 		private boolean mcpHttp = false;
 
 		private boolean mcpSse = false;
+
+		private boolean logout = false;
 
 		private boolean booleanConfigOptions = false;
 
@@ -697,6 +723,11 @@ public final class NegotiatedCapabilities {
 
 		public Builder booleanConfigOptions(boolean value) {
 			this.booleanConfigOptions = value;
+			return this;
+		}
+
+		public Builder logout(boolean value) {
+			this.logout = value;
 			return this;
 		}
 
