@@ -1,28 +1,40 @@
 # Cross-SDK and load scenarios
 
-Interop tests of the Streamable HTTP transport against the TypeScript, Rust and Python ACP SDKs,
-plus load runs of the Java listener. Each scenario starts real processes in several languages,
-checks what they print, and tears them all down.
+Interop tests of the Java SDK against the TypeScript, Rust, Python and Kotlin ACP SDKs over stdio,
+Streamable HTTP and WebSocket, plus load runs of the Java listener. Each scenario starts real
+processes in several languages, checks what they print, and tears them all down.
 
 This directory is **not** a Maven module and the root `pom.xml` does not reference it, so
 `./mvnw verify` and the release build never run it. It runs locally with the scripts below, and in
-CI through `.github/workflows/cross-sdk.yml` (manual dispatch plus nightly; never on push or pull
-request).
+CI through `.github/workflows/cross-sdk.yml` (per peer; manual dispatch plus nightly) and
+`.github/workflows/interop-java.yml` (the Java<->Java cells on every push and pull request).
+
+There are two generations of scenarios:
+
+- **Generated cells**, `configs/x-<client>-<agent>-<transport>.json`: one feature-driven agent and
+  one client program per language, a shared step catalogue (`steps.json`), and configs generated
+  from `matrix.json` by `GenConfigs.java`. The [Contracts](#contracts) section is everything a
+  language package needs to take part.
+- **Legacy scenarios**, `configs/interop-*.json`: hand-written per-pair scripts over Streamable
+  HTTP. They stay until the generated HTTP cells cover their steps (reconnect, the HTTP-version
+  checks), then they are deleted in one change. The `load-*` scenarios stay as they are.
 
 ## Prerequisites
 
 | Tool | Version | Used for |
 |---|---|---|
 | JDK (with `jcmd`) | 17+ | the SDK, the Java programs, the runner, heap and thread samples |
-| [JBang](https://www.jbang.dev/download/) | 0.135+ | `RunScenario.java` |
+| JDK | 21 | the Kotlin SDK's Gradle toolchain (Kotlin cells only) |
+| [JBang](https://www.jbang.dev/download/) | 0.135+ | `RunScenario.java`, `GenConfigs.java` |
 | Node.js and npm | 20 | the TypeScript SDK and its programs |
 | Rust (`cargo`) | stable | the Rust SDK and its programs |
 | Python | 3.12 (`python3 -m venv`) | the Python SDK (plus Hypercorn) and its programs |
 | git | any | cloning the peer SDKs |
 
-The first run clones the three peer SDKs from GitHub and builds them (npm, cargo, a venv), which
-takes a few minutes. Later runs reuse the checkouts in `.cache/` and rebuild a peer only when its
-ref resolves to a new commit.
+`run-all.sh` checks only the tools the selected scenarios need. The first run clones the peer SDKs
+it needs from GitHub and builds them (npm, cargo, a venv, Gradle), which takes a few minutes.
+Later runs reuse the checkouts in `.cache/` and rebuild a peer only when its ref resolves to a new
+commit.
 
 ## Running
 
@@ -33,17 +45,37 @@ One scenario (from `integration-testing/`):
 
 ```bash
 cd integration-testing
-jbang RunScenario.java interop-ts-server            # installs the SDK first
+jbang RunScenario.java x-java-java-stdio            # installs the SDK first
 jbang RunScenario.java load-300 --skip-sdk-install  # reuse the SDK already installed
 jbang RunScenario.java --list
 ```
 
-All scenarios, with a pass/fail table at the end (exits non-zero on any unexpected failure):
+A set of scenarios, with a pass/fail table at the end (exits non-zero on any unexpected failure):
 
 ```bash
-integration-testing/scripts/run-all.sh
-integration-testing/scripts/run-all.sh --only interop-java-java,load-50
+integration-testing/scripts/run-all.sh                                     # the default set
+integration-testing/scripts/run-all.sh --only interop-java-java,load-50    # names
+integration-testing/scripts/run-all.sh --only 'x-*-python-*,x-python-*'    # globs
+integration-testing/scripts/run-all.sh --tag python                        # name tokens
+integration-testing/scripts/run-all.sh --tag stdio --exclude 'x-java-*' --list
 ```
+
+- `--only` takes comma-separated names or globs; `--tag` takes comma-separated tags, where a
+  scenario's tags are the dash-separated tokens of its name (`x-java-python-stdio` has `x`, `java`,
+  `python`, `stdio`). Both together select the union; `--exclude` (globs) removes from it.
+  `--list` prints the selection and exits.
+- With no `--only`/`--tag`, every config runs except `self-*`, `smoke-*` and `*-unstable`. Those
+  run only when a pattern or tag targets them (`--only 'self-*'`, `--only '*-unstable'`,
+  `--tag self`, `--tag unstable`) or a name selects one exactly.
+- An empty selection fails unless `--allow-empty` is given; a name with no config is an error.
+- **Parallel by default.** `run-all.sh` installs the SDK once, then prepares every peer checkout
+  and program build the selection needs, once and serially (`RunScenario --prepare`). It then runs
+  the scenarios `--jobs` at a time (default: half the CPUs, at most 8; `--jobs 1` for one at a
+  time), each with `--prepared`: no git, no build, its own `logs/<scenario>/`, its own temp
+  directory and its own port range. `load-*` scenarios run afterwards, alone and serially, since
+  they measure throughput. With more than one job each scenario's console goes to
+  `logs/run-all/<scenario>.console.log` and a line is printed as each finishes; the table at the end
+  is the same. `--prepare-only` stops after the preparation (CI warms its caches with it).
 
 Against a tag or other ref of the peer SDKs (the default, from `peers.json`, is `main`):
 
@@ -58,14 +90,16 @@ jbang RunScenario.java interop-python-server --peer python-sdk=1.0.0rc2
 A ref can be a branch, a tag or a commit SHA. Each ref gets its own checkout,
 `.cache/peers/<name>@<ref>`, so switching refs does not throw away a build.
 
-Logs for each run go to `logs/<scenario>/`: one file per process (`server.log`, `client.log`,
-`clients.log`), per build (`build-*.log`, `peer-*.log`) and `result.txt`. `run-all.sh` also writes
-`logs/run-all/summary.txt`. CI uploads the whole `logs/` directory as an artifact.
+Logs for each run go to `logs/<scenario>/`: one file per process (`agent.log`, `server.log`,
+`client.log`, `clients.log`), per build (`build-*.log`, `peer-*.log`) and `result.txt`.
+`run-all.sh` also writes `logs/run-all/summary.txt`. CI uploads the whole `logs/` directory as an
+artifact.
 
 ## Scenarios
 
 | Scenario | What runs |
 |---|---|
+| `x-java-java-stdio`, `x-java-java-http`, `x-java-java-ws` | generated: the Java client against the Java agent over stdio, Streamable HTTP (h2c) and WebSocket, running the seeded catalogue steps ([Contracts](#6-the-java-seed)) |
 | `interop-java-java` | Java client -> Java server; HTTP/2 (h2c) on every request |
 | `interop-ts-server` | Java client -> TypeScript server, wired as the SDK's example ships it (HTTP handler plus WebSocket upgrade listener); HTTP/1.1 |
 | `interop-rust-server` | Java client -> Rust server (axum); HTTP/1.1 |
@@ -76,7 +110,7 @@ Logs for each run go to `logs/<scenario>/`: one file per process (`server.log`, 
 | `load-50`, `load-300`, `load-1000` | N Java clients on their own connections, each: initialize, session/new, then 10 (or 5) prompts streaming two updates each |
 | `load-shared-300` | 300 clients sharing one HttpClient, so one HTTP/2 connection |
 
-The interop steps are the same in every cell: `initialize`, `session/new`, two prompts that each
+The legacy interop steps are the same in every cell: `initialize`, `session/new`, two prompts that each
 stream two updates, a prompt that triggers a permission round trip, `session/load` on the same
 connection, a prompt after the load, and the DELETE on close (checked in the server's request log).
 The Java client then reconnects on a new connection, loads the same session and prompts again.
@@ -97,6 +131,241 @@ prompt answered (`ok == expected`), every update delivered (`updates == 2*ok`), 
 threads (`acp-*`) on the server at peak and after close, server heap after a full GC at most
 256 MB at peak and 64 MB after close. p50/p99 latency is recorded in the results and never
 asserted.
+
+## Contracts
+
+What a language package (an agent and a client program for one SDK) must implement to take part
+in the generated cells. Nothing here needs the runner's source. The step catalogue, `steps.json`,
+is the normative list of steps; this section defines everything around it.
+
+### 1. Files a language package owns
+
+```
+programs/<lang>/launch/build.sh    build the programs (may do nothing)
+programs/<lang>/launch/agent.sh    exec the agent
+programs/<lang>/launch/client.sh   exec the client
+programs/<lang>/...                sources, project files
+expectations/<lang>.json           the package's expected failures (expectations/README.md)
+```
+
+`<lang>` directories are those of `matrix.json`: `java`, `node` (typescript), `rust`, `python`,
+`kotlin`. Do not name a directory `bin/`: the repository `.gitignore` ignores it.
+
+The three scripts are bash, executable, and work from any working directory (resolve paths from
+`$(dirname "${BASH_SOURCE[0]}")`). `agent.sh` and `client.sh` end in `exec <program> "$@"`, so the
+process the runner (or a stdio client) starts is the program itself and a kill reaches it; they
+print nothing themselves. They read the environment below and nothing else.
+
+| Variable | Set for | Value |
+|---|---|---|
+| `MVNW`, `ACP_VERSION`, `CACHE`, `IT_ROOT` | `build.sh` | the Maven wrapper, the SDK version under test, `integration-testing/.cache`, `integration-testing/` |
+| the language's `env` in `matrix.json` | `build.sh`, and every process of a cell that uses the language | e.g. `TS_SDK`, `PY_SDK`, `RUST_SDK` + `CARGO_TARGET_DIR`, `KOTLIN_SDK`: the peer checkout (and build dir) for the ref under test |
+| `STEPS` | client | comma-separated step ids, in order |
+| `AGENT_CMD` | client, stdio only | a shell command line that starts the agent |
+| `STEP_TIMEOUT_MS` | client, optional | per-step timeout, default 15000 |
+
+In a stdio cell both languages' variables are on the client process, and the client's environment
+is inherited by the agent it spawns. The build runs once per cell before any process starts
+(`build.sh` of both languages in a stdio cell); it must be idempotent and fast when nothing
+changed.
+
+### 2. Command lines and the transport flag
+
+```
+agent.sh  --transport stdio
+agent.sh  --transport http --port <port>
+agent.sh  --transport ws   --port <port>
+client.sh --transport stdio                       (AGENT_CMD in the environment)
+client.sh --transport http --url http://127.0.0.1:<port>/acp
+client.sh --transport ws   --url ws://127.0.0.1:<port>/acp
+```
+
+- **Agent, `http`/`ws`.** Listen on 127.0.0.1:`<port>` (0 means any), serve ACP at `/acp`, and print
+  `READY <port>` on stdout once accepting connections. `ws` is a `GET /acp` with
+  `Upgrade: websocket` on that endpoint; an SDK whose one server handles both (Java, TypeScript,
+  Rust, Python) may serve both transports for either flag. Run until killed (SIGTERM, then
+  SIGKILL after 5 s). Optionally log one `[http] <METHOD> <path> <protocol> -> <status> ...` line
+  per request, which `matrix.json` facts can assert on.
+- **Agent, `stdio`.** Newline-delimited JSON-RPC on stdin/stdout. Stdout carries nothing else:
+  every log line, diagnostic and `STEP agent.*` line goes to **stderr** (logging frameworks
+  included). Exit when stdin reaches EOF (any exit code), or on SIGTERM.
+- **Client, `stdio`.** Spawn the agent as `bash -c "exec $AGENT_CMD"` with the client's environment,
+  using the SDK's own process transport where it has one (Java `StdioAcpClientTransport`, Rust
+  `AcpAgent`, Python `spawn_agent_process`; TypeScript `child_process.spawn` + `ndJsonStream`;
+  Kotlin the sample's `createProcessStdioTransport`). **Relay the child's stderr** to the client's
+  stdout, line by line: a line that starts with `STEP ` verbatim, every other line prefixed
+  `agent| `. The runner's `STEP` matcher is anchored at the start of the line, so this is how the
+  agent's assertions reach it in a stdio cell. End the child when the run ends.
+- An unknown flag or a missing required value: print usage to stderr and exit 2.
+
+### 3. What the programs print
+
+**Client**, on stdout, one line per step in `STEPS` order, then one `RESULT` line, then exit 0
+(whatever the step outcomes; a non-zero exit means the program itself broke):
+
+```
+STEP <id> PASS (<ms> ms) -> <detail>
+STEP <id> FAIL (<ms> ms) -> <detail>
+RESULT pass=<n> fail=<n> updates_total=<n> upd_<sessionUpdate>=<n> ...
+```
+
+- `<detail>` is one line. A step that timed out has `TIMEOUT` in its detail; the runner reports
+  their count as a hang count, a distinct kind of finding.
+- A step id the program does not implement prints `STEP <id> FAIL (0 ms) -> unknown-step`, so a
+  program that lags the catalogue shows up rather than passing silently.
+- `pass` and `fail` count the client's own steps only. `updates_total` counts every
+  `session/update` received on any connection, and `upd_<kind>` the ones of each `sessionUpdate`
+  value (`upd_agent_message_chunk=8`); unknown kinds count as `upd_other`.
+- Other output (updates, requests, logs) is free-form, but must not start with `STEP ` or
+  `RESULT `.
+
+**Agent**: its own assertions, on stderr, never `RESULT`:
+
+```
+STEP agent.<id> PASS (<ms> ms) -> <detail>
+STEP agent.<id> FAIL (<ms> ms) -> <detail>
+```
+
+An agent prints `STEP agent.<id>` exactly when it handles that step's directive, for the steps
+whose `pass.agent` is set in `steps.json`. The generated config requires the PASS line (on the
+`agent` process for HTTP/WS, on the relaying `client` for stdio), and any undeclared FAIL fails
+the scenario.
+
+### 4. The step catalogue, `steps.json`
+
+- `conventions`: the step timeout (15 s), the grace for updates that trail a response (1 s) and for
+  load replay (2 s), placeholders, and the mandatory `first` (`init.initialize`) and `last`
+  (`conn.close`) steps, which every cell runs.
+- `fixtures`: the exact values both sides use: the client and agent `initialize` profiles,
+  modes, config options, permission options and the client's selection rule, `#emit` payloads,
+  file contents, extension method names, `_meta`, elicitation schemas. Programs hard-code these.
+- `directives`: what the agent does for each prompt text. The agent keeps no script: the client
+  drives it through the prompt. If the first text block of a prompt starts with `#`, it is
+  `#<name> <args>` (single spaces; for `#fs write` and `#len` the last argument is the rest of the
+  line); otherwise it is plain text, answered with the chunks `"echo: "` and the text. An unknown
+  directive is answered with a JSON-RPC error `-32602`, message `unknown directive: #<name>`.
+- `steps`, in run order. Each has `id`, `group`, `client` (what the client does), `pass.client`
+  (when its `STEP <id>` passes) and optionally `prompt` (the prompt text it sends), `agent` and
+  `pass.agent` (the agent behaviour and its `STEP agent.<id>` rule), `requires` (capabilities the
+  step depends on: `client.<path>` in the client's `initialize`, `agent.<path>` in the agent's),
+  `transports` (default all three), `only` (`{"client": [...], "agent": [...]}`: languages the
+  step applies to, e.g. Java SDK policy), `profile` (`stable` default, or `unstable`), `phaseB`
+  (the Java Phase B item that blocks it, informative) and `seed` (implemented by the WP0 Java seed).
+
+Rules for every step:
+
+- **Self-contained.** A step opens its own session (or connection) when it needs state; one
+  failure must not cascade. Only `init.initialize` opens the main connection, and only
+  `conn.close` closes it.
+- `{dir}` in a prompt is the client's scratch directory: absolute, created once per run, no spaces.
+  Agent and client always run on the same host.
+- A program advertises in `initialize` only what it really implements, taking the values from
+  `fixtures.client` / `fixtures.agent`. An agent obeys the client's capabilities: when a directive
+  needs one the client did not advertise, it prints `STEP agent.<id> FAIL` and answers without
+  calling the client.
+- Updates may trail the prompt response (nothing orders their dispatch on HTTP): wait up to
+  `updateGraceMs` before failing on a missing update, `replayGraceMs` for a load replay, and accept
+  the replay on either side of the response.
+
+Step ids are stable. A new behaviour is a new id; a changed `pass` rule is a contract change that
+every package must follow, so it goes through review like an API change.
+
+### 5. Cells, `matrix.json` and `GenConfigs.java`
+
+A cell is one generated config, `configs/x-<client>-<agent>-<transport>[-unstable].json`:
+
+- **pairs** are J<->J, J->X and X->J for X in TypeScript, Rust, Python and Kotlin;
+- **transports** are those both languages support (Kotlin has no Streamable HTTP: stdio and ws);
+- the **profile** is `stable`, or `unstable` (the `unstable` steps only, plus the mandatory first
+  and last; suffix `-unstable`, run on demand).
+
+`matrix.json` per language: `enabled` (cells are generated only when both languages are enabled),
+`dir`, `peers` (from `peers.json`), `env`, `transports`, `readyTimeoutSec`. `stepSelection` is
+`seed` (only `"seed": true` steps) or `all`. `facts` add transport assertions to the cells their
+`when` matches, with roles `client` and `agent` mapped to processes: the h2c checks of the Java
+pair, DELETE -> 202 on the Java agent, the WebSocket 101.
+
+Each cell is an ordinary runner config: on HTTP/WS an `agent` process (role `server`, `ready` on
+`READY`) and a `client` process; on stdio a single `client` process with `AGENT_CMD`. The checks are
+`client RESULT pass == <steps - expected client failures>` and `client RESULT fail == <expected
+client failures>`, plus the required agent `STEP` lines, the facts and the expected failures from
+`expectations/*.json` ([expectations/README.md](expectations/README.md)). `RunScenario`, `Checks`,
+`Scenario` and `Proc` are unchanged.
+
+```bash
+cd integration-testing
+jbang GenConfigs.java              # write the cells of the enabled languages (commit them)
+jbang GenConfigs.java --check      # CI: exit 1 if a committed cell is stale, missing or extra
+jbang GenConfigs.java --list       # print cells and step counts, write nothing
+# local development of a language package: its cells and self-pairs, every catalogue step
+jbang GenConfigs.java --enable python --self --steps all
+scripts/run-all.sh --only 'self-python-*'
+scripts/run-all.sh --only 'x-*-python-*,x-python-*'
+```
+
+`--self` writes `self-<lang>-<transport>` cells (the language against itself: develop a package
+before the Java side is ready, and separate a peer SDK bug from a Java one); they are git-ignored
+and never part of the nightly. **Language packages never commit generated configs**: only the
+integration step regenerates and commits them, after enabling the languages. `--check` reports
+locally generated extra cells as "extra", which is the reminder.
+
+### 6. The Java seed
+
+The Java programs, `programs/java` (`interop.Agent`, `interop.Client`), are every package's first
+partner. Today they implement the eight `seed` steps on all three transports:
+
+| Step | stdio | http | ws |
+|---|---|---|---|
+| `init.initialize` | yes | yes | yes |
+| `session.new` | yes | yes | yes |
+| `session.load` | yes | yes | yes |
+| `update.agent_message_chunk` | yes | yes | yes |
+| `perm.selected` (agent asserts too) | yes | yes | yes |
+| `fs.write` (agent asserts too) | yes | yes | yes |
+| `http.reconnect` | - | yes | - |
+| `conn.close` | yes | yes | yes |
+
+The Java agent answers every other directive with `-32602 unknown directive`, and the Java client
+prints `unknown-step` for every other step. The Java agent advertises `loadSession` only; the Java
+client advertises `fs.writeTextFile` only. The rest of the catalogue lands with the Java package.
+The legacy `interop.JavaAgentMain`/`JavaClientMain` serve the legacy configs until they are
+retired.
+
+### 7. Isolation: every scenario must be safe to run next to any other
+
+`run-all.sh` runs scenarios concurrently, so a program must assume that other cells, of its own
+language too, run on the same host at the same time.
+
+- **Ports.** Never a fixed port. An agent binds exactly the `--port` it is given: the runner takes
+  `${PORT}` from a range reserved for the scenario (`IT_PORT_RANGE`, 100 ports per scenario from
+  20000, below the Linux ephemeral range). `--port 0` must also work (print the bound port in
+  `READY`). A client connects only to the `--url` it is given.
+- **Files.** Never a fixed path. Temporary files go under `$TMPDIR`, which the runner sets for every
+  process to `logs/<scenario>/tmp/`, or under the client's `{dir}` (created with a unique name).
+  Nothing is written into `programs/<lang>/` at run time.
+- **Logs.** Only stdout and stderr; the runner files them under `logs/<scenario>/`. No log files
+  elsewhere.
+- **Builds.** Only `build.sh` builds, fetches or installs, and it runs before any scenario starts
+  (serially, once per distinct build in a parallel run). `agent.sh` and `client.sh` never build;
+  in a `--prepared` run nothing else does either.
+- **Processes.** No daemons and no detached children: everything a program starts dies with it
+  (a stdio client ends its agent; the runner kills each process tree at the end of a scenario).
+- **No shared mutable state**: no lock files, fixed sockets or named pipes, no global caches
+  written at run time.
+
+### 8. CI
+
+- `.github/workflows/interop-java.yml`, on every push to `main` and every pull request: JDK 17
+  only, `GenConfigs.java --check`, then the `x-java-java-*` cells on all three transports.
+- `.github/workflows/cross-sdk.yml`, nightly and on manual dispatch (optionally for one peer):
+  a `prepare <peer>` job per peer SDK fetches and builds the peer and its programs once
+  (`run-all.sh --prepare-only`) and caches them under the peer's resolved commit
+  (`scripts/peer-sha.sh`); then one job per peer and transport (`typescript-stdio`,
+  `typescript-http`, ..., `kotlin-ws`) restores that build, installs only its own toolchain, and
+  runs `run-all.sh --only 'x-java-<peer>-<t>*,x-<peer>-java-<t>*'` (the `http` leg also runs the
+  peer's legacy `interop-*` scenarios). A `java` job runs the Java pair, conformance, load and
+  `--check`. Each job uploads `logs/` as `cross-sdk-logs-<leg>`; `fail-fast` is off.
+- None of these gates a release.
 
 ## How a scenario is described
 
@@ -131,10 +400,11 @@ asserted.
   order, and each must print its `ready` line in time. Clients then run in order under their
   `timeoutSec` and must exit with `exitCode` (default 0). Every process tree is killed in a
   `finally`, including on Ctrl-C.
-- **Variables.** `${PORT}` (a free port, one per scenario), `${ROOT}` (this directory), `${REPO}`,
-  `${MVNW}`, `${ACP_VERSION}` (from the root pom), `${CACHE}`, `${LOG_DIR}`, and for each peer
-  `${peer.<name>}` (checkout path), `${peerRef.<name>}` and `${peerKey.<name>}`. An unknown
-  variable is an error.
+- **Variables.** `${PORT}` (a free port, one per scenario; from `IT_PORT_RANGE` when set),
+  `${ROOT}` (this directory), `${REPO}`, `${MVNW}`, `${ACP_VERSION}` (from the root pom),
+  `${CACHE}`, `${LOG_DIR}`, `${TMP}` (`logs/<scenario>/tmp`, also every process's `TMPDIR`), and
+  for each peer `${peer.<name>}` (checkout path), `${peerRef.<name>}` and `${peerKey.<name>}`.
+  An unknown variable is an error.
 - **Samples.** A server can list `samples`, which are jcmd samples taken `on` `ready`, on a `line`
   another process prints, or on another process's `exit` (after `delayMs`). Each sample is a full
   GC, then heap used, total threads and SDK threads. It is recorded as
@@ -149,18 +419,22 @@ asserted.
   without asserting on it. It is for known, timing-dependent behaviour: in `load-shared-300`,
   Jetty's HTTP/2 rate control can send GOAWAY when all 300 clients close at once.
 
-The programs live in `programs/<language>/`. Each prints `READY <port>` when it is listening (the
+The legacy programs live in `programs/<language>/`. Each prints `READY <port>` when it is listening (the
 servers), `STEP <name> PASS|FAIL` per step and a final `RESULT key=value ...` line (the clients),
 and one `[http]` line per request with the negotiated HTTP version (the servers).
 
 ## Layout
 
 ```
-RunScenario.java          JBang entry point
+RunScenario.java          JBang entry point: runs one configs/<scenario>.json
+GenConfigs.java           JBang: generates configs/x-*.json from the three inputs below
+steps.json                the step catalogue (Contracts)
+matrix.json               languages, pairs, transports, profiles, transport facts
+expectations/             <lang>.json expected failures, one file per language package
 jbang-lib/                config model, peer checkouts, processes, jcmd sampler, assertions
 peers.json                peer SDK git URLs, default refs and build commands
-configs/                  one JSON file per scenario
-programs/java|node|rust|python   the interop and load programs
-scripts/run-all.sh        every scenario plus a summary table
+configs/                  one JSON file per scenario (x-* generated, the rest hand-written)
+programs/<lang>/          each language's programs; launch/{build,agent,client}.sh for the cells
+scripts/run-all.sh        a selection of scenarios plus a summary table
 .cache/, logs/            generated, git-ignored
 ```
