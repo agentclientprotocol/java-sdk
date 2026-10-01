@@ -377,7 +377,7 @@ class CodeAssistant {
     @LoadSession
     LoadSessionResponse loadSession(LoadSessionRequest req) {
         if (!sessionHistory.containsKey(req.sessionId())) {
-            throw new AcpProtocolException(AcpErrorCodes.SESSION_NOT_FOUND,
+            throw new AcpProtocolException(AcpErrorCodes.RESOURCE_NOT_FOUND,
                 "Session not found: " + req.sessionId());
         }
         return new LoadSessionResponse(List.of(), List.of());

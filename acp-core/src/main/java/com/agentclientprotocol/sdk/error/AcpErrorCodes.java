@@ -7,15 +7,15 @@ package com.agentclientprotocol.sdk.error;
 import java.util.Map;
 
 /**
- * Standard JSON-RPC 2.0 error codes used by ACP.
+ * The JSON-RPC 2.0 error codes ACP defines.
  *
  * <p>
- * The error codes follow the JSON-RPC 2.0 specification:
- * <ul>
- * <li>-32700 to -32600: Parse/transport errors</li>
- * <li>-32603 to -32600: Request errors</li>
- * <li>-32099 to -32000: Server/implementation errors (reserved for ACP)</li>
- * </ul>
+ * Every constant is a code from the ACP v1 schema ({@code $defs.ErrorCode}): the JSON-RPC
+ * 2.0 standard codes, {@code -32800} (request cancelled), and the two codes ACP defines in
+ * its reserved range {@code -32000..-32099}: {@code -32000} (authentication required) and
+ * {@code -32002} (resource not found). The SDK uses no other code in the reserved range,
+ * because a peer reads any code there as the meaning ACP gives it, or will give it.
+ * </p>
  *
  * @author Mark Pollack
  * @see <a href="https://www.jsonrpc.org/specification#error_object">JSON-RPC Error Object</a>
@@ -68,45 +68,23 @@ public final class AcpErrorCodes {
 	// --------------------------
 
 	/**
-	 * Concurrent prompt: There is already an active prompt execution on this session.
-	 * ACP enforces single-turn semantics - only one prompt can be active at a time.
+	 * Authentication required: authentication is required before this operation can be
+	 * performed.
 	 */
-	public static final int CONCURRENT_PROMPT = -32000;
+	public static final int AUTHENTICATION_REQUIRED = -32000;
 
 	/**
-	 * Capability not supported: The peer does not support the requested capability.
+	 * Resource not found: a given resource, such as a file or a session, was not found.
 	 */
-	public static final int CAPABILITY_NOT_SUPPORTED = -32001;
-
-	/**
-	 * Session not found: The specified session ID does not exist.
-	 */
-	public static final int SESSION_NOT_FOUND = -32002;
-
-	/**
-	 * Not initialized: A method was called before the connection was initialized.
-	 */
-	public static final int NOT_INITIALIZED = -32003;
-
-	/**
-	 * Authentication required: The operation requires authentication.
-	 */
-	public static final int AUTHENTICATION_REQUIRED = -32004;
-
-	/**
-	 * Permission denied: The user denied permission for the requested operation.
-	 */
-	public static final int PERMISSION_DENIED = -32005;
+	public static final int RESOURCE_NOT_FOUND = -32002;
 
 	private static final Map<Integer, String> DESCRIPTIONS = Map.ofEntries(Map.entry(PARSE_ERROR, "Parse error"),
 			Map.entry(INVALID_REQUEST, "Invalid request"), Map.entry(METHOD_NOT_FOUND, "Method not found"),
 			Map.entry(INVALID_PARAMS, "Invalid params"), Map.entry(INTERNAL_ERROR, "Internal error"),
 			Map.entry(REQUEST_CANCELLED, "Request cancelled"),
-			Map.entry(CONCURRENT_PROMPT, "Concurrent prompt"),
-			Map.entry(CAPABILITY_NOT_SUPPORTED, "Capability not supported"),
-			Map.entry(SESSION_NOT_FOUND, "Session not found"), Map.entry(NOT_INITIALIZED, "Not initialized"),
 			Map.entry(AUTHENTICATION_REQUIRED, "Authentication required"),
-			Map.entry(PERMISSION_DENIED, "Permission denied"));
+			Map.entry(RESOURCE_NOT_FOUND, "Resource not found"));
+
 
 	/**
 	 * Returns a human-readable description for the given error code.

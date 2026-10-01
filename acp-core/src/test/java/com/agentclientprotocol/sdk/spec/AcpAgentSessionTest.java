@@ -36,7 +36,7 @@ class AcpAgentSessionTest {
 
 	private static final long CLIENT_TRANSPORT_SUBSCRIPTION_DELAY_MILLIS = 50;
 
-	private static final int ACTIVE_PROMPT_ERROR_CODE = -32000;
+	private static final int ACTIVE_PROMPT_ERROR_CODE = -32600;
 
 	private static final String SESSION_1 = "session-1";
 

@@ -21,7 +21,9 @@ import org.jspecify.annotations.Nullable;
  * <li>{@link AcpErrorCodes#METHOD_NOT_FOUND} (-32601): Method not available</li>
  * <li>{@link AcpErrorCodes#INVALID_PARAMS} (-32602): Invalid parameters</li>
  * <li>{@link AcpErrorCodes#INTERNAL_ERROR} (-32603): Internal error</li>
- * <li>{@link AcpErrorCodes#CONCURRENT_PROMPT} (-32000): Already processing a prompt</li>
+ * <li>{@link AcpErrorCodes#INVALID_REQUEST} (-32600): Invalid request, such as a prompt while
+ * the session already has an active prompt</li>
+ * <li>{@link AcpErrorCodes#AUTHENTICATION_REQUIRED} (-32000): Authentication required</li>
  * </ul>
  *
  * <p>
@@ -30,8 +32,8 @@ import org.jspecify.annotations.Nullable;
  * try {
  *     client.prompt(request).block();
  * } catch (AcpProtocolException e) {
- *     if (e.getCode() == AcpErrorCodes.CONCURRENT_PROMPT) {
- *         // Handle concurrent prompt error
+ *     if (e.isAuthenticationRequired()) {
+ *         // Ask the user to authenticate
  *     }
  * }
  * }</pre>
@@ -94,11 +96,11 @@ public class AcpProtocolException extends AcpException {
 	}
 
 	/**
-	 * Returns true if this error indicates a concurrent prompt violation.
-	 * @return true if concurrent prompt error
+	 * Returns true if this error says authentication is required first.
+	 * @return true if authentication required error
 	 */
-	public boolean isConcurrentPrompt() {
-		return code == AcpErrorCodes.CONCURRENT_PROMPT;
+	public boolean isAuthenticationRequired() {
+		return code == AcpErrorCodes.AUTHENTICATION_REQUIRED;
 	}
 
 	/**

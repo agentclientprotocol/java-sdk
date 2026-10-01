@@ -225,10 +225,13 @@ public class AcpAgentSession implements AcpSession {
 
 			// Single-turn enforcement for session/prompt requests
 			if (AcpSchema.METHOD_SESSION_PROMPT.equals(request.method())) {
-				ActivePrompts.Turn turn = activePrompts.tryStart(extractSessionId(request.params()), request.id());
+				String sessionId = extractSessionId(request.params());
+				ActivePrompts.Turn turn = activePrompts.tryStart(sessionId, request.id());
 				if (turn == null) {
-					return Mono.just(InboundMessages.error(request, AcpErrorCodes.CONCURRENT_PROMPT,
-							"There is already an active prompt execution", null));
+					// -32600, not -32000: ACP v1 defines -32000 as "Authentication required".
+					return Mono.just(InboundMessages.error(request, AcpErrorCodes.INVALID_REQUEST,
+							"There is already an active prompt on session " + sessionId,
+							Map.of("sessionId", sessionId)));
 				}
 
 				// The turn ends before the response is published (#14): see

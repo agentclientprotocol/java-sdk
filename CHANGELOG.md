@@ -36,6 +36,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: error codes follow the ACP v1 schema (`$defs.ErrorCode`).** A prompt sent while the
+  session already has an active prompt was rejected with `-32000`, which ACP defines as
+  "Authentication required", so a client could ask its user to log in when the user had only sent a
+  second prompt. It is now rejected with `-32600` (invalid request), message
+  `There is already an active prompt on session <id>` and data `{"sessionId": "<id>"}`, as the Rust
+  SDK rejects requests that are invalid in the connection's state; the Kotlin SDK answers
+  `-32603`. `AcpErrorCodes` keeps only codes the schema defines:
+  - `AUTHENTICATION_REQUIRED` is `-32000` (it was `-32004`); `AcpProtocolException.isAuthenticationRequired()`
+    is new.
+  - `SESSION_NOT_FOUND` (`-32002`) is renamed `RESOURCE_NOT_FOUND`, the schema's name for the code.
+  - `CONCURRENT_PROMPT` (`-32000`) and `AcpProtocolException.isConcurrentPrompt()` are removed; a
+    concurrent prompt is an `INVALID_REQUEST`.
+  - `CAPABILITY_NOT_SUPPORTED` (`-32001`), `NOT_INITIALIZED` (`-32003`) and `PERMISSION_DENIED`
+    (`-32005`) are removed: the SDK made them up inside the range ACP reserves for itself.
+    `AcpCapabilityException.toProtocolException()` now answers `-32600` with the capability name as
+    data.
+
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's
@@ -43,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session/update`s after the cancel and must then answer the original `session/prompt` with stop
   reason `cancelled`, and "once a prompt turn completes, the Client may send another
   `session/prompt`". A prompt sent between the cancel and that answer is now rejected with
-  `-32000` (`CONCURRENT_PROMPT`), like any prompt during an active turn. The turn ends when the
+  `-32600` (invalid request; see below), like any prompt during an active turn. The turn ends when the
   answer is published (before it reaches the client, as for every prompt), when the handler fails
   (a timeout the handler applies included), when the request is cancelled, when the session
   closes, or when the cancel grace period passes (below). Migration: clients send the next prompt

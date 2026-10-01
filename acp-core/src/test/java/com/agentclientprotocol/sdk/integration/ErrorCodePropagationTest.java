@@ -144,22 +144,22 @@ class ErrorCodePropagationTest {
 	}
 
 	/**
-	 * Test that ACP-specific error codes (like CONCURRENT_PROMPT) are preserved.
+	 * Test that ACP-specific error codes (like AUTHENTICATION_REQUIRED) are preserved.
 	 */
 	@Test
 	void acpSpecificErrorCodeIsPreserved() throws Exception {
 		transportPair = InMemoryTransportPair.create();
 
-		// Build agent that throws CAPABILITY_NOT_SUPPORTED error
+		// Build agent that throws AUTHENTICATION_REQUIRED error
 		AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport())
 			.requestTimeout(TIMEOUT)
 			.initializeHandler(request -> Mono
 				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("session-123", null, null)))
 			.promptHandler((request, updater) -> {
-				// Throw CAPABILITY_NOT_SUPPORTED error
+				// Throw AUTHENTICATION_REQUIRED error
 				return Mono.error(
-						new AcpProtocolException(AcpErrorCodes.CAPABILITY_NOT_SUPPORTED, "Terminal not supported"));
+						new AcpProtocolException(AcpErrorCodes.AUTHENTICATION_REQUIRED, "Log in first"));
 			})
 			.build();
 
@@ -172,15 +172,15 @@ class ErrorCodePropagationTest {
 		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
-		// Send prompt - should receive CAPABILITY_NOT_SUPPORTED error
+		// Send prompt - should receive AUTHENTICATION_REQUIRED error
 		assertThatThrownBy(() -> {
 			client.prompt(new AcpSchema.PromptRequest("session-123", List.of(new AcpSchema.TextContent("test"))))
 				.block(TIMEOUT);
 		}).isInstanceOf(AcpError.class).satisfies(ex -> {
 			AcpError acpError = (AcpError) ex;
 			assertThat(acpError.getCode())
-				.as("Error code should be CAPABILITY_NOT_SUPPORTED, not wrapped in INTERNAL_ERROR")
-				.isEqualTo(AcpErrorCodes.CAPABILITY_NOT_SUPPORTED);
+				.as("Error code should be AUTHENTICATION_REQUIRED, not wrapped in INTERNAL_ERROR")
+				.isEqualTo(AcpErrorCodes.AUTHENTICATION_REQUIRED);
 		});
 
 		// Cleanup

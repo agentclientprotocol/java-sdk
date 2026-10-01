@@ -338,8 +338,8 @@ import com.agentclientprotocol.sdk.error.*;
 try {
     client.prompt(request);
 } catch (AcpProtocolException e) {
-    if (e.isConcurrentPrompt()) {
-        // Another prompt is already in progress
+    if (e.isAuthenticationRequired()) {
+        // The agent wants authenticate() first
     } else if (e.isMethodNotFound()) {
         // Agent doesn't support this method
     }

@@ -29,7 +29,7 @@ package com.agentclientprotocol.sdk.error;
  * }</pre>
  *
  * @author Mark Pollack
- * @see AcpErrorCodes#CAPABILITY_NOT_SUPPORTED
+ * @see #toProtocolException()
  */
 public class AcpCapabilityException extends AcpException {
 
@@ -63,11 +63,13 @@ public class AcpCapabilityException extends AcpException {
 	}
 
 	/**
-	 * Converts this exception to a JSON-RPC protocol exception.
+	 * Converts this exception to a JSON-RPC protocol exception: {@code -32600} (invalid
+	 * request: the request is not valid for the negotiated capabilities), with the
+	 * capability name as data. ACP defines no code of its own for an unsupported capability.
 	 * @return an AcpProtocolException with the appropriate error code
 	 */
 	public AcpProtocolException toProtocolException() {
-		return new AcpProtocolException(AcpErrorCodes.CAPABILITY_NOT_SUPPORTED, getMessage(), capability);
+		return new AcpProtocolException(AcpErrorCodes.INVALID_REQUEST, getMessage(), capability);
 	}
 
 	private static String formatMessage(String capability) {

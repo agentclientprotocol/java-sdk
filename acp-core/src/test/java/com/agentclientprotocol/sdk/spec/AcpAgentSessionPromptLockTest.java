@@ -164,7 +164,10 @@ class AcpAgentSessionPromptLockTest {
 
 		AcpSchema.JSONRPCResponse second = response(transport.deliver(prompt("2")).block(TIMEOUT));
 		assertThat(second.error()).isNotNull();
-		assertThat(second.error().code()).isEqualTo(-32000);
+		// Not -32000: ACP v1 defines that as "Authentication required" (schema $defs.ErrorCode).
+		assertThat(second.error().code()).isEqualTo(-32600);
+		assertThat(second.error().message()).isEqualTo("There is already an active prompt on session session-14");
+		assertThat(second.error().data()).isEqualTo(java.util.Map.of("sessionId", "session-14"));
 
 		gate.tryEmitValue(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
 		assertThat(first.get()).isNotNull();
