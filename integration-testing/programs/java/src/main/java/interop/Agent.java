@@ -227,17 +227,17 @@ public class Agent {
 				String id = "java-sess-" + sessionCounter.incrementAndGet();
 				SESSIONS.put(id, new SessionState(id, r.cwd()));
 				log("[agent] session/new " + id + " cwd " + r.cwd());
-				return Mono.just(new AcpSchema.NewSessionResponse(id, modes("interop-mode-a")));
+				return Mono.just(new AcpSchema.NewSessionResponse(id, modes("interop-mode-a"), configOptions("model-a")));
 			})
 			.loadSessionHandler(r -> known(r.sessionId()).flatMap(s -> {
 				log("[agent] session/load " + s.id + ": replaying " + s.history.size() + " updates");
 				return Flux.fromIterable(s.history)
 					.concatMap(u -> self.get().sendSessionUpdate(s.id, u))
-					.then(Mono.just(new AcpSchema.LoadSessionResponse(modes(s.mode))));
+					.then(Mono.just(new AcpSchema.LoadSessionResponse(modes(s.mode), configOptions(s.model))));
 			}))
 			.resumeSessionHandler(r -> known(r.sessionId()).map(s -> {
 				log("[agent] session/resume " + s.id);
-				return new AcpSchema.ResumeSessionResponse(modes(s.mode));
+				return new AcpSchema.ResumeSessionResponse(modes(s.mode), configOptions(s.model));
 			}))
 			.listSessionsHandler(r -> {
 				List<AcpSchema.SessionInfo> out = new ArrayList<>();

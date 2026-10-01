@@ -442,13 +442,25 @@ public final class AcpSchema {
 
 	/**
 	 * Create new session response
+	 *
+	 * @param sessionId the new session's id
+	 * @param modes the session's modes and the current one, if the agent has modes
+	 * @param configOptions the session's config options (model, mode, ...) and their
+	 * current values, if the agent has any
+	 * @param meta reserved metadata
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NewSessionResponse(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("modes") @Nullable SessionModeState modes,
+			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes) {
-			this(sessionId, modes, null);
+			this(sessionId, modes, null, null);
+		}
+
+		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes,
+				@Nullable List<SessionConfigOption> configOptions) {
+			this(sessionId, modes, configOptions, null);
 		}
 	}
 
@@ -472,12 +484,22 @@ public final class AcpSchema {
 
 	/**
 	 * Load session response
+	 *
+	 * @param modes the session's modes and the current one, if the agent has modes
+	 * @param configOptions the session's config options and their current values, if the
+	 * agent has any
+	 * @param meta reserved metadata
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LoadSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
+			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public LoadSessionResponse(@Nullable SessionModeState modes) {
-			this(modes, null);
+			this(modes, null, null);
+		}
+
+		public LoadSessionResponse(@Nullable SessionModeState modes, @Nullable List<SessionConfigOption> configOptions) {
+			this(modes, configOptions, null);
 		}
 	}
 
@@ -661,12 +683,22 @@ public final class AcpSchema {
 
 	/**
 	 * Resume session response
+	 *
+	 * @param modes the session's modes and the current one, if the agent has modes
+	 * @param configOptions the session's config options and their current values, if the
+	 * agent has any
+	 * @param meta reserved metadata
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResumeSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
+			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public ResumeSessionResponse(@Nullable SessionModeState modes) {
-			this(modes, null);
+			this(modes, null, null);
+		}
+
+		public ResumeSessionResponse(@Nullable SessionModeState modes, @Nullable List<SessionConfigOption> configOptions) {
+			this(modes, configOptions, null);
 		}
 	}
 

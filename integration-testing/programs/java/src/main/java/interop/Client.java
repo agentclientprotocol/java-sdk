@@ -217,7 +217,7 @@ public class Client {
 		STEPS.put("stop.refusal", () -> stop("refusal", AcpSchema.StopReason.REFUSAL));
 		STEPS.put("stop.max_turn_requests", () -> stop("max_turn_requests", AcpSchema.StopReason.MAX_TURN_REQUESTS));
 		STEPS.put("mode.set", Client::modeSet);
-		STEPS.put("config.on-new", gapped("P1b", Client::configOnNew));
+		STEPS.put("config.on-new", Client::configOnNew);
 		STEPS.put("config.select", Client::configSelect);
 		STEPS.put("config.boolean", gapped("P6", Client::configBoolean));
 		STEPS.put("perm.selected", Client::permSelected);
@@ -608,8 +608,10 @@ public class Client {
 
 	static String configOnNew() {
 		Conn c = main();
-		block(c.client.newSession(new AcpSchema.NewSessionRequest(dir.toString(), List.of())));
-		throw new StepFailure("AcpSchema.NewSessionResponse has no configOptions to check");
+		AcpSchema.NewSessionResponse r = block(c.client.newSession(new AcpSchema.NewSessionRequest(dir.toString(), List.of())));
+		check(r != null && "model-a".equals(selectValue(r.configOptions(), "model")),
+				"configOptions " + (r == null ? null : r.configOptions()));
+		return "session/new configOptions: model at model-a";
 	}
 
 	static String configSelect() {

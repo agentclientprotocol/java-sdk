@@ -2,15 +2,6 @@
   "comment": "Expected failures caused by the Java SDK (programs/java): the Java client (when.client java) and the Java agent (when.agent java). Each entry names the Phase B item that closes it; that item's commit deletes its entries. Client entries come first, so in a Java<->Java cell the client's (more specific) contains wins.",
   "expectations": [
     {
-      "step": "config.on-new",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P1b:",
-      "see": "P1b",
-      "reason": "AcpSchema.NewSessionResponse has no configOptions field, so the Java client cannot read them"
-    },
-    {
       "step": "cancel-request.client",
       "when": {
         "client": "java"
@@ -108,15 +99,6 @@
       "contains": "P9:",
       "see": "P9",
       "reason": "AcpAsyncClient has no generic notification send"
-    },
-    {
-      "step": "config.on-new",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P1b",
-      "reason": "AcpSchema.NewSessionResponse has no configOptions field, so the Java agent cannot return them"
     },
     {
       "step": "cancel-request.client",
