@@ -146,7 +146,7 @@ public class InMemoryTransportPair {
 			connected = true;
 			return inbound.asFlux()
 				.flatMap(message -> Mono.just(message).transform(handler))
-				.doOnError(exceptionHandler::accept)
+				.doOnError(error -> exceptionHandler.accept(error))
 				.doFinally(signal -> connected = false)
 				.then();
 		}
@@ -220,7 +220,7 @@ public class InMemoryTransportPair {
 						exceptionHandler.accept(error);
 						return Mono.empty();
 					}))
-				.doOnError(exceptionHandler::accept)
+				.doOnError(error -> exceptionHandler.accept(error))
 				.doFinally(signal -> started = false)
 				.then();
 		}

@@ -56,8 +56,6 @@ public class MockAcpClient {
 
 	private final AcpAsyncClient delegate;
 
-	private final AcpClientTransport transport;
-
 	private final Duration timeout;
 
 	private final List<AcpSchema.SessionNotification> receivedUpdates = new CopyOnWriteArrayList<>();
@@ -73,7 +71,6 @@ public class MockAcpClient {
 	private volatile @Nullable String currentSessionId;
 
 	private MockAcpClient(Builder builder) {
-		this.transport = builder.transport;
 		this.timeout = builder.requestTimeout;
 		Function<AcpSchema.RequestPermissionRequest, AcpSchema.RequestPermissionResponse> permissionHandler = builder.permissionHandler;
 		Function<AcpSchema.ReadTextFileRequest, AcpSchema.ReadTextFileResponse> readFileHandler = builder.readFileHandler;

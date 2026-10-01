@@ -11,8 +11,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
@@ -54,11 +52,6 @@ public class AcpAgentSession implements AcpSession {
 
 	/** Duration to wait for request responses before timing out */
 	private final Duration requestTimeout;
-
-	/**
-	 * The JVM-wide daemon timer shared by every session (see AcpSchedulers); never disposed here.
-	 */
-	private final Scheduler timeoutScheduler;
 
 	/** Transport layer implementation for message exchange */
 	private final AcpAgentTransport transport;
@@ -158,9 +151,6 @@ public class AcpAgentSession implements AcpSession {
 		this.transport = transport;
 		this.requestHandlers.putAll(requestHandlers);
 		this.notificationHandlers.putAll(notificationHandlers);
-
-		// One shared daemon timer for every session in the JVM (see AcpSchedulers).
-		this.timeoutScheduler = AcpSchedulers.timeouts();
 
 		this.transport.start(mono -> mono.flatMap(this::handle)).subscribe(v -> {
 		}, this::onStartFailure);

@@ -140,9 +140,6 @@ public class AcpAsyncClient {
 	private static final TypeRef<AcpSchema.PromptResponse> PROMPT_RESPONSE_TYPE_REF = new TypeRef<>() {
 	};
 
-	private static final TypeRef<Void> VOID_TYPE_REF = new TypeRef<>() {
-	};
-
 	/**
 	 * The underlying ACP session that handles request/response communication.
 	 */
