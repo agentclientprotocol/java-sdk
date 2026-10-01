@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.json;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import ch.qos.logback.classic.Level;
@@ -93,6 +94,23 @@ class JacksonAcpJsonMapperTest {
 
 		assertThat(response.agentCapabilities().promptCapabilities().image()).isTrue();
 		assertThat(response.meta()).containsEntry("k", "v");
+	}
+
+
+	/**
+	 * The JSON {@code null} literal reads as null through every overload; this is why
+	 * {@code readValue} is declared {@code @Nullable}.
+	 */
+	@Test
+	void jsonNullLiteralReadsAsNull() throws Exception {
+		AcpJsonMapper mapper = new JacksonAcpJsonMapperSupplier().get();
+		byte[] bytes = "null".getBytes(StandardCharsets.UTF_8);
+		TypeRef<AcpSchema.JSONRPCError> typeRef = new TypeRef<>() {
+		};
+		assertThat(mapper.readValue("null", AcpSchema.JSONRPCError.class)).isNull();
+		assertThat(mapper.readValue(bytes, AcpSchema.JSONRPCError.class)).isNull();
+		assertThat(mapper.readValue("null", typeRef)).isNull();
+		assertThat(mapper.readValue(bytes, typeRef)).isNull();
 	}
 
 }

@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.json.jackson3;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import ch.qos.logback.classic.Level;
@@ -13,6 +14,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.StrictMapperFixtures;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -152,6 +154,23 @@ class Jackson3AcpJsonMapperTest {
 
 		public int alpha = 2;
 
+	}
+
+
+	/**
+	 * The JSON {@code null} literal reads as null through every overload; this is why
+	 * {@code readValue} is declared {@code @Nullable}.
+	 */
+	@Test
+	void jsonNullLiteralReadsAsNull() throws Exception {
+		AcpJsonMapper mapper = new Jackson3AcpJsonMapperSupplier().get();
+		byte[] bytes = "null".getBytes(StandardCharsets.UTF_8);
+		TypeRef<AcpSchema.JSONRPCError> typeRef = new TypeRef<>() {
+		};
+		assertThat(mapper.readValue("null", AcpSchema.JSONRPCError.class)).isNull();
+		assertThat(mapper.readValue(bytes, AcpSchema.JSONRPCError.class)).isNull();
+		assertThat(mapper.readValue("null", typeRef)).isNull();
+		assertThat(mapper.readValue(bytes, typeRef)).isNull();
 	}
 
 }
