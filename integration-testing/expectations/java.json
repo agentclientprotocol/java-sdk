@@ -1,0 +1,292 @@
+{
+  "comment": "Expected failures caused by the Java SDK (programs/java): the Java client (when.client java) and the Java agent (when.agent java). Each entry names the Phase B item that closes it; that item's commit deletes its entries. Client entries come first, so in a Java<->Java cell the client's (more specific) contains wins.",
+  "expectations": [
+    {
+      "step": "update.session_info_update",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P1:",
+      "see": "P1",
+      "reason": "The Java client cannot parse session_info_update: AcpSchema.SessionUpdate has no such subtype"
+    },
+    {
+      "step": "config.on-new",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P1b:",
+      "see": "P1b",
+      "reason": "AcpSchema.NewSessionResponse has no configOptions field, so the Java client cannot read them"
+    },
+    {
+      "step": "cancel-request.client",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P2:",
+      "see": "P2",
+      "reason": "The Java client has no $/cancel_request send"
+    },
+    {
+      "step": "cancel-request.agent",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P2:",
+      "see": "P2",
+      "reason": "The Java client does not honour $/cancel_request from the agent; its fs read is never cancelled"
+    },
+    {
+      "step": "cancel-request.unknown",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P2:",
+      "see": "P2",
+      "reason": "The Java client has no $/cancel_request send"
+    },
+    {
+      "step": "update.tool_call-name",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P3:",
+      "see": "P3",
+      "reason": "AcpSchema.ToolCall has no name field"
+    },
+    {
+      "step": "auth.terminal",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P5:",
+      "see": "P5",
+      "reason": "AcpSchema.AuthMethod has no type and ClientCapabilities cannot advertise auth.terminal"
+    },
+    {
+      "step": "init.config-boolean",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P6:",
+      "see": "P6",
+      "reason": "AcpSchema.ClientCapabilities has no session field, so the Java client cannot advertise session.configOptions.boolean"
+    },
+    {
+      "step": "config.boolean",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P6:",
+      "see": "P6",
+      "reason": "The Java client cannot advertise session.configOptions.boolean, so no agent offers the boolean option"
+    },
+    {
+      "step": "auth.logout-capability",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P7:",
+      "see": "P7",
+      "reason": "AcpSchema.AgentCapabilities has no auth field, so the Java client cannot read auth.logout"
+    },
+    {
+      "step": "meta.permission",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P8:",
+      "see": "P8",
+      "reason": "AcpSchema.RequestPermissionRequest and RequestPermissionResponse have no _meta"
+    },
+    {
+      "step": "ext.client-request",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P9:",
+      "see": "P9",
+      "reason": "AcpAsyncClient has no generic request send"
+    },
+    {
+      "step": "ext.client-notification",
+      "when": {
+        "client": "java"
+      },
+      "contains": "P9:",
+      "see": "P9",
+      "reason": "AcpAsyncClient has no generic notification send"
+    },
+    {
+      "step": "update.session_info_update",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P1",
+      "reason": "The Java agent cannot send session_info_update (no record); it answers -32603"
+    },
+    {
+      "step": "config.on-new",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P1b",
+      "reason": "AcpSchema.NewSessionResponse has no configOptions field, so the Java agent cannot return them"
+    },
+    {
+      "step": "cancel-request.client",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P2",
+      "reason": "The Java agent ignores $/cancel_request: the #slow prompt runs its full 10 s and answers end_turn"
+    },
+    {
+      "step": "cancel-request.agent",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P2",
+      "reason": "The Java agent cannot send $/cancel_request; it answers #fs read-slow with the chunk \"cancel-request unsupported (P2)\""
+    },
+    {
+      "step": "agent.cancel-request.agent",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "P2:",
+      "see": "P2",
+      "reason": "The Java agent cannot send $/cancel_request"
+    },
+    {
+      "step": "update.tool_call-name",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P3",
+      "reason": "AcpSchema.ToolCall has no name field, so the Java agent sends the tool call without it"
+    },
+    {
+      "step": "auth.terminal",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P5",
+      "reason": "AcpSchema.AuthMethod has no type, so the Java agent cannot list a terminal auth method"
+    },
+    {
+      "step": "init.config-boolean",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P6",
+      "reason": "AcpSchema.ClientCapabilities has no session field: the Java agent drops session.configOptions.boolean and cannot echo it"
+    },
+    {
+      "step": "config.boolean",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P6",
+      "reason": "The Java agent cannot see session.configOptions.boolean, so it offers no boolean option and rejects verbose with -32602"
+    },
+    {
+      "step": "auth.logout-capability",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P7",
+      "reason": "AcpSchema.AgentCapabilities has no auth field, so the Java agent cannot advertise auth.logout"
+    },
+    {
+      "step": "meta.permission",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P8",
+      "reason": "AcpSchema.RequestPermissionRequest has no _meta, so the Java agent cannot put it on the request"
+    },
+    {
+      "step": "ext.agent-request",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P9",
+      "reason": "The Java agent has no generic request send; it answers #ext request with the chunk \"ext: unsupported (P9)\""
+    },
+    {
+      "step": "agent.ext.agent-request",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "P9:",
+      "see": "P9",
+      "reason": "The Java agent has no generic request send"
+    },
+    {
+      "step": "ext.agent-notification",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P9",
+      "reason": "The Java agent has no generic notification send"
+    },
+    {
+      "step": "ext.client-request",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P9",
+      "reason": "The Java agent cannot register an extension request handler; it answers -32601"
+    },
+    {
+      "step": "ext.client-notification",
+      "when": {
+        "agent": "java"
+      },
+      "contains": "",
+      "see": "P9",
+      "reason": "The Java agent cannot register an extension notification handler, so #ext last-notification answers \"ext last: none\""
+    },
+    {
+      "step": "agent.cancel-request.agent",
+      "when": {
+        "client": "java",
+        "agent": [
+          "typescript",
+          "rust",
+          "python",
+          "kotlin"
+        ]
+      },
+      "contains": "",
+      "see": "P2",
+      "reason": "The Java client does not honour the agent's $/cancel_request, so the fs read never ends with -32800"
+    },
+    {
+      "step": "session.delete",
+      "when": {
+        "client": "java",
+        "agent": "java",
+        "transport": "http"
+      },
+      "contains": "404",
+      "see": "spec:rfds/streamable-http-websocket-transport.mdx:124,306-310",
+      "reason": "Java over HTTP: session/delete of an unknown id is posted session-scoped (inferred route, StreamableHttpRoutes.java:117-124) with Acp-Session-Id no-such-session, and the Java server answers 404 (StreamableHttpSessions.admitInbound); the RFD names no scope for session/delete and its POST tree has no 404 for an unknown session"
+    }
+  ]
+}
