@@ -331,8 +331,11 @@ AcpAgentSupport.create(agentInstance)      // Start with agent instance
 AcpAgentSupport.create(MyAgent.class)
 
 // With factory supplier
-AcpAgentSupport.create(MyAgent.class, () -> new MyAgent(dependency))
+AcpAgentSupport.builder().agent(MyAgent.class, () -> new MyAgent(dependency))
 ```
+
+Either way the agent is instantiated once, when it is registered, and that instance serves
+every request, so state kept in its fields is shared across handlers.
 
 ### Running the Agent
 

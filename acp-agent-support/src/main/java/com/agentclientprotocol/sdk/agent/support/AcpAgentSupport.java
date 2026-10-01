@@ -153,7 +153,8 @@ public class AcpAgentSupport {
 	}
 
 	/**
-	 * Create a new builder for an agent class (requires no-arg constructor).
+	 * Create a new builder for an agent class (requires no-arg constructor). The class is
+	 * instantiated once, here, and that instance serves every request.
 	 * @param agentClass the annotated agent class
 	 * @return a new builder
 	 */
@@ -402,26 +403,29 @@ public class AcpAgentSupport {
 		}
 
 		/**
-		 * Register an agent class (must have no-arg constructor).
+		 * Register an agent class (must have no-arg constructor). The class is
+		 * instantiated once, here, and that instance serves every request.
 		 * @param agentClass the annotated agent class
 		 * @return this builder
+		 * @throws IllegalArgumentException if the class cannot be instantiated
 		 */
 		public Builder agent(Class<?> agentClass) {
 			discoverHandlers(agentClass, () -> {
 				try {
 					return agentClass.getDeclaredConstructor().newInstance();
 				}
-				catch (Exception e) {
-					throw new RuntimeException("Cannot instantiate " + agentClass, e);
+				catch (ReflectiveOperationException e) {
+					throw new IllegalArgumentException("Cannot instantiate " + agentClass.getName(), e);
 				}
 			});
 			return this;
 		}
 
 		/**
-		 * Register an agent class with factory.
+		 * Register an agent class with factory. The factory is called once, here, and the
+		 * instance it returns serves every request.
 		 * @param agentClass the annotated agent class
-		 * @param factory supplier for agent instances
+		 * @param factory supplier of the agent instance
 		 * @param <T> the agent type
 		 * @return this builder
 		 */
@@ -497,14 +501,16 @@ public class AcpAgentSupport {
 			return new AcpAgentSupport(this, transport);
 		}
 
-		private void discoverHandlers(Class<?> agentClass, Supplier<Object> beanSupplier) {
+		private void discoverHandlers(Class<?> agentClass, Supplier<Object> instanceFactory) {
 			if (!agentClass.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
 				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName());
 			}
+			// One instance for every handler and request: handlers share the agent's state
+			Object agentInstance = instanceFactory.get();
 			for (Method method : agentClass.getDeclaredMethods()) {
 				HANDLER_ANNOTATIONS.forEach((annotation, acpMethod) -> {
 					if (method.isAnnotationPresent(annotation)) {
-						handlers.put(acpMethod, new AcpHandlerMethod(beanSupplier, method, acpMethod));
+						handlers.put(acpMethod, new AcpHandlerMethod(agentInstance, method, acpMethod));
 						log.debug("Discovered @{} handler: {}", annotation.getSimpleName(), method.getName());
 					}
 				});
