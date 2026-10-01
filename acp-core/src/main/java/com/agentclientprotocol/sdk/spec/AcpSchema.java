@@ -1763,13 +1763,14 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Tool call
+	 * Tool call. {@code name} is the programmatic name of the tool being invoked, if the
+	 * agent knows it ({@code title} is the human-readable label).
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCall(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") String title,
-			@JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
+			@JsonProperty("name") @Nullable String name, @JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
@@ -1780,24 +1781,26 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Tool call update
+	 * Tool call update, as carried by a permission request. Every field but
+	 * {@code toolCallId} is optional; {@code name} is the tool's programmatic name.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdate(@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") @Nullable String title,
-			@JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
+			@JsonProperty("name") @Nullable String name, @JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput) {
 	}
 
 	/**
-	 * Tool call update notification
+	 * Tool call update notification. Every field but {@code toolCallId} is optional;
+	 * {@code name} is the tool's programmatic name.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdateNotification(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") @Nullable String title,
-			@JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
+			@JsonProperty("name") @Nullable String name, @JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,

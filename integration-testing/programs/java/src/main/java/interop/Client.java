@@ -194,7 +194,7 @@ public class Client {
 						&& "interop tool".equals(c.title()) && c.kind() == AcpSchema.ToolKind.READ
 						&& c.status() == AcpSchema.ToolCallStatus.PENDING));
 		STEPS.put("update.tool_call_update", Client::toolCallUpdate);
-		STEPS.put("update.tool_call-name", gapped("P3", Client::toolCallName));
+		STEPS.put("update.tool_call-name", Client::toolCallName);
 		STEPS.put("update.plan", () -> emit("plan", u -> u instanceof AcpSchema.Plan p && p.entries() != null
 				&& p.entries().size() == 2 && planEntry(p.entries().get(0), "step one", "HIGH", "PENDING")
 				&& planEntry(p.entries().get(1), "step two", "LOW", "COMPLETED")));
@@ -562,7 +562,13 @@ public class Client {
 		String sid = c.newSession();
 		c.prompt(sid, "#emit tool_call name=read_file");
 		await(() -> c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.ToolCall), "no tool_call");
-		throw new StepFailure("a tool_call arrived, but AcpSchema.ToolCall has no name to check");
+		List<String> names = c.updates(sid)
+			.stream()
+			.filter(u -> u instanceof AcpSchema.ToolCall)
+			.map(u -> ((AcpSchema.ToolCall) u).name())
+			.toList();
+		check(names.contains("read_file"), "tool_call names " + names);
+		return "tool_call name read_file";
 	}
 
 	static String sessionInfoUpdate() {

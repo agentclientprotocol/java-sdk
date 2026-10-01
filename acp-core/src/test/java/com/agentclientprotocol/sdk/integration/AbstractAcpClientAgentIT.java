@@ -324,7 +324,7 @@ public abstract class AbstractAcpClientAgentIT {
 						request -> Mono.just(new AcpSchema.NewSessionResponse("session-permission", null, null)))
 				.promptHandler((request, updater) -> {
 					// Request permission from client
-					AcpSchema.ToolCallUpdate toolCall = new AcpSchema.ToolCallUpdate("tool-123", "Write File",
+					AcpSchema.ToolCallUpdate toolCall = new AcpSchema.ToolCallUpdate("tool-123", "Write File", null,
 							AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null);
 					List<AcpSchema.PermissionOption> options = List.of(
 							new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE),

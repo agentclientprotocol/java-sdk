@@ -429,7 +429,7 @@ public class Agent {
 		long t0 = System.nanoTime();
 		String id = hold ? "perm.cancelled" : "perm.selected";
 		AcpSchema.RequestPermissionRequest req = new AcpSchema.RequestPermissionRequest(sessionId,
-				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", AcpSchema.ToolKind.EDIT,
+				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", null, AcpSchema.ToolKind.EDIT,
 						AcpSchema.ToolCallStatus.PENDING, null, null, null, null),
 				List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE),
 						new AcpSchema.PermissionOption("reject", "Reject", AcpSchema.PermissionOptionKind.REJECT_ONCE)));
@@ -515,17 +515,22 @@ public class Agent {
 	static Mono<AcpSchema.PromptResponse> emit(PromptContext context, String[] words) {
 		String kind = words.length > 1 ? words[1] : "";
 		String sid = context.getSessionId();
-		AcpSchema.SessionUpdate toolCall = new AcpSchema.ToolCall("tool_call", "call-1", "interop tool",
+		String name = null;
+		for (String word : words) {
+			if (word.startsWith("name=")) {
+				name = word.substring("name=".length());
+			}
+		}
+		AcpSchema.SessionUpdate toolCall = new AcpSchema.ToolCall("tool_call", "call-1", "interop tool", name,
 				AcpSchema.ToolKind.READ, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null);
 		List<AcpSchema.SessionUpdate> updates = switch (kind) {
 			case "user_message_chunk" -> List.of(new AcpSchema.UserMessageChunk("user_message_chunk",
 					new AcpSchema.TextContent("user-chunk")));
 			case "agent_thought_chunk" -> List.of(new AcpSchema.AgentThoughtChunk("agent_thought_chunk",
 					new AcpSchema.TextContent("thinking")));
-			// name= cannot be set: AcpSchema.ToolCall has no name (P3); the tool call goes out without it.
 			case "tool_call" -> List.of(toolCall);
 			case "tool_call_update" -> List.of(toolCall,
-					new AcpSchema.ToolCallUpdateNotification("tool_call_update", "call-1", null, null,
+					new AcpSchema.ToolCallUpdateNotification("tool_call_update", "call-1", null, null, null,
 							AcpSchema.ToolCallStatus.COMPLETED,
 							List.of(new AcpSchema.ToolCallContentBlock("content", new AcpSchema.TextContent("tool output"))),
 							null, null, null, null));

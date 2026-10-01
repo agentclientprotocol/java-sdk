@@ -29,15 +29,6 @@
       "reason": "The Java client has no $/cancel_request send"
     },
     {
-      "step": "update.tool_call-name",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P3:",
-      "see": "P3",
-      "reason": "AcpSchema.ToolCall has no name field"
-    },
-    {
       "step": "auth.terminal",
       "when": {
         "client": "java"
@@ -126,15 +117,6 @@
       "contains": "P2:",
       "see": "P2",
       "reason": "The Java agent cannot send $/cancel_request"
-    },
-    {
-      "step": "update.tool_call-name",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P3",
-      "reason": "AcpSchema.ToolCall has no name field, so the Java agent sends the tool call without it"
     },
     {
       "step": "auth.terminal",
