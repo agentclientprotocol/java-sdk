@@ -17,6 +17,9 @@
     <description>Streamable HTTP agent transport using Jetty for listener-backed remote agents</description>
 
     <properties>
+        <!-- Coverage floors: measured line 88.13%, branch 78.07-78.44%, less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.86</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.76</jacoco.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>

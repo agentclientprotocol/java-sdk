@@ -429,6 +429,14 @@ server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/ac
 ./mvnw install      # Install to local Maven repository
 ```
 
+### Coverage
+
+`./mvnw verify` writes a JaCoCo coverage report for each module to
+`<module>/target/site/jacoco/index.html`, and fails if a module's line or branch coverage drops
+below the floor declared in its `pom.xml` (measured coverage less 2 points). Each module counts
+only its own classes, covered by its own tests. When running a subset of tests under `verify`
+(`-Dtest=...`), add `-Djacoco.skip` to skip the gate.
+
 ### Integration Tests
 
 Integration tests connect to real ACP agents and require additional setup:

@@ -16,6 +16,12 @@
     <name>ACP JSON Jackson 2</name>
     <description>ACP JSON mapper implementation based on Jackson 2 (com.fasterxml.jackson.databind)</description>
 
+    <properties>
+        <!-- Coverage floors: measured line 100%, branch 62.50% (5 of 8), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.98</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.60</jacoco.minimum.branch>
+    </properties>
+
     <dependencies>
         <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
         <dependency>

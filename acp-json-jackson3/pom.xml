@@ -16,6 +16,12 @@
     <name>ACP JSON Jackson 3</name>
     <description>ACP JSON mapper implementation based on Jackson 3 (tools.jackson.databind)</description>
 
+    <properties>
+        <!-- Coverage floors: measured line 96.08%, branch 62.50% (5 of 8), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.94</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.60</jacoco.minimum.branch>
+    </properties>
+
     <dependencies>
         <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
         <dependency>
