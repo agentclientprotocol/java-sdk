@@ -15,6 +15,15 @@ import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.Session
  * for, before the agent confirmed them. Provisional sessions are bounded, so a client cannot
  * grow server state with arbitrary ids.
  *
+ * <p>
+ * Client requests (servlet threads), the agent's outbound messages and closing the connection
+ * change the table concurrently, so every change runs under this object's monitor: a check of
+ * a session's state and the change it decides stay together (a session GET racing a failed
+ * {@code session/load} could otherwise recreate the discarded stream outside the table). A
+ * stream first asked for after the connection closed used to stay open, holding its GET
+ * forever (found by Lincheck, StreamableHttpSessionsLincheckTest); it is now closed.
+ * </p>
+ *
  * @author Kaiser Dandangi
  */
 final class StreamableHttpSessions {
@@ -27,19 +36,29 @@ final class StreamableHttpSessions {
 
 	private final ConcurrentMap<String, SseOutboundStream> streams = new ConcurrentHashMap<>();
 
+	/** Guarded by {@code this}. */
+	private boolean closed;
+
 	StreamableHttpSessions(String connectionId, StreamableHttpAcpAgentTransportOptions options) {
 		this.connectionId = connectionId;
 		this.options = options;
 	}
 
-	/** The stream of a session, created on first use. */
-	SseOutboundStream stream(String sessionId) {
-		return streams.computeIfAbsent(sessionId,
+	/**
+	 * The stream of a session, created on first use. Once the connection has closed, the
+	 * stream is closed too: a GET subscribing to it completes at once.
+	 */
+	synchronized SseOutboundStream stream(String sessionId) {
+		SseOutboundStream stream = streams.computeIfAbsent(sessionId,
 				ignored -> new SseOutboundStream(options.mailboxCapacity(), options.maxPendingSseEvents()));
+		if (closed) {
+			stream.close();
+		}
+		return stream;
 	}
 
 	/** The stream a session-scoped GET subscribes to; an unknown session becomes provisional. */
-	SseOutboundStream openStream(String sessionId) {
+	synchronized SseOutboundStream openStream(String sessionId) {
 		if (!sessions.containsKey(sessionId)) {
 			/*
 			 * RFD gap:
@@ -57,7 +76,7 @@ final class StreamableHttpSessions {
 	 * session, which becomes provisional; anything else must name a known one.
 	 * @throws UnknownSessionException otherwise, or when the provisional bound is reached
 	 */
-	void admitInbound(String sessionId, boolean isLoad) {
+	synchronized void admitInbound(String sessionId, boolean isLoad) {
 		SessionState current = sessions.get(sessionId);
 		if (isLoad) {
 			if (current == null) {
@@ -71,13 +90,13 @@ final class StreamableHttpSessions {
 		}
 	}
 
-	void markKnown(String sessionId) {
+	synchronized void markKnown(String sessionId) {
 		sessions.put(sessionId, SessionState.KNOWN);
 		stream(sessionId);
 	}
 
 	/** A failed session/load leaves no provisional state behind. */
-	void discardProvisional(String sessionId) {
+	synchronized void discardProvisional(String sessionId) {
 		if (sessions.remove(sessionId, SessionState.PENDING_LOAD)) {
 			SseOutboundStream stream = streams.remove(sessionId);
 			if (stream != null) {
@@ -90,7 +109,8 @@ final class StreamableHttpSessions {
 		streams.values().forEach(SseOutboundStream::keepAlive);
 	}
 
-	void close() {
+	synchronized void close() {
+		closed = true;
 		streams.values().forEach(SseOutboundStream::close);
 	}
 

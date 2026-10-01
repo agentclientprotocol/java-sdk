@@ -80,6 +80,7 @@
         <archunit.version>1.4.1</archunit.version>
         <mockito.version>5.23.0</mockito.version>
         <logback.version>1.6.3</logback.version>
+        <lincheck.version>3.7</lincheck.version>
 
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
@@ -229,6 +230,13 @@
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
                 <version>${logback.version}</version>
+            </dependency>
+            <!-- Model checker for the concurrent state machines (test scope, acp-core and
+                 acp-streamable-http-jetty) -->
+            <dependency>
+                <groupId>org.jetbrains.lincheck</groupId>
+                <artifactId>lincheck</artifactId>
+                <version>${lincheck.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -99,7 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the response arrived or the session ended. A request that hit the request timeout, or whose
   subscriber cancelled, kept its entry, so a long-lived session grew by one entry per such request,
   and a late response was silently swallowed rather than logged as unexpected. The entry is now
-  removed when the request times out or is cancelled. Found by the PIT mutation-testing pilot.
+  removed when the request times out or is cancelled (when its sink is disposed, and only if the
+  entry is still that request's). Found by the PIT mutation-testing pilot and, independently, by
+  model checking with Lincheck (`PendingResponsesLincheckTest`).
 - **Streamable HTTP: a JSON-RPC message with `"id": null` broke the agent transport.** A client
   request posted with `"id": null` (legal JSON-RPC) was answered with `"id": null`, and routing that
   answer looked the id up in a map that rejects null keys; the `NullPointerException` closed the whole
@@ -178,7 +180,36 @@ Found by enabling Error Prone's bug checks; each has a test.
   failed with an opaque `ClassCastException` message; the `INTERNAL_ERROR` now names the method and
   both types.
 
+Found by model checking with Lincheck; each has a Lincheck test as its regression.
+
+- **`AcpAgentSession.hasActivePrompt()` and `getActivePromptSessionIds()` could report no active
+  prompt while one was active**, when a prompt of another session started or ended at the same
+  moment: they asked the `ConcurrentHashMap` for its size, whose counters concurrent updates change
+  after the entries themselves. They now look at the entries.
+- When the transport terminated while the session was closing, each request still waiting for a
+  response was failed twice (Reactor dropped the second failure), and a request registered during
+  that dismissal could be cleared from the table without being failed, leaving its caller to wait
+  for the timeout. Each request is now removed from the table before it is failed, so it is failed
+  exactly once.
+- **Streamable HTTP: a session stream first used after the connection closed stayed open.** A
+  session GET that raced the connection's close (a `DELETE`, or the agent ending the connection)
+  held its response open until the client gave up, and agent messages for a session after close
+  queued in a new stream nobody would read. Such a stream is now closed, so the GET completes at
+  once, as on the connection stream. The connection's session table now makes each check and the
+  change it decides one step.
+
 ### Build
+
+- Model checking with Lincheck (`org.jetbrains.lincheck:lincheck` 3.7, test scope) for the SDK's
+  concurrent state: the single-turn prompt rule and its release before the response is published
+  (#14), the requests waiting for a response, emission on a transport's outbound sink, the
+  Streamable HTTP SSE mailbox (no event lost or reordered across reconnects, client resets and
+  pending writes) and the connection's session table. Each test checks every interleaving of a
+  bounded, seeded set of scenarios against a sequential specification and invariants, and was
+  shown to fail, with a minimal interleaving, against the bug it guards. They run in the normal
+  build (about a minute in total); the `lincheck` CI job runs them with ten times the scenarios.
+  The single-turn rule and the requests table moved into their own classes (`ActivePrompts`,
+  `PendingResponses`) so that they can be checked without a transport.
 
 - Architecture rules (ArchUnit) guard the package structure: acp-core's layers (util and json under the
   protocol, protocol under capabilities, capabilities under client and agent, which never depend on each

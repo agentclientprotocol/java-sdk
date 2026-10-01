@@ -1,0 +1,267 @@
+/*
+ * Copyright 2025-2026 the original author or authors.
+ */
+
+package com.agentclientprotocol.sdk.spec;
+
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.function.LongConsumer;
+
+import com.agentclientprotocol.sdk.QuietLoggers;
+import org.jetbrains.lincheck.datastructures.IntGen;
+import org.jetbrains.lincheck.datastructures.ModelCheckingOptions;
+import org.jetbrains.lincheck.datastructures.Operation;
+import org.jetbrains.lincheck.datastructures.Param;
+import org.jetbrains.lincheck.datastructures.ThreadIdGen;
+import org.jetbrains.lincheck.datastructures.Validate;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import reactor.core.Disposable;
+import reactor.core.publisher.MonoSink;
+import reactor.util.context.Context;
+
+/**
+ * Model checks {@link PendingResponses}, the table of requests waiting for a response, with
+ * Lincheck. Requests are registered, answered, timed out (their sink is disposed, as
+ * {@code Mono.timeout} cancels the {@code Mono.create} source), failed by a transport failure
+ * and dismissed by close, in any interleaving.
+ *
+ * <p>
+ * The sequential specification covers what {@code send} returns. The invariant that matters,
+ * checked after every interleaving by {@link Requests#noLostOrDoubleCompletion()}: every
+ * request is signalled at most once, and a request that was neither signalled nor timed out
+ * is still waiting (its response can still complete it), while a timed-out one is not
+ * (nothing leaks until the session ends).
+ * </p>
+ */
+class PendingResponsesLincheckTest {
+
+	/**
+	 * Multiplies the number of scenarios explored. The default keeps this test to seconds in
+	 * the build; CI's lincheck job raises it with -Dlincheck.scale. Scenarios and interleavings
+	 * are generated from a fixed seed, so a run is repeatable.
+	 */
+	private static final int SCALE = Integer.getInteger("lincheck.scale", 1);
+
+	private static @Nullable QuietLoggers quiet;
+
+	@BeforeAll
+	static void quietLogs() {
+		quiet = QuietLoggers.of(PendingResponses.class);
+	}
+
+	@AfterAll
+	static void restoreLogs() {
+		if (quiet != null) {
+			quiet.close();
+		}
+	}
+
+
+	private static final int THREADS = 2;
+
+	/** Request ids are thread ids, which Lincheck numbers from 1 (0 is its own thread). */
+	private static final int REQUESTS = THREADS + 1;
+
+	@Test
+	void noRequestIsLostOrCompletedTwice() {
+		new ModelCheckingOptions().iterations(50 * SCALE)
+			.invocationsPerIteration(100)
+			.threads(THREADS)
+			.actorsPerThread(3)
+			.actorsBefore(0)
+			.actorsAfter(0)
+			.sequentialSpecification(RequestsSpec.class)
+			.check(Requests.class);
+	}
+
+
+	@Param(name = "id", gen = IntGen.class, conf = "1:2")
+	public static class Requests {
+
+		private final AtomicReference<@Nullable Throwable> transportFailure = new AtomicReference<>();
+
+		private final PendingResponses pending = new PendingResponses(transportFailure::get,
+				cause -> new IllegalStateException("not started", cause), "agent");
+
+		/** Request ids are unique: each may be sent once. Only the thread of that id touches its slot. */
+		private final boolean[] used = new boolean[REQUESTS];
+
+		/** The sink of each request that was registered. */
+		private final AtomicReferenceArray<RecordingSink> sinks = new AtomicReferenceArray<>(REQUESTS);
+
+		/** Each thread sends one request, whose id is the thread's. */
+		@Operation
+		public String send(@Param(gen = ThreadIdGen.class) int id) {
+			if (used[id]) {
+				return "DUPLICATE";
+			}
+			used[id] = true;
+			RecordingSink sink = new RecordingSink();
+			if (!pending.register(id, sink)) {
+				return "FAILED_AT_ONCE";
+			}
+			sinks.set(id, sink);
+			return "SENT";
+		}
+
+		@Operation
+		public void respond(@Param(name = "id") int id) {
+			pending.complete(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, "result", null));
+		}
+
+		/** The request's timeout fires: Reactor cancels and disposes its sink. */
+		@Operation
+		public void timeOut(@Param(name = "id") int id) {
+			RecordingSink sink = sinks.get(id);
+			if (sink != null) {
+				sink.cancel();
+			}
+		}
+
+		/** The transport terminates (or failed to start): what the sessions do. */
+		@Operation
+		public void transportFails() {
+			IllegalStateException failure = new IllegalStateException("transport terminated");
+			transportFailure.compareAndSet(null, failure);
+			pending.dismissAll(failure);
+		}
+
+		@Operation
+		public void close() {
+			pending.dismissAll(null);
+		}
+
+		@Validate
+		public void noLostOrDoubleCompletion() {
+			int waiting = 0;
+			for (int id = 1; id < REQUESTS; id++) {
+				RecordingSink sink = sinks.get(id);
+				if (sink == null) {
+					continue;
+				}
+				if (sink.signals.get() > 1) {
+					throw new IllegalStateException("request " + id + " was completed " + sink.signals.get() + " times");
+				}
+				if (sink.signals.get() == 0 && !sink.cancelled) {
+					waiting++;
+				}
+			}
+			if (transportFailure.get() != null && waiting > 0) {
+				throw new IllegalStateException(waiting + " requests still wait on a transport that failed");
+			}
+			if (pending.size() != waiting) {
+				throw new IllegalStateException(
+						"requests waiting: " + waiting + ", but " + pending.size() + " can still be completed");
+			}
+		}
+
+	}
+
+	/** Sequential specification of what {@code send} returns. */
+	public static class RequestsSpec {
+
+		private final Set<Integer> used = new HashSet<>();
+
+		private boolean failed;
+
+		public String send(int id) {
+			if (!used.add(id)) {
+				return "DUPLICATE";
+			}
+			return failed ? "FAILED_AT_ONCE" : "SENT";
+		}
+
+		public void respond(int id) {
+		}
+
+		public void timeOut(int id) {
+		}
+
+		public void transportFails() {
+			failed = true;
+		}
+
+		public void close() {
+		}
+
+	}
+
+	/**
+	 * A {@link MonoSink} that counts the signals it is given and, like Reactor's, runs its
+	 * dispose callback when it is cancelled or signalled.
+	 */
+	static final class RecordingSink implements MonoSink<AcpSchema.JSONRPCResponse> {
+
+		final AtomicInteger signals = new AtomicInteger();
+
+		volatile boolean cancelled;
+
+		private final AtomicReference<@Nullable Disposable> onDispose = new AtomicReference<>();
+
+		void cancel() {
+			cancelled = true;
+			dispose();
+		}
+
+		private void dispose() {
+			Disposable callback = onDispose.getAndSet(null);
+			if (callback != null) {
+				callback.dispose();
+			}
+		}
+
+		@Override
+		public void success() {
+			signals.incrementAndGet();
+			dispose();
+		}
+
+		@Override
+		public void success(AcpSchema.@Nullable JSONRPCResponse value) {
+			signals.incrementAndGet();
+			dispose();
+		}
+
+		@Override
+		public void error(Throwable e) {
+			signals.incrementAndGet();
+			dispose();
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public Context currentContext() {
+			return Context.empty();
+		}
+
+		@Override
+		public MonoSink<AcpSchema.JSONRPCResponse> onRequest(LongConsumer consumer) {
+			return this;
+		}
+
+		@Override
+		public MonoSink<AcpSchema.JSONRPCResponse> onCancel(Disposable d) {
+			return this;
+		}
+
+		@Override
+		public MonoSink<AcpSchema.JSONRPCResponse> onDispose(Disposable d) {
+			if (cancelled) {
+				d.dispose();
+			}
+			else {
+				onDispose.set(d);
+			}
+			return this;
+		}
+
+	}
+
+}

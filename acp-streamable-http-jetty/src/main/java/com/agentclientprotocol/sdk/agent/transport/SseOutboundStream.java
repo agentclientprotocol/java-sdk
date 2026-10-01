@@ -158,6 +158,12 @@ final class SseOutboundStream {
 		}
 	}
 
+	boolean isClosed() {
+		synchronized (lock) {
+			return closed;
+		}
+	}
+
 	/** Detaches a subscriber if it is still the attached one, and completes its response. */
 	private void detach(SseSubscriber subscriber) {
 		synchronized (lock) {
