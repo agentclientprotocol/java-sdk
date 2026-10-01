@@ -1243,7 +1243,7 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ProvidersCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ProvidersCapabilities() {
-			this((Map<String, Object>) null);
+			this(null);
 		}
 	}
 
@@ -1288,7 +1288,7 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListProvidersRequest(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ListProvidersRequest() {
-			this((Map<String, Object>) null);
+			this(null);
 		}
 	}
 
@@ -1335,7 +1335,7 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public SetProviderResponse() {
-			this((Map<String, Object>) null);
+			this(null);
 		}
 	}
 
@@ -1358,7 +1358,7 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DisableProviderResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
 		public DisableProviderResponse() {
-			this((Map<String, Object>) null);
+			this(null);
 		}
 	}
 

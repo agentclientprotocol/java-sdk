@@ -34,13 +34,13 @@ public class AgentParameters {
 				: Arrays.asList("HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER");
 
 	@JsonProperty("command")
-	private String command;
+	private final String command;
 
 	@JsonProperty("args")
-	private List<String> args = new ArrayList<>();
+	private final List<String> args;
 
 	@JsonProperty("env")
-	private Map<String, String> env;
+	private final Map<String, String> env;
 
 	private AgentParameters(String command, List<String> args, Map<String, String> env) {
 		Assert.notNull(command, "The command can not be null");
@@ -70,11 +70,11 @@ public class AgentParameters {
 
 	public static class Builder {
 
-		private String command;
+		private final String command;
 
 		private List<String> args = new ArrayList<>();
 
-		private Map<String, String> env = new HashMap<>();
+		private final Map<String, String> env = new HashMap<>();
 
 		public Builder(String command) {
 			Assert.notNull(command, "The command can not be null");

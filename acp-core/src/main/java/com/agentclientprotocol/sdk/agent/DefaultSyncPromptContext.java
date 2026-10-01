@@ -129,8 +129,7 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	@Override
 	public Optional<String> tryReadFile(String path) {
 		try {
-			String content = readFile(path);
-			return Optional.ofNullable(content);
+			return Optional.of(readFile(path));
 		}
 		catch (Exception e) {
 			return Optional.empty();

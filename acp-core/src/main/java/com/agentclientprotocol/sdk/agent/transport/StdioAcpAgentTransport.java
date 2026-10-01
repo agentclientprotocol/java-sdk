@@ -72,9 +72,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
-	private Scheduler inboundScheduler;
+	private final Scheduler inboundScheduler;
 
-	private Scheduler outboundScheduler;
+	private final Scheduler outboundScheduler;
 
 	private final AtomicBoolean isClosing = new AtomicBoolean(false);
 
@@ -135,11 +135,6 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	@Override
-	public List<Integer> protocolVersions() {
-		return List.of(AcpSchema.LATEST_PROTOCOL_VERSION);
-	}
-
-	@Override
 	public Mono<Void> start(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		if (!isStarted.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Already started"));
@@ -182,9 +177,8 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	private void startInboundProcessing() {
 		this.inboundScheduler.schedule(() -> {
 			inboundReady.tryEmitValue(null);
-			BufferedReader reader = null;
 			try {
-				reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+				BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 				while (!isClosing.get()) {
 					try {
 						String line = reader.readLine();
