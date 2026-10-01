@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agent's error response with `"id": null` (JSON-RPC's answer to a request it could not parse) was
   looked up in a map that rejects null keys, and the `NullPointerException` replaced delivery; a
   client response with `"id": null` failed the same way on its way out. Both are now delivered.
+- **`AgentParameters.Builder.arg` after `args(String...)` threw `UnsupportedOperationException`**:
+  the varargs form kept the fixed-size `Arrays.asList` view. It now copies the arguments.
 - **`StreamableHttpAcpAgentTransport`'s WebSocket upgrade closed the connection on any inbound text
   message over 64 KB** (Jetty's default; close code 1009), so a prompt carrying a file of that size
   ended the session. The single-client `WebSocketAcpAgentTransport` accepted 4 MB. The upgrade now

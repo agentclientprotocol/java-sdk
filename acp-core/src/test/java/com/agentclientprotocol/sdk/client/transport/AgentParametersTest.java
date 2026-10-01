@@ -68,6 +68,13 @@ class AgentParametersTest {
 	}
 
 	@Test
+	void argAfterArgsVarargsAppends() {
+		AgentParameters params = AgentParameters.builder("agent").args("--a", "--b").arg("--c").build();
+
+		assertThat(params.getArgs()).containsExactly("--a", "--b", "--c");
+	}
+
+	@Test
 	void testBuilderWithArgsList() {
 		List<String> argsList = Arrays.asList("--experimental-acp", "--model", "gemini-1.5-pro");
 		AgentParameters params = AgentParameters.builder("gemini").args(argsList).build();

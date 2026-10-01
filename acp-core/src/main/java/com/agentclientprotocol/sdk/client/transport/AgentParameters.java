@@ -83,7 +83,7 @@ public class AgentParameters {
 
 		public Builder args(String... args) {
 			Assert.notNull(args, "The args can not be null");
-			this.args = Arrays.asList(args);
+			this.args = new ArrayList<>(Arrays.asList(args));
 			return this;
 		}
 
