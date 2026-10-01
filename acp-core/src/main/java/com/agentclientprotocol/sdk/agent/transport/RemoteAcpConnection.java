@@ -59,18 +59,34 @@ public final class RemoteAcpConnection {
 	private volatile @Nullable AcpAsyncAgent agent;
 
 	/**
-	 * Creates a new remote ACP connection core.
+	 * Creates a new remote ACP connection core whose transport errors are logged.
 	 * @param id stable transport connection id
 	 * @param jsonMapper JSON mapper used by the connection transport
 	 * @param outboundConsumer callback that receives agent-originated outbound messages
 	 */
 	public RemoteAcpConnection(String id, AcpJsonMapper jsonMapper, Consumer<JSONRPCMessage> outboundConsumer) {
+		this(id, jsonMapper, outboundConsumer, error -> logger.error("Remote ACP transport error", error));
+	}
+
+	/**
+	 * Creates a new remote ACP connection core that reports its transport errors to the
+	 * host. The agent runtime installs no exception handler on its transport, so without
+	 * one the host would never see them; the agent factory may still replace it through
+	 * {@link AcpAgentTransport#setExceptionHandler}.
+	 * @param id stable transport connection id
+	 * @param jsonMapper JSON mapper used by the connection transport
+	 * @param outboundConsumer callback that receives agent-originated outbound messages
+	 * @param exceptionHandler receives the connection's transport errors
+	 */
+	public RemoteAcpConnection(String id, AcpJsonMapper jsonMapper, Consumer<JSONRPCMessage> outboundConsumer,
+			Consumer<Throwable> exceptionHandler) {
 		Assert.hasText(id, "The id can not be empty");
 		Assert.notNull(jsonMapper, "The jsonMapper can not be null");
 		Assert.notNull(outboundConsumer, "The outboundConsumer can not be null");
+		Assert.notNull(exceptionHandler, "The exceptionHandler can not be null");
 		this.id = id;
 		this.jsonMapper = jsonMapper;
-		this.transport = new ConnectionTransport(outboundConsumer);
+		this.transport = new ConnectionTransport(outboundConsumer, exceptionHandler);
 	}
 
 	/**
@@ -180,10 +196,11 @@ public final class RemoteAcpConnection {
 		 */
 		private volatile @Nullable Disposable inboundSubscription;
 
-		private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Remote ACP transport error", t);
+		private volatile Consumer<Throwable> exceptionHandler;
 
-		ConnectionTransport(Consumer<JSONRPCMessage> outboundConsumer) {
+		ConnectionTransport(Consumer<JSONRPCMessage> outboundConsumer, Consumer<Throwable> exceptionHandler) {
 			this.outboundConsumer = outboundConsumer;
+			this.exceptionHandler = exceptionHandler;
 		}
 
 		@Override

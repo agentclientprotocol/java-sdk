@@ -39,6 +39,9 @@ final class SseStream {
 		/** Delivers a message read from the stream of {@code scope}. */
 		Mono<Void> onMessage(RouteScope scope, JSONRPCMessage message);
 
+		/** An event that is not a JSON-RPC message was skipped. */
+		void onUnreadable(Throwable error);
+
 		/** The stream ended, or failed, without having been closed. */
 		void onUnexpectedClose(SseStream stream, Throwable error);
 
@@ -175,7 +178,8 @@ final class SseStream {
 		}
 		catch (Exception e) {
 			if (isLive()) {
-				logger.warn("Failed to deserialize SSE event from {}", scope, e);
+				logger.warn("Skipped an SSE event from {} that is not a JSON-RPC message", scope, e);
+				listener.onUnreadable(e);
 			}
 		}
 	}

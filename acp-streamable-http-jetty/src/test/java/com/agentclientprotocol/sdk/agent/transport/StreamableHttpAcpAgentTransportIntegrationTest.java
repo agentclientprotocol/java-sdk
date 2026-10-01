@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -95,6 +96,32 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 
 			assertThat(response.statusCode()).isEqualTo(500);
 			assertThat(server.transport.activeConnectionCount()).isZero();
+		}
+	}
+
+	/**
+	 * A connection's transport errors reach the listener's exception handler. Before, the
+	 * agent runtime installed none on the connection's transport, so they were only logged.
+	 */
+	@Test
+	void aConnectionErrorReachesTheListenerExceptionHandler() throws Exception {
+		AcpAgentFactory agentFactory = transport -> {
+			throw new IllegalStateException("agent creation failed");
+		};
+		List<Throwable> reported = new CopyOnWriteArrayList<>();
+		try (FixtureServer server = FixtureServer.start(agentFactory)) {
+			server.transport.setExceptionHandler(reported::add);
+			HttpResponse<String> response = HttpClient.newHttpClient()
+				.send(HttpRequest.newBuilder(server.endpoint())
+					.header("Content-Type", "application/json")
+					.header("Accept", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString("""
+							{"jsonrpc":"2.0","id":"init-failed","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+							"""))
+					.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+			assertThat(response.statusCode()).isEqualTo(500);
+			assertThat(reported).singleElement().satisfies(error -> assertThat(error).hasMessage("agent creation failed"));
 		}
 	}
 

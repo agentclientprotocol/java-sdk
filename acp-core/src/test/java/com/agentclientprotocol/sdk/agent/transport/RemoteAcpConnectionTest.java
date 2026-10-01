@@ -189,6 +189,23 @@ class RemoteAcpConnectionTest {
 			.isInstanceOf(AcpConnectionException.class);
 	}
 
+	/**
+	 * The handler the host gives the connection receives its transport errors when the
+	 * agent runtime installs none, as no runtime does: before, they were only logged.
+	 */
+	@Test
+	void transportExceptionsReachTheHandlerTheHostGave() {
+		AtomicReference<Throwable> reported = new AtomicReference<>();
+		AcpAsyncAgent agent = mock(AcpAsyncAgent.class);
+		when(agent.start()).thenReturn(Mono.empty());
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add, reported::set);
+		connection.start(transport -> agent).block(TIMEOUT);
+
+		connection.signalException(new IllegalStateException("wire broke"));
+
+		assertThat(reported.get()).hasMessage("wire broke");
+	}
+
 	@Test
 	void agentMessagesReachTheOutboundConsumerAndTransportExceptionsTheHandler() {
 		AtomicReference<AcpAgentTransport> transportRef = new AtomicReference<>();

@@ -4,21 +4,27 @@
 
 package com.agentclientprotocol.sdk.agent.transport;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.AcpTestFixtures;
+import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -145,6 +151,56 @@ class StdioAcpAgentTransportTest {
 		transport.start(msg -> msg).subscribe();
 		transport.closeGracefully().block(TIMEOUT);
 		// Test passes if no exception is thrown
+	}
+
+	/**
+	 * A line that is not a JSON-RPC message is reported, answered as JSON-RPC 2.0 says
+	 * (-32700 for text that is not JSON, -32600 for JSON that is no message, both with a
+	 * null id), and skipped: the message after it still arrives. A blank line is skipped
+	 * silently. Before, the first such line ended the inbound stream for good.
+	 */
+	@Test
+	void aMalformedLineIsReportedAnsweredAndSkipped() throws Exception {
+		PipedOutputStream clientOut = new PipedOutputStream();
+		PipedInputStream agentIn = new PipedInputStream(clientOut, 65536);
+		PipedOutputStream agentOut = new PipedOutputStream();
+		PipedInputStream clientIn = new PipedInputStream(agentOut, 65536);
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper, agentIn, agentOut);
+		List<Object> handled = new CopyOnWriteArrayList<>();
+		List<Throwable> reported = new CopyOnWriteArrayList<>();
+		transport.setExceptionHandler(reported::add);
+		transport.start(message -> message.map(m -> {
+			AcpSchema.JSONRPCRequest request = (AcpSchema.JSONRPCRequest) m;
+			handled.add(request.id());
+			return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), "ok", null);
+		})).block(TIMEOUT);
+
+		String first = jsonMapper.writeValueAsString(new AcpSchema.JSONRPCRequest("test/one", "1", null));
+		String second = jsonMapper.writeValueAsString(new AcpSchema.JSONRPCRequest("test/two", "2", null));
+		List<String> written = new CopyOnWriteArrayList<>();
+		try (QuietLoggers quiet = QuietLoggers.of(StdioAcpAgentTransport.class)) {
+			clientOut.write((first + "\n{not json\n\n42\n" + second + "\n").getBytes(StandardCharsets.UTF_8));
+			clientOut.flush();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(clientIn, StandardCharsets.UTF_8));
+			Mono.fromCallable(() -> {
+				for (int i = 0; i < 4; i++) {
+					written.add(reader.readLine());
+				}
+				return written;
+			}).subscribeOn(Schedulers.boundedElastic()).block(TIMEOUT);
+		}
+		finally {
+			transport.closeGracefully().block(TIMEOUT);
+		}
+
+		assertThat(handled).containsExactly("1", "2");
+		assertThat(reported).hasSize(2);
+		assertThat(written).filteredOn(line -> line.contains("\"id\":null"))
+			.extracting(line -> ((AcpSchema.JSONRPCResponse) AcpSchema.deserializeJsonRpcMessage(jsonMapper, line))
+				.error()
+				.code())
+			.containsExactly(-32700, -32600);
+		assertThat(written).filteredOn(line -> line.contains("\"result\":\"ok\"")).hasSize(2);
 	}
 
 }

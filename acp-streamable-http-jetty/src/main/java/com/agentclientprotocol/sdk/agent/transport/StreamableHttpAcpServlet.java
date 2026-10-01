@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
@@ -92,6 +93,9 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	private final transient AtomicBoolean closing = new AtomicBoolean(false);
 
 	private transient volatile @Nullable Scheduler keepAliveScheduler;
+
+	private transient volatile Consumer<Throwable> exceptionHandler = error -> logger
+		.error("Streamable HTTP ACP connection error", error);
 
 	private transient volatile @Nullable Disposable keepAliveTask;
 
@@ -184,6 +188,22 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	}
 
 	/**
+	 * Sets the handler for the transport errors of every connection this servlet holds,
+	 * including those opened before the call. The default logs them. An agent factory may
+	 * still install its own handler on the transport it is given.
+	 * @param handler receives the connections' transport errors
+	 */
+	public void setExceptionHandler(Consumer<Throwable> handler) {
+		Assert.notNull(handler, "The handler can not be null");
+		this.exceptionHandler = handler;
+	}
+
+	/** Reports a connection's transport error to the current exception handler. */
+	void reportException(Throwable error) {
+		this.exceptionHandler.accept(error);
+	}
+
+	/**
 	 * The number of remote connections this servlet currently holds.
 	 * @return open connections
 	 */
@@ -193,7 +213,8 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private StreamableHttpConnection createConnection() {
 		return new StreamableHttpConnection(UUID.randomUUID().toString(), jsonMapper, agentFactory, routing, options,
-				connection -> connections.remove(connection.id(), connection));
+				new StreamableHttpConnection.Owner(connection -> connections.remove(connection.id(), connection),
+						this::reportException));
 	}
 
 	@Override

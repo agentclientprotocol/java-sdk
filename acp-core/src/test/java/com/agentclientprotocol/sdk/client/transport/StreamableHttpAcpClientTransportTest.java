@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -513,11 +514,16 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	/**
+	 * A malformed SSE event is skipped and reported to the exception handler, as the other
+	 * transports report one. It is not answered: an SSE stream has no reply channel.
+	 */
 	@Test
-	void malformedSseEventDoesNotStopConnectionReader() throws Exception {
+	void malformedSseEventIsReportedAndDoesNotStopConnectionReader() throws Exception {
 		HttpClient httpClient = mock(HttpClient.class);
 		PipedInputStream connectionStreamBody = new PipedInputStream();
 		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		List<Throwable> reported = new CopyOnWriteArrayList<>();
 		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
 
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
@@ -541,6 +547,7 @@ class StreamableHttpAcpClientTransportTest {
 		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
 				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
 		try {
+			transport.setExceptionHandler(reported::add);
 			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
 			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
 					AcpTestFixtures.createInitializeRequest()))
@@ -554,6 +561,7 @@ class StreamableHttpAcpClientTransportTest {
 			writeSse(connectionStreamWriter, AcpTestFixtures.createJsonRpcResponse("ping-1", Map.of()));
 
 			assertThat(awaitResponse(inboundMessages, "ping-1")).isNotNull();
+			assertThat(reported).hasSize(1);
 		}
 		finally {
 			connectionStreamWriter.close();

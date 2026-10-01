@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -287,6 +288,40 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 			assertThat(listener.closeLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
 			assertThat(listener.closeCode.get()).isEqualTo(StatusCode.PROTOCOL);
 			assertEventuallyNoConnections(server.transport());
+		}
+	}
+
+	/**
+	 * A frame that is not JSON is answered with -32700 and a null id, reported to the
+	 * listener's exception handler, and skipped: the connection stays open and initialize
+	 * still works. Before, the connection was closed.
+	 */
+	@Test
+	void aMalformedFrameIsAnsweredReportedAndSkipped() throws Exception {
+		List<Throwable> reported = new CopyOnWriteArrayList<>();
+		try (FixtureServer server = FixtureServer.start(simpleAgentFactory())) {
+			server.transport().setExceptionHandler(reported::add);
+			MessageRecordingListener listener = new MessageRecordingListener();
+			WebSocket webSocket = HttpClient.newHttpClient()
+				.newWebSocketBuilder()
+				.connectTimeout(TIMEOUT)
+				.buildAsync(server.endpoint(), listener)
+				.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			assertThat(listener.openLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+
+			webSocket.sendText("{not json", true).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			AcpSchema.JSONRPCResponse answer = (AcpSchema.JSONRPCResponse) readJsonRpcMessage(listener);
+			webSocket.sendText("""
+					{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}
+					""", true).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+			AcpSchema.JSONRPCResponse initialized = (AcpSchema.JSONRPCResponse) readJsonRpcMessage(listener);
+
+			assertThat(answer.id()).isNull();
+			assertThat(answer.error()).isNotNull();
+			assertThat(answer.error().code()).isEqualTo(-32700);
+			assertThat(initialized.id()).isEqualTo("init-1");
+			assertThat(initialized.error()).isNull();
+			assertThat(reported).hasSize(1);
 		}
 	}
 

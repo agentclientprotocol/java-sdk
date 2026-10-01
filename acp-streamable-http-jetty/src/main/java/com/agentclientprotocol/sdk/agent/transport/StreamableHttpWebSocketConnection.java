@@ -63,13 +63,14 @@ final class StreamableHttpWebSocketConnection {
 	private final Consumer<StreamableHttpWebSocketConnection> deregister;
 
 	StreamableHttpWebSocketConnection(String id, AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory,
-			StreamableHttpAcpAgentTransportOptions options, Consumer<StreamableHttpWebSocketConnection> deregister) {
+			StreamableHttpAcpAgentTransportOptions options, Consumer<StreamableHttpWebSocketConnection> deregister,
+			Consumer<Throwable> exceptionHandler) {
 		this.id = id;
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
 		this.options = options;
 		this.deregister = deregister;
-		this.remoteConnection = new RemoteAcpConnection(id, jsonMapper, this::sendToClient);
+		this.remoteConnection = new RemoteAcpConnection(id, jsonMapper, this::sendToClient, exceptionHandler);
 	}
 
 	String id() {
@@ -262,14 +263,18 @@ final class StreamableHttpWebSocketConnection {
 		public void onMessage(Session session, String message) {
 			logger.debug("Received streamable ACP WebSocket message ({} characters)", message.length());
 
+			JSONRPCMessage jsonRpcMessage;
 			try {
-				JSONRPCMessage jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);
-				connection.acceptFromClient(jsonRpcMessage);
+				jsonRpcMessage = AcpSchema.deserializeJsonRpcMessage(jsonMapper, message);
 			}
 			catch (Exception e) {
-				logger.warn("Closing streamable ACP WebSocket connection after invalid JSON-RPC frame", e);
-				connection.close(StatusCode.PROTOCOL, "invalid JSON-RPC frame");
+				// Answered as JSON-RPC 2.0 says and skipped, as every ACP transport does.
+				logger.warn("Skipped a streamable ACP WebSocket frame that is not a JSON-RPC message", e);
+				connection.signalException(e);
+				connection.sendToClient(AcpSchema.unreadableMessageResponse(jsonMapper, message));
+				return;
 			}
+			connection.acceptFromClient(jsonRpcMessage);
 		}
 
 		@OnWebSocketClose
