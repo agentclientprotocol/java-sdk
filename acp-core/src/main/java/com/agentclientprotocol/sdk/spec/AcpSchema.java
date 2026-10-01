@@ -66,19 +66,28 @@ public final class AcpSchema {
 			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
 		}
 
-		// Determine message type based on specific JSON structure
-		if (map.containsKey("method") && map.containsKey("id")) {
-			return jsonMapper.convertValue(map, JSONRPCRequest.class);
+		Class<? extends JSONRPCMessage> messageType = messageType(map);
+		if (messageType == null) {
+			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
 		}
-		else if (map.containsKey("method") && !map.containsKey("id")) {
-			return jsonMapper.convertValue(map, JSONRPCNotification.class);
-		}
-		else if (map.containsKey("result") || map.containsKey("error") || map.containsKey("id")) {
-			// A message with an id and no method answers a request, even without a result.
-			return jsonMapper.convertValue(map, JSONRPCResponse.class);
-		}
+		return jsonMapper.convertValue(map, messageType);
+	}
 
-		throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
+	/**
+	 * The kind of JSON-RPC message a JSON object is, by its members: a method makes a request
+	 * (with an id) or a notification (without); otherwise a result, an error or an id makes a
+	 * response, since a message with an id and no method answers a request even without a
+	 * result. Null when it is none of them.
+	 */
+	private static @Nullable Class<? extends JSONRPCMessage> messageType(Map<String, Object> message) {
+		boolean hasId = message.containsKey("id");
+		if (message.containsKey("method")) {
+			return hasId ? JSONRPCRequest.class : JSONRPCNotification.class;
+		}
+		if (hasId || message.containsKey("result") || message.containsKey("error")) {
+			return JSONRPCResponse.class;
+		}
+		return null;
 	}
 
 	// ---------------------------

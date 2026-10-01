@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.error;
 
+import java.util.Map;
+
 /**
  * Standard JSON-RPC 2.0 error codes used by ACP.
  *
@@ -89,26 +91,22 @@ public final class AcpErrorCodes {
 	 */
 	public static final int PERMISSION_DENIED = -32005;
 
+	private static final Map<Integer, String> DESCRIPTIONS = Map.ofEntries(Map.entry(PARSE_ERROR, "Parse error"),
+			Map.entry(INVALID_REQUEST, "Invalid request"), Map.entry(METHOD_NOT_FOUND, "Method not found"),
+			Map.entry(INVALID_PARAMS, "Invalid params"), Map.entry(INTERNAL_ERROR, "Internal error"),
+			Map.entry(CONCURRENT_PROMPT, "Concurrent prompt"),
+			Map.entry(CAPABILITY_NOT_SUPPORTED, "Capability not supported"),
+			Map.entry(SESSION_NOT_FOUND, "Session not found"), Map.entry(NOT_INITIALIZED, "Not initialized"),
+			Map.entry(AUTHENTICATION_REQUIRED, "Authentication required"),
+			Map.entry(PERMISSION_DENIED, "Permission denied"));
+
 	/**
 	 * Returns a human-readable description for the given error code.
 	 * @param code the error code
 	 * @return a description of the error code
 	 */
 	public static String getDescription(int code) {
-		return switch (code) {
-			case PARSE_ERROR -> "Parse error";
-			case INVALID_REQUEST -> "Invalid request";
-			case METHOD_NOT_FOUND -> "Method not found";
-			case INVALID_PARAMS -> "Invalid params";
-			case INTERNAL_ERROR -> "Internal error";
-			case CONCURRENT_PROMPT -> "Concurrent prompt";
-			case CAPABILITY_NOT_SUPPORTED -> "Capability not supported";
-			case SESSION_NOT_FOUND -> "Session not found";
-			case NOT_INITIALIZED -> "Not initialized";
-			case AUTHENTICATION_REQUIRED -> "Authentication required";
-			case PERMISSION_DENIED -> "Permission denied";
-			default -> "Unknown error";
-		};
+		return DESCRIPTIONS.getOrDefault(code, "Unknown error");
 	}
 
 }
