@@ -56,6 +56,13 @@ public final class AcpErrorCodes {
 	 */
 	public static final int INTERNAL_ERROR = -32603;
 
+	/**
+	 * Request cancelled: execution of the method was aborted, because the caller cancelled
+	 * the request or because of resource constraints or shutdown. ACP answers an internally
+	 * cancelled request (an internal timeout, for one) with this code too.
+	 */
+	public static final int REQUEST_CANCELLED = -32800;
+
 	// --------------------------
 	// ACP-Specific Errors
 	// --------------------------
@@ -94,6 +101,7 @@ public final class AcpErrorCodes {
 	private static final Map<Integer, String> DESCRIPTIONS = Map.ofEntries(Map.entry(PARSE_ERROR, "Parse error"),
 			Map.entry(INVALID_REQUEST, "Invalid request"), Map.entry(METHOD_NOT_FOUND, "Method not found"),
 			Map.entry(INVALID_PARAMS, "Invalid params"), Map.entry(INTERNAL_ERROR, "Internal error"),
+			Map.entry(REQUEST_CANCELLED, "Request cancelled"),
 			Map.entry(CONCURRENT_PROMPT, "Concurrent prompt"),
 			Map.entry(CAPABILITY_NOT_SUPPORTED, "Capability not supported"),
 			Map.entry(SESSION_NOT_FOUND, "Session not found"), Map.entry(NOT_INITIALIZED, "Not initialized"),

@@ -218,6 +218,7 @@
                                 <param>com.agentclientprotocol.sdk.spec.OutboundMessages*</param>
                                 <param>com.agentclientprotocol.sdk.spec.PendingResponses*</param>
                                 <param>com.agentclientprotocol.sdk.spec.ActivePrompts*</param>
+                                <param>com.agentclientprotocol.sdk.spec.Prompt*</param>
                                 <param>com.agentclientprotocol.sdk.spec.InboundMessages*</param>
                                 <param>com.agentclientprotocol.sdk.spec.ResponseResults*</param>
                                 <param>com.agentclientprotocol.sdk.spec.AcpError*</param>

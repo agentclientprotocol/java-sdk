@@ -48,9 +48,38 @@ final class ActivePrompts {
 
 		private final @Nullable Object requestId;
 
+		private final PromptAnswer answer = new PromptAnswer();
+
+		/** Runs when a cancel arrives; set by {@link PromptDeadlines} to start the grace period. */
+		private volatile @Nullable Runnable onCancelRequested;
+
 		private Turn(String sessionId, @Nullable Object requestId) {
 			this.sessionId = sessionId;
 			this.requestId = requestId;
+		}
+
+		PromptAnswer answer() {
+			return this.answer;
+		}
+
+		/**
+		 * Runs {@code action} when a cancel arrives for this prompt, or now if one already
+		 * has. It may run twice when the two race: it must be idempotent.
+		 */
+		void onCancelRequested(Runnable action) {
+			this.onCancelRequested = action;
+			if (this.answer.isCancelling()) {
+				action.run();
+			}
+		}
+
+		private void requestCancel() {
+			if (this.answer.requestCancel()) {
+				Runnable action = this.onCancelRequested;
+				if (action != null) {
+					action.run();
+				}
+			}
 		}
 
 		String sessionId() {
@@ -119,13 +148,15 @@ final class ActivePrompts {
 	 * completed may the client send another prompt (ACP v1, prompt turn, Cancellation). The
 	 * turn ends when that response is published ({@link #endBeforePublishing}), when the
 	 * handler fails (a timeout the handler applies included), when the request's
-	 * subscription is cancelled, or when the session closes. A handler that never answers
-	 * keeps the session busy: the session sets no timeout of its own on an inbound prompt.
+	 * subscription is cancelled, or when the session closes. If the handler has not answered
+	 * within the cancel grace period ({@link PromptTimeouts}), the session answers
+	 * {@code cancelled} itself ({@link PromptDeadlines}).
 	 * @return whether a prompt is active, and so will end with its response
 	 */
 	boolean cancel(String sessionId) {
 		Turn current = this.active.get(sessionId);
 		if (current != null) {
+			current.requestCancel();
 			logger.debug("Cancel requested for sessionId={} requestId={}; the turn ends with its response",
 					sessionId, current.requestId());
 			return true;

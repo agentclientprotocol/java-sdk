@@ -68,6 +68,17 @@ public final class AcpSchedulers {
 	}
 
 	/**
+	 * Emits once after {@code delay}, timed on the shared timer and delivered on the same
+	 * separate daemon threads as a timeout, so what runs on it cannot delay other sessions'
+	 * timeouts. Cancelling the subscription cancels the timer.
+	 * @param delay how long to wait
+	 * @return a Mono that emits {@code 0} after the delay
+	 */
+	public static Mono<Long> after(Duration delay) {
+		return Mono.delay(delay, TimeoutHolder.SCHEDULER).publishOn(TimeoutHolder.DELIVERY);
+	}
+
+	/**
 	 * Applies a timeout on the shared timer and delivers the resulting
 	 * {@link TimeoutException} on a separate daemon thread.
 	 * @param mono the source

@@ -74,6 +74,7 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
+import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -135,7 +136,9 @@ public class AcpAgentSupport {
 
 		// Build the underlying sync agent
 		var agentBuilder = AcpAgent.sync(transport)
-				.requestTimeout(builder.requestTimeout);
+				.requestTimeout(builder.requestTimeout)
+				.cancelGracePeriod(builder.cancelGracePeriod)
+				.maxPromptDuration(builder.maxPromptDuration);
 
 		// Wire discovered handlers to the agent builder
 		wireHandlers(agentBuilder);
@@ -391,6 +394,10 @@ public class AcpAgentSupport {
 
 		private Duration requestTimeout = Duration.ofSeconds(30);
 
+		private Duration cancelGracePeriod = PromptTimeouts.DEFAULT_CANCEL_GRACE_PERIOD;
+
+		private Duration maxPromptDuration = Duration.ZERO;
+
 		/**
 		 * Register an agent instance.
 		 * @param agentInstance the annotated agent instance
@@ -447,6 +454,31 @@ public class AcpAgentSupport {
 		 */
 		public Builder requestTimeout(Duration timeout) {
 			this.requestTimeout = timeout;
+			return this;
+		}
+
+		/**
+		 * Set how long a {@code @Prompt} method has to return after {@code session/cancel}
+		 * before the agent answers the prompt with stop reason {@code cancelled} itself. The
+		 * method's thread is not interrupted. Default 60 seconds; {@link Duration#ZERO} for
+		 * none. See {@code AcpAgent.SyncAgentBuilder#cancelGracePeriod}.
+		 * @param gracePeriod the grace period; zero for none, not negative
+		 * @return this builder
+		 */
+		public Builder cancelGracePeriod(Duration gracePeriod) {
+			this.cancelGracePeriod = gracePeriod;
+			return this;
+		}
+
+		/**
+		 * Set how long a prompt may run before the agent answers it with error
+		 * {@code -32800} (request cancelled). Default none ({@link Duration#ZERO}). See
+		 * {@code AcpAgent.SyncAgentBuilder#maxPromptDuration}.
+		 * @param maxDuration the maximum prompt duration; zero for none, not negative
+		 * @return this builder
+		 */
+		public Builder maxPromptDuration(Duration maxDuration) {
+			this.maxPromptDuration = maxDuration;
 			return this;
 		}
 

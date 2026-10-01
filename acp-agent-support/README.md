@@ -62,7 +62,7 @@ This module transitively includes `acp-annotations` and `acp-core`.
 | `@LoadSession` | `session/load` | Loads an existing session by ID. |
 | `@Prompt` | `session/prompt` | Handles user prompts within a session. |
 | `@SetSessionMode` | `session/set_mode` | Changes the operational mode of a session. |
-| `@Cancel` | `session/cancel` | Handles cancellation notifications (fire-and-forget). The cancel does not end the prompt turn: the cancelled `@Prompt` method still returns, with stop reason `cancelled`, and the session rejects a new prompt until it has. |
+| `@Cancel` | `session/cancel` | Handles cancellation notifications (fire-and-forget). The cancel does not end the prompt turn: the cancelled `@Prompt` method still returns, with stop reason `cancelled`, and the session rejects a new prompt until it has, or until the cancel grace period (default 60 s, `cancelGracePeriod`) passes and the agent answers `cancelled` itself. |
 
 ### Parameter Annotations
 

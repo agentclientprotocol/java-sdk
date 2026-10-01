@@ -13,6 +13,7 @@ import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -321,7 +322,9 @@ public interface AcpAgent {
 	 * A cancel does not end the prompt turn: stop the prompt's work, send any last
 	 * updates, and answer the prompt with stop reason {@code cancelled}. The session stays
 	 * busy, rejecting a new prompt, until that answer (or an error) is sent (ACP v1, prompt
-	 * turn, Cancellation).
+	 * turn, Cancellation). If the prompt handler has not answered within the cancel grace
+	 * period (60 seconds unless set with {@code cancelGracePeriod}), the agent cancels it
+	 * and answers {@code cancelled} itself.
 	 * </p>
 	 */
 	@FunctionalInterface
@@ -554,6 +557,8 @@ public interface AcpAgent {
 
 		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
+		private PromptTimeouts promptTimeouts = PromptTimeouts.DEFAULTS;
+
 		private final AgentHandlers handlers = new AgentHandlers();
 
 		AsyncAgentBuilder(AcpAgentTransport transport) {
@@ -569,6 +574,37 @@ public interface AcpAgent {
 		public AsyncAgentBuilder requestTimeout(Duration timeout) {
 			Assert.notNull(timeout, "Timeout must not be null");
 			this.requestTimeout = timeout;
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt handler has to answer after {@code session/cancel}. When it
+		 * passes, the agent cancels the handler and answers the prompt itself with stop
+		 * reason {@code cancelled}, as ACP requires of a cancelled prompt, which ends the
+		 * turn so the session accepts a new prompt. Updates the handler sent before that
+		 * answer reach the client first. Default: 60 seconds
+		 * ({@link PromptTimeouts#DEFAULT_CANCEL_GRACE_PERIOD}); {@link Duration#ZERO} turns
+		 * it off, and a handler that never answers then keeps its session busy.
+		 * @param gracePeriod the grace period; zero for none, not negative
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder cancelGracePeriod(Duration gracePeriod) {
+			this.promptTimeouts = this.promptTimeouts.withCancelGracePeriod(gracePeriod);
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt may run. When it passes, the agent cancels the handler and
+		 * answers the prompt with JSON-RPC error {@code -32800} (request cancelled; ACP
+		 * answers an internally cancelled request, an internal timeout included, with this
+		 * code), or with stop reason {@code cancelled} if the client had cancelled the
+		 * prompt, and the turn ends. Default: none ({@link Duration#ZERO}), since a prompt
+		 * turn can legitimately run for a long time.
+		 * @param maxDuration the maximum prompt duration; zero for none, not negative
+		 * @return This builder for chaining
+		 */
+		public AsyncAgentBuilder maxPromptDuration(Duration maxDuration) {
+			this.promptTimeouts = this.promptTimeouts.withMaxPromptDuration(maxDuration);
 			return this;
 		}
 
@@ -757,7 +793,7 @@ public interface AcpAgent {
 		 * @return A new AcpAsyncAgent instance
 		 */
 		public AcpAsyncAgent build() {
-			return new DefaultAcpAsyncAgent(transport, requestTimeout, handlers);
+			return new DefaultAcpAsyncAgent(transport, requestTimeout, promptTimeouts, handlers);
 		}
 
 	}
@@ -798,6 +834,37 @@ public interface AcpAgent {
 		 */
 		public SyncAgentBuilder requestTimeout(Duration timeout) {
 			asyncBuilder.requestTimeout(timeout);
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt handler has to answer after {@code session/cancel}. When it
+		 * passes, the agent cancels the handler (a sync handler blocked on its thread is not interrupted; what it sends afterwards is its own) and answers the prompt itself with stop
+		 * reason {@code cancelled}, as ACP requires of a cancelled prompt, which ends the
+		 * turn so the session accepts a new prompt. Updates the handler sent before that
+		 * answer reach the client first. Default: 60 seconds
+		 * ({@link PromptTimeouts#DEFAULT_CANCEL_GRACE_PERIOD}); {@link Duration#ZERO} turns
+		 * it off, and a handler that never answers then keeps its session busy.
+		 * @param gracePeriod the grace period; zero for none, not negative
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder cancelGracePeriod(Duration gracePeriod) {
+			asyncBuilder.cancelGracePeriod(gracePeriod);
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt may run. When it passes, the agent cancels the handler and
+		 * answers the prompt with JSON-RPC error {@code -32800} (request cancelled; ACP
+		 * answers an internally cancelled request, an internal timeout included, with this
+		 * code), or with stop reason {@code cancelled} if the client had cancelled the
+		 * prompt, and the turn ends. Default: none ({@link Duration#ZERO}), since a prompt
+		 * turn can legitimately run for a long time.
+		 * @param maxDuration the maximum prompt duration; zero for none, not negative
+		 * @return This builder for chaining
+		 */
+		public SyncAgentBuilder maxPromptDuration(Duration maxDuration) {
+			asyncBuilder.maxPromptDuration(maxDuration);
 			return this;
 		}
 
