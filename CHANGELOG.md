@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session's title and last activity time. Stable in ACP v1. Known limit: the schema lets a peer
   send `null` to clear a field; the record reads an explicit `null` like a missing field and never
   writes one, so it cannot express a clear.
+- **`configOptions` on `NewSessionResponse`, `LoadSessionResponse` and `ResumeSessionResponse`**
+  (ACP v1 schema; model selection moved to config options when `session/set_model` was removed).
+  An agent advertises its config options and their current values when the session is created,
+  loaded or resumed, and the client reads them from the response. New constructors
+  `NewSessionResponse(sessionId, modes, configOptions)` and `LoadSessionResponse(modes,
+  configOptions)` / `ResumeSessionResponse(modes, configOptions)`.
 
 ### Changed
 
@@ -42,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pass the variant's wire name (`"agent_message_chunk"`) or `null`, or use the convenience
   constructors, which already do. Code that switches exhaustively over a union's known records
   needs a branch for its `Unknown*` record.
+- **Breaking: the canonical constructors of `NewSessionResponse`, `LoadSessionResponse` and
+  `ResumeSessionResponse` take `configOptions` before `_meta`.** `new NewSessionResponse(id, modes,
+  null)` and `new LoadSessionResponse(modes, null)` still compile (the `null` is now the config
+  options); a call that passed a `_meta` map in that position no longer compiles. Migration: pass
+  `(id, modes, configOptions, meta)` or `(modes, configOptions, meta)`.
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's

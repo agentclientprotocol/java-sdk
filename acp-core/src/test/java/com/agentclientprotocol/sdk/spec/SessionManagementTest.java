@@ -121,6 +121,41 @@ class SessionManagementTest {
 		assertThat(result.modes().availableModes()).hasSize(2);
 	}
 
+	/** configOptions as the v1.9.1 schema puts it on new, load and resume responses. */
+	private static final String CONFIG_OPTIONS = """
+			"configOptions":[{"type":"select","id":"model","name":"Model","category":"model",\
+			"currentValue":"fast","options":[{"value":"fast","name":"Fast"}]},\
+			{"type":"boolean","id":"web","name":"Web search","currentValue":false}]""";
+
+	@Test
+	void sessionResponsesReadAndWriteConfigOptions() throws IOException {
+		var map = new TypeRef<java.util.Map<String, Object>>() {
+		};
+		String created = "{\"sessionId\":\"s1\"," + CONFIG_OPTIONS + "}";
+		String loaded = "{" + CONFIG_OPTIONS + "}";
+
+		var newResponse = jsonMapper.readValue(created, AcpSchema.NewSessionResponse.class);
+		var loadResponse = jsonMapper.readValue(loaded, AcpSchema.LoadSessionResponse.class);
+		var resumeResponse = jsonMapper.readValue(loaded, AcpSchema.ResumeSessionResponse.class);
+
+		var expected = List.of(
+				new AcpSchema.SessionConfigSelect("select", "model", "Model", null, "model", "fast",
+						List.of(new AcpSchema.SessionConfigSelectOption("fast", "Fast")), null),
+				new AcpSchema.SessionConfigBoolean("web", "Web search", false));
+		assertThat(newResponse.configOptions()).isEqualTo(expected);
+		assertThat(loadResponse.configOptions()).isEqualTo(expected);
+		assertThat(resumeResponse.configOptions()).isEqualTo(expected);
+		assertThat(jsonMapper.readValue(jsonMapper.writeValueAsString(newResponse), map))
+			.isEqualTo(jsonMapper.readValue(created, map));
+		assertThat(jsonMapper.readValue(jsonMapper.writeValueAsString(loadResponse), map))
+			.isEqualTo(jsonMapper.readValue(loaded, map));
+		assertThat(jsonMapper.readValue(jsonMapper.writeValueAsString(resumeResponse), map))
+			.isEqualTo(jsonMapper.readValue(loaded, map));
+		assertThat(new AcpSchema.LoadSessionResponse(null).configOptions()).isNull();
+		assertThat(new AcpSchema.ResumeSessionResponse(null).configOptions()).isNull();
+		assertThat(new AcpSchema.NewSessionResponse("s", null).configOptions()).isNull();
+	}
+
 	// ---------------------------
 	// SetSessionModeRequest Tests
 	// ---------------------------

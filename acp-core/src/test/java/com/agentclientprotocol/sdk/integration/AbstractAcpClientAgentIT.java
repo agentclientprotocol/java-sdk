@@ -152,6 +152,49 @@ public abstract class AbstractAcpClientAgentIT {
 	}
 
 	@Test
+	void sessionResponsesCarryConfigOptions() throws Exception {
+		AcpClientTransport clientTransport = createClientTransport();
+		AcpAgentTransport agentTransport = createAgentTransport();
+		List<AcpSchema.SessionConfigOption> options = List.of(
+				new AcpSchema.SessionConfigSelect("model", "Model", "fast",
+						List.of(new AcpSchema.SessionConfigSelectOption("fast", "Fast"),
+								new AcpSchema.SessionConfigSelectOption("smart", "Smart"))),
+				new AcpSchema.SessionConfigBoolean("web", "Web search", true));
+
+		try {
+			AcpAsyncAgent agent = AcpAgent.async(agentTransport)
+				.requestTimeout(TIMEOUT)
+				.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(1,
+						new AcpSchema.AgentCapabilities(true, new AcpSchema.SessionCapabilities(null, null, Map.of()),
+								null, null, null),
+						List.of())))
+				.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("s1", null, options)))
+				.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, options)))
+				.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, options)))
+				.build();
+			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
+			agent.start().subscribe();
+			Thread.sleep(100);
+			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+
+			var created = client.newSession(new AcpSchema.NewSessionRequest("/w", List.of())).block(TIMEOUT);
+			var loaded = client.loadSession(new AcpSchema.LoadSessionRequest("s1", "/w", List.of())).block(TIMEOUT);
+			var resumed = client.resumeSession(new AcpSchema.ResumeSessionRequest("s1", "/w", List.of()))
+				.block(TIMEOUT);
+
+			assertThat(created.configOptions()).isEqualTo(options);
+			assertThat(loaded.configOptions()).isEqualTo(options);
+			assertThat(resumed.configOptions()).isEqualTo(options);
+
+			client.closeGracefully().block(TIMEOUT);
+			agent.closeGracefully().block(TIMEOUT);
+		}
+		finally {
+			closeTransports();
+		}
+	}
+
+	@Test
 	void promptResponseFlowWorks() throws Exception {
 		AcpClientTransport clientTransport = createClientTransport();
 		AcpAgentTransport agentTransport = createAgentTransport();
