@@ -32,8 +32,8 @@ import org.slf4j.LoggerFactory;
  * backpressure, a new GET took the stream over, or the container reported an error on
  * another thread) its unconfirmed events go back to the front of the queue in order, and
  * the next subscriber continues from there. All state changes happen under this stream's
- * monitor, including the container's asynchronous callbacks, so a reconnect racing the old
- * subscriber's close is serialised.
+ * private lock, including the container's asynchronous callbacks, so a reconnect racing
+ * the old subscriber's close is serialised.
  * </p>
  *
  * <p>
@@ -62,17 +62,23 @@ final class SseOutboundStream {
 
 	private static final byte[] NO_BYTES = new byte[0];
 
+	/**
+	 * Guards all state of this stream and its subscriber. Private, not this stream's own
+	 * monitor, so no other code can take it and stall the container's write callbacks.
+	 */
+	private final Object lock = new Object();
+
 	private final int mailboxCapacity;
 
 	private final int maxPendingSseEvents;
 
-	/** Events not yet written to any subscriber, oldest first. Guarded by {@code this}. */
+	/** Events not yet written to any subscriber, oldest first. Guarded by {@code lock}. */
 	private final ArrayDeque<String> mailbox = new ArrayDeque<>();
 
-	/** Guarded by {@code this}. */
+	/** Guarded by {@code lock}. */
 	private @Nullable SseSubscriber current;
 
-	/** Guarded by {@code this}. */
+	/** Guarded by {@code lock}. */
 	private boolean closed;
 
 	SseOutboundStream(int mailboxCapacity, int maxPendingSseEvents) {
@@ -85,90 +91,100 @@ final class SseOutboundStream {
 	 * @throws AcpConnectionException when the mailbox is full; the caller closes the
 	 * connection rather than drop an event
 	 */
-	synchronized void push(String payload) {
-		if (closed) {
-			return;
-		}
-		if (mailbox.size() + (current != null ? current.unconfirmed.size() : 0) >= mailboxCapacity) {
-			throw new AcpConnectionException("Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
-		}
-		mailbox.addLast(payload);
-		if (current == null) {
-			return;
-		}
-		if (mailbox.size() > maxPendingSseEvents) {
-			// The attached client is not reading. Detach it; the events stay queued for the
-			// next GET, and a full mailbox then closes the connection.
-			logger.warn("Closing backpressured SSE subscriber after {} pending events", maxPendingSseEvents);
-			detach(current);
-			return;
-		}
-		current.drain();
-	}
-
-	synchronized void subscribe(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
-		if (closed) {
-			// DELETE may close the connection after GET has started async processing.
-			// Complete that request instead of leaving its response open indefinitely.
-			asyncContext.complete();
-			return;
-		}
-		// One subscriber per stream: a new GET takes the stream over from a previous
-		// one that the server may not yet know is dead (proxy drop, client restart).
-		// Rust and TypeScript answer 409 instead; taking over is friendlier to a
-		// reconnecting client and never duplicates events.
-		if (current != null) {
-			logger.debug("New SSE subscriber replaces the attached one");
-			detach(current);
-		}
-		SseSubscriber subscriber = new SseSubscriber(asyncContext, response);
-		current = subscriber;
-		subscriber.start();
-		subscriber.drain();
-	}
-
-	synchronized void keepAlive() {
-		if (!closed && current != null) {
-			current.sendKeepAlive();
+	void push(String payload) {
+		synchronized (lock) {
+			if (closed) {
+				return;
+			}
+			if (mailbox.size() + (current != null ? current.unconfirmed.size() : 0) >= mailboxCapacity) {
+				throw new AcpConnectionException("Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
+			}
+			mailbox.addLast(payload);
+			if (current == null) {
+				return;
+			}
+			if (mailbox.size() > maxPendingSseEvents) {
+				// The attached client is not reading. Detach it; the events stay queued for the
+				// next GET, and a full mailbox then closes the connection.
+				logger.warn("Closing backpressured SSE subscriber after {} pending events", maxPendingSseEvents);
+				detach(current);
+				return;
+			}
+			current.drain();
 		}
 	}
 
-	synchronized void close() {
-		if (closed) {
-			return;
+	void subscribe(AsyncContext asyncContext, HttpServletResponse response) throws IOException {
+		synchronized (lock) {
+			if (closed) {
+				// DELETE may close the connection after GET has started async processing.
+				// Complete that request instead of leaving its response open indefinitely.
+				asyncContext.complete();
+				return;
+			}
+			// One subscriber per stream: a new GET takes the stream over from a previous
+			// one that the server may not yet know is dead (proxy drop, client restart).
+			// Rust and TypeScript answer 409 instead; taking over is friendlier to a
+			// reconnecting client and never duplicates events.
+			if (current != null) {
+				logger.debug("New SSE subscriber replaces the attached one");
+				detach(current);
+			}
+			SseSubscriber subscriber = new SseSubscriber(asyncContext, response);
+			current = subscriber;
+			subscriber.start();
+			subscriber.drain();
 		}
-		closed = true;
-		if (current != null) {
-			detach(current);
+	}
+
+	void keepAlive() {
+		synchronized (lock) {
+			if (!closed && current != null) {
+				current.sendKeepAlive();
+			}
 		}
-		mailbox.clear();
+	}
+
+	void close() {
+		synchronized (lock) {
+			if (closed) {
+				return;
+			}
+			closed = true;
+			if (current != null) {
+				detach(current);
+			}
+			mailbox.clear();
+		}
 	}
 
 	/** Detaches a subscriber if it is still the attached one, and completes its response. */
-	private synchronized void detach(SseSubscriber subscriber) {
-		if (subscriber.detached) {
-			return;
-		}
-		subscriber.detached = true;
-		if (current == subscriber) {
-			current = null;
-		}
-		// Not known to have reached the client: back to the front, in order.
-		while (!subscriber.unconfirmed.isEmpty()) {
-			mailbox.addFirst(subscriber.unconfirmed.removeLast());
-		}
-		try {
-			subscriber.asyncContext.complete();
-		}
-		catch (IllegalStateException ignored) {
-			// already completed by the container
+	private void detach(SseSubscriber subscriber) {
+		synchronized (lock) {
+			if (subscriber.detached) {
+				return;
+			}
+			subscriber.detached = true;
+			if (current == subscriber) {
+				current = null;
+			}
+			// Not known to have reached the client: back to the front, in order.
+			while (!subscriber.unconfirmed.isEmpty()) {
+				mailbox.addFirst(subscriber.unconfirmed.removeLast());
+			}
+			try {
+				subscriber.asyncContext.complete();
+			}
+			catch (IllegalStateException ignored) {
+				// already completed by the container
+			}
 		}
 	}
 
 	/**
 	 * Writes to one servlet async response. Holds no events of its own except comments and
 	 * the events it wrote whose write has not yet completed; every method runs under the
-	 * enclosing stream's monitor.
+	 * enclosing stream's lock.
 	 */
 	private final class SseSubscriber implements AsyncListener, WriteListener {
 
@@ -208,7 +224,7 @@ final class SseOutboundStream {
 		}
 
 		void drain() {
-			synchronized (SseOutboundStream.this) {
+			synchronized (lock) {
 				if (detached) {
 					return;
 				}
