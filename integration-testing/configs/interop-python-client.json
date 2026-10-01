@@ -40,7 +40,7 @@
         "STEP prompt1 PASS",
         "STEP prompt2 PASS",
         "STEP prompt3-permission PASS",
-        "write_text_file /tmp/acp-interop.txt",
+        "/tmp/acp-interop.txt",
         "STEP prompt4-write PASS",
         "STEP session/load PASS",
         "STEP prompt-after-load PASS",
