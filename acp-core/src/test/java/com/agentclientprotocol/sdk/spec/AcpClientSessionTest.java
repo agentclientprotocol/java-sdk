@@ -93,7 +93,7 @@ class AcpClientSessionTest {
 			AcpSchema.JSONRPCError error = new AcpSchema.JSONRPCError(-32601, "Method not found", null);
 			transport.simulateIncomingMessage(
 					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, error));
-		}).expectError(AcpClientSession.AcpError.class).verify();
+		}).expectError(AcpError.class).verify();
 
 		session.close();
 	}

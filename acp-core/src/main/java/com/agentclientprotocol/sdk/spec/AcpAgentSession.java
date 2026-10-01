@@ -7,21 +7,16 @@ package com.agentclientprotocol.sdk.spec;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
-import com.agentclientprotocol.sdk.error.AcpProtocolException;
-import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.MonoSink;
 
 /**
  * Agent-side implementation of the ACP (Agent Client Protocol) session that manages
@@ -50,26 +45,17 @@ public class AcpAgentSession implements AcpSession {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpAgentSession.class);
 
-	/** Duration to wait for request responses before timing out */
-	private final Duration requestTimeout;
-
 	/** Transport layer implementation for message exchange */
 	private final AcpAgentTransport transport;
 
-	/** Map of pending responses keyed by request ID */
-	private final ConcurrentHashMap<Object, MonoSink<AcpSchema.JSONRPCResponse>> pendingResponses = new ConcurrentHashMap<>();
+	/** Requests and notifications sent to the client, and the requests waiting for a response */
+	private final OutboundMessages outbound;
 
 	/** Map of request handlers keyed by method name */
 	private final ConcurrentHashMap<String, RequestHandler<?>> requestHandlers = new ConcurrentHashMap<>();
 
 	/** Map of notification handlers keyed by method name */
 	private final ConcurrentHashMap<String, NotificationHandler> notificationHandlers = new ConcurrentHashMap<>();
-
-	/** Session-specific prefix for request IDs */
-	private final String sessionPrefix = UUID.randomUUID().toString().substring(0, 8);
-
-	/** Atomic counter for generating unique request IDs */
-	private final AtomicLong requestCounter = new AtomicLong(0);
 
 	/**
 	 * Active prompt tracking for single-turn enforcement, keyed by logical ACP
@@ -147,8 +133,9 @@ public class AcpAgentSession implements AcpSession {
 		Assert.notNull(requestHandlers, "The requestHandlers can not be null");
 		Assert.notNull(notificationHandlers, "The notificationHandlers can not be null");
 
-		this.requestTimeout = requestTimeout;
 		this.transport = transport;
+		this.outbound = new OutboundMessages(transport, requestTimeout, () -> this.startFailure,
+				AcpAgentSession::notStarted, "client");
 		this.requestHandlers.putAll(requestHandlers);
 		this.notificationHandlers.putAll(notificationHandlers);
 
@@ -179,11 +166,7 @@ public class AcpAgentSession implements AcpSession {
 	}
 
 	private void dismissPendingResponses(@Nullable Throwable cause) {
-		this.pendingResponses.forEach((id, sink) -> {
-			logger.warn("Abruptly terminating exchange for request {}", id);
-			sink.error(new RuntimeException("ACP session with client terminated", cause));
-		});
-		this.pendingResponses.clear();
+		this.outbound.dismissPending(cause);
 	}
 
 	/**
@@ -193,50 +176,21 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	private Mono<AcpSchema.JSONRPCMessage> handle(AcpSchema.JSONRPCMessage message) {
 		if (message instanceof AcpSchema.JSONRPCResponse response) {
-			logger.debug("Received response for id {}", response.id());
-			if (response.id() != null) {
-				var sink = pendingResponses.remove(response.id());
-				if (sink == null) {
-					logger.warn("Unexpected response for unknown id {}", response.id());
-				}
-				else {
-					sink.success(response);
-				}
-			}
-			else {
-				logger.error("Discarded ACP request response without session id. "
-						+ "This is an indication of a bug in the request sender code that can lead to memory "
-						+ "leaks as pending requests will never be completed.");
-			}
+			this.outbound.complete(response);
 			return Mono.empty();
 		}
-		else if (message instanceof AcpSchema.JSONRPCRequest request) {
+		if (message instanceof AcpSchema.JSONRPCRequest request) {
 			logger.debug("Received request method={} id={}", request.method(), request.id());
 			// Mono.from widens the response Mono to the message type without an operator.
-			return Mono.from(handleIncomingRequest(request).onErrorResume(error -> {
-				// Preserve error codes from AcpProtocolException, wrap others in INTERNAL_ERROR
-				int errorCode;
-				Object errorData = null;
-				if (error instanceof AcpProtocolException protocolException) {
-					errorCode = protocolException.getCode();
-					errorData = protocolException.getData();
-				}
-				else {
-					errorCode = AcpErrorCodes.INTERNAL_ERROR;
-				}
-				var errorResponse = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-						new AcpSchema.JSONRPCError(errorCode, errorMessage(error), errorData));
-				return Mono.just(errorResponse);
-			}));
+			return Mono.from(handleIncomingRequest(request)
+				.onErrorResume(error -> Mono.just(InboundMessages.error(request, error))));
 		}
-		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
+		if (message instanceof AcpSchema.JSONRPCNotification notification) {
 			logger.debug("Received notification method={}", notification.method());
 			return handleIncomingNotification(notification).then(Mono.empty());
 		}
-		else {
-			logger.warn("Received unknown message type: {}", message);
-			return Mono.empty();
-		}
+		logger.warn("Received unknown message type: {}", message);
+		return Mono.empty();
 	}
 
 	/**
@@ -250,8 +204,8 @@ public class AcpAgentSession implements AcpSession {
 			var handler = this.requestHandlers.get(request.method());
 			if (handler == null) {
 				MethodNotFoundError error = getMethodNotFoundError(request.method());
-				return Mono.just(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-						new AcpSchema.JSONRPCError(-32601, error.message(), error.data())));
+				return Mono.just(InboundMessages.error(request, AcpErrorCodes.METHOD_NOT_FOUND, error.message(),
+						error.data()));
 			}
 
 			// Single-turn enforcement for session/prompt requests
@@ -266,8 +220,8 @@ public class AcpAgentSession implements AcpSession {
 				if (current != null) {
 					logger.warn("Rejected concurrent prompt request for sessionId={}. Active requestId={}", sessionId,
 							current.requestId());
-					return Mono.just(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
-							new AcpSchema.JSONRPCError(-32000, "There is already an active prompt execution", null)));
+					return Mono.just(InboundMessages.error(request, AcpErrorCodes.CONCURRENT_PROMPT,
+							"There is already an active prompt execution", null));
 				}
 
 				// The prompt response ends the turn (ACP semantics), so the lock is released
@@ -279,15 +233,17 @@ public class AcpAgentSession implements AcpSession {
 				// ordered before publication on every path; doFinally covers cancellation.
 				// Mono.defer keeps a handler that throws synchronously from holding the lock
 				// forever: the throw becomes an error signal that passes through the release.
-				return requireResult(Mono.defer(() -> handler.handle(paramsOrEmpty(request.params()))), request.method())
-					.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null))
+				return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+						request.method())
+					.map(result -> InboundMessages.result(request, result))
 					.doOnNext(response -> releasePrompt(sessionId, newPrompt, "response"))
 					.doOnError(error -> releasePrompt(sessionId, newPrompt, "error"))
 					.doFinally(signal -> releasePrompt(sessionId, newPrompt, signal.toString()));
 			}
 
-			return requireResult(Mono.defer(() -> handler.handle(paramsOrEmpty(request.params()))), request.method())
-				.map(result -> new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
+			return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+						request.method())
+				.map(result -> InboundMessages.result(request, result));
 		});
 	}
 
@@ -352,17 +308,8 @@ public class AcpAgentSession implements AcpSession {
 				logger.warn("No handler registered for notification method: {}", notification.method());
 				return Mono.empty();
 			}
-			return handler.handle(paramsOrEmpty(notification.params()));
+			return handler.handle(InboundMessages.paramsOrEmpty(notification.params()));
 		});
-	}
-
-	/**
-	 * Generates a unique request ID in a non-blocking way. Combines a session-specific
-	 * prefix with an atomic counter to ensure uniqueness.
-	 * @return A unique request ID string
-	 */
-	private String generateRequestId() {
-		return this.sessionPrefix + "-" + this.requestCounter.getAndIncrement();
 	}
 
 	/**
@@ -372,50 +319,12 @@ public class AcpAgentSession implements AcpSession {
 	 * @param method the name of the method to call on the client
 	 * @param requestParams the parameters to send with the request
 	 * @param typeRef the TypeReference describing the expected response type
-	 * @return a Mono that will emit the response when received
+	 * @return a Mono that will emit the response when received; an error response fails
+	 * it with {@link AcpError}
 	 */
 	@Override
 	public <T> Mono<T> sendRequest(String method, Object requestParams, TypeRef<T> typeRef) {
-		String requestId = this.generateRequestId();
-
-		return Mono.deferContextual(ctx -> Mono.<AcpSchema.JSONRPCResponse>create(pendingResponseSink -> {
-			Throwable failure = this.startFailure;
-			if (failure != null) {
-				pendingResponseSink.error(notStarted(failure));
-				return;
-			}
-			logger.debug("Sending request for method {} with id {}", method, requestId);
-			this.pendingResponses.put(requestId, pendingResponseSink);
-			// Re-check after registering: a failure recorded between the check above and the
-			// put may already have dismissed the map without seeing this request.
-			Throwable lateFailure = this.startFailure;
-			if (lateFailure != null) {
-				this.pendingResponses.remove(requestId);
-				pendingResponseSink.error(notStarted(lateFailure));
-				return;
-			}
-			AcpSchema.JSONRPCRequest jsonrpcRequest = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
-					method, requestParams);
-			this.transport.sendMessage(jsonrpcRequest).contextWrite(ctx).subscribe(v -> {
-			}, error -> {
-				this.pendingResponses.remove(requestId);
-				pendingResponseSink.error(error);
-			});
-		})).transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout)).handle((jsonRpcResponse, deliveredResponseSink) -> {
-			if (jsonRpcResponse.error() != null) {
-				logger.error("Error handling request: {}", jsonRpcResponse.error());
-				deliveredResponseSink.error(new AcpError(jsonRpcResponse.error()));
-			}
-			else {
-				if (typeRef.getType().equals(Void.class)) {
-					deliveredResponseSink.complete();
-				}
-				else {
-					ResponseResults.deliver(method, jsonRpcResponse.result(), typeRef, this.transport,
-							deliveredResponseSink);
-				}
-			}
-		});
+		return this.outbound.sendRequest(method, requestParams, typeRef);
 	}
 
 	/**
@@ -427,15 +336,7 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	@Override
 	public Mono<Void> sendNotification(String method, @Nullable Object params) {
-		return Mono.defer(() -> {
-			Throwable failure = this.startFailure;
-			if (failure != null) {
-				return Mono.error(notStarted(failure));
-			}
-			AcpSchema.JSONRPCNotification jsonrpcNotification = new AcpSchema.JSONRPCNotification(
-					AcpSchema.JSONRPC_VERSION, method, params);
-			return this.transport.sendMessage(jsonrpcNotification);
-		});
+		return this.outbound.sendNotification(method, params);
 	}
 
 	/**
@@ -498,79 +399,6 @@ public class AcpAgentSession implements AcpSession {
 		activePrompts.clear();
 		dismissPendingResponses();
 		transport.close();
-	}
-
-	/**
-	 * The params a handler receives. JSON-RPC lets a request or notification omit them;
-	 * an omitted params reads as an empty object, which is what a peer sending {@code {}}
-	 * would deliver, so handlers never see null.
-	 */
-	private static Object paramsOrEmpty(@Nullable Object params) {
-		return (params != null) ? params : Map.of();
-	}
-
-	/** JSON-RPC requires an error message; an exception without one is named by its type. */
-	private static String errorMessage(Throwable error) {
-		String message = error.getMessage();
-		return (message != null) ? message : error.getClass().getName();
-	}
-
-	/** A request always gets a response: a handler that completes empty is answered with an error. */
-	private static <T> Mono<T> requireResult(Mono<T> result, String method) {
-		return result.switchIfEmpty(Mono.error(() -> new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
-				"The " + method + " handler produced no response")));
-	}
-
-	/**
-	 * ACP-specific error wrapper for JSON-RPC errors.
-	 * Provides detailed error information including code, message, and data.
-	 */
-	public static class AcpError extends RuntimeException {
-
-		private final AcpSchema.JSONRPCError error;
-
-		public AcpError(AcpSchema.JSONRPCError error) {
-			super(buildErrorMessage(error));
-			this.error = error;
-		}
-
-		private static String buildErrorMessage(AcpSchema.JSONRPCError error) {
-			StringBuilder sb = new StringBuilder();
-			sb.append(error.message());
-			sb.append(" [code=").append(error.code()).append("]");
-			if (error.data() != null) {
-				sb.append(": ").append(formatErrorData(error.data()));
-			}
-			return sb.toString();
-		}
-
-		private static String formatErrorData(Object data) {
-			if (data instanceof java.util.Map<?, ?> map) {
-				// Extract common fields for better readability
-				Object details = map.get("details");
-				if (details != null) {
-					return details.toString();
-				}
-				Object reason = map.get("reason");
-				if (reason != null) {
-					return reason.toString();
-				}
-			}
-			return data.toString();
-		}
-
-		public AcpSchema.JSONRPCError getError() {
-			return error;
-		}
-
-		public int getCode() {
-			return error.code();
-		}
-
-		public @Nullable Object getData() {
-			return error.data();
-		}
-
 	}
 
 }

@@ -56,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   formed a cycle. They now depend on the `invocation` package and `AcpAgentSupport` depends on them,
   one way. Migration: change the imports in custom `ArgumentResolver`, `ReturnValueHandler` and
   `AcpInterceptor` implementations to `com.agentclientprotocol.sdk.agent.support.invocation.*`.
+- **Breaking: the error a request fails with when the peer answers with a JSON-RPC error is one
+  type, `com.agentclientprotocol.sdk.spec.AcpError`,** on both sides. It replaces the two identical
+  nested classes `AcpClientSession.AcpError` and `AcpAgentSession.AcpError`; its constructor,
+  message, `getError()`, `getCode()` and `getData()` are unchanged. Migration: catch or test for
+  `AcpError` (import `com.agentclientprotocol.sdk.spec.AcpError`) instead of
+  `AcpClientSession.AcpError` or `AcpAgentSession.AcpError`.
 
 ### Removed
 

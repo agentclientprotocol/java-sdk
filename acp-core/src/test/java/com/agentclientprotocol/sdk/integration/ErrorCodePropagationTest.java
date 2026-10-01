@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpAgentSession;
+import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
@@ -87,8 +88,8 @@ class ErrorCodePropagationTest {
 		assertThatThrownBy(() -> {
 			client.prompt(new AcpSchema.PromptRequest("session-123", List.of(new AcpSchema.TextContent("test"))))
 				.block(TIMEOUT);
-		}).isInstanceOf(AcpClientSession.AcpError.class).satisfies(ex -> {
-			AcpClientSession.AcpError acpError = (AcpClientSession.AcpError) ex;
+		}).isInstanceOf(AcpError.class).satisfies(ex -> {
+			AcpError acpError = (AcpError) ex;
 			// BUG: Currently returns -32603 (INTERNAL_ERROR) instead of -32602 (INVALID_PARAMS)
 			assertThat(acpError.getCode()).as("Error code should be INVALID_PARAMS, not wrapped in INTERNAL_ERROR")
 				.isEqualTo(AcpErrorCodes.INVALID_PARAMS);
@@ -131,8 +132,8 @@ class ErrorCodePropagationTest {
 		assertThatThrownBy(() -> {
 			client.prompt(new AcpSchema.PromptRequest("session-123", List.of(new AcpSchema.TextContent("test"))))
 				.block(TIMEOUT);
-		}).isInstanceOf(AcpClientSession.AcpError.class).satisfies(ex -> {
-			AcpClientSession.AcpError acpError = (AcpClientSession.AcpError) ex;
+		}).isInstanceOf(AcpError.class).satisfies(ex -> {
+			AcpError acpError = (AcpError) ex;
 			assertThat(acpError.getCode()).as("Error code should be METHOD_NOT_FOUND, not wrapped in INTERNAL_ERROR")
 				.isEqualTo(AcpErrorCodes.METHOD_NOT_FOUND);
 		});
@@ -175,8 +176,8 @@ class ErrorCodePropagationTest {
 		assertThatThrownBy(() -> {
 			client.prompt(new AcpSchema.PromptRequest("session-123", List.of(new AcpSchema.TextContent("test"))))
 				.block(TIMEOUT);
-		}).isInstanceOf(AcpClientSession.AcpError.class).satisfies(ex -> {
-			AcpClientSession.AcpError acpError = (AcpClientSession.AcpError) ex;
+		}).isInstanceOf(AcpError.class).satisfies(ex -> {
+			AcpError acpError = (AcpError) ex;
 			assertThat(acpError.getCode())
 				.as("Error code should be CAPABILITY_NOT_SUPPORTED, not wrapped in INTERNAL_ERROR")
 				.isEqualTo(AcpErrorCodes.CAPABILITY_NOT_SUPPORTED);
@@ -196,7 +197,7 @@ class ErrorCodePropagationTest {
 		transportPair = InMemoryTransportPair.create();
 
 		AtomicReference<AcpAsyncAgent> agentRef = new AtomicReference<>();
-		AtomicReference<AcpAgentSession.AcpError> receivedError = new AtomicReference<>();
+		AtomicReference<AcpError> receivedError = new AtomicReference<>();
 		CountDownLatch errorLatch = new CountDownLatch(1);
 
 		// Build agent that will request a file read
@@ -210,7 +211,7 @@ class ErrorCodePropagationTest {
 				return agentRef.get()
 					.readTextFile(new AcpSchema.ReadTextFileRequest("session-123", "/nonexistent.txt", null, null))
 					.onErrorResume(error -> {
-						if (error instanceof AcpAgentSession.AcpError acpError) {
+						if (error instanceof AcpError acpError) {
 							receivedError.set(acpError);
 							errorLatch.countDown();
 						}
@@ -288,8 +289,8 @@ class ErrorCodePropagationTest {
 		assertThatThrownBy(() -> {
 			client.prompt(new AcpSchema.PromptRequest("session-123", List.of(new AcpSchema.TextContent("test"))))
 				.block(TIMEOUT);
-		}).isInstanceOf(AcpClientSession.AcpError.class).satisfies(ex -> {
-			AcpClientSession.AcpError acpError = (AcpClientSession.AcpError) ex;
+		}).isInstanceOf(AcpError.class).satisfies(ex -> {
+			AcpError acpError = (AcpError) ex;
 			// This SHOULD be INTERNAL_ERROR - unexpected exceptions should be wrapped
 			assertThat(acpError.getCode()).as("Unexpected exceptions should be wrapped in INTERNAL_ERROR")
 				.isEqualTo(AcpErrorCodes.INTERNAL_ERROR);
