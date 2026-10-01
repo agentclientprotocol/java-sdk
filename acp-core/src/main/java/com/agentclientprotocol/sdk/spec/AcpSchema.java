@@ -1134,15 +1134,68 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") @Nullable FileSystemCapability fs,
 			@JsonProperty("terminal") @Nullable Boolean terminal,
+			@JsonProperty("session") @Nullable ClientSessionCapabilities session,
 			@JsonProperty("auth") @Nullable AuthCapabilities auth,
 			@UnstableAcpApi @JsonProperty("elicitation") @Nullable ElicitationCapabilities elicitation,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ClientCapabilities() {
-			this(new FileSystemCapability(), false, null, null, null);
+			this(new FileSystemCapability(), false, null, null, null, null);
 		}
 
 		public ClientCapabilities(@Nullable FileSystemCapability fs, @Nullable Boolean terminal) {
-			this(fs, terminal, null, null, null);
+			this(fs, terminal, null, null, null, null);
+		}
+	}
+
+	/**
+	 * Session capabilities the client advertises.
+	 *
+	 * @param configOptions which config option kinds beyond {@code select} the client
+	 * supports
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ClientSessionCapabilities(
+			@JsonProperty("configOptions") @Nullable SessionConfigOptionsCapabilities configOptions,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ClientSessionCapabilities(@Nullable SessionConfigOptionsCapabilities configOptions) {
+			this(configOptions, null);
+		}
+	}
+
+	/**
+	 * Config option kinds the client supports beyond {@code select}.
+	 *
+	 * @param booleanOptions present (even empty) when the client supports {@code boolean}
+	 * config options; written as {@code "boolean"}
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionConfigOptionsCapabilities(
+			@JsonProperty("boolean") @Nullable BooleanConfigOptionCapabilities booleanOptions,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public SessionConfigOptionsCapabilities(@Nullable BooleanConfigOptionCapabilities booleanOptions) {
+			this(booleanOptions, null);
+		}
+
+		/**
+		 * The capabilities of a client that supports {@code boolean} config options.
+		 * @return {@code {"boolean": {}}}
+		 */
+		public static SessionConfigOptionsCapabilities withBoolean() {
+			return new SessionConfigOptionsCapabilities(new BooleanConfigOptionCapabilities());
+		}
+	}
+
+	/**
+	 * Present when the client supports {@code boolean} config options.
+	 *
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record BooleanConfigOptionCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public BooleanConfigOptionCapabilities() {
+			this(null);
 		}
 	}
 
@@ -1256,12 +1309,13 @@ public final class AcpSchema {
 
 	// ---------------------------
 	// Session Config Types
-	// (session/set_config_option is stable; the "boolean" variant remains an unstable extension)
 	// ---------------------------
 
 	/**
-	 * Session config option - a configurable setting exposed by the agent.
-	 * Discriminated by type: "select" (stable) or "boolean" (unstable extension).
+	 * Session config option - a configurable setting exposed by the agent. Discriminated by
+	 * type: {@code "select"} or {@code "boolean"}, both stable. An agent sends boolean
+	 * options only to a client that advertises
+	 * {@code clientCapabilities.session.configOptions.boolean}.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownSessionConfigOption.class)
@@ -1309,12 +1363,9 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Boolean-type config option - a toggle.
-	 *
-	 * <p>Unstable: the stable schema only defines the {@code select} config option variant;
-	 * {@code boolean} is an SDK extension that may change.
+	 * Boolean-type config option - a toggle (stable in ACP v1 since 2026-07-06). Set it with
+	 * {@link SetSessionConfigOptionRequest#bool}.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigBoolean(
 			@JsonProperty("type") String type,

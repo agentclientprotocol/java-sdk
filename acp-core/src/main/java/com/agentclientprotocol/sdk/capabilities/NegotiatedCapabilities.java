@@ -96,6 +96,8 @@ public final class NegotiatedCapabilities {
 
 	private final boolean mcpSse;
 
+	private final boolean booleanConfigOptions;
+
 	private final boolean terminalAuth;
 
 	private NegotiatedCapabilities(Builder builder) {
@@ -118,6 +120,7 @@ public final class NegotiatedCapabilities {
 		this.embeddedContext = builder.embeddedContext;
 		this.mcpHttp = builder.mcpHttp;
 		this.mcpSse = builder.mcpSse;
+		this.booleanConfigOptions = builder.booleanConfigOptions;
 		this.terminalAuth = builder.terminalAuth;
 	}
 
@@ -147,6 +150,10 @@ public final class NegotiatedCapabilities {
 			builder.elicitationForm(elicit.form() != null);
 			builder.elicitationUrl(elicit.url() != null);
 		}
+
+		var session = caps.session();
+		var configOptions = session != null ? session.configOptions() : null;
+		builder.booleanConfigOptions(configOptions != null && configOptions.booleanOptions() != null);
 
 		var auth = caps.auth();
 		builder.terminalAuth(auth != null && Boolean.TRUE.equals(auth.terminal()));
@@ -302,6 +309,24 @@ public final class NegotiatedCapabilities {
 	public void requireTerminalAuth() {
 		if (!terminalAuth) {
 			throw new AcpCapabilityException("auth.terminal");
+		}
+	}
+
+	/**
+	 * Returns true if the client supports boolean config options.
+	 * @return true if session.configOptions.boolean was advertised
+	 */
+	public boolean supportsBooleanConfigOptions() {
+		return booleanConfigOptions;
+	}
+
+	/**
+	 * Requires session.configOptions.boolean, throwing if the client did not advertise it.
+	 * @throws AcpCapabilityException if the client doesn't support this capability
+	 */
+	public void requireBooleanConfigOptions() {
+		if (!booleanConfigOptions) {
+			throw new AcpCapabilityException("session.configOptions.boolean");
 		}
 	}
 
@@ -520,7 +545,7 @@ public final class NegotiatedCapabilities {
 				+ deleteSession + ", additionalDirectories=" + additionalDirectories + ", forkSession="
 				+ forkSession + ", providers=" + providers + ", imageContent="
 				+ imageContent + ", audioContent=" + audioContent + ", embeddedContext=" + embeddedContext
-				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + '}';
+				+ ", mcpHttp=" + mcpHttp + ", mcpSse=" + mcpSse + ", terminalAuth=" + terminalAuth + ", booleanConfigOptions=" + booleanConfigOptions + '}';
 	}
 
 	/**
@@ -565,6 +590,8 @@ public final class NegotiatedCapabilities {
 		private boolean mcpHttp = false;
 
 		private boolean mcpSse = false;
+
+		private boolean booleanConfigOptions = false;
 
 		private boolean terminalAuth = false;
 
@@ -665,6 +692,11 @@ public final class NegotiatedCapabilities {
 
 		public Builder terminalAuth(boolean value) {
 			this.terminalAuth = value;
+			return this;
+		}
+
+		public Builder booleanConfigOptions(boolean value) {
+			this.booleanConfigOptions = value;
 			return this;
 		}
 
