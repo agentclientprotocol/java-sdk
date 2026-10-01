@@ -126,6 +126,7 @@ final class StreamableHttpRouting {
 		}
 	}
 
+	@SuppressWarnings("removal") // routes the deprecated-for-removal session/set_model
 	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, @Nullable String sessionHeader) {
 		String method;
 		@Nullable Object params;

@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -28,21 +29,9 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 
 	private final List<ArgumentResolver> resolvers = new ArrayList<>();
 
-	// Cache: parameter -> resolver
-	private final ConcurrentMap<AcpMethodParameter, ArgumentResolver> resolverCache = new ConcurrentHashMap<>(256);
-
-	// Sentinel value for "no resolver found"
-	private static final ArgumentResolver NO_RESOLVER = new ArgumentResolver() {
-		@Override
-		public boolean supportsParameter(AcpMethodParameter parameter) {
-			return false;
-		}
-
-		@Override
-		public Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
-			throw new UnsupportedOperationException();
-		}
-	};
+	// Cache: parameter -> resolver, empty when no resolver supports the parameter
+	private final ConcurrentMap<AcpMethodParameter, Optional<ArgumentResolver>> resolverCache = new ConcurrentHashMap<>(
+			256);
 
 	/**
 	 * Add a resolver to the chain.
@@ -97,23 +86,10 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 	}
 
 	private @Nullable ArgumentResolver getResolver(AcpMethodParameter parameter) {
-		// Check cache first
-		ArgumentResolver resolver = resolverCache.get(parameter);
-		if (resolver != null) {
-			return resolver == NO_RESOLVER ? null : resolver;
-		}
-
-		// Find matching resolver
-		for (ArgumentResolver r : resolvers) {
-			if (r.supportsParameter(parameter)) {
-				resolverCache.put(parameter, r);
-				return r;
-			}
-		}
-
-		// Cache the miss to avoid repeated lookups
-		resolverCache.put(parameter, NO_RESOLVER);
-		return null;
+		// The first resolver that supports the parameter; a miss is cached too
+		return resolverCache
+			.computeIfAbsent(parameter, p -> resolvers.stream().filter(r -> r.supportsParameter(p)).findFirst())
+			.orElse(null);
 	}
 
 }

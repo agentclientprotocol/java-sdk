@@ -177,7 +177,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	// Session id -> shared open operation so callers reuse one GET while opening.
 	private final Map<String, Mono<Void>> sessionStreamOpenOperations = new ConcurrentHashMap<>();
 
-	private volatile @Nullable SseStream connectionStream;
+	private final AtomicReference<@Nullable SseStream> connectionStream = new AtomicReference<>();
 
 	private volatile @Nullable String connectionId;
 
@@ -499,7 +499,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private Mono<Void> openConnectionStream() {
 		return openSseStream(RouteScope.connection()).doOnSuccess(stream -> {
-			this.connectionStream = stream;
+			this.connectionStream.set(stream);
 			stream.start();
 		}).then();
 	}
@@ -597,6 +597,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
 	}
 
+	@SuppressWarnings("removal") // routes the deprecated-for-removal session/set_model
 	private ResolvedOutboundRoute resolveRequestOrNotificationRoute(JSONRPCMessage message, String method,
 			@Nullable Object params) {
 		RouteScope requestScope;
@@ -750,7 +751,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 				return Mono.empty();
 			}
 			terminationSink.tryEmitEmpty();
-			Optional.ofNullable(connectionStream).ifPresent(SseStream::close);
+			Optional.ofNullable(connectionStream.get()).ifPresent(SseStream::close);
 			sessionStreams.values().forEach(SseStream::close);
 
 			Mono<Void> deleteRequest = Mono.empty();
@@ -786,9 +787,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private void clearState() {
-		Optional.ofNullable(connectionStream).ifPresent(SseStream::close);
+		Optional.ofNullable(connectionStream.getAndSet(null)).ifPresent(SseStream::close);
 		sessionStreams.values().forEach(SseStream::close);
-		connectionStream = null;
 		sessionStreams.clear();
 		sessionStreamOpenOperations.clear();
 		inboundRequestRoutes.clear();
@@ -845,13 +845,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		if (old.scope.isSession()) {
 			return sessionStreams.replace(old.scope.boundSessionId(), old, reopened);
 		}
-		synchronized (this) {
-			if (this.connectionStream != old) {
-				return false;
-			}
-			this.connectionStream = reopened;
-			return true;
-		}
+		return connectionStream.compareAndSet(old, reopened);
 	}
 
 	/** 404 on reconnect: the server no longer knows this connection or session. */
@@ -971,6 +965,8 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 					body.close();
 				}
 				catch (IOException ignored) {
+					// Best effort: the stream is abandoned either way, and cancelling the
+					// reader below stops the read loop.
 				}
 				Future<?> readerTask = this.readerTask;
 				if (readerTask != null) {

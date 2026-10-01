@@ -408,6 +408,8 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 			asyncContext.complete();
 		}
 		catch (IllegalStateException ignored) {
+			// Already completed, or completed by the container after a timeout or a
+			// client disconnect: there is nothing left to complete.
 		}
 	}
 

@@ -95,6 +95,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * System.in and System.out for communication.
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
+	@SuppressWarnings("SystemOut") // the stdio transport is the one owner of System.out
 	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper) {
 		this(jsonMapper, System.in, System.out);
 	}
