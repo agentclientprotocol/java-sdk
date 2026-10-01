@@ -6,8 +6,10 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpCapabilityException;
@@ -26,7 +28,8 @@ import reactor.core.publisher.Mono;
  *
  * <p>
  * This implementation creates an {@link AcpAgentSession} to manage the JSON-RPC
- * communication and registers handlers for all ACP protocol methods.
+ * communication and installs in it the handlers its builder registered
+ * ({@link AgentHandlers}).
  * </p>
  *
  * @author Mark Pollack
@@ -39,39 +42,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final Duration requestTimeout;
 
-	private final AcpAgent.@Nullable InitializeHandler initializeHandler;
+	private final List<AgentHandlers.Request<?>> requestHandlers;
 
-	private final AcpAgent.@Nullable AuthenticateHandler authenticateHandler;
-
-	private final AcpAgent.@Nullable LogoutHandler logoutHandler;
-
-	private final AcpAgent.@Nullable NewSessionHandler newSessionHandler;
-
-	private final AcpAgent.@Nullable LoadSessionHandler loadSessionHandler;
-
-	private final AcpAgent.@Nullable PromptHandler promptHandler;
-
-	private final AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler;
-
-	private final AcpAgent.@Nullable ListSessionsHandler listSessionsHandler;
-
-	private final AcpAgent.@Nullable CloseSessionHandler closeSessionHandler;
-
-	private final AcpAgent.@Nullable DeleteSessionHandler deleteSessionHandler;
-
-	private final AcpAgent.@Nullable ResumeSessionHandler resumeSessionHandler;
-
-	private final AcpAgent.@Nullable ForkSessionHandler forkSessionHandler;
-
-	private final AcpAgent.@Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler;
-
-	private final AcpAgent.@Nullable ListProvidersHandler listProvidersHandler;
-
-	private final AcpAgent.@Nullable SetProviderHandler setProviderHandler;
-
-	private final AcpAgent.@Nullable DisableProviderHandler disableProviderHandler;
-
-	private final AcpAgent.@Nullable CancelHandler cancelHandler;
+	private final List<AgentHandlers.Notification<?>> notificationHandlers;
 
 	/**
 	 * The session serving this agent; null until {@link #start()}, then never null again.
@@ -84,232 +57,54 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	 */
 	private final AtomicReference<@Nullable NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
-	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout,
-			AcpAgent.@Nullable InitializeHandler initializeHandler, AcpAgent.@Nullable AuthenticateHandler authenticateHandler,
-			AcpAgent.@Nullable LogoutHandler logoutHandler, AcpAgent.@Nullable NewSessionHandler newSessionHandler,
-			AcpAgent.@Nullable LoadSessionHandler loadSessionHandler,
-			AcpAgent.@Nullable PromptHandler promptHandler, AcpAgent.@Nullable SetSessionModeHandler setSessionModeHandler,
-			AcpAgent.@Nullable ListSessionsHandler listSessionsHandler, AcpAgent.@Nullable CloseSessionHandler closeSessionHandler,
-			AcpAgent.@Nullable DeleteSessionHandler deleteSessionHandler,
-			AcpAgent.@Nullable ResumeSessionHandler resumeSessionHandler, AcpAgent.@Nullable ForkSessionHandler forkSessionHandler,
-			AcpAgent.@Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler,
-			AcpAgent.@Nullable ListProvidersHandler listProvidersHandler, AcpAgent.@Nullable SetProviderHandler setProviderHandler,
-			AcpAgent.@Nullable DisableProviderHandler disableProviderHandler,
-			AcpAgent.@Nullable CancelHandler cancelHandler) {
+	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout, AgentHandlers handlers) {
 		this.transport = transport;
 		this.requestTimeout = requestTimeout;
-		this.initializeHandler = initializeHandler;
-		this.authenticateHandler = authenticateHandler;
-		this.logoutHandler = logoutHandler;
-		this.newSessionHandler = newSessionHandler;
-		this.loadSessionHandler = loadSessionHandler;
-		this.promptHandler = promptHandler;
-		this.setSessionModeHandler = setSessionModeHandler;
-		this.listSessionsHandler = listSessionsHandler;
-		this.closeSessionHandler = closeSessionHandler;
-		this.deleteSessionHandler = deleteSessionHandler;
-		this.resumeSessionHandler = resumeSessionHandler;
-		this.forkSessionHandler = forkSessionHandler;
-		this.setSessionConfigOptionHandler = setSessionConfigOptionHandler;
-		this.listProvidersHandler = listProvidersHandler;
-		this.setProviderHandler = setProviderHandler;
-		this.disableProviderHandler = disableProviderHandler;
-		this.cancelHandler = cancelHandler;
+		this.requestHandlers = handlers.requests();
+		this.notificationHandlers = handlers.notifications();
 	}
 
 	@Override
 	public Mono<Void> start() {
 		return Mono.fromRunnable(() -> {
 			logger.info("Starting ACP async agent");
-
-			// Build request handlers
-			Map<String, AcpAgentSession.RequestHandler<?>> requestHandlers = new HashMap<>();
-
-			// Initialize handler - also captures client capabilities
-			if (initializeHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_INITIALIZE, params -> {
-					AcpSchema.InitializeRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.InitializeRequest>() {
-							});
-					// Capture the client capabilities
-					NegotiatedCapabilities caps = NegotiatedCapabilities.fromClient(request.clientCapabilities());
-					clientCapabilities.set(caps);
-					logger.debug("Negotiated client capabilities: {}", caps);
-					return initializeHandler.handle(request).cast(Object.class);
-				});
+			Map<String, AcpAgentSession.RequestHandler<?>> requests = new HashMap<>();
+			for (AgentHandlers.Request<?> registration : requestHandlers) {
+				requests.put(registration.method(), sessionHandler(registration));
 			}
-
-			// Authenticate handler
-			if (authenticateHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_AUTHENTICATE, params -> {
-					AcpSchema.AuthenticateRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.AuthenticateRequest>() {
-							});
-					return authenticateHandler.handle(request).cast(Object.class);
-				});
+			Map<String, AcpAgentSession.NotificationHandler> notifications = new HashMap<>();
+			for (AgentHandlers.Notification<?> registration : notificationHandlers) {
+				notifications.put(registration.method(), sessionHandler(registration));
 			}
-
-			// Logout handler
-			if (logoutHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_LOGOUT, params -> {
-					AcpSchema.LogoutRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.LogoutRequest>() {
-							});
-					return logoutHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// New session handler
-			if (newSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_NEW, params -> {
-					AcpSchema.NewSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.NewSessionRequest>() {
-							});
-					return newSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Load session handler
-			if (loadSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_LOAD, params -> {
-					AcpSchema.LoadSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.LoadSessionRequest>() {
-							});
-					return loadSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Prompt handler - provides full PromptContext with all agent capabilities
-			if (promptHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_PROMPT, params -> {
-					AcpSchema.PromptRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.PromptRequest>() {
-							});
-					// Create PromptContext that wraps this agent, giving handler access to all capabilities
-					PromptContext context = new DefaultPromptContext(this, request.sessionId());
-					return promptHandler.handle(request, context)
-						.cast(Object.class);
-				});
-			}
-
-			// Set session mode handler
-			if (setSessionModeHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_SET_MODE, params -> {
-					AcpSchema.SetSessionModeRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.SetSessionModeRequest>() {
-							});
-					return setSessionModeHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// List sessions handler
-			if (listSessionsHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_LIST, params -> {
-					AcpSchema.ListSessionsRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.ListSessionsRequest>() {
-							});
-					return listSessionsHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Close session handler
-			if (closeSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_CLOSE, params -> {
-					AcpSchema.CloseSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.CloseSessionRequest>() {
-							});
-					return closeSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Delete session handler
-			if (deleteSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_DELETE, params -> {
-					AcpSchema.DeleteSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.DeleteSessionRequest>() {
-							});
-					return deleteSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Resume session handler
-			if (resumeSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_RESUME, params -> {
-					AcpSchema.ResumeSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.ResumeSessionRequest>() {
-							});
-					return resumeSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Fork session handler
-			if (forkSessionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_FORK, params -> {
-					AcpSchema.ForkSessionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.ForkSessionRequest>() {
-							});
-					return forkSessionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Set config option handler
-			if (setSessionConfigOptionHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, params -> {
-					AcpSchema.SetSessionConfigOptionRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.SetSessionConfigOptionRequest>() {
-							});
-					return setSessionConfigOptionHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// List providers handler (unstable)
-			if (listProvidersHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_LIST, params -> {
-					AcpSchema.ListProvidersRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.ListProvidersRequest>() {
-							});
-					return listProvidersHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Set provider handler (unstable)
-			if (setProviderHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_SET, params -> {
-					AcpSchema.SetProviderRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.SetProviderRequest>() {
-							});
-					return setProviderHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Disable provider handler (unstable)
-			if (disableProviderHandler != null) {
-				requestHandlers.put(AcpSchema.METHOD_PROVIDERS_DISABLE, params -> {
-					AcpSchema.DisableProviderRequest request = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.DisableProviderRequest>() {
-							});
-					return disableProviderHandler.handle(request).cast(Object.class);
-				});
-			}
-
-			// Build notification handlers
-			Map<String, AcpAgentSession.NotificationHandler> notificationHandlers = new HashMap<>();
-
-			// Cancel handler
-			if (cancelHandler != null) {
-				notificationHandlers.put(AcpSchema.METHOD_SESSION_CANCEL, params -> {
-					AcpSchema.CancelNotification notification = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.CancelNotification>() {
-							});
-					return cancelHandler.handle(notification);
-				});
-			}
-
-			// Create and start the session
-			this.session = new AcpAgentSession(requestTimeout, transport, requestHandlers, notificationHandlers);
-
+			this.session = new AcpAgentSession(requestTimeout, transport, requests, notifications);
 			logger.info("ACP async agent started");
 		});
+	}
+
+	/** Reads the params as the registered request type, then calls the registered handler. */
+	private <T> AcpAgentSession.RequestHandler<Object> sessionHandler(AgentHandlers.Request<T> registration) {
+		return params -> {
+			T request = transport.unmarshalFrom(params, registration.requestType());
+			recordClientCapabilities(request);
+			return registration.handler().handle(request, this).cast(Object.class);
+		};
+	}
+
+	private <T> AcpAgentSession.NotificationHandler sessionHandler(AgentHandlers.Notification<T> registration) {
+		return params -> registration.handler()
+			.apply(transport.unmarshalFrom(params, registration.notificationType()));
+	}
+
+	/**
+	 * Captures what the client offered in its initialize request, before the initialize
+	 * handler runs, so the capability checks below see it.
+	 */
+	private void recordClientCapabilities(Object request) {
+		if (request instanceof AcpSchema.InitializeRequest initialize) {
+			NegotiatedCapabilities caps = NegotiatedCapabilities.fromClient(initialize.clientCapabilities());
+			clientCapabilities.set(caps);
+			logger.debug("Negotiated client capabilities: {}", caps);
+		}
 	}
 
 	@Override
@@ -324,91 +119,44 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	@Override
 	public Mono<Void> sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		AcpSchema.SessionNotification notification = new AcpSchema.SessionNotification(sessionId, update);
-		return current.sendNotification(AcpSchema.METHOD_SESSION_UPDATE, notification);
+		return sendNotification(AcpSchema.METHOD_SESSION_UPDATE, new AcpSchema.SessionNotification(sessionId, update));
 	}
 
 	@Override
 	public Mono<AcpSchema.RequestPermissionResponse> requestPermission(AcpSchema.RequestPermissionRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, request,
+		return sendRequest(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, request,
 				new TypeRef<AcpSchema.RequestPermissionResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		// Validate client supports file reading
-		NegotiatedCapabilities caps = clientCapabilities.get();
-		if (caps != null && !caps.supportsReadTextFile()) {
-			return Mono.error(new AcpCapabilityException("fs.readTextFile"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE, request,
-				new TypeRef<AcpSchema.ReadTextFileResponse>() {
-				});
+		return sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE, request, new TypeRef<AcpSchema.ReadTextFileResponse>() {
+		}, NegotiatedCapabilities::supportsReadTextFile, "fs.readTextFile");
 	}
 
 	@Override
 	public Mono<AcpSchema.WriteTextFileResponse> writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		// Validate client supports file writing
-		NegotiatedCapabilities caps = clientCapabilities.get();
-		if (caps != null && !caps.supportsWriteTextFile()) {
-			return Mono.error(new AcpCapabilityException("fs.writeTextFile"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, request,
+		return sendRequest(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, request,
 				new TypeRef<AcpSchema.WriteTextFileResponse>() {
-				});
+				}, NegotiatedCapabilities::supportsWriteTextFile, "fs.writeTextFile");
 	}
 
 	@Override
 	public Mono<AcpSchema.CreateTerminalResponse> createTerminal(AcpSchema.CreateTerminalRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		// Validate client supports terminal
-		NegotiatedCapabilities caps = clientCapabilities.get();
-		if (caps != null && !caps.supportsTerminal()) {
-			return Mono.error(new AcpCapabilityException("terminal"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_TERMINAL_CREATE, request,
-				new TypeRef<AcpSchema.CreateTerminalResponse>() {
-				});
+		return sendRequest(AcpSchema.METHOD_TERMINAL_CREATE, request, new TypeRef<AcpSchema.CreateTerminalResponse>() {
+		}, NegotiatedCapabilities::supportsTerminal, "terminal");
 	}
 
 	@Override
 	public Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_TERMINAL_OUTPUT, request,
-				new TypeRef<AcpSchema.TerminalOutputResponse>() {
-				});
+		return sendRequest(AcpSchema.METHOD_TERMINAL_OUTPUT, request, new TypeRef<AcpSchema.TerminalOutputResponse>() {
+		});
 	}
 
 	@Override
 	public Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_TERMINAL_RELEASE, request,
+		return sendRequest(AcpSchema.METHOD_TERMINAL_RELEASE, request,
 				new TypeRef<AcpSchema.ReleaseTerminalResponse>() {
 				});
 	}
@@ -416,22 +164,14 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.WaitForTerminalExitResponse> waitForTerminalExit(
 			AcpSchema.WaitForTerminalExitRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, request,
+		return sendRequest(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, request,
 				new TypeRef<AcpSchema.WaitForTerminalExitResponse>() {
 				});
 	}
 
 	@Override
 	public Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		AcpAgentSession current = this.session;
-		if (current == null) {
-			return Mono.error(new IllegalStateException("Agent not started"));
-		}
-		return current.sendRequest(AcpSchema.METHOD_TERMINAL_KILL, request,
+		return sendRequest(AcpSchema.METHOD_TERMINAL_KILL, request,
 				new TypeRef<AcpSchema.KillTerminalCommandResponse>() {
 				});
 	}
@@ -439,26 +179,44 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.CreateElicitationResponse> createElicitation(
 			AcpSchema.CreateElicitationRequest request) {
+		return sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request,
+				new TypeRef<AcpSchema.CreateElicitationResponse>() {
+				}, NegotiatedCapabilities::supportsElicitation, "elicitation");
+	}
+
+	@Override
+	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
+		return sendNotification(AcpSchema.METHOD_ELICITATION_COMPLETE, notification);
+	}
+
+	private <T> Mono<T> sendRequest(String method, Object request, TypeRef<T> responseType) {
+		return sendRequest(method, request, responseType, caps -> true, method);
+	}
+
+	/**
+	 * Sends a request to the client, unless the agent is not started or the client said
+	 * during initialization that it does not support the capability the request needs.
+	 * Before initialization nothing is known, and the request is sent.
+	 */
+	private <T> Mono<T> sendRequest(String method, Object request, TypeRef<T> responseType,
+			Predicate<NegotiatedCapabilities> clientSupports, String capability) {
 		AcpAgentSession current = this.session;
 		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
 		NegotiatedCapabilities caps = clientCapabilities.get();
-		if (caps != null && !caps.supportsElicitation()) {
-			return Mono.error(new AcpCapabilityException("elicitation"));
+		if (caps != null && !clientSupports.test(caps)) {
+			return Mono.error(new AcpCapabilityException(capability));
 		}
-		return current.sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request,
-				new TypeRef<AcpSchema.CreateElicitationResponse>() {
-				});
+		return current.sendRequest(method, request, responseType);
 	}
 
-	@Override
-	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
+	private Mono<Void> sendNotification(String method, Object notification) {
 		AcpAgentSession current = this.session;
 		if (current == null) {
 			return Mono.error(new IllegalStateException("Agent not started"));
 		}
-		return current.sendNotification(AcpSchema.METHOD_ELICITATION_COMPLETE, notification);
+		return current.sendNotification(method, notification);
 	}
 
 	@Override

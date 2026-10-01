@@ -152,13 +152,18 @@ class ArchitectureTest {
 		.because("a transport sits beneath the session and the runtime that use it");
 
 	/**
-	 * Inside the session and transport packages no two top-level classes depend on each other,
-	 * directly or through others (nested classes count as their top-level class).
+	 * Inside each package no two top-level classes depend on each other, directly or through
+	 * others (nested classes count as their top-level class). The one package left out is
+	 * {@code json}: {@code AcpJsonMapper.createDefault()} finds the default mapper through
+	 * {@code AcpJsonMapperSelector} and the {@code AcpJsonMapperSupplier} SPI, which supplies
+	 * {@code AcpJsonMapper}s, a cycle that is the public default-lookup API itself.
 	 */
 	@ArchTest
-	static final ArchRule noClassCyclesInSessionAndTransportPackages = slices()
-		.assignedFrom(topLevelClassesIn("com.agentclientprotocol.sdk.spec", "com.agentclientprotocol.sdk.client.transport",
-				"com.agentclientprotocol.sdk.agent.transport"))
+	static final ArchRule noClassCycles = slices()
+		.assignedFrom(topLevelClassesIn("com.agentclientprotocol.sdk.spec", "com.agentclientprotocol.sdk.error",
+				"com.agentclientprotocol.sdk.util", "com.agentclientprotocol.sdk.capabilities",
+				"com.agentclientprotocol.sdk.client", "com.agentclientprotocol.sdk.client.transport",
+				"com.agentclientprotocol.sdk.agent", "com.agentclientprotocol.sdk.agent.transport"))
 		.should()
 		.beFreeOfCycles();
 

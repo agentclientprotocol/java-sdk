@@ -6,13 +6,14 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -546,39 +547,7 @@ public interface AcpAgent {
 
 		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
-		private @Nullable InitializeHandler initializeHandler;
-
-		private @Nullable AuthenticateHandler authenticateHandler;
-
-		private @Nullable LogoutHandler logoutHandler;
-
-		private @Nullable NewSessionHandler newSessionHandler;
-
-		private @Nullable LoadSessionHandler loadSessionHandler;
-
-		private @Nullable PromptHandler promptHandler;
-
-		private @Nullable SetSessionModeHandler setSessionModeHandler;
-
-		private @Nullable ListSessionsHandler listSessionsHandler;
-
-		private @Nullable CloseSessionHandler closeSessionHandler;
-
-		private @Nullable DeleteSessionHandler deleteSessionHandler;
-
-		private @Nullable ResumeSessionHandler resumeSessionHandler;
-
-		private @Nullable ForkSessionHandler forkSessionHandler;
-
-		private @Nullable SetSessionConfigOptionHandler setSessionConfigOptionHandler;
-
-		private @Nullable ListProvidersHandler listProvidersHandler;
-
-		private @Nullable SetProviderHandler setProviderHandler;
-
-		private @Nullable DisableProviderHandler disableProviderHandler;
-
-		private @Nullable CancelHandler cancelHandler;
+		private final AgentHandlers handlers = new AgentHandlers();
 
 		AsyncAgentBuilder(AcpAgentTransport transport) {
 			Assert.notNull(transport, "Transport must not be null");
@@ -602,8 +571,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder initializeHandler(InitializeHandler handler) {
-			this.initializeHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -612,8 +581,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder authenticateHandler(AuthenticateHandler handler) {
-			this.authenticateHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_AUTHENTICATE, new TypeRef<AcpSchema.AuthenticateRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -622,8 +591,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder logoutHandler(LogoutHandler handler) {
-			this.logoutHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_LOGOUT, new TypeRef<AcpSchema.LogoutRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -632,8 +601,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder newSessionHandler(NewSessionHandler handler) {
-			this.newSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_NEW, new TypeRef<AcpSchema.NewSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -642,8 +611,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder loadSessionHandler(LoadSessionHandler handler) {
-			this.loadSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_LOAD, new TypeRef<AcpSchema.LoadSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -652,8 +621,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder promptHandler(PromptHandler handler) {
-			this.promptHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_PROMPT, new TypeRef<AcpSchema.PromptRequest>() {
+			}, (request, agent) -> handler.handle(request, new DefaultPromptContext(agent, request.sessionId())));
 		}
 
 		/**
@@ -662,8 +631,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder setSessionModeHandler(SetSessionModeHandler handler) {
-			this.setSessionModeHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_SET_MODE, new TypeRef<AcpSchema.SetSessionModeRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -672,8 +641,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder listSessionsHandler(ListSessionsHandler handler) {
-			this.listSessionsHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_LIST, new TypeRef<AcpSchema.ListSessionsRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -682,8 +651,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder closeSessionHandler(CloseSessionHandler handler) {
-			this.closeSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_CLOSE, new TypeRef<AcpSchema.CloseSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -692,8 +661,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder deleteSessionHandler(DeleteSessionHandler handler) {
-			this.deleteSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_DELETE, new TypeRef<AcpSchema.DeleteSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -702,8 +671,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder resumeSessionHandler(ResumeSessionHandler handler) {
-			this.resumeSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_RESUME, new TypeRef<AcpSchema.ResumeSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -712,8 +681,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder forkSessionHandler(ForkSessionHandler handler) {
-			this.forkSessionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_FORK, new TypeRef<AcpSchema.ForkSessionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -722,8 +691,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder setSessionConfigOptionHandler(SetSessionConfigOptionHandler handler) {
-			this.setSessionConfigOptionHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, new TypeRef<AcpSchema.SetSessionConfigOptionRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -733,8 +702,8 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder listProvidersHandler(ListProvidersHandler handler) {
-			this.listProvidersHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_PROVIDERS_LIST, new TypeRef<AcpSchema.ListProvidersRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -744,8 +713,8 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder setProviderHandler(SetProviderHandler handler) {
-			this.setProviderHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_PROVIDERS_SET, new TypeRef<AcpSchema.SetProviderRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -755,8 +724,8 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder disableProviderHandler(DisableProviderHandler handler) {
-			this.disableProviderHandler = handler;
-			return this;
+			return request(AcpSchema.METHOD_PROVIDERS_DISABLE, new TypeRef<AcpSchema.DisableProviderRequest>() {
+			}, (request, agent) -> handler.handle(request));
 		}
 
 		/**
@@ -765,7 +734,14 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public AsyncAgentBuilder cancelHandler(CancelHandler handler) {
-			this.cancelHandler = handler;
+			handlers.notification(AcpSchema.METHOD_SESSION_CANCEL, new TypeRef<AcpSchema.CancelNotification>() {
+			}, handler::handle);
+			return this;
+		}
+
+		private <T> AsyncAgentBuilder request(String method, TypeRef<T> requestType,
+				AgentHandlers.RequestHandler<T> handler) {
+			handlers.request(method, requestType, handler);
 			return this;
 		}
 
@@ -774,11 +750,7 @@ public interface AcpAgent {
 		 * @return A new AcpAsyncAgent instance
 		 */
 		public AcpAsyncAgent build() {
-			return new DefaultAcpAsyncAgent(transport, requestTimeout, initializeHandler, authenticateHandler,
-					logoutHandler, newSessionHandler, loadSessionHandler, promptHandler, setSessionModeHandler,
-					listSessionsHandler, closeSessionHandler, deleteSessionHandler,
-					resumeSessionHandler, forkSessionHandler, setSessionConfigOptionHandler, listProvidersHandler,
-					setProviderHandler, disableProviderHandler, cancelHandler);
+			return new DefaultAcpAsyncAgent(transport, requestTimeout, handlers);
 		}
 
 	}
@@ -787,8 +759,8 @@ public interface AcpAgent {
 	 * Builder for creating synchronous ACP agents.
 	 * <p>
 	 * This builder accepts synchronous handler interfaces that return plain values
-	 * instead of Mono. Internally, handlers are converted to async handlers using
-	 * the MCP SDK pattern (Mono.fromCallable + boundedElastic scheduler).
+	 * instead of Mono. Each is adapted to its async counterpart, which calls it with
+	 * Mono.fromCallable on the library-owned {@link #SYNC_HANDLER_SCHEDULER}.
 	 * </p>
 	 *
 	 * <p>Example usage:</p>
@@ -828,7 +800,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder initializeHandler(SyncInitializeHandler handler) {
-			asyncBuilder.initializeHandler(fromSync(handler));
+			asyncBuilder.initializeHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -838,7 +810,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder authenticateHandler(SyncAuthenticateHandler handler) {
-			asyncBuilder.authenticateHandler(fromSync(handler));
+			asyncBuilder.authenticateHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -848,7 +820,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder logoutHandler(SyncLogoutHandler handler) {
-			asyncBuilder.logoutHandler(fromSync(handler));
+			asyncBuilder.logoutHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -858,7 +830,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder newSessionHandler(SyncNewSessionHandler handler) {
-			asyncBuilder.newSessionHandler(fromSync(handler));
+			asyncBuilder.newSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -868,7 +840,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder loadSessionHandler(SyncLoadSessionHandler handler) {
-			asyncBuilder.loadSessionHandler(fromSync(handler));
+			asyncBuilder.loadSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -878,7 +850,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder promptHandler(SyncPromptHandler handler) {
-			asyncBuilder.promptHandler(fromSync(handler));
+			asyncBuilder.promptHandler((request, context) -> onSyncHandlerThread(
+					() -> handler.handle(request, new DefaultSyncPromptContext(context))));
 			return this;
 		}
 
@@ -888,7 +861,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder setSessionModeHandler(SyncSetSessionModeHandler handler) {
-			asyncBuilder.setSessionModeHandler(fromSync(handler));
+			asyncBuilder.setSessionModeHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -898,7 +871,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder listSessionsHandler(SyncListSessionsHandler handler) {
-			asyncBuilder.listSessionsHandler(fromSync(handler));
+			asyncBuilder.listSessionsHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -908,7 +881,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder closeSessionHandler(SyncCloseSessionHandler handler) {
-			asyncBuilder.closeSessionHandler(fromSync(handler));
+			asyncBuilder.closeSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -918,7 +891,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder deleteSessionHandler(SyncDeleteSessionHandler handler) {
-			asyncBuilder.deleteSessionHandler(fromSync(handler));
+			asyncBuilder.deleteSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -928,17 +901,17 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder resumeSessionHandler(SyncResumeSessionHandler handler) {
-			asyncBuilder.resumeSessionHandler(fromSync(handler));
+			asyncBuilder.resumeSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
 		public SyncAgentBuilder forkSessionHandler(SyncForkSessionHandler handler) {
-			asyncBuilder.forkSessionHandler(fromSync(handler));
+			asyncBuilder.forkSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
 		public SyncAgentBuilder setSessionConfigOptionHandler(SyncSetSessionConfigOptionHandler handler) {
-			asyncBuilder.setSessionConfigOptionHandler(fromSync(handler));
+			asyncBuilder.setSessionConfigOptionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -949,7 +922,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder listProvidersHandler(SyncListProvidersHandler handler) {
-			asyncBuilder.listProvidersHandler(fromSync(handler));
+			asyncBuilder.listProvidersHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -960,7 +933,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder setProviderHandler(SyncSetProviderHandler handler) {
-			asyncBuilder.setProviderHandler(fromSync(handler));
+			asyncBuilder.setProviderHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -971,7 +944,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder disableProviderHandler(SyncDisableProviderHandler handler) {
-			asyncBuilder.disableProviderHandler(fromSync(handler));
+			asyncBuilder.disableProviderHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
 
@@ -981,7 +954,8 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder cancelHandler(SyncCancelHandler handler) {
-			asyncBuilder.cancelHandler(fromSync(handler));
+			asyncBuilder.cancelHandler(notification -> Mono.<Void>fromRunnable(() -> handler.handle(notification))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER));
 			return this;
 		}
 
@@ -993,97 +967,13 @@ public interface AcpAgent {
 			return new AcpSyncAgent(asyncBuilder.build());
 		}
 
-		// ========================================================================
-		// fromSync() conversion methods - following MCP SDK pattern
-		// Wraps sync handlers in Mono.fromCallable() with library-owned daemon scheduler
-		// ========================================================================
-
-		private static InitializeHandler fromSync(SyncInitializeHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static AuthenticateHandler fromSync(SyncAuthenticateHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static LogoutHandler fromSync(SyncLogoutHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static NewSessionHandler fromSync(SyncNewSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static LoadSessionHandler fromSync(SyncLoadSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static PromptHandler fromSync(SyncPromptHandler syncHandler) {
-			return (request, asyncContext) -> Mono.fromCallable(() -> {
-				// Create a blocking wrapper around the async PromptContext
-				SyncPromptContext syncContext = new DefaultSyncPromptContext(asyncContext);
-				return syncHandler.handle(request, syncContext);
-			}).subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static SetSessionModeHandler fromSync(SyncSetSessionModeHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static ListSessionsHandler fromSync(SyncListSessionsHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static CloseSessionHandler fromSync(SyncCloseSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static DeleteSessionHandler fromSync(SyncDeleteSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static ResumeSessionHandler fromSync(SyncResumeSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static ForkSessionHandler fromSync(SyncForkSessionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static SetSessionConfigOptionHandler fromSync(SyncSetSessionConfigOptionHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static ListProvidersHandler fromSync(SyncListProvidersHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static SetProviderHandler fromSync(SyncSetProviderHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static DisableProviderHandler fromSync(SyncDisableProviderHandler syncHandler) {
-			return request -> Mono.fromCallable(() -> syncHandler.handle(request))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
-		}
-
-		private static CancelHandler fromSync(SyncCancelHandler syncHandler) {
-			return notification -> Mono.<Void>fromRunnable(() -> syncHandler.handle(notification))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER);
+		/**
+		 * Runs a sync handler on the library-owned daemon scheduler, so it may block (on
+		 * {@link SyncPromptContext} calls back to the client, for one) without stalling the
+		 * transport.
+		 */
+		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
+			return Mono.fromCallable(handler).subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 	}
