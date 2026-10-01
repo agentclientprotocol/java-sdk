@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
@@ -252,13 +253,8 @@ public interface AcpClient {
 		public AsyncSpec readTextFileHandler(
 				Function<AcpSchema.ReadTextFileRequest, Mono<AcpSchema.ReadTextFileResponse>> handler) {
 			Assert.notNull(handler, "Read text file handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.ReadTextFileResponse> rawHandler = params -> {
-				AcpSchema.ReadTextFileRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.ReadTextFileRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_FS_READ_TEXT_FILE, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_FS_READ_TEXT_FILE, new TypeRef<AcpSchema.ReadTextFileRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -280,13 +276,8 @@ public interface AcpClient {
 		public AsyncSpec writeTextFileHandler(
 				Function<AcpSchema.WriteTextFileRequest, Mono<AcpSchema.WriteTextFileResponse>> handler) {
 			Assert.notNull(handler, "Write text file handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.WriteTextFileResponse> rawHandler = params -> {
-				AcpSchema.WriteTextFileRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.WriteTextFileRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, new TypeRef<AcpSchema.WriteTextFileRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -308,13 +299,8 @@ public interface AcpClient {
 		public AsyncSpec requestPermissionHandler(
 				Function<AcpSchema.RequestPermissionRequest, Mono<AcpSchema.RequestPermissionResponse>> handler) {
 			Assert.notNull(handler, "Request permission handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.RequestPermissionResponse> rawHandler = params -> {
-				AcpSchema.RequestPermissionRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.RequestPermissionRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, new TypeRef<AcpSchema.RequestPermissionRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -336,13 +322,8 @@ public interface AcpClient {
 		public AsyncSpec createTerminalHandler(
 				Function<AcpSchema.CreateTerminalRequest, Mono<AcpSchema.CreateTerminalResponse>> handler) {
 			Assert.notNull(handler, "Create terminal handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.CreateTerminalResponse> rawHandler = params -> {
-				AcpSchema.CreateTerminalRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.CreateTerminalRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_CREATE, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_TERMINAL_CREATE, new TypeRef<AcpSchema.CreateTerminalRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -363,13 +344,8 @@ public interface AcpClient {
 		public AsyncSpec terminalOutputHandler(
 				Function<AcpSchema.TerminalOutputRequest, Mono<AcpSchema.TerminalOutputResponse>> handler) {
 			Assert.notNull(handler, "Terminal output handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.TerminalOutputResponse> rawHandler = params -> {
-				AcpSchema.TerminalOutputRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.TerminalOutputRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_OUTPUT, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_TERMINAL_OUTPUT, new TypeRef<AcpSchema.TerminalOutputRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -390,13 +366,8 @@ public interface AcpClient {
 		public AsyncSpec releaseTerminalHandler(
 				Function<AcpSchema.ReleaseTerminalRequest, Mono<AcpSchema.ReleaseTerminalResponse>> handler) {
 			Assert.notNull(handler, "Release terminal handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.ReleaseTerminalResponse> rawHandler = params -> {
-				AcpSchema.ReleaseTerminalRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.ReleaseTerminalRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_RELEASE, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_TERMINAL_RELEASE, new TypeRef<AcpSchema.ReleaseTerminalRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -417,13 +388,8 @@ public interface AcpClient {
 		public AsyncSpec waitForTerminalExitHandler(
 				Function<AcpSchema.WaitForTerminalExitRequest, Mono<AcpSchema.WaitForTerminalExitResponse>> handler) {
 			Assert.notNull(handler, "Wait for terminal exit handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.WaitForTerminalExitResponse> rawHandler = params -> {
-				AcpSchema.WaitForTerminalExitRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.WaitForTerminalExitRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, new TypeRef<AcpSchema.WaitForTerminalExitRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -444,13 +410,8 @@ public interface AcpClient {
 		public AsyncSpec killTerminalHandler(
 				Function<AcpSchema.KillTerminalCommandRequest, Mono<AcpSchema.KillTerminalCommandResponse>> handler) {
 			Assert.notNull(handler, "Kill terminal handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.KillTerminalCommandResponse> rawHandler = params -> {
-				AcpSchema.KillTerminalCommandRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.KillTerminalCommandRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_KILL, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_TERMINAL_KILL, new TypeRef<AcpSchema.KillTerminalCommandRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -464,13 +425,8 @@ public interface AcpClient {
 		public AsyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
-			AcpClientSession.RequestHandler<AcpSchema.CreateElicitationResponse> rawHandler = params -> {
-				AcpSchema.CreateElicitationRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.CreateElicitationRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_ELICITATION_CREATE, rawHandler);
-			return this;
+			return request(AcpSchema.METHOD_ELICITATION_CREATE, new TypeRef<AcpSchema.CreateElicitationRequest>() {
+			}, handler);
 		}
 
 		/**
@@ -520,6 +476,14 @@ public interface AcpClient {
 			return this;
 		}
 
+		/** Reads the params as the request type, then calls the handler. */
+		private <Q, R> AsyncSpec request(String method, TypeRef<Q> requestType, Function<Q, Mono<R>> handler) {
+			AcpClientSession.RequestHandler<R> rawHandler = params -> handler
+				.apply(transport.unmarshalFrom(params, requestType));
+			this.requestHandlers.put(method, rawHandler);
+			return this;
+		}
+
 		/**
 		 * Creates an instance of {@link AcpAsyncClient} with the provided configurations
 		 * or sensible defaults.
@@ -565,21 +529,10 @@ public interface AcpClient {
 	 */
 	class SyncSpec {
 
-		private final AcpClientTransport transport;
-
-		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
-
-		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
-
-		private final Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = new HashMap<>();
-
-		private final Map<String, AcpClientSession.NotificationHandler> notificationHandlers = new HashMap<>();
-
-		private final List<Function<AcpSchema.SessionNotification, Mono<Void>>> sessionUpdateConsumers = new ArrayList<>();
+		private final AsyncSpec asyncSpec;
 
 		private SyncSpec(AcpClientTransport transport) {
-			Assert.notNull(transport, "Transport must not be null");
-			this.transport = transport;
+			this.asyncSpec = new AsyncSpec(transport);
 		}
 
 		/**
@@ -592,8 +545,12 @@ public interface AcpClient {
 		 * @return An async handler that wraps the sync handler
 		 */
 		private static <T> AcpClientSession.RequestHandler<T> fromSync(SyncRequestHandler<T> syncHandler) {
-			return params -> Mono.fromCallable(() -> syncHandler.handle(params))
-					.subscribeOn(SYNC_HANDLER_SCHEDULER);
+			return params -> onSyncHandlerThread(() -> syncHandler.handle(params));
+		}
+
+		/** Runs a sync handler on the library-owned daemon scheduler, so it may block. */
+		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
+			return Mono.fromCallable(handler).subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		/**
@@ -606,8 +563,7 @@ public interface AcpClient {
 		 * @throws IllegalArgumentException if requestTimeout is null
 		 */
 		public SyncSpec requestTimeout(Duration requestTimeout) {
-			Assert.notNull(requestTimeout, "Request timeout must not be null");
-			this.requestTimeout = requestTimeout;
+			asyncSpec.requestTimeout(requestTimeout);
 			return this;
 		}
 
@@ -621,8 +577,7 @@ public interface AcpClient {
 		 * @throws IllegalArgumentException if clientCapabilities is null
 		 */
 		public SyncSpec clientCapabilities(AcpSchema.ClientCapabilities clientCapabilities) {
-			Assert.notNull(clientCapabilities, "Client capabilities must not be null");
-			this.clientCapabilities = clientCapabilities;
+			asyncSpec.clientCapabilities(clientCapabilities);
 			return this;
 		}
 
@@ -643,13 +598,7 @@ public interface AcpClient {
 		public SyncSpec readTextFileHandler(
 				Function<AcpSchema.ReadTextFileRequest, AcpSchema.ReadTextFileResponse> handler) {
 			Assert.notNull(handler, "Read text file handler must not be null");
-			SyncRequestHandler<AcpSchema.ReadTextFileResponse> rawHandler = params -> {
-				logger.debug("readTextFile request params: {}", params);
-				AcpSchema.ReadTextFileRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.ReadTextFileRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_FS_READ_TEXT_FILE, fromSync(rawHandler));
+			asyncSpec.readTextFileHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -672,13 +621,7 @@ public interface AcpClient {
 		public SyncSpec writeTextFileHandler(
 				Function<AcpSchema.WriteTextFileRequest, AcpSchema.WriteTextFileResponse> handler) {
 			Assert.notNull(handler, "Write text file handler must not be null");
-			SyncRequestHandler<AcpSchema.WriteTextFileResponse> rawHandler = params -> {
-				logger.debug("writeTextFile request params: {}", params);
-				AcpSchema.WriteTextFileRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.WriteTextFileRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, fromSync(rawHandler));
+			asyncSpec.writeTextFileHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -703,13 +646,7 @@ public interface AcpClient {
 		public SyncSpec requestPermissionHandler(
 				Function<AcpSchema.RequestPermissionRequest, AcpSchema.RequestPermissionResponse> handler) {
 			Assert.notNull(handler, "Request permission handler must not be null");
-			SyncRequestHandler<AcpSchema.RequestPermissionResponse> rawHandler = params -> {
-				logger.debug("requestPermission request params: {}", params);
-				AcpSchema.RequestPermissionRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.RequestPermissionRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, fromSync(rawHandler));
+			asyncSpec.requestPermissionHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -732,13 +669,7 @@ public interface AcpClient {
 		public SyncSpec createTerminalHandler(
 				Function<AcpSchema.CreateTerminalRequest, AcpSchema.CreateTerminalResponse> handler) {
 			Assert.notNull(handler, "Create terminal handler must not be null");
-			SyncRequestHandler<AcpSchema.CreateTerminalResponse> rawHandler = params -> {
-				logger.debug("createTerminal request params: {}", params);
-				AcpSchema.CreateTerminalRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.CreateTerminalRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_CREATE, fromSync(rawHandler));
+			asyncSpec.createTerminalHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -760,13 +691,7 @@ public interface AcpClient {
 		public SyncSpec terminalOutputHandler(
 				Function<AcpSchema.TerminalOutputRequest, AcpSchema.TerminalOutputResponse> handler) {
 			Assert.notNull(handler, "Terminal output handler must not be null");
-			SyncRequestHandler<AcpSchema.TerminalOutputResponse> rawHandler = params -> {
-				logger.debug("terminalOutput request params: {}", params);
-				AcpSchema.TerminalOutputRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.TerminalOutputRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_OUTPUT, fromSync(rawHandler));
+			asyncSpec.terminalOutputHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -788,13 +713,7 @@ public interface AcpClient {
 		public SyncSpec releaseTerminalHandler(
 				Function<AcpSchema.ReleaseTerminalRequest, AcpSchema.ReleaseTerminalResponse> handler) {
 			Assert.notNull(handler, "Release terminal handler must not be null");
-			SyncRequestHandler<AcpSchema.ReleaseTerminalResponse> rawHandler = params -> {
-				logger.debug("releaseTerminal request params: {}", params);
-				AcpSchema.ReleaseTerminalRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.ReleaseTerminalRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_RELEASE, fromSync(rawHandler));
+			asyncSpec.releaseTerminalHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -816,13 +735,7 @@ public interface AcpClient {
 		public SyncSpec waitForTerminalExitHandler(
 				Function<AcpSchema.WaitForTerminalExitRequest, AcpSchema.WaitForTerminalExitResponse> handler) {
 			Assert.notNull(handler, "Wait for terminal exit handler must not be null");
-			SyncRequestHandler<AcpSchema.WaitForTerminalExitResponse> rawHandler = params -> {
-				logger.debug("waitForTerminalExit request params: {}", params);
-				AcpSchema.WaitForTerminalExitRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.WaitForTerminalExitRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, fromSync(rawHandler));
+			asyncSpec.waitForTerminalExitHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -844,13 +757,7 @@ public interface AcpClient {
 		public SyncSpec killTerminalHandler(
 				Function<AcpSchema.KillTerminalCommandRequest, AcpSchema.KillTerminalCommandResponse> handler) {
 			Assert.notNull(handler, "Kill terminal handler must not be null");
-			SyncRequestHandler<AcpSchema.KillTerminalCommandResponse> rawHandler = params -> {
-				logger.debug("killTerminal request params: {}", params);
-				AcpSchema.KillTerminalCommandRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.KillTerminalCommandRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_TERMINAL_KILL, fromSync(rawHandler));
+			asyncSpec.killTerminalHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -865,13 +772,7 @@ public interface AcpClient {
 		public SyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, AcpSchema.CreateElicitationResponse> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
-			SyncRequestHandler<AcpSchema.CreateElicitationResponse> rawHandler = params -> {
-				logger.debug("createElicitation request params: {}", params);
-				AcpSchema.CreateElicitationRequest request = transport.unmarshalFrom(params,
-						new TypeRef<AcpSchema.CreateElicitationRequest>() {});
-				return handler.apply(request);
-			};
-			this.requestHandlers.put(AcpSchema.METHOD_ELICITATION_CREATE, fromSync(rawHandler));
+			asyncSpec.createElicitationHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
 			return this;
 		}
 
@@ -896,11 +797,10 @@ public interface AcpClient {
 		public SyncSpec sessionUpdateConsumer(Consumer<AcpSchema.SessionNotification> sessionUpdateConsumer) {
 			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
 			// Convert sync consumer to async Function
-			this.sessionUpdateConsumers.add(notification -> {
-				return Mono.fromRunnable(() -> sessionUpdateConsumer.accept(notification))
-						.subscribeOn(SYNC_HANDLER_SCHEDULER)
-						.then();
-			});
+			asyncSpec.sessionUpdateConsumer(notification -> Mono
+				.fromRunnable(() -> sessionUpdateConsumer.accept(notification))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER)
+				.then());
 			return this;
 		}
 
@@ -917,7 +817,7 @@ public interface AcpClient {
 		public <T> SyncSpec requestHandler(String method, SyncRequestHandler<T> handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			this.requestHandlers.put(method, fromSync(handler));
+			asyncSpec.requestHandler(method, fromSync(handler));
 			return this;
 		}
 
@@ -930,9 +830,7 @@ public interface AcpClient {
 		 * @throws IllegalArgumentException if method or handler is null
 		 */
 		public SyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
-			Assert.notNull(method, "Method must not be null");
-			Assert.notNull(handler, "Handler must not be null");
-			this.notificationHandlers.put(method, handler);
+			asyncSpec.notificationHandler(method, handler);
 			return this;
 		}
 
@@ -942,25 +840,7 @@ public interface AcpClient {
 		 * @return a new instance of {@link AcpSyncClient}
 		 */
 		public AcpSyncClient build() {
-			// Set up session update notification handler
-			if (!sessionUpdateConsumers.isEmpty()) {
-				notificationHandlers.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
-					AcpSchema.SessionNotification notification = transport.unmarshalFrom(params,
-							new TypeRef<AcpSchema.SessionNotification>() {
-							});
-					logger.debug("Received session update for session: {}", notification.sessionId());
-
-					// Call all registered consumers
-					return Mono
-						.when(sessionUpdateConsumers.stream().map(consumer -> consumer.apply(notification)).toList());
-				});
-			}
-
-			// Create session with request and notification handlers
-			AcpSession session = new AcpClientSession(requestTimeout, transport, requestHandlers, notificationHandlers,
-					Function.identity());
-
-			return new AcpSyncClient(new AcpAsyncClient(session, transport, clientCapabilities));
+			return new AcpSyncClient(asyncSpec.build());
 		}
 
 	}
