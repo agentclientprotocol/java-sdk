@@ -25,6 +25,11 @@
 # directory and port range; load-* scenarios run afterwards, alone and serially. Exits non-zero
 # if any scenario fails; a declared expected failure (for example the Java client -> Python server
 # reconnect-then-load 404) does not fail the run.
+#
+# Concurrent run-alls (several checkouts on one host): each takes an exclusive 10,000-port block
+# (IT_PORT_BASE, else the first free of 20000/30000/40000/50000, locked with flock for the whole
+# run), and every Maven and JBang call uses one local repository, IT_M2_REPO (default
+# integration-testing/.cache/m2; ~/.m2/repository when CI=true). See README.md, Contracts 7.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,7 +63,7 @@ while [ $# -gt 0 ]; do
         --allow-empty) ALLOW_EMPTY=1; shift ;;
         --peer|--peers-ref) PASS_ARGS+=("$1" "$2"); shift 2 ;;
         --peer=*|--peers-ref=*) PASS_ARGS+=("$1"); shift ;;
-        -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -160,8 +165,11 @@ if [ ${#missing[@]} -gt 0 ]; then
 fi
 
 mkdir -p logs/run-all
-echo "Installing the SDK from $REPO_DIR"
-if ! (cd "$REPO_DIR" && timeout 900 ./mvnw -q -B -DskipTests install) > logs/run-all/sdk-install.log 2>&1; then
+# One Maven local repository for the SDK install, every program build and JBang (IT_M2_REPO).
+# shellcheck source=m2-repo.sh
+. "$SCRIPT_DIR/m2-repo.sh"
+echo "Installing the SDK from $REPO_DIR into $IT_M2_REPO"
+if ! (cd "$REPO_DIR" && timeout 900 "$SCRIPT_DIR/mvnw.sh" -q -B -DskipTests install) > logs/run-all/sdk-install.log 2>&1; then
     echo "SDK install failed; see $IT_DIR/logs/run-all/sdk-install.log" >&2
     tail -40 logs/run-all/sdk-install.log >&2
     exit 1
@@ -188,10 +196,39 @@ if [ "$PREPARE_ONLY" -eq 1 ]; then
     exit 0
 fi
 
+# This run's port block, 10,000 ports no other run-all on this host uses at the same time:
+# IT_PORT_BASE if set, else the first of 20000/30000/40000/50000 whose lock file we can flock.
+# The lock is held by file descriptor PORT_LOCK_FD for the life of this shell (children inherit
+# it, so a block stays taken while anything this run started is alive) and released when the
+# last holder exits, however it exits. All four taken: wait for one.
+PORT_BASE="${IT_PORT_BASE:-}"
+if [ -n "$PORT_BASE" ]; then
+    case "$PORT_BASE" in *[!0-9]*) echo "IT_PORT_BASE needs a number, got '$PORT_BASE'" >&2; exit 2 ;; esac
+elif ! command -v flock > /dev/null 2>&1; then
+    PORT_BASE=20000
+    echo "WARN flock not found: using port block 20000 unlocked (set IT_PORT_BASE for concurrent runs)" >&2
+else
+    lock_dir="${XDG_RUNTIME_DIR:-/tmp}"
+    waited=0
+    while [ -z "$PORT_BASE" ]; do
+        for base in 20000 30000 40000 50000; do
+            exec {PORT_LOCK_FD}>> "$lock_dir/acp-it-ports-$base.lock" || continue
+            if flock -n "$PORT_LOCK_FD"; then PORT_BASE=$base; break; fi
+            exec {PORT_LOCK_FD}>&-
+        done
+        if [ -z "$PORT_BASE" ]; then
+            [ "$waited" -eq 0 ] && echo "All port blocks are in use by other runs; waiting for one"
+            waited=1
+            sleep 5
+        fi
+    done
+fi
+echo "Port block $PORT_BASE-$((PORT_BASE + 9999))"
+
 # One scenario: its own log directory (logs/<s>/), its own ${TMP}, and a port range no other
-# scenario of this run uses (20000 + 100 * (index mod 100), 100 ports wide).
+# scenario of this run uses (PORT_BASE + 100 * (index mod 100), 100 ports wide).
 run_one() { # <scenario> <index> <tee: 0|1>
-    local s="$1" idx="$2" from=$((20000 + ($2 % 100) * 100))
+    local s="$1" idx="$2" from=$((PORT_BASE + ($2 % 100) * 100))
     rm -f "logs/$s/result.txt" "logs/run-all/$s.exit"
     local cmd=(env IT_PORT_RANGE="$from-$((from + 99))"
         timeout 1800 jbang RunScenario.java "$s" --prepared "${PASS_ARGS[@]}")

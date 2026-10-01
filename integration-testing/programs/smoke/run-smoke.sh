@@ -41,11 +41,11 @@ ACP_VERSION="$(sed -n '/<parent>/,/<\/parent>/d; s#^    <version>\(.*\)</version
 
 if [ -z "$SKIP_INSTALL" ]; then
     echo "Installing the SDK $ACP_VERSION from $REPO_DIR"
-    (cd "$REPO_DIR" && timeout 900 ./mvnw -q -B -DskipTests install) > "$LOGS/sdk-install.log" 2>&1 || {
+    (cd "$REPO_DIR" && timeout 900 "$IT_DIR/scripts/mvnw.sh" -q -B -DskipTests install) > "$LOGS/sdk-install.log" 2>&1 || {
         echo "SDK install failed; see $LOGS/sdk-install.log" >&2; tail -40 "$LOGS/sdk-install.log" >&2; exit 1; }
 fi
 echo "Building the smoke client against acp $ACP_VERSION"
-(cd "$SCRIPT_DIR" && timeout 600 "$REPO_DIR/mvnw" -q -B -Dacp.version="$ACP_VERSION" compile \
+(cd "$SCRIPT_DIR" && timeout 600 "$IT_DIR/scripts/mvnw.sh" -q -B -Dacp.version="$ACP_VERSION" compile \
     dependency:build-classpath -Dmdep.outputFile=target/classpath.txt) > "$LOGS/build.log" 2>&1 || {
     echo "Smoke client build failed; see $LOGS/build.log" >&2; tail -40 "$LOGS/build.log" >&2; exit 1; }
 
