@@ -254,6 +254,34 @@ class AcpAsyncClientTest {
 	}
 
 	@Test
+	void testSessionUpdateNotificationHandling() {
+		Sinks.One<AcpSchema.SessionNotification> receivedNotification = Sinks.one();
+
+		var transport = new MockAcpClientTransport();
+		AcpAsyncClient client = AcpClient.async(transport)
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> {
+				receivedNotification.tryEmitValue(notification);
+				return Mono.empty();
+			})
+			.build();
+
+		AcpSchema.SessionNotification sessionUpdate = new AcpSchema.SessionNotification("session-123",
+				new AcpSchema.UserMessageChunk("user_message_chunk", new AcpSchema.TextContent("Hello")));
+		AcpSchema.JSONRPCNotification notification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
+				AcpSchema.METHOD_SESSION_UPDATE, sessionUpdate);
+
+		transport.simulateIncomingMessage(notification);
+
+		AcpSchema.SessionNotification received = receivedNotification.asMono().block(Duration.ofSeconds(1));
+		assertThat(received).isNotNull();
+		assertThat(received.sessionId()).isEqualTo("session-123");
+		assertThat(received.update()).isInstanceOf(AcpSchema.UserMessageChunk.class);
+
+		client.close();
+	}
+
+	@Test
 	void testSessionInfoUpdateNotificationHandling() {
 		Sinks.One<AcpSchema.SessionNotification> receivedNotification = Sinks.one();
 
