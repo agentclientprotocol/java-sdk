@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
+  response does.** The agent session used to free the session for a new prompt as soon as the
+  cancel notification arrived, so a client could start a second prompt while the cancelled one's
+  handler was still running. ACP v1 (prompt turn, Cancellation) says the agent may still send
+  `session/update`s after the cancel and must then answer the original `session/prompt` with stop
+  reason `cancelled`, and "once a prompt turn completes, the Client may send another
+  `session/prompt`". A prompt sent between the cancel and that answer is now rejected with
+  `-32000` (`CONCURRENT_PROMPT`), like any prompt during an active turn. The turn ends when the
+  answer is published (before it reaches the client, as for every prompt), when the handler fails
+  (a timeout the handler applies included), when the request is cancelled, or when the session
+  closes. The session sets no timeout of its own on an inbound prompt, so a handler that never
+  answers after a cancel keeps its session busy. Migration: clients send the next prompt after the
+  cancelled one has answered (the SDK client sends nothing on its own after `cancel`); agent
+  prompt handlers must answer a cancelled prompt.
 - **Breaking (unstable providers API): the provider identifier is `providerId`, on the wire and in
   Java.** `ProviderInfo`, `SetProviderRequest` and `DisableProviderRequest` wrote and read `"id"`,
   but the unstable schema names the property `providerId`, so no spec-conforming peer could exchange

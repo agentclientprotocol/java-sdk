@@ -26,9 +26,13 @@ import reactor.core.publisher.Mono;
  *
  * <p>
  * A prompt holds its session through a {@link Turn}. Ending a turn releases the session only
- * while that same turn still holds it: turns compare by identity, so a prompt that was
- * cancelled and is still finishing cannot release the turn of a later prompt, whatever their
- * request ids.
+ * while that same turn still holds it: turns compare by identity, so a prompt still finishing
+ * after the session closed cannot release the turn of a later prompt, whatever their request
+ * ids.
+ * </p>
+ *
+ * <p>
+ * A cancel does not end a turn; the cancelled prompt's response does (see {@link #cancel}).
  * </p>
  */
 final class ActivePrompts {
@@ -109,13 +113,21 @@ final class ActivePrompts {
 	}
 
 	/**
-	 * Releases the session's active prompt, whichever it is ({@code session/cancel}).
-	 * @return whether a prompt was active
+	 * Notes a {@code session/cancel}. The turn does not end here: after a cancel the agent
+	 * may still send {@code session/update}s and must then answer the original
+	 * {@code session/prompt} with stop reason {@code cancelled}, and only once the turn has
+	 * completed may the client send another prompt (ACP v1, prompt turn, Cancellation). The
+	 * turn ends when that response is published ({@link #endBeforePublishing}), when the
+	 * handler fails (a timeout the handler applies included), when the request's
+	 * subscription is cancelled, or when the session closes. A handler that never answers
+	 * keeps the session busy: the session sets no timeout of its own on an inbound prompt.
+	 * @return whether a prompt is active, and so will end with its response
 	 */
 	boolean cancel(String sessionId) {
-		Turn current = this.active.remove(sessionId);
+		Turn current = this.active.get(sessionId);
 		if (current != null) {
-			logger.debug("Cancelled active prompt for session: {}", sessionId);
+			logger.debug("Cancel requested for sessionId={} requestId={}; the turn ends with its response",
+					sessionId, current.requestId());
 			return true;
 		}
 		return false;

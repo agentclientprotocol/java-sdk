@@ -19,6 +19,10 @@ import java.lang.annotation.Target;
  * <p>Note: This is a notification handler, not a request handler. The method
  * should not return a response - it should perform cleanup and return void.
  *
+ * <p>The cancel does not end the prompt turn: the cancelled prompt handler should stop,
+ * send any last updates, and return stop reason {@code cancelled}. Until it has returned
+ * (or failed), the session rejects a new prompt (ACP v1, prompt turn, Cancellation).
+ *
  * <p>The method can have the following parameters (all optional):
  * <ul>
  *   <li>{@code CancelNotification} - the cancel notification containing the sessionId</li>

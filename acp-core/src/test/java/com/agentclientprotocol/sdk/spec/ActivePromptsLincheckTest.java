@@ -25,12 +25,14 @@ import reactor.core.publisher.Mono;
  * must produce results some sequential execution of the specification could produce.
  *
  * <p>
- * {@link Turns} checks the rule itself (at most one active prompt per session; cancel
- * releases whichever turn is active) and the views of it: it found the active-session count
- * reading ConcurrentHashMap's size counters, which can show no active prompt while one is
- * active. {@link Wire}
+ * {@link Turns} checks the rule itself (at most one active prompt per session; a cancel
+ * does not end the turn, the cancelled prompt's response does) and the views of it: it found
+ * the active-session count reading ConcurrentHashMap's size counters, which can show no
+ * active prompt while one is active. {@link Wire}
  * checks #14: an agent that ends a prompt and a client that sends its next prompt as soon as
- * it sees the response must never see that prompt rejected.
+ * it sees the response must never see that prompt rejected. In both, a cancel does not end
+ * the turn: a prompt sent after session/cancel but before the cancelled prompt has answered
+ * is rejected (ACP v1, prompt turn, Cancellation).
  * </p>
  */
 class ActivePromptsLincheckTest {
@@ -103,6 +105,13 @@ class ActivePromptsLincheckTest {
 			return prompts.cancel("s" + session);
 		}
 
+		/** A client that sends session/cancel and then a prompt without waiting for the answer. */
+		@Operation
+		public boolean cancelThenStart(@Param(name = "session") int session) {
+			prompts.cancel("s" + session);
+			return prompts.tryStart("s" + session, session) != null;
+		}
+
 		@Operation
 		public boolean isActive(@Param(name = "session") int session) {
 			return prompts.isActive("s" + session);
@@ -128,8 +137,14 @@ class ActivePromptsLincheckTest {
 			active.remove(session);
 		}
 
+		/** session/cancel: the turn stays until its prompt answers (ACP v1, prompt turn, Cancellation). */
 		public boolean cancel(int session) {
-			return active.remove(session);
+			return active.contains(session);
+		}
+
+		/** Rejected while the cancelled prompt has not answered. */
+		public boolean cancelThenStart(int session) {
+			return active.add(session);
 		}
 
 		public boolean isActive(int session) {
