@@ -69,6 +69,9 @@ final class OutboundMessages {
 			if (!register(requestId, responseSink)) {
 				return;
 			}
+			// A request that times out or is cancelled stops waiting: without this its entry
+			// stayed in the map until the session closed, one per timed-out request.
+			responseSink.onDispose(() -> this.pendingResponses.remove(requestId, responseSink));
 			logger.debug("Sending request for method {} with id {}", method, requestId);
 			logger.trace("Outgoing request method='{}' id={} params={}", method, requestId, params);
 			AcpSchema.JSONRPCRequest request = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
@@ -159,6 +162,11 @@ final class OutboundMessages {
 			sink.error(new RuntimeException("ACP session with " + this.peer + " terminated", cause));
 		});
 		this.pendingResponses.clear();
+	}
+
+	/** The number of requests waiting for a response. */
+	int pendingRequests() {
+		return this.pendingResponses.size();
 	}
 
 }
