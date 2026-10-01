@@ -151,6 +151,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Streamable HTTP routed `session/delete`, `session/close`, `session/list`,
+  `session/set_config_option`, `session/fork` and `logout` by guesswork, and the server refused a
+  session it did not know with 404.** The client had rules for only seven methods and inferred the
+  rest from their params with a WARN per call; the server likewise. Both now route every
+  client-to-agent method of ACP v1, stable and unstable, from a table: `authenticate`, `logout`,
+  `session/new`, `session/list`, `providers/*`, `nes/start`, `mcp/message` and `$/cancel_request` on
+  the connection; every method whose params require a `sessionId` (`session/prompt`, `cancel`,
+  `set_mode`, `set_config_option`, `close`, `delete`, `fork`, `load`, `resume`, `nes/suggest`,
+  `accept`, `reject`, `close`, `document/*`) session-scoped with `Acp-Session-Id`, as the transport
+  RFD's Identity Model asks and the Rust and TypeScript SDKs do. Only methods outside v1, such as
+  extension methods, are still routed by their params (logged at DEBUG). The server no longer
+  answers a session-scoped POST naming a session the connection does not know with 404: the RFD's
+  POST decision tree has none, so the request goes to the agent, which decides; a `session/delete`
+  of a session that never existed succeeds, as `session-delete.mdx` asks. Its reply comes on that
+  session's stream when the client opened one, else on the connection stream. A session-scoped GET
+  for an unknown session still opens a (bounded) provisional stream, as the RFD's resume flow and
+  the Rust and TypeScript servers do.
 - **A stdio client did not notice its agent process exiting.** `StdioAcpClientTransport` did not
   implement `awaitTermination()`, so when the agent exited or crashed, pending requests waited out the
   request timeout. It now completes when the transport is closed, and errors with an

@@ -48,6 +48,8 @@ class StreamableHttpClientServerIntegrationTest {
 					"sess-" + sessionCounter.incrementAndGet(), null, null)))
 			.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, null)))
 			.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, null)))
+			.deleteSessionHandler(request -> Mono.just(new AcpSchema.DeleteSessionResponse()))
+			.listSessionsHandler(request -> Mono.just(new AcpSchema.ListSessionsResponse(List.of())))
 			.promptHandler((request, context) -> {
 				String text = request.text();
 				Mono<Void> work = text.contains("permission") ? context.askPermission("fixture permission").then()
@@ -97,6 +99,28 @@ class StreamableHttpClientServerIntegrationTest {
 				.block(TIMEOUT);
 			assertThat(prompt.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 			assertThat(updates).containsExactly(session.sessionId());
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			server.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	/**
+	 * session/delete is session-scoped (the RFD's Identity Model) and of a session that never
+	 * existed succeeds silently (session-delete.mdx); session/list is connection-scoped.
+	 * Before, the client inferred both routes with a warning, and the server answered the
+	 * delete with 404.
+	 */
+	@Test
+	void deleteOfAnUnknownSessionAndListRoundTrip() throws Exception {
+		StreamableHttpAcpAgentTransport server = startServer(StreamableHttpAcpAgentTransportOptions.defaults());
+		AcpAsyncClient client = client(server).build();
+		try {
+			client.initialize().block(TIMEOUT);
+			assertThat(client.deleteSession(new AcpSchema.DeleteSessionRequest("never-existed")).block(TIMEOUT))
+				.isNotNull();
+			assertThat(client.listSessions(new AcpSchema.ListSessionsRequest("/workspace")).block(TIMEOUT).sessions()).isEmpty();
 		}
 		finally {
 			client.closeGracefully().block(TIMEOUT);

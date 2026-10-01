@@ -47,22 +47,46 @@ final class StreamableHttpRouting {
 
 	private final AcpJsonMapper jsonMapper;
 
-	/** Client-to-agent methods with their own routing rule; any other method uses {@link #defaultRoute}. */
+	/**
+	 * Every client-to-agent method of ACP v1, stable and unstable (schema/v1/meta.json,
+	 * meta.unstable.json), and the {@code $/} protocol methods, with its routing rule. A
+	 * method whose params require a {@code sessionId} is session-scoped and needs
+	 * {@code Acp-Session-Id} (the RFD's Identity Model), as in the Rust and TypeScript SDKs'
+	 * tables. Any other method, such as an extension method, uses {@link #defaultRoute}.
+	 */
 	private final Map<String, InboundRule> inboundRules;
 
 	StreamableHttpRouting(AcpJsonMapper jsonMapper) {
 		this.jsonMapper = jsonMapper;
-		this.inboundRules = Map.of(
-				AcpSchema.METHOD_AUTHENTICATE, (method, params, header) -> connectionRoute(RequestKind.GENERIC),
-				AcpSchema.METHOD_SESSION_NEW, (method, params, header) -> connectionRoute(RequestKind.SESSION_NEW),
-				AcpSchema.METHOD_SESSION_LOAD, this::loadRoute,
-				AcpSchema.METHOD_SESSION_RESUME, this::loadRoute,
+		InboundRule connection = (method, params, header) -> connectionRoute(RequestKind.GENERIC);
+		this.inboundRules = Map.ofEntries(Map.entry(AcpSchema.METHOD_AUTHENTICATE, connection),
+				Map.entry(AcpSchema.METHOD_LOGOUT, connection),
+				Map.entry(AcpSchema.METHOD_SESSION_NEW,
+						(method, params, header) -> connectionRoute(RequestKind.SESSION_NEW)),
+				Map.entry(AcpSchema.METHOD_SESSION_LIST, connection),
+				Map.entry(AcpSchema.METHOD_PROVIDERS_LIST, connection),
+				Map.entry(AcpSchema.METHOD_PROVIDERS_SET, connection),
+				Map.entry(AcpSchema.METHOD_PROVIDERS_DISABLE, connection), Map.entry("nes/start", connection),
+				Map.entry("mcp/message", connection), Map.entry("$/cancel_request", connection),
+				Map.entry(AcpSchema.METHOD_SESSION_LOAD, this::loadRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_RESUME, this::loadRoute),
 				// Scoped to the parent session; the reply names the forked session.
-				AcpSchema.METHOD_SESSION_FORK, (method, params, header) -> sameStreamRoute(RequestKind.SESSION_FORK,
-						requireSessionScope(method, params, header)),
-				AcpSchema.METHOD_SESSION_PROMPT, this::sessionBoundRoute,
-				AcpSchema.METHOD_SESSION_SET_MODE, this::sessionBoundRoute,
-				AcpSchema.METHOD_SESSION_CANCEL, this::sessionBoundRoute);
+				Map.entry(AcpSchema.METHOD_SESSION_FORK,
+						(method, params, header) -> sameStreamRoute(RequestKind.SESSION_FORK,
+								requireSessionScope(method, params, header))),
+				Map.entry(AcpSchema.METHOD_SESSION_PROMPT, this::sessionBoundRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_SET_MODE, this::sessionBoundRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, this::sessionBoundRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_CANCEL, this::sessionBoundRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_CLOSE, this::sessionBoundRoute),
+				Map.entry(AcpSchema.METHOD_SESSION_DELETE, this::sessionBoundRoute),
+				Map.entry("nes/suggest", this::sessionBoundRoute), Map.entry("nes/accept", this::sessionBoundRoute),
+				Map.entry("nes/reject", this::sessionBoundRoute), Map.entry("nes/close", this::sessionBoundRoute),
+				Map.entry("document/didOpen", this::sessionBoundRoute),
+				Map.entry("document/didChange", this::sessionBoundRoute),
+				Map.entry("document/didClose", this::sessionBoundRoute),
+				Map.entry("document/didSave", this::sessionBoundRoute),
+				Map.entry("document/didFocus", this::sessionBoundRoute));
 	}
 
 	/** How one client-to-agent method is routed: its request scope and its response scope. */
@@ -171,6 +195,11 @@ final class StreamableHttpRouting {
 			return RouteScope.session(requireSessionId(params, method));
 		}
 		return extractSessionId(params).map(RouteScope::session).orElseGet(RouteScope::connection);
+	}
+
+	/** The methods routed by their own rule rather than {@link #defaultRoute}. */
+	Set<String> routedMethods() {
+		return inboundRules.keySet();
 	}
 
 	ResolvedInboundRoute resolveInboundRoute(JSONRPCMessage message, @Nullable String sessionHeader) {

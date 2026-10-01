@@ -78,8 +78,7 @@ class StreamableHttpSessionsLincheckTest {
 		@Operation
 		public String admit(@Param(name = "session") int session, @Param(gen = BooleanGen.class) boolean load) {
 			try {
-				sessions.admitInbound("s" + session, load);
-				return "OK";
+				return sessions.admitInbound("s" + session, load) ? "STREAM" : "CONNECTION";
 			}
 			catch (UnknownSessionException e) {
 				return "UNKNOWN";
@@ -148,12 +147,16 @@ class StreamableHttpSessionsLincheckTest {
 			return "OPEN";
 		}
 
+		/**
+		 * A load may add a provisional session; nothing else changes the table, and no
+		 * session id is refused (the RFD's POST tree has no 404 for an unknown session). The
+		 * answer says whether the session has a stream to reply on.
+		 */
 		public String admit(int session, boolean load) {
-			String state = states.get(session);
-			if (load) {
-				return state != null || addProvisional(session) ? "OK" : "UNKNOWN";
+			if (load && !states.containsKey(session) && !addProvisional(session)) {
+				return "UNKNOWN";
 			}
-			return KNOWN.equals(state) ? "OK" : "UNKNOWN";
+			return states.containsKey(session) ? "STREAM" : "CONNECTION";
 		}
 
 		public void markKnown(int session) {

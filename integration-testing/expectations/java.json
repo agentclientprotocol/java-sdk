@@ -276,17 +276,6 @@
       "contains": "",
       "see": "P2",
       "reason": "The Java client does not honour the agent's $/cancel_request, so the fs read never ends with -32800"
-    },
-    {
-      "step": "session.delete",
-      "when": {
-        "client": "java",
-        "agent": "java",
-        "transport": "http"
-      },
-      "contains": "404",
-      "see": "spec:rfds/streamable-http-websocket-transport.mdx:124,306-310",
-      "reason": "Java over HTTP: session/delete of an unknown id is posted session-scoped (inferred route, StreamableHttpRoutes.java:117-124) with Acp-Session-Id no-such-session, and the Java server answers 404 (StreamableHttpSessions.admitInbound); the RFD names no scope for session/delete and its POST tree has no 404 for an unknown session"
     }
   ]
 }
