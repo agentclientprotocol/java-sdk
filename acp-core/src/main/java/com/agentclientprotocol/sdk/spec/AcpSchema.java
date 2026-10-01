@@ -5,13 +5,17 @@
 package com.agentclientprotocol.sdk.spec;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -29,6 +33,36 @@ import org.slf4j.LoggerFactory;
  * This schema defines all request, response, and notification types used in ACP. ACP is a
  * protocol for communication between code editors (clients) and coding agents.
  *
+ * <h2>Forward compatibility of discriminated unions</h2>
+ * <p>
+ * A peer on a newer version of the protocol can send a variant this SDK does not know: a
+ * {@code sessionUpdate} type, a content block type, a tool call content type, a config
+ * option type or a permission outcome. Such a variant never fails the message that
+ * carries it. The rule, the same for every union:
+ * </p>
+ * <ul>
+ * <li>A union that the schema gives a default variant for a missing discriminator reads
+ * an unknown variant as that default, as the Rust SDK does: an MCP server without a known
+ * {@code type} is a {@link McpServerStdio}.</li>
+ * <li>Every other union reads an unknown variant as its {@code Unknown*} record
+ * ({@link UnknownSessionUpdate}, {@link UnknownContentBlock},
+ * {@link UnknownToolCallContent}, {@link UnknownSessionConfigOption},
+ * {@link UnknownPermissionOutcome}). The record keeps the discriminator and every other
+ * field, and writes them back unchanged, so a proxy forwards what it received. A receiver
+ * that does not understand the variant ignores it, as the schema's
+ * {@code x-deserialize-skip-invalid-items} asks for list items.</li>
+ * </ul>
+ * <p>
+ * This follows the Kotlin SDK and the direction of the v2 schema (an {@code Other} variant
+ * that preserves the raw payload) rather than dropping the whole notification, which is
+ * what the Rust, TypeScript and Python SDKs do for an unknown session update: a dropped
+ * notification cannot be logged by the application, forwarded or counted. Because the
+ * {@code Unknown*} records write their own discriminator, every union is declared with
+ * {@code include = EXISTING_PROPERTY}: each record writes its discriminator as an ordinary
+ * property, and the canonical constructors of the known records accept {@code null} for it
+ * (it becomes the record's own name) and reject any other value.
+ * </p>
+ *
  * @author Mark Pollack
  * @author Christian Tzolov
  */
@@ -40,6 +74,31 @@ public final class AcpSchema {
 	};
 
 	private AcpSchema() {
+	}
+
+	/**
+	 * The discriminator a known union variant writes: {@code expected} when the caller
+	 * passed {@code null}, so the convenience of not repeating it is kept.
+	 * @throws IllegalArgumentException when the caller passed a different name, which
+	 * would otherwise go on the wire as is
+	 */
+	static String discriminator(@Nullable String given, String expected) {
+		if (given == null) {
+			return expected;
+		}
+		if (!given.equals(expected)) {
+			throw new IllegalArgumentException(
+					"Discriminator '" + given + "' does not name this variant; expected '" + expected + "'");
+		}
+		return given;
+	}
+
+	/**
+	 * The fields of an unknown union variant, copied and unmodifiable, in wire order.
+	 */
+	static Map<String, Object> unknownFields(@Nullable Map<String, Object> fields) {
+		// Null when the variant had no fields besides its discriminator under some mappers
+		return fields == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(fields));
 	}
 
 	public static final String JSONRPC_VERSION = "2.0";
@@ -1197,7 +1256,8 @@ public final class AcpSchema {
 	 * Session config option - a configurable setting exposed by the agent.
 	 * Discriminated by type: "select" (stable) or "boolean" (unstable extension).
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			visible = true, defaultImpl = UnknownSessionConfigOption.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = SessionConfigSelect.class, name = "select"),
 			@JsonSubTypes.Type(value = SessionConfigBoolean.class, name = "boolean") })
 	public interface SessionConfigOption {
@@ -1205,16 +1265,36 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * A config option of a kind this SDK does not know: the peer is newer, or sent an
+	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
+	 * and every other field, and writes them back unchanged.
+	 *
+	 * @param type the discriminator as received
+	 * @param fields every other field, in wire order
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UnknownSessionConfigOption(@JsonProperty("type") @Nullable String type,
+			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements SessionConfigOption {
+		public UnknownSessionConfigOption {
+			fields = unknownFields(fields);
+		}
+	}
+
+	/**
 	 * Select-type config option - a dropdown with named values.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelect(
-			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("type") String type,
 			@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description, @JsonProperty("category") @Nullable String category,
 			@JsonProperty("currentValue") String currentValue,
 			@JsonProperty("options") List<SessionConfigSelectOption> options,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigOption {
+		public SessionConfigSelect {
+			type = discriminator(type, "select");
+		}
+
 		public SessionConfigSelect(String id, String name, String currentValue,
 				List<SessionConfigSelectOption> options) {
 			this("select", id, name, null, null, currentValue, options, null);
@@ -1230,11 +1310,15 @@ public final class AcpSchema {
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigBoolean(
-			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("type") String type,
 			@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description, @JsonProperty("category") @Nullable String category,
 			@JsonProperty("currentValue") Boolean currentValue,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigOption {
+		public SessionConfigBoolean {
+			type = discriminator(type, "boolean");
+		}
+
 		public SessionConfigBoolean(String id, String name, Boolean currentValue) {
 			this("boolean", id, name, null, null, currentValue, null);
 		}
@@ -1257,9 +1341,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ConfigOptionUpdate(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("configOptions") List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public ConfigOptionUpdate {
+			sessionUpdate = discriminator(sessionUpdate, "config_option_update");
+		}
+
 		public ConfigOptionUpdate(String sessionUpdate, List<SessionConfigOption> configOptions) {
 			this(sessionUpdate, configOptions, null);
 		}
@@ -1402,9 +1490,12 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Content block - base type for all content
+	 * Content block - base type for all content. A block of a type this SDK does not know
+	 * reads as an {@link UnknownContentBlock} (see {@link AcpSchema} on forward
+	 * compatibility).
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			visible = true, defaultImpl = UnknownContentBlock.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = TextContent.class, name = "text"),
 			@JsonSubTypes.Type(value = ImageContent.class, name = "image"),
 			@JsonSubTypes.Type(value = AudioContent.class, name = "audio"),
@@ -1415,12 +1506,32 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * A content block of a kind this SDK does not know: the peer is newer, or sent an
+	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
+	 * and every other field, and writes them back unchanged.
+	 *
+	 * @param type the discriminator as received
+	 * @param fields every other field, in wire order
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UnknownContentBlock(@JsonProperty("type") @Nullable String type,
+			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements ContentBlock {
+		public UnknownContentBlock {
+			fields = unknownFields(fields);
+		}
+	}
+
+	/**
 	 * Text content
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record TextContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record TextContent(@JsonProperty("type") String type,
 			@JsonProperty("text") String text, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		public TextContent {
+			type = discriminator(type, "text");
+		}
+
 		public TextContent(String text) {
 			this("text", text, null, null);
 		}
@@ -1430,41 +1541,53 @@ public final class AcpSchema {
 	 * Image content
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ImageContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record ImageContent(@JsonProperty("type") String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
 			@JsonProperty("uri") @Nullable String uri, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		public ImageContent {
+			type = discriminator(type, "image");
+		}
 	}
 
 	/**
 	 * Audio content
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AudioContent(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record AudioContent(@JsonProperty("type") String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
 			@JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		public AudioContent {
+			type = discriminator(type, "audio");
+		}
 	}
 
 	/**
 	 * Resource link
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ResourceLink(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record ResourceLink(@JsonProperty("type") String type,
 			@JsonProperty("name") String name, @JsonProperty("uri") String uri, @JsonProperty("title") @Nullable String title,
 			@JsonProperty("description") @Nullable String description, @JsonProperty("mimeType") @Nullable String mimeType,
 			@JsonProperty("size") @Nullable Long size, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		public ResourceLink {
+			type = discriminator(type, "resource_link");
+		}
 	}
 
 	/**
 	 * Embedded resource
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record Resource(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record Resource(@JsonProperty("type") String type,
 			@JsonProperty("resource") EmbeddedResourceResource resource,
 			@JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		public Resource {
+			type = discriminator(type, "resource");
+		}
 	}
 
 	/**
@@ -1506,9 +1629,13 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Session update - different types of updates
+	 * Session update - different types of updates. An update of a type this SDK does not
+	 * know reads as an {@link UnknownSessionUpdate}, so the notification that carries it
+	 * still reaches the client's consumers (see {@link AcpSchema} on forward
+	 * compatibility).
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "sessionUpdate", visible = true)
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "sessionUpdate", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			visible = true, defaultImpl = UnknownSessionUpdate.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = UserMessageChunk.class, name = "user_message_chunk"),
 			@JsonSubTypes.Type(value = AgentMessageChunk.class, name = "agent_message_chunk"),
 			@JsonSubTypes.Type(value = AgentThoughtChunk.class, name = "agent_thought_chunk"),
@@ -1518,9 +1645,26 @@ public final class AcpSchema {
 			@JsonSubTypes.Type(value = AvailableCommandsUpdate.class, name = "available_commands_update"),
 			@JsonSubTypes.Type(value = CurrentModeUpdate.class, name = "current_mode_update"),
 			@JsonSubTypes.Type(value = UsageUpdate.class, name = "usage_update"),
-			@JsonSubTypes.Type(value = ConfigOptionUpdate.class, name = "config_option_update") })
+			@JsonSubTypes.Type(value = ConfigOptionUpdate.class, name = "config_option_update"),
+			@JsonSubTypes.Type(value = SessionInfoUpdate.class, name = "session_info_update") })
 	public interface SessionUpdate {
 
+	}
+
+	/**
+	 * A session update of a kind this SDK does not know: the peer is newer, or sent an
+	 * extension. It keeps the {@code sessionUpdate} discriminator (null when the peer sent none)
+	 * and every other field, and writes them back unchanged.
+	 *
+	 * @param sessionUpdate the discriminator as received
+	 * @param fields every other field, in wire order
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UnknownSessionUpdate(@JsonProperty("sessionUpdate") @Nullable String sessionUpdate,
+			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements SessionUpdate {
+		public UnknownSessionUpdate {
+			fields = unknownFields(fields);
+		}
 	}
 
 	/**
@@ -1528,9 +1672,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UserMessageChunk(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public UserMessageChunk {
+			sessionUpdate = discriminator(sessionUpdate, "user_message_chunk");
+		}
+
 		public UserMessageChunk(String sessionUpdate, ContentBlock content) {
 			this(sessionUpdate, content, null, null);
 		}
@@ -1545,9 +1693,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentMessageChunk(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public AgentMessageChunk {
+			sessionUpdate = discriminator(sessionUpdate, "agent_message_chunk");
+		}
+
 		public AgentMessageChunk(String sessionUpdate, ContentBlock content) {
 			this(sessionUpdate, content, null, null);
 		}
@@ -1562,9 +1714,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentThoughtChunk(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public AgentThoughtChunk {
+			sessionUpdate = discriminator(sessionUpdate, "agent_thought_chunk");
+		}
+
 		public AgentThoughtChunk(String sessionUpdate, ContentBlock content) {
 			this(sessionUpdate, content, null, null);
 		}
@@ -1579,13 +1735,16 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCall(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") String title,
 			@JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public ToolCall {
+			sessionUpdate = discriminator(sessionUpdate, "tool_call");
+		}
 	}
 
 	/**
@@ -1604,13 +1763,16 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdateNotification(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("toolCallId") String toolCallId, @JsonProperty("title") @Nullable String title,
 			@JsonProperty("kind") @Nullable ToolKind kind, @JsonProperty("status") @Nullable ToolCallStatus status,
 			@JsonProperty("content") @Nullable List<ToolCallContent> content,
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public ToolCallUpdateNotification {
+			sessionUpdate = discriminator(sessionUpdate, "tool_call_update");
+		}
 	}
 
 	/**
@@ -1618,9 +1780,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Plan(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("entries") List<PlanEntry> entries,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public Plan {
+			sessionUpdate = discriminator(sessionUpdate, "plan");
+		}
+
 		public Plan(String sessionUpdate, List<PlanEntry> entries) {
 			this(sessionUpdate, entries, null);
 		}
@@ -1631,9 +1797,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommandsUpdate(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("availableCommands") List<AvailableCommand> availableCommands,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public AvailableCommandsUpdate {
+			sessionUpdate = discriminator(sessionUpdate, "available_commands_update");
+		}
+
 		public AvailableCommandsUpdate(String sessionUpdate, List<AvailableCommand> availableCommands) {
 			this(sessionUpdate, availableCommands, null);
 		}
@@ -1644,11 +1814,43 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CurrentModeUpdate(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("currentModeId") String currentModeId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public CurrentModeUpdate {
+			sessionUpdate = discriminator(sessionUpdate, "current_mode_update");
+		}
+
 		public CurrentModeUpdate(String sessionUpdate, String currentModeId) {
 			this(sessionUpdate, currentModeId, null);
+		}
+	}
+
+	/**
+	 * Session info update - the agent changed the session's metadata (title, last
+	 * activity). Every field is optional: a field left out is unchanged.
+	 *
+	 * <p>
+	 * The schema also lets a peer send {@code null} to clear a field. This record cannot
+	 * tell an explicit {@code null} from a missing field (both read as {@code null}) and
+	 * never writes {@code null}, so it can neither receive nor send a clear.
+	 * </p>
+	 *
+	 * @param sessionUpdate the discriminator, {@code "session_info_update"}
+	 * @param title human-readable title for the session
+	 * @param updatedAt ISO 8601 timestamp of the last activity
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionInfoUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
+			@JsonProperty("title") @Nullable String title, @JsonProperty("updatedAt") @Nullable String updatedAt,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public SessionInfoUpdate {
+			sessionUpdate = discriminator(sessionUpdate, "session_info_update");
+		}
+
+		public SessionInfoUpdate(@Nullable String title, @Nullable String updatedAt) {
+			this("session_info_update", title, updatedAt, null);
 		}
 	}
 
@@ -1657,9 +1859,13 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UsageUpdate(
-			@JsonProperty(value = "sessionUpdate", access = JsonProperty.Access.WRITE_ONLY) String sessionUpdate,
+			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("used") Long used, @JsonProperty("size") Long size, @JsonProperty("cost") @Nullable Cost cost,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		public UsageUpdate {
+			sessionUpdate = discriminator(sessionUpdate, "usage_update");
+		}
+
 		public UsageUpdate(String sessionUpdate, Long used, Long size) {
 			this(sessionUpdate, used, size, null, null);
 		}
@@ -1678,9 +1884,11 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Tool call content
+	 * Tool call content. Content of a type this SDK does not know reads as an
+	 * {@link UnknownToolCallContent}.
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			visible = true, defaultImpl = UnknownToolCallContent.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = ToolCallContentBlock.class, name = "content"),
 			@JsonSubTypes.Type(value = ToolCallDiff.class, name = "diff"),
 			@JsonSubTypes.Type(value = ToolCallTerminal.class, name = "terminal") })
@@ -1689,29 +1897,54 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * Tool call content of a kind this SDK does not know: the peer is newer, or sent an
+	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
+	 * and every other field, and writes them back unchanged.
+	 *
+	 * @param type the discriminator as received
+	 * @param fields every other field, in wire order
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UnknownToolCallContent(@JsonProperty("type") @Nullable String type,
+			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements ToolCallContent {
+		public UnknownToolCallContent {
+			fields = unknownFields(fields);
+		}
+	}
+
+	/**
 	 * Tool call content block
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallContentBlock(
-			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+			@JsonProperty("type") String type,
 			@JsonProperty("content") ContentBlock content) implements ToolCallContent {
+		public ToolCallContentBlock {
+			type = discriminator(type, "content");
+		}
 	}
 
 	/**
 	 * Tool call diff
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallDiff(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record ToolCallDiff(@JsonProperty("type") String type,
 			@JsonProperty("path") String path, @JsonProperty("oldText") @Nullable String oldText,
 			@JsonProperty("newText") String newText) implements ToolCallContent {
+		public ToolCallDiff {
+			type = discriminator(type, "diff");
+		}
 	}
 
 	/**
 	 * Tool call terminal
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ToolCallTerminal(@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
+	public record ToolCallTerminal(@JsonProperty("type") String type,
 			@JsonProperty("terminalId") String terminalId) implements ToolCallContent {
+		public ToolCallTerminal {
+			type = discriminator(type, "terminal");
+		}
 	}
 
 	/**
@@ -1918,9 +2151,11 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Request permission outcome
+	 * Request permission outcome. An outcome this SDK does not know reads as an
+	 * {@link UnknownPermissionOutcome}.
 	 */
-	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "outcome", visible = true)
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "outcome", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			visible = true, defaultImpl = UnknownPermissionOutcome.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = PermissionCancelled.class, name = "cancelled"),
 			@JsonSubTypes.Type(value = PermissionSelected.class, name = "selected") })
 	public interface RequestPermissionOutcome {
@@ -1928,12 +2163,32 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * A permission outcome of a kind this SDK does not know: the peer is newer, or sent an
+	 * extension. It keeps the {@code outcome} discriminator (null when the peer sent none)
+	 * and every other field, and writes them back unchanged.
+	 *
+	 * @param outcome the discriminator as received
+	 * @param fields every other field, in wire order
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record UnknownPermissionOutcome(@JsonProperty("outcome") @Nullable String outcome,
+			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements RequestPermissionOutcome {
+		public UnknownPermissionOutcome {
+			fields = unknownFields(fields);
+		}
+	}
+
+	/**
 	 * Permission cancelled
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionCancelled(
-			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome)
+			@JsonProperty("outcome") String outcome)
 			implements RequestPermissionOutcome {
+		public PermissionCancelled {
+			outcome = discriminator(outcome, "cancelled");
+		}
+
 		public PermissionCancelled() {
 			this("cancelled");
 		}
@@ -1944,8 +2199,12 @@ public final class AcpSchema {
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionSelected(
-			@JsonProperty(value = "outcome", access = JsonProperty.Access.WRITE_ONLY) String outcome,
+			@JsonProperty("outcome") String outcome,
 			@JsonProperty("optionId") String optionId) implements RequestPermissionOutcome {
+		public PermissionSelected {
+			outcome = discriminator(outcome, "selected");
+		}
+
 		public PermissionSelected(String optionId) {
 			this("selected", optionId);
 		}

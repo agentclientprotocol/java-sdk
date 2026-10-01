@@ -207,7 +207,7 @@ public class Client {
 				u -> u instanceof AcpSchema.CurrentModeUpdate m && "interop-mode-b".equals(m.currentModeId())));
 		STEPS.put("update.config_option_update", () -> emit("config_option_update",
 				u -> u instanceof AcpSchema.ConfigOptionUpdate c && "model-b".equals(selectValue(c.configOptions(), "model"))));
-		STEPS.put("update.session_info_update", gapped("P1", Client::sessionInfoUpdate));
+		STEPS.put("update.session_info_update", Client::sessionInfoUpdate);
 		STEPS.put("update.usage_update", () -> emit("usage_update",
 				u -> u instanceof AcpSchema.UsageUpdate x && Long.valueOf(100).equals(x.used())
 						&& Long.valueOf(1000).equals(x.size()) && x.cost() != null && x.cost().amount() != null
@@ -570,9 +570,10 @@ public class Client {
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit session_info_update");
 		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
-		await(() -> false, () -> "no session_info_update received (the Java SDK has no record for it); updates "
-				+ kinds(c.updates(sid)));
-		return "unreachable";
+		await(() -> c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.SessionInfoUpdate i
+				&& "interop title".equals(i.title())), () -> "no session_info_update titled \"interop title\"; updates "
+						+ kinds(c.updates(sid)));
+		return "session_info_update title \"interop title\"";
 	}
 
 	static String updateUnknown() {
@@ -581,7 +582,9 @@ public class Client {
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit unknown");
 		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains("after-unknown"), () -> "no chunk \"after-unknown\" in " + c.chunks(sid));
-		return "after-unknown arrived; end_turn (unknown update dropped, connection kept)";
+		boolean surfaced = c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.UnknownSessionUpdate);
+		return "after-unknown arrived; end_turn (unknown update " + (surfaced ? "surfaced as UnknownSessionUpdate"
+				: "dropped") + ", connection kept)";
 	}
 
 	static String stop(String reason, AcpSchema.StopReason expected) {

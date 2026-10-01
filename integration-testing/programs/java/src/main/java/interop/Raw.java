@@ -67,7 +67,7 @@ final class Raw {
 			AcpSchema.PromptResponse r = c.prompt(sid, "#raw unknown-update");
 			Client.check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
 			Client.await(() -> c.chunks(sid).contains("after-unknown"),
-					() -> "no chunk \"after-unknown\" in " + c.chunks(sid) + " (P1: the Java client fails the unknown update)");
+					() -> "no chunk \"after-unknown\" in " + c.chunks(sid));
 			return "after-unknown arrived; end_turn";
 		});
 		STEPS.put("raw.null-result", () -> {

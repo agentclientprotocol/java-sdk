@@ -23,8 +23,6 @@ import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeName;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.Server;
@@ -53,13 +51,12 @@ import reactor.core.publisher.Mono;
  * </p>
  *
  * <p>
- * What the Java SDK cannot do yet is answered honestly, never faked: no {@code session_info_update}
- * record (P1), no {@code configOptions} on session responses (P1b), no {@code $/cancel_request}
+ * What the Java SDK cannot do yet is answered honestly, never faked: no {@code configOptions} on session responses (P1b), no {@code $/cancel_request}
  * (P2), no tool call {@code name} (P3), no terminal auth method or {@code auth.logout} capability
  * (P5, P7), no view of {@code session.configOptions.boolean} in the client capabilities (P6), no
  * {@code _meta} on permission requests (P8), and no generic send or receive of extension methods
- * (P9). The unknown update is sent through an application subtype of {@code SessionUpdate}, the
- * untyped send the catalogue allows.
+ * (P9). The unknown update is an {@code AcpSchema.UnknownSessionUpdate}, which writes the type and
+ * fields it is given.
  * </p>
  */
 public class Agent {
@@ -195,11 +192,6 @@ public class Agent {
 			}
 		}
 
-	}
-
-	/** The unknown future update of fixtures.emit.unknown, sent through the open SessionUpdate type. */
-	@JsonTypeName("interop_future_update")
-	record FutureUpdate(@JsonProperty("payload") Map<String, Object> payload) implements AcpSchema.SessionUpdate {
 	}
 
 	// ---------------------------------------------------------------- the agent
@@ -549,15 +541,12 @@ public class Agent {
 					configOptions("model-b")));
 			case "usage_update" -> List.of(new AcpSchema.UsageUpdate("usage_update", 100L, 1000L,
 					new AcpSchema.Cost(0.01, "USD"), null));
-			case "unknown" -> List.of(new FutureUpdate(Map.of("x", 1)), chunk("after-unknown"));
+			case "session_info_update" -> List.of(new AcpSchema.SessionInfoUpdate("interop title", null));
+			case "unknown" -> List.of(new AcpSchema.UnknownSessionUpdate("interop_future_update", Map.of("x", 1)),
+					chunk("after-unknown"));
 			default -> null;
 		};
 		if (updates == null) {
-			if (kind.equals("session_info_update")) {
-				// No record for it (P1): answer with an error rather than fake it.
-				return Mono.error(new AcpProtocolException(-32603,
-						"P1: the Java SDK has no session_info_update record to send"));
-			}
 			return Mono.error(new AcpProtocolException(-32602, "unknown directive: #emit " + kind));
 		}
 		return Flux.fromIterable(updates).concatMap(u -> context.sendUpdate(sid, u)).then(Mono.just(endTurn()));

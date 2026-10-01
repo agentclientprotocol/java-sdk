@@ -2,15 +2,6 @@
   "comment": "Expected failures caused by the Java SDK (programs/java): the Java client (when.client java) and the Java agent (when.agent java). Each entry names the Phase B item that closes it; that item's commit deletes its entries. Client entries come first, so in a Java<->Java cell the client's (more specific) contains wins.",
   "expectations": [
     {
-      "step": "update.session_info_update",
-      "when": {
-        "client": "java"
-      },
-      "contains": "P1:",
-      "see": "P1",
-      "reason": "The Java client cannot parse session_info_update: AcpSchema.SessionUpdate has no such subtype"
-    },
-    {
       "step": "config.on-new",
       "when": {
         "client": "java"
@@ -117,15 +108,6 @@
       "contains": "P9:",
       "see": "P9",
       "reason": "AcpAsyncClient has no generic notification send"
-    },
-    {
-      "step": "update.session_info_update",
-      "when": {
-        "agent": "java"
-      },
-      "contains": "",
-      "see": "P1",
-      "reason": "The Java agent cannot send session_info_update (no record); it answers -32603"
     },
     {
       "step": "config.on-new",

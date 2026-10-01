@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timers run on the SDK's shared timeout timer, with no new threads. A handler that keeps running
   after its subscription is cancelled (a blocking sync handler is not interrupted) and sends more
   updates sends them after the answer. `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
+- **`session_info_update`** (`AcpSchema.SessionInfoUpdate`): the agent tells the client the
+  session's title and last activity time. Stable in ACP v1. Known limit: the schema lets a peer
+  send `null` to clear a field; the record reads an explicit `null` like a missing field and never
+  writes one, so it cannot express a clear.
 
 ### Changed
 
@@ -53,6 +57,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `AcpCapabilityException.toProtocolException()` now answers `-32600` with the capability name as
     data.
 
+- **Unknown union variants no longer fail the message** (ACP forward compatibility). A newer agent's
+  `sessionUpdate` type used to fail the whole `session/update` notification, which the client then
+  dropped with an error log; an unknown content block, tool call content type, config option type
+  or permission outcome failed its message the same way. Each union now reads an unknown variant as
+  its `Unknown*` record (`UnknownSessionUpdate`, `UnknownContentBlock`, `UnknownToolCallContent`,
+  `UnknownSessionConfigOption`, `UnknownPermissionOutcome`), which keeps the discriminator and
+  every other field and writes them back unchanged. Session update consumers receive it like any
+  other update; code that does not know the variant ignores it. The Rust, TypeScript and Python
+  SDKs drop such a notification; the Kotlin SDK and the v2 schema keep the raw payload, which this
+  SDK follows. The rule is documented on `AcpSchema`. Unions with a default variant keep it
+  (`McpServer` reads an unknown `type` as stdio).
+- **Breaking: union records write their own discriminator, and reject a wrong one.** Every union
+  above is now declared `include = EXISTING_PROPERTY`, so the `sessionUpdate`, `type` or `outcome`
+  component of a record such as `AgentMessageChunk` or `TextContent` is written as is. Before,
+  Jackson replaced whatever the caller passed with the registered name. A canonical constructor
+  now turns `null` into the record's own name and throws `IllegalArgumentException` for any other
+  value (`new AgentMessageChunk("agentMessage", ...)` used to be silently corrected). Migration:
+  pass the variant's wire name (`"agent_message_chunk"`) or `null`, or use the convenience
+  constructors, which already do. Code that switches exhaustively over a union's known records
+  needs a branch for its `Unknown*` record.
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's

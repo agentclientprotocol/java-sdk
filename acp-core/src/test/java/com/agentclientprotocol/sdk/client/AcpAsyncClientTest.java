@@ -268,7 +268,7 @@ class AcpAsyncClientTest {
 
 		// Simulate incoming session update notification
 		AcpSchema.SessionNotification sessionUpdate = new AcpSchema.SessionNotification("session-123",
-				new AcpSchema.UserMessageChunk("userMessage", new AcpSchema.TextContent("Hello")));
+				new AcpSchema.UserMessageChunk("user_message_chunk", new AcpSchema.TextContent("Hello")));
 		AcpSchema.JSONRPCNotification notification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
 				AcpSchema.METHOD_SESSION_UPDATE, sessionUpdate);
 
@@ -278,6 +278,35 @@ class AcpAsyncClientTest {
 		AcpSchema.SessionNotification received = receivedNotification.asMono().block(Duration.ofSeconds(1));
 		assertThat(received).isNotNull();
 		assertThat(received.sessionId()).isEqualTo("session-123");
+
+		client.close();
+	}
+
+	@Test
+	void unknownSessionUpdateReachesTheConsumerAndTheNextUpdateFollows() throws Exception {
+		Sinks.Many<AcpSchema.SessionNotification> received = Sinks.many().replay().all();
+		var transport = new MockAcpClientTransport();
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(n -> {
+			received.tryEmitNext(n);
+			return Mono.empty();
+		}).build();
+		var json = com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault();
+		var mapType = new com.agentclientprotocol.sdk.json.TypeRef<Map<String, Object>>() {
+		};
+
+		// As a newer agent sends them: an update type this SDK does not know, then a known one
+		transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(AcpSchema.METHOD_SESSION_UPDATE,
+				json.readValue("{\"sessionId\":\"s1\",\"update\":{\"sessionUpdate\":\"future_update\",\"x\":1}}",
+						mapType)));
+		transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(AcpSchema.METHOD_SESSION_UPDATE,
+				json.readValue("{\"sessionId\":\"s1\",\"update\":{\"sessionUpdate\":\"session_info_update\","
+						+ "\"title\":\"Renamed\"}}", mapType)));
+
+		StepVerifier.create(received.asFlux().take(2).map(AcpSchema.SessionNotification::update))
+			.expectNext(new AcpSchema.UnknownSessionUpdate("future_update", Map.of("x", 1)))
+			.expectNext(new AcpSchema.SessionInfoUpdate("Renamed", null))
+			.expectComplete()
+			.verify(Duration.ofSeconds(5));
 
 		client.close();
 	}
