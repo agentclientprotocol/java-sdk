@@ -244,6 +244,16 @@ Found by enabling Error Prone's bug checks; each has a test.
   one with their reasons in `config/spotbugs/spotbugs-exclude.xml`, and the Streamable HTTP SSE
   stream locking on its own monitor, which any code holding the stream could also take; it now
   locks a private object.
+- The SpotBugs gate also fails on concurrency bugs below rank 9. SpotBugs ranks most
+  multithreaded-correctness patterns 14 to 17 (inconsistent synchronization is 17), so a rank gate
+  alone never sees them. The analysis now reports up to rank 20, and
+  `config/spotbugs/spotbugs-include.xml` selects what fails the build: every pattern of rank 9 or
+  less, plus a listed set of concurrency patterns at any rank (inconsistent synchronization,
+  wait/notify and explicit-lock misuse, broken double-checked locking, `volatile` increments,
+  locking on the wrong object, mutable servlet fields), each group with its reason, and the
+  concurrency patterns left out with theirs. The code base had no such finding. One analysis serves
+  both: a second `check` execution with its own filter does not work, since `check` analyses with
+  the plugin-level configuration and the second execution would pass on a report never written.
 
 ## [0.18.0] - 2026-09-25
 

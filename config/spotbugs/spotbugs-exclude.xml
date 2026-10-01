@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ACP Java SDK SpotBugs exclusions (spotbugs-maven-plugin, `verify`, main sources, rank 9 or less).
+  ACP Java SDK SpotBugs exclusions (spotbugs-maven-plugin, `verify`, main sources), applied to the
+  findings spotbugs-include.xml selects: rank 9 or less, and the listed concurrency patterns.
 
   Each entry is one false positive, named by class, method and bug pattern, with the reason it is
   false. Never exclude a whole pattern or package: a real instance of the same pattern elsewhere
   must still fail the build. A finding that is a real bug or a risky pattern is fixed in the code.
 
   Exposure patterns (EI_EXPOSE_REP, EI_EXPOSE_REP2: records and value objects handing out the
-  components they hold) are rank 18, outside the gate, so they need no entry here.
+  components they hold) are rank 18 and not selected by the include filter, so they need no entry
+  here.
 -->
 <FindBugsFilter
         xmlns="https://github.com/spotbugs/filter/3.0.0"

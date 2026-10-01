@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ACP Java SDK SpotBugs gate: which findings fail `verify` (spotbugs-maven-plugin, main sources).
+
+  The analysis reports every finding up to rank 20 (maxRank in the parent pom); this filter keeps
+  the ones that fail the build:
+
+  1. Every pattern at rank 9 or less, SpotBugs' "scariest" (1-4) and "scary" (5-9) bands.
+     A RankMatcher matches rank >= value, so "rank 9 or less" is Not(Rank 10).
+  2. The multithreaded-correctness patterns below at any rank. SpotBugs ranks most of them 14 to
+     17 (IS2_INCONSISTENT_SYNC 17, UW_UNCOND_WAIT and WA_NOT_IN_LOOP 14, measured), so the rank
+     gate alone never sees them, yet a transport library is mostly concurrent code. Each is
+     group below says why it is a bug rather than advice. MT_CORRECTNESS patterns left out, and why:
+     - AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION, AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE,
+       AT_STALE_THREAD_WRITE_OF_PRIMITIVE, AT_NONATOMIC_64BIT_PRIMITIVE,
+       AT_UNSAFE_RESOURCE_ACCESS_IN_THREAD: newer detectors that report get-then-put and field
+       writes without knowing what guards them; noise-prone, so not gated until measured on real
+       findings.
+     - SC_START_IN_CTOR, WL_USING_GETCLASS_RATHER_THAN_CLASS_LITERAL: matter only to subclasses.
+     - NO_NOTIFY_NOT_NOTIFYALL, ESync_EMPTY_SYNC, LI_LAZY_INIT_STATIC, VO_VOLATILE_REFERENCE_TO_ARRAY,
+       DM_USELESS_THREAD: often deliberate (one waiter, a memory barrier, a benign idempotent race).
+     - RS_READOBJECT_SYNC, WS_WRITEOBJECT_SYNC: Java serialization, which the SDK does not use.
+
+  The threshold (Medium, in the pom) still applies: low-confidence findings are dropped.
+  A false positive is excluded narrowly in spotbugs-exclude.xml, never by editing this list.
+-->
+<FindBugsFilter
+        xmlns="https://github.com/spotbugs/filter/3.0.0"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+
+    <!-- 1. Rank 9 or less, every pattern. -->
+    <Match>
+        <Not>
+            <Rank value="10"/>
+        </Not>
+    </Match>
+
+    <!-- 2. Multithreaded correctness, any rank. -->
+
+    <!--
+      Guarded state read or written without its guard: a racy read sees a stale or torn value.
+    -->
+    <Match>
+        <Bug pattern="IS2_INCONSISTENT_SYNC,IS_INCONSISTENT_SYNC,IS_FIELD_NOT_GUARDED,UG_SYNC_SET_UNSYNC_GET"/>
+    </Match>
+
+    <!--
+      wait/await misuse: a wait not in a loop, or not on a condition, misses or misreads wakeups;
+      a wait or notify without the monitor throws IllegalMonitorStateException; a notify that
+      changes no state signals nothing a waiter can check.
+    -->
+    <Match>
+        <Bug pattern="UW_UNCOND_WAIT,WA_NOT_IN_LOOP,WA_AWAIT_NOT_IN_LOOP,MWN_MISMATCHED_WAIT,MWN_MISMATCHED_NOTIFY,NN_NAKED_NOTIFY,DM_MONITOR_WAIT_ON_CONDITION"/>
+    </Match>
+
+    <!--
+      Explicit locks: a lock not released on every path (including exceptions) deadlocks the next
+      caller; an unlock without a lock throws.
+    -->
+    <Match>
+        <Bug pattern="UL_UNRELEASED_LOCK,UL_UNRELEASED_LOCK_EXCEPTION_PATH,CWO_CLOSED_WITHOUT_OPENED"/>
+    </Match>
+
+    <!--
+      Liveness: waiting or sleeping while holding a lock stalls every thread that needs it; a spin
+      on a non-volatile field may never see the write that ends it.
+    -->
+    <Match>
+        <Bug pattern="TLW_TWO_LOCK_WAIT,SWL_SLEEP_WITH_LOCK_HELD,SP_SPIN_ON_FIELD"/>
+    </Match>
+
+    <!--
+      Publication and atomicity: broken double-checked locking publishes a partially built object;
+      volatile++ loses updates.
+    -->
+    <Match>
+        <Bug pattern="DC_DOUBLECHECK,DC_PARTIALLY_CONSTRUCTED,VO_VOLATILE_INCREMENT"/>
+    </Match>
+
+    <!--
+      Wrong lock object: a lock that is reassigned, a java.util.concurrent object's monitor (which
+      its own methods ignore), or a shared constant, Boolean, boxed primitive or interned String
+      (which unrelated code also locks) does not exclude what it should, or deadlocks with
+      strangers; an instance lock does not guard static data.
+    -->
+    <Match>
+        <Bug pattern="ML_SYNC_ON_UPDATED_FIELD,JLM_JSR166_UTILCONCURRENT_MONITORENTER,JLM_JSR166_LOCK_MONITORENTER,DL_SYNCHRONIZATION_ON_SHARED_CONSTANT,DL_SYNCHRONIZATION_ON_BOOLEAN,DL_SYNCHRONIZATION_ON_BOXED_PRIMITIVE,DL_SYNCHRONIZATION_ON_UNSHARED_BOXED_PRIMITIVE,DL_SYNCHRONIZATION_ON_INTERNED_STRING,SSD_DO_NOT_USE_INSTANCE_LOCK_ON_SHARED_STATIC_DATA"/>
+    </Match>
+
+    <!--
+      Shared mutable objects that are not thread-safe: a static Calendar, or a mutable field on a
+      servlet (one instance serves every request thread; StreamableHttpAcpServlet is one).
+    -->
+    <Match>
+        <Bug pattern="STCAL_STATIC_CALENDAR_INSTANCE,MSF_MUTABLE_SERVLET_FIELD"/>
+    </Match>
+
+    <!--
+      Thread.run() called instead of start(): the work runs on the caller's thread.
+    -->
+    <Match>
+        <Bug pattern="RU_INVOKE_RUN"/>
+    </Match>
+
+</FindBugsFilter>
