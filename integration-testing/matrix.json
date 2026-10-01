@@ -1,0 +1,79 @@
+{
+  "comment": "Input of GenConfigs.java: languages, pairs, transports, profiles and transport facts. Generated cells are configs/x-<client>-<agent>-<transport>[-unstable].json (and self-<lang>-<transport>[-unstable].json with --self). A language's cells are generated only while it is enabled; a language package enables its row when its programs land. See README.md, Contracts.",
+  "version": 1,
+  "stepSelection": "seed",
+  "transports": ["stdio", "http", "ws"],
+  "profiles": {
+    "stable": { "suffix": "" },
+    "unstable": { "suffix": "-unstable" }
+  },
+  "languages": {
+    "java": {
+      "enabled": true,
+      "dir": "programs/java",
+      "peers": [],
+      "env": {},
+      "transports": ["stdio", "http", "ws"],
+      "readyTimeoutSec": 60
+    },
+    "typescript": {
+      "enabled": false,
+      "dir": "programs/node",
+      "peers": ["typescript-sdk"],
+      "env": { "TS_SDK": "${peer.typescript-sdk}" },
+      "transports": ["stdio", "http", "ws"],
+      "readyTimeoutSec": 60
+    },
+    "rust": {
+      "enabled": false,
+      "dir": "programs/rust",
+      "peers": ["rust-sdk"],
+      "env": { "RUST_SDK": "${peer.rust-sdk}", "CARGO_TARGET_DIR": "${CACHE}/build/${peerKey.rust-sdk}" },
+      "transports": ["stdio", "http", "ws"],
+      "readyTimeoutSec": 60
+    },
+    "python": {
+      "enabled": false,
+      "dir": "programs/python",
+      "peers": ["python-sdk"],
+      "env": { "PY_SDK": "${peer.python-sdk}", "PYTHONUNBUFFERED": "1" },
+      "transports": ["stdio", "http", "ws"],
+      "readyTimeoutSec": 60
+    },
+    "kotlin": {
+      "enabled": false,
+      "dir": "programs/kotlin",
+      "peers": ["kotlin-sdk"],
+      "env": { "KOTLIN_SDK": "${peer.kotlin-sdk}" },
+      "transports": ["stdio", "ws"],
+      "readyTimeoutSec": 90
+    }
+  },
+  "pairs": [
+    ["java", "java"],
+    ["java", "typescript"], ["typescript", "java"],
+    ["java", "rust"], ["rust", "java"],
+    ["java", "python"], ["python", "java"],
+    ["java", "kotlin"], ["kotlin", "java"]
+  ],
+  "self": ["typescript", "rust", "python", "kotlin"],
+  "facts": [
+    {
+      "comment": "Java client -> Java agent on HTTP negotiates h2c on every request (carried over from interop-java-java).",
+      "when": { "client": "java", "agent": "java", "transport": "http" },
+      "requiredOutput": { "client": ["negotiated HTTP_2"] },
+      "forbiddenOutput": { "client": ["negotiated HTTP_1_1"], "agent": [" /acp HTTP/1.1 "] },
+      "requiredPatterns": { "agent": ["\\[http\\] POST /acp HTTP/2\\.0 .*-> 200", "\\[http\\] DELETE /acp HTTP/2\\.0 .*-> 202"] }
+    },
+    {
+      "comment": "Any client closing an HTTP connection to the Java agent sends DELETE, answered 202.",
+      "when": { "agent": "java", "transport": "http" },
+      "requiredPatterns": { "agent": ["\\[http\\] DELETE /acp HTTP/\\S+ .*-> 202"] }
+    },
+    {
+      "comment": "A WebSocket connection to the Java agent is a GET upgrade answered 101.",
+      "when": { "agent": "java", "transport": "ws" },
+      "requiredPatterns": { "agent": ["\\[http\\] GET /acp HTTP/1\\.1 -> 101 .*upgrade=\"websocket\""] }
+    }
+  ]
+}
