@@ -40,10 +40,10 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.CONTENT_TYPE_EVENT_STREAM;
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_CONNECTION_ID;
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_SESSION_ID;
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.INITIALIZE_TIMEOUT;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.CONTENT_TYPE_EVENT_STREAM;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.HEADER_CONNECTION_ID;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.HEADER_SESSION_ID;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.INITIALIZE_TIMEOUT;
 
 /**
  * The HTTP side of the ACP Streamable HTTP endpoint: {@code POST} carries client

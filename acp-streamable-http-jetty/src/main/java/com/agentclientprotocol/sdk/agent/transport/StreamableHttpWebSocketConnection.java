@@ -28,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.INITIALIZE_TIMEOUT;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.INITIALIZE_TIMEOUT;
 
 /**
  * One remote ACP connection upgraded to WebSocket on the Streamable HTTP endpoint: its

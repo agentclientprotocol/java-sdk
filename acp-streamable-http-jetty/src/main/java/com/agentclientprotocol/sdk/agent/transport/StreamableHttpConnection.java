@@ -30,9 +30,9 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.CONTENT_TYPE_EVENT_STREAM;
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_CONNECTION_ID;
-import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport.HEADER_SESSION_ID;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.CONTENT_TYPE_EVENT_STREAM;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.HEADER_CONNECTION_ID;
+import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.HEADER_SESSION_ID;
 
 /**
  * One remote ACP connection over Streamable HTTP (POST/SSE): its agent runtime, its
@@ -255,7 +255,7 @@ final class StreamableHttpConnection {
 			// clients omit it on every response. The id alone identifies the exchange, so a
 			// missing header is accepted. A header naming a different scope is still an error.
 			logger.debug("Client response {} carried no {}; accepting it for {}", response.id(),
-					StreamableHttpAcpAgentTransport.HEADER_SESSION_ID, expected);
+					HEADER_SESSION_ID, expected);
 			agentRequestRoutes.remove(response.id(), expected);
 			return;
 		}

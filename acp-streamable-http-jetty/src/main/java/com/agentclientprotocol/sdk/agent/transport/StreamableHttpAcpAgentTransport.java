@@ -66,14 +66,6 @@ public class StreamableHttpAcpAgentTransport {
 
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
-	static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
-
-	static final String HEADER_SESSION_ID = "Acp-Session-Id";
-
-	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
-
-	static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
-
 	private final int configuredPort;
 
 	private final String path;
@@ -181,7 +173,7 @@ public class StreamableHttpAcpAgentTransport {
 					try {
 						connection.start();
 						webSocketConnections.put(connection.id(), connection);
-						response.getHeaders().put(HEADER_CONNECTION_ID, connection.id());
+						response.getHeaders().put(StreamableHttpRouting.HEADER_CONNECTION_ID, connection.id());
 						return new StreamableHttpWebSocketConnection.AcpWebSocketEndpoint(connection, jsonMapper);
 					}
 					catch (Exception e) {

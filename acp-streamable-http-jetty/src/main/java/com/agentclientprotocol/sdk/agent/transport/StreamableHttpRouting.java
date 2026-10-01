@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent.transport;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
@@ -27,6 +28,15 @@ import org.jspecify.annotations.Nullable;
  * @author Kaiser Dandangi
  */
 final class StreamableHttpRouting {
+
+	static final String HEADER_CONNECTION_ID = "Acp-Connection-Id";
+
+	static final String HEADER_SESSION_ID = "Acp-Session-Id";
+
+	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
+
+	/** How long a new connection may take to answer {@code initialize}. */
+	static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
 	private final AcpJsonMapper jsonMapper;
 
@@ -203,10 +213,10 @@ final class StreamableHttpRouting {
 		String sessionId = requireSessionId(params, method);
 		if (sessionHeader == null) {
 			throw new AcpConnectionException(
-					StreamableHttpAcpAgentTransport.HEADER_SESSION_ID + " header required for " + method);
+					HEADER_SESSION_ID + " header required for " + method);
 		}
 		if (!sessionId.equals(sessionHeader)) {
-			throw new AcpConnectionException("Header " + StreamableHttpAcpAgentTransport.HEADER_SESSION_ID
+			throw new AcpConnectionException("Header " + HEADER_SESSION_ID
 					+ " does not match params.sessionId");
 		}
 		return RouteScope.session(sessionId);
