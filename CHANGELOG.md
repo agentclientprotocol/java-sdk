@@ -94,6 +94,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A request that timed out or was cancelled stayed registered until the session closed.** Both
+  session sides kept the entry for every request still awaiting a response, and removed it only when
+  the response arrived or the session ended. A request that hit the request timeout, or whose
+  subscriber cancelled, kept its entry, so a long-lived session grew by one entry per such request,
+  and a late response was silently swallowed rather than logged as unexpected. The entry is now
+  removed when the request times out or is cancelled. Found by the PIT mutation-testing pilot.
 - **Streamable HTTP: a JSON-RPC message with `"id": null` broke the agent transport.** A client
   request posted with `"id": null` (legal JSON-RPC) was answered with `"id": null`, and routing that
   answer looked the id up in a map that rejects null keys; the `NullPointerException` closed the whole

@@ -78,7 +78,10 @@ final class OutboundMessages {
 				this.pendingResponses.remove(requestId);
 				responseSink.error(error);
 			});
-		}))
+		})
+			// A request that times out or is cancelled stops waiting: without this its entry
+			// stayed in the map until the session closed, one per timed-out request.
+			.doFinally(signal -> this.pendingResponses.remove(requestId)))
 			.transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout))
 			.handle((response, resultSink) -> deliver(method, response, typeRef, resultSink));
 	}
@@ -159,6 +162,11 @@ final class OutboundMessages {
 			sink.error(new RuntimeException("ACP session with " + this.peer + " terminated", cause));
 		});
 		this.pendingResponses.clear();
+	}
+
+	/** The number of requests waiting for a response. */
+	int pendingRequests() {
+		return this.pendingResponses.size();
 	}
 
 }
