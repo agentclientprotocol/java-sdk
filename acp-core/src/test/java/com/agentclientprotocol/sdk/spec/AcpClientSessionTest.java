@@ -479,7 +479,10 @@ class AcpClientSessionTest {
 			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
 			transport.simulateIncomingMessage(
 					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
-		}).expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result")).verify(TIMEOUT);
+		}).expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result")
+			.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+					e -> assertThat(e.getCode()).isEqualTo(-32603)))
+			.verify(TIMEOUT);
 
 		session.close();
 	}

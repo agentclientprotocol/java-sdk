@@ -115,7 +115,7 @@ final class ActivePrompts {
 	 * <em>before</em> the response is handed downstream to the transport. Releasing in
 	 * doFinally instead ran after the response had already reached the client; under CPU
 	 * contention the client's next prompt then arrived before the release and was rejected
-	 * with -32000 (#14). doOnNext and doOnError run before the signal propagates, and a Mono
+	 * as a concurrent prompt (#14). doOnNext and doOnError run before the signal propagates, and a Mono
 	 * emits at most once, so the release is ordered before publication on every path;
 	 * doFinally covers cancellation.
 	 * </p>

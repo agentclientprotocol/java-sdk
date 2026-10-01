@@ -294,7 +294,9 @@ class NegotiatedCapabilitiesTest {
 
 		var protocolException = exception.toProtocolException();
 
-		assertThat(protocolException.getCode()).isEqualTo(-32001);
+		// -32001 is in the ACP-reserved range and undefined there; the request is invalid for
+		// the negotiated capabilities.
+		assertThat(protocolException.getCode()).isEqualTo(-32600);
 		assertThat(protocolException.getData()).isEqualTo("terminal");
 	}
 

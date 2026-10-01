@@ -176,7 +176,7 @@ class AcpAgentSessionLifecycleTest {
 
 		AcpSchema.JSONRPCResponse sameSession = answer(prompt("p2", Map.of("sessionId", "s1", "prompt", List.of())));
 		assertThat(sameSession.error()).isNotNull();
-		assertThat(sameSession.error().code()).isEqualTo(AcpErrorCodes.CONCURRENT_PROMPT);
+		assertThat(sameSession.error().code()).isEqualTo(AcpErrorCodes.INVALID_REQUEST);
 
 		this.transport.deliver(prompt("p3", Map.of("sessionId", "s2", "prompt", List.of()))).subscribe();
 		assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder("s1", "s2");
@@ -209,7 +209,7 @@ class AcpAgentSessionLifecycleTest {
 		assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder("s1", "s2");
 		AcpSchema.JSONRPCResponse tooEarly = answer(prompt("p3", Map.of("sessionId", "s1", "prompt", List.of())));
 		assertThat(tooEarly.error()).as("a prompt before the cancelled one answered is rejected").isNotNull();
-		assertThat(tooEarly.error().code()).isEqualTo(AcpErrorCodes.CONCURRENT_PROMPT);
+		assertThat(tooEarly.error().code()).isEqualTo(AcpErrorCodes.INVALID_REQUEST);
 
 		this.gate.tryEmitValue(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
 		AcpSchema.JSONRPCResponse cancelledAnswer = (AcpSchema.JSONRPCResponse) cancelled.block(WAIT);

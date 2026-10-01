@@ -430,6 +430,64 @@ class StreamableHttpAcpClientTransportTest {
 	}
 
 	@Test
+	void sessionNewResponseWithoutSessionIdIsAnsweredAsAnInternalError() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		AtomicInteger sessionGetCount = new AtomicInteger();
+		BlockingQueue<AcpSchema.JSONRPCMessage> inboundMessages = new LinkedBlockingQueue<>();
+
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method())
+					&& request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"),
+						initializeResponse));
+			}
+			if ("GET".equals(request.method())
+					&& request.headers().firstValue("Acp-Session-Id").isEmpty()) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			if ("GET".equals(request.method())) {
+				sessionGetCount.incrementAndGet();
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.connect(message -> message.doOnNext(inboundMessages::add).then(Mono.empty())).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+			awaitResponse(inboundMessages, "init-1");
+
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_NEW, "new-1",
+					AcpTestFixtures.createNewSessionRequest("/workspace")))
+				.block();
+			writeSse(connectionStreamWriter,
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, "new-1", Map.of(), null));
+
+			AcpSchema.JSONRPCResponse response = awaitResponse(inboundMessages, "new-1");
+			assertThat(response.error()).isNotNull();
+			assertThat(response.error().code()).isEqualTo(-32603);
+			assertThat(response.error().message()).isEqualTo("session/new response missing sessionId");
+			assertThat(sessionGetCount).hasValue(0);
+		}
+		finally {
+			connectionStreamWriter.close();
+			transport.close();
+		}
+	}
+
+	@Test
 	void concurrentSessionSseEventsAreSerializedIntoInboundSink() throws Exception {
 		HttpClient httpClient = mock(HttpClient.class);
 		Map<String, PipedOutputStream> sessionWriters = new ConcurrentHashMap<>();

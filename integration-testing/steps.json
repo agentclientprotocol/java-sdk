@@ -401,7 +401,7 @@
       "id": "cancel.prompt-while-cancelling", "group": "cancel", "prompt": "#slow grace=1000",
       "only": { "agent": ["java"] },
       "client": "session/new; the prompt; after the first tick, session/cancel, then at once prompt \"during cancel\" on the same session; after the first prompt answers, prompt \"after cancel\".",
-      "pass": { "client": "The first prompt answers cancelled, \"during cancel\" fails with -32000, and \"after cancel\" answers end_turn. Java SDK policy (G0e), so only asserted against Java agents." }
+      "pass": { "client": "The first prompt answers cancelled, \"during cancel\" fails with -32600 (invalid request), and \"after cancel\" answers end_turn. Java SDK policy (G0e), so only asserted against Java agents." }
     },
     {
       "id": "cancel.grace", "group": "cancel", "prompt": "#hang",

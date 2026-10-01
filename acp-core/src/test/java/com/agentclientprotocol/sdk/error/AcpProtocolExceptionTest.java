@@ -28,11 +28,11 @@ class AcpProtocolExceptionTest {
 
 	@Test
 	void constructWithCodeAndMessage() {
-		AcpProtocolException exception = new AcpProtocolException(AcpErrorCodes.CONCURRENT_PROMPT,
+		AcpProtocolException exception = new AcpProtocolException(AcpErrorCodes.INVALID_REQUEST,
 				"Already processing");
 
-		assertThat(exception.getCode()).isEqualTo(-32000);
-		assertThat(exception.getMessage()).contains("-32000");
+		assertThat(exception.getCode()).isEqualTo(-32600);
+		assertThat(exception.getMessage()).contains("-32600");
 		assertThat(exception.getMessage()).contains("Already processing");
 		assertThat(exception.getData()).isNull();
 	}
@@ -69,12 +69,12 @@ class AcpProtocolExceptionTest {
 	}
 
 	@Test
-	void isConcurrentPromptReturnsTrueForCorrectCode() {
-		AcpProtocolException concurrent = new AcpProtocolException(AcpErrorCodes.CONCURRENT_PROMPT, "Already running");
+	void isAuthenticationRequiredReturnsTrueForCorrectCode() {
+		AcpProtocolException authRequired = new AcpProtocolException(-32000, "Log in first");
 		AcpProtocolException otherError = new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "Internal error");
 
-		assertThat(concurrent.isConcurrentPrompt()).isTrue();
-		assertThat(otherError.isConcurrentPrompt()).isFalse();
+		assertThat(authRequired.isAuthenticationRequired()).isTrue();
+		assertThat(otherError.isAuthenticationRequired()).isFalse();
 	}
 
 	@Test

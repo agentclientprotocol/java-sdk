@@ -85,7 +85,7 @@ class PromptCancellationTest {
 			assertThatThrownBy(() -> client.prompt(prompt).block(TIMEOUT))
 				.as("a prompt before the cancelled one has answered is rejected")
 				.isInstanceOfSatisfying(AcpError.class,
-						error -> assertThat(error.getCode()).isEqualTo(AcpErrorCodes.CONCURRENT_PROMPT));
+						error -> assertThat(error.getCode()).isEqualTo(AcpErrorCodes.INVALID_REQUEST));
 
 			finishAborting.tryEmitEmpty();
 			assertThat(cancelled.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
