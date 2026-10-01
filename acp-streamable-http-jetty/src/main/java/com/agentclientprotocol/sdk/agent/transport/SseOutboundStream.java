@@ -26,15 +26,27 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * <b>A mailbox, as in the Rust and TypeScript servers.</b> Every event goes into one
- * bounded queue owned by the stream. An attached subscriber removes an event only at the
- * moment it writes it to the response, so an event is never owned by a subscriber: when a
- * subscriber goes away (the client dropped, the server closed it for backpressure, a new
- * GET took the stream over, or the container reported an error on another thread) nothing
- * it had not written is lost or reordered, and the next subscriber continues from the
- * same queue. All state changes happen under this stream's monitor, including the
- * container's asynchronous callbacks, so a reconnect racing the old subscriber's close is
- * serialised. Bytes already written to a connection that then died can still be lost;
- * only event ids and {@code Last-Event-ID}, which the RFD defers, could close that.
+ * bounded queue owned by the stream. An attached subscriber takes an event from the queue
+ * when it writes it, but holds it as unconfirmed until the write has completed without
+ * error: when a subscriber goes away (the client dropped, the server closed it for
+ * backpressure, a new GET took the stream over, or the container reported an error on
+ * another thread) its unconfirmed events go back to the front of the queue in order, and
+ * the next subscriber continues from there. All state changes happen under this stream's
+ * monitor, including the container's asynchronous callbacks, so a reconnect racing the old
+ * subscriber's close is serialised.
+ * </p>
+ *
+ * <p>
+ * <b>What "completed" means.</b> A write is pending while {@code isReady()} returns false
+ * after its flush; the container then calls {@code onWritePossible} on success or
+ * {@code onError} on failure. A write whose flush completes at once may still have failed:
+ * a container can accept a write to a stream the client has already reset and report it
+ * only on the next write (Jetty's HTTP/2 output does). So once a flush has completed, an
+ * empty write checks the stream before the events in it are confirmed. An event whose
+ * write was still pending when its subscriber was detached is returned too, so it may
+ * arrive twice rather than not at all. Events whose write the container did complete, but which a client then discarded (its reset crossed the
+ * data on the wire), cannot be detected here; only event ids and {@code Last-Event-ID},
+ * which the RFD defers, could close that.
  * </p>
  *
  * @author Kaiser Dandangi
@@ -47,6 +59,8 @@ final class SseOutboundStream {
 
 	// Commits the SSE response when there are no queued events, without emitting an ACP message.
 	private static final byte[] SSE_OPEN_COMMENT = ": connected\n\n".getBytes(StandardCharsets.UTF_8);
+
+	private static final byte[] NO_BYTES = new byte[0];
 
 	private final int mailboxCapacity;
 
@@ -75,7 +89,7 @@ final class SseOutboundStream {
 		if (closed) {
 			return;
 		}
-		if (mailbox.size() == mailboxCapacity) {
+		if (mailbox.size() + (current != null ? current.unconfirmed.size() : 0) >= mailboxCapacity) {
 			throw new AcpConnectionException("Outbound SSE replay buffer exceeded " + mailboxCapacity + " events");
 		}
 		mailbox.addLast(payload);
@@ -139,6 +153,10 @@ final class SseOutboundStream {
 		if (current == subscriber) {
 			current = null;
 		}
+		// Not known to have reached the client: back to the front, in order.
+		while (!subscriber.unconfirmed.isEmpty()) {
+			mailbox.addFirst(subscriber.unconfirmed.removeLast());
+		}
 		try {
 			subscriber.asyncContext.complete();
 		}
@@ -148,8 +166,9 @@ final class SseOutboundStream {
 	}
 
 	/**
-	 * Writes to one servlet async response. Holds no events of its own except comments;
-	 * every method runs under the enclosing stream's monitor.
+	 * Writes to one servlet async response. Holds no events of its own except comments and
+	 * the events it wrote whose write has not yet completed; every method runs under the
+	 * enclosing stream's monitor.
 	 */
 	private final class SseSubscriber implements AsyncListener, WriteListener {
 
@@ -159,6 +178,12 @@ final class SseOutboundStream {
 
 		/** Comments (open, keep-alive) not yet written; written before queued events. */
 		private final ArrayDeque<byte[]> comments = new ArrayDeque<>();
+
+		/**
+		 * Events taken from the mailbox and written, oldest first, whose write has not
+		 * completed without error. Detaching returns them to the mailbox.
+		 */
+		private final ArrayDeque<String> unconfirmed = new ArrayDeque<>();
 
 		private boolean detached;
 
@@ -188,41 +213,37 @@ final class SseOutboundStream {
 					return;
 				}
 				try {
-					flushIfReady();
+					// isReady() true means no write is pending: everything written so far has
+					// been flushed and that flush has completed.
 					while (!detached && output.isReady()) {
+						if (!flushPending && !unconfirmed.isEmpty()) {
+							// A completed flush may still have failed; an empty write
+							// surfaces that before its events count as delivered.
+							output.write(NO_BYTES);
+							unconfirmed.clear();
+							continue;
+						}
 						byte[] bytes = comments.pollFirst();
-						String payload = null;
 						if (bytes == null) {
-							payload = mailbox.pollFirst();
+							String payload = mailbox.pollFirst();
 							if (payload == null) {
-								break;
+								if (!flushPending) {
+									break;
+								}
+								output.flush();
+								flushPending = false;
+								continue;
 							}
+							unconfirmed.addLast(payload);
 							bytes = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
 						}
-						try {
-							output.write(bytes);
-						}
-						catch (IOException | IllegalStateException e) {
-							if (payload != null) {
-								// The write failed, so the event did not go out: keep it first in line.
-								mailbox.addFirst(payload);
-							}
-							throw e;
-						}
+						output.write(bytes);
 						flushPending = true;
 					}
-					flushIfReady();
 				}
 				catch (IOException | IllegalStateException e) {
 					detach(this);
 				}
-			}
-		}
-
-		private void flushIfReady() throws IOException {
-			if (flushPending && output.isReady()) {
-				output.flush();
-				flushPending = false;
 			}
 		}
 
