@@ -212,6 +212,17 @@ Found by model checking with Lincheck; each has a Lincheck test as its regressio
   once, as on the connection stream. The connection's session table now makes each check and the
   change it decides one step.
 
+Found by measuring coverage with JaCoCo; each has a test.
+
+- **Annotated agents registered by class got a new instance for every request.**
+  `AcpAgentSupport.create(MyAgent.class)` and `builder().agent(MyAgent.class, factory)` created the
+  agent anew on each handler call, so state kept in its fields (sessions stored by `@NewSession` and
+  read by `@Prompt`, as in the module README's complete example) was lost between requests. The
+  agent is now created once, when it is registered, and that instance serves every request; a class
+  that cannot be instantiated fails at registration with an `IllegalArgumentException` rather than on
+  the first request. The module README's factory example, which called a
+  `create(Class, Supplier)` that does not exist, is corrected.
+
 ### Build
 
 - Model checking with Lincheck (`org.jetbrains.lincheck:lincheck` 3.7, test scope) for the SDK's
