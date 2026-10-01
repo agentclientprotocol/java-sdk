@@ -29,7 +29,6 @@ import org.jspecify.annotations.Nullable;
  * @param exitCode The exit code (0 typically means success), or null if the process was
  * terminated by a signal
  * @param signal The signal that terminated the process, or null if it exited normally
- * @param timedOut Whether the command was terminated due to timeout
  * @author Mark Pollack
  * @since 0.9.2
  * @see SyncPromptContext#execute(String...)
@@ -38,36 +37,24 @@ import org.jspecify.annotations.Nullable;
 public record CommandResult(
 		String output,
 		@Nullable Integer exitCode,
-		@Nullable String signal,
-		boolean timedOut
+		@Nullable String signal
 ) {
-
-	/**
-	 * Creates a CommandResult with the given output and exit code.
-	 * Sets timedOut to false.
-	 * @param output The command output
-	 * @param exitCode The exit code
-	 */
-	public CommandResult(String output, int exitCode) {
-		this(output, exitCode, null, false);
-	}
 
 	/**
 	 * Creates a CommandResult for a process that exited with the given code.
 	 * @param output The command output
 	 * @param exitCode The exit code
-	 * @param timedOut Whether the command was terminated due to timeout
 	 */
-	public CommandResult(String output, int exitCode, boolean timedOut) {
-		this(output, exitCode, null, timedOut);
+	public CommandResult(String output, int exitCode) {
+		this(output, exitCode, null);
 	}
 
 	/**
 	 * Returns true if the command completed successfully (exit code 0).
-	 * @return true if the process exited with code 0 and did not time out
+	 * @return true if the process exited with code 0
 	 */
 	public boolean success() {
-		return exitCode != null && exitCode == 0 && !timedOut;
+		return exitCode != null && exitCode == 0;
 	}
 
 }

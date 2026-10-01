@@ -29,11 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking: `SyncPromptContext.askChoice` returns `Optional<String>`**, empty when the client cancels
   the choice (it was documented to return null, and failed instead, below). `PromptContext.askChoice`
   completes empty on cancellation. Migration: `askChoice(...).orElse(...)`, or test `isPresent()`.
-- **Breaking: `CommandResult` carries a nullable exit code and the terminating signal.** Its components
-  are `(String output, @Nullable Integer exitCode, @Nullable String signal, boolean timedOut)`: a
-  command killed by a signal has no exit code. The `(output, int exitCode)` and
-  `(output, int exitCode, boolean timedOut)` constructors remain. Migration: `exitCode()` returns
-  `Integer`; use `success()`, or check `exitCode()` for null before comparing it.
+- **Breaking: `CommandResult` carries a nullable exit code and the terminating signal, and no
+  `timedOut` flag.** Its components are `(String output, @Nullable Integer exitCode,
+  @Nullable String signal)`: a command killed by a signal has no exit code. `timedOut` is removed,
+  with the `(output, int exitCode, boolean timedOut)` constructor: `execute` has no timeout (neither
+  `Command` nor `terminal/wait_for_exit` has one), so it never set the flag, and a result could not
+  report a timeout truthfully. The `(output, int exitCode)` constructor remains. Migration:
+  `exitCode()` returns `Integer`; use `success()`, or check `exitCode()` for null before comparing
+  it. To bound a command, use the terminal methods (`createTerminal`, `killTerminal`) directly.
 - **Breaking: `Command.env()` is never null**; it is empty when no variables are set (`Command.of`
   now builds it with `Map.of()`, and the canonical constructor takes a non-null map). Migration: test
   `env().isEmpty()` instead of `env() == null`.

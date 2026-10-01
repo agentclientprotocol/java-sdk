@@ -224,7 +224,7 @@ class DefaultPromptContext implements PromptContext {
 				return waitForTerminalExit(new WaitForTerminalExitRequest(sessionId, terminalId))
 						.flatMap(exitResp -> getTerminalOutput(new TerminalOutputRequest(sessionId, terminalId))
 								.map(outputResp -> new CommandResult(outputResp.output(), exitResp.exitCode(),
-										exitResp.signal(), false)))
+										exitResp.signal())))
 						// Release terminal after getting result, then return result
 						.flatMap(result -> releaseTerminal(releaseReq).thenReturn(result))
 						// On error, still release terminal before propagating error

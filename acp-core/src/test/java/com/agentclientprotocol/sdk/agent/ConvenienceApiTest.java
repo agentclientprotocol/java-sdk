@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import java.lang.reflect.RecordComponent;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -751,11 +752,19 @@ class ConvenienceApiTest {
 	void commandResultSuccessReturnsCorrectly() {
 		CommandResult success = new CommandResult("output", 0);
 		CommandResult failure = new CommandResult("error", 1);
-		CommandResult timedOut = new CommandResult("partial", 0, true);
+		CommandResult killed = new CommandResult("partial", null, "SIGKILL");
 
 		assertThat(success.success()).isTrue();
 		assertThat(failure.success()).isFalse();
-		assertThat(timedOut.success()).isFalse();
+		assertThat(killed.success()).isFalse();
+	}
+
+	@Test
+	void commandResultCarriesOnlyWhatTheTerminalReports() {
+		// execute() has no timeout (neither Command nor terminal/wait_for_exit has one), so a
+		// timedOut flag could never be set; the result carries what the client reports.
+		assertThat(CommandResult.class.getRecordComponents()).extracting(RecordComponent::getName)
+			.containsExactly("output", "exitCode", "signal");
 	}
 
 }
