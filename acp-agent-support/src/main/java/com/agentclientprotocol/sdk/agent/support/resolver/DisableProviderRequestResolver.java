@@ -28,7 +28,7 @@ public class DisableProviderRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException("Expected DisableProviderRequest but got: "
-				+ (request != null ? request.getClass().getName() : "null"));
+				+ request.getClass().getName());
 	}
 
 }

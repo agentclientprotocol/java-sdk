@@ -28,7 +28,7 @@ public class LoadSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected LoadSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected LoadSessionRequest but got: " + request.getClass().getName());
 	}
 
 }

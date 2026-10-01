@@ -28,7 +28,7 @@ public class ListProvidersRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected ListProvidersRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected ListProvidersRequest but got: " + request.getClass().getName());
 	}
 
 }

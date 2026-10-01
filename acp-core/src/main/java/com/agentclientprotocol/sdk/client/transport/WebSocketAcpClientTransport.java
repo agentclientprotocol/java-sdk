@@ -170,16 +170,14 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		this.inboundSink.asFlux()
 			.flatMap(message -> Mono.just(message).transform(handler))
 			.doOnNext(response -> {
-				if (response != null) {
-					// Responses are emitted from the inbound thread while sendMessage emits
-					// from user threads on the same sink; both must go through the serialising
-					// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
-					try {
-						this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
-					}
-					catch (Sinks.EmissionException e) {
-						logger.error("Dropped response {}: {}", response, e.getReason());
-					}
+				// Responses are emitted from the inbound thread while sendMessage emits
+				// from user threads on the same sink; both must go through the serialising
+				// busy-loop or a collision drops the response (FAIL_NON_SERIALIZED, #14).
+				try {
+					this.outboundSink.emitNext(response, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+				}
+				catch (Sinks.EmissionException e) {
+					logger.error("Dropped response {}: {}", response, e.getReason());
 				}
 			})
 			.doOnTerminate(() -> {
@@ -193,7 +191,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			.publishOn(outboundScheduler)
 			.subscribe(message -> {
 				WebSocket webSocket = this.webSocket;
-				if (message != null && !isClosing.get() && webSocket != null) {
+				if (!isClosing.get() && webSocket != null) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
 						logger.debug("Sending WebSocket message ({} characters)", jsonMessage.length());

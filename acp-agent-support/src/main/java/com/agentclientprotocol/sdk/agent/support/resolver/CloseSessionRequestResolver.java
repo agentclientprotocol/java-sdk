@@ -28,7 +28,7 @@ public class CloseSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected CloseSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected CloseSessionRequest but got: " + request.getClass().getName());
 	}
 
 }

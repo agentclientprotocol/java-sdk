@@ -28,7 +28,7 @@ public class SetSessionModeRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException("Expected SetSessionModeRequest but got: "
-				+ (request != null ? request.getClass().getName() : "null"));
+				+ request.getClass().getName());
 	}
 
 }

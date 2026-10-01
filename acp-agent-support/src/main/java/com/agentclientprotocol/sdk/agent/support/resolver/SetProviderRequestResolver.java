@@ -28,7 +28,7 @@ public class SetProviderRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected SetProviderRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected SetProviderRequest but got: " + request.getClass().getName());
 	}
 
 }

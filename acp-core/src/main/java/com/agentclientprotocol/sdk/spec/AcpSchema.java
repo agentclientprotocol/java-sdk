@@ -403,6 +403,7 @@ public final class AcpSchema {
 		 * string if no text content is present.
 		 */
 		public String text() {
+			// Required by the schema, but Jackson does not enforce it: a peer can omit it.
 			if (prompt == null) {
 				return "";
 			}

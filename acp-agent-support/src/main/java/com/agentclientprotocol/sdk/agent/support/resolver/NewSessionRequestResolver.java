@@ -28,7 +28,7 @@ public class NewSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected NewSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected NewSessionRequest but got: " + request.getClass().getName());
 	}
 
 }

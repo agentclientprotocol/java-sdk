@@ -28,7 +28,7 @@ public class LogoutRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected LogoutRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected LogoutRequest but got: " + request.getClass().getName());
 	}
 
 }

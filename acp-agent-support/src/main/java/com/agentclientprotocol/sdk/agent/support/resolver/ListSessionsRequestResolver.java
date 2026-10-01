@@ -28,7 +28,7 @@ public class ListSessionsRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected ListSessionsRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected ListSessionsRequest but got: " + request.getClass().getName());
 	}
 
 }

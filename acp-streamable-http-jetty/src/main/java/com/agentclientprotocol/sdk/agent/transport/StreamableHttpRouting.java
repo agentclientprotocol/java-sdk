@@ -243,6 +243,7 @@ final class StreamableHttpRouting {
 		AcpSchema.NewSessionResponse sessionResponse = jsonMapper.convertValue(result,
 				new TypeRef<AcpSchema.NewSessionResponse>() {
 				});
+		// Required by the schema, but conversion does not enforce it.
 		if (sessionResponse.sessionId() == null || sessionResponse.sessionId().isBlank()) {
 			throw new AcpConnectionException("session/new response missing sessionId");
 		}

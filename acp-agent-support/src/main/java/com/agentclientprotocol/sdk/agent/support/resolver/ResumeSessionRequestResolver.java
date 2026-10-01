@@ -28,7 +28,7 @@ public class ResumeSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected ResumeSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected ResumeSessionRequest but got: " + request.getClass().getName());
 	}
 
 }

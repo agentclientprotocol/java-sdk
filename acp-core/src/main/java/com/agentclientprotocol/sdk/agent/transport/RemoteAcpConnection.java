@@ -197,9 +197,7 @@ public final class RemoteAcpConnection {
 				this.inboundSubscription = inboundSink.asFlux()
 					.flatMap(message -> Mono.just(message).transform(handler))
 					.doOnNext(response -> {
-						if (response != null) {
-							outboundConsumer.accept(response);
-						}
+						outboundConsumer.accept(response);
 					})
 					.doOnError(this::signalException)
 					.doFinally(signal -> terminationSink.tryEmitValue(null))

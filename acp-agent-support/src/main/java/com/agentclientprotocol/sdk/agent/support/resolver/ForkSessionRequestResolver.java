@@ -28,7 +28,7 @@ public class ForkSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected ForkSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected ForkSessionRequest but got: " + request.getClass().getName());
 	}
 
 }

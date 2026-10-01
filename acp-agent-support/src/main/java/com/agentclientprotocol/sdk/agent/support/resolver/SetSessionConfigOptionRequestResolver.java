@@ -29,7 +29,7 @@ public class SetSessionConfigOptionRequestResolver implements ArgumentResolver {
 		}
 		throw new ArgumentResolutionException(
 				"Expected SetSessionConfigOptionRequest but got: "
-						+ (request != null ? request.getClass().getName() : "null"));
+						+ request.getClass().getName());
 	}
 
 }

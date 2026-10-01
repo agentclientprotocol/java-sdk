@@ -28,7 +28,7 @@ public class CancelNotificationResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException("Expected CancelNotification but got: "
-				+ (request != null ? request.getClass().getName() : "null"));
+				+ request.getClass().getName());
 	}
 
 }

@@ -336,7 +336,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			// want to ensure that the actual writing happens on a dedicated thread
 			.publishOn(outboundScheduler)
 			.handle((message, s) -> {
-				if (message != null && !isClosing) {
+				if (!isClosing) {
 					try {
 						String jsonMessage = jsonMapper.writeValueAsString(message);
 						// Escape any embedded newlines in the JSON message as per spec:

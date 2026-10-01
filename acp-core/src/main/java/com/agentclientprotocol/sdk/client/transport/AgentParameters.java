@@ -49,9 +49,7 @@ public class AgentParameters {
 		this.command = command;
 		this.args = args;
 		this.env = new HashMap<>(getDefaultEnvironment());
-		if (env != null && !env.isEmpty()) {
-			this.env.putAll(env);
-		}
+		this.env.putAll(env);
 	}
 
 	public String getCommand() {

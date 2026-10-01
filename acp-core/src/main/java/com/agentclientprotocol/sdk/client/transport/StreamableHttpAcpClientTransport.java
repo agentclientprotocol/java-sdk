@@ -727,6 +727,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		catch (Exception e) {
 			return emitInbound(errorResponse(response.id(), "Failed to read session/new response", e));
 		}
+		// Required by the schema, but Jackson does not enforce it: the agent can omit it.
 		if (sessionId == null || sessionId.isBlank()) {
 			return emitInbound(errorResponse(response.id(), "session/new response missing sessionId", null));
 		}

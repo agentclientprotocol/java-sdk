@@ -144,7 +144,7 @@ public final class AcpInvocationContext {
 	@SuppressWarnings("unchecked")
 	public <T> Optional<T> getAttribute(String name, Class<T> type) {
 		Object value = attributes.get(name);
-		if (value != null && type.isInstance(value)) {
+		if (type.isInstance(value)) {
 			return Optional.of((T) value);
 		}
 		return Optional.empty();

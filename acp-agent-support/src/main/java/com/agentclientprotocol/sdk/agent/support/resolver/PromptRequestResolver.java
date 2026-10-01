@@ -28,7 +28,7 @@ public class PromptRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected PromptRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected PromptRequest but got: " + request.getClass().getName());
 	}
 
 }

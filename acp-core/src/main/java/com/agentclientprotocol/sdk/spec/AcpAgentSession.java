@@ -307,6 +307,8 @@ public class AcpAgentSession implements AcpSession {
 	 * the JSON transports and as the typed record from in-process transports.
 	 */
 	private String extractSessionId(@Nullable Object params) {
+		// The typed records come from in-process callers, which no nullness checker may
+		// have seen; a null key would fail the activePrompts map.
 		if (params instanceof AcpSchema.PromptRequest promptRequest) {
 			return promptRequest.sessionId() != null ? promptRequest.sessionId() : "unknown";
 		}

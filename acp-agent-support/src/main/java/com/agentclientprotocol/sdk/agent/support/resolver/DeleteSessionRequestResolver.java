@@ -28,7 +28,7 @@ public class DeleteSessionRequestResolver implements ArgumentResolver {
 			return request;
 		}
 		throw new ArgumentResolutionException(
-				"Expected DeleteSessionRequest but got: " + (request != null ? request.getClass().getName() : "null"));
+				"Expected DeleteSessionRequest but got: " + request.getClass().getName());
 	}
 
 }
