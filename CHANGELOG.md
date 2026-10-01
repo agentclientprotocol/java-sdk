@@ -151,6 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A peer's error answer to a message it could not read was logged as an SDK bug.** An error
+  response with `"id": null` (what JSON-RPC 2.0 prescribes, and what this SDK and its peers send, for
+  a message whose id could not be read) was logged at ERROR as "a bug in the request sender code".
+  It is now logged at WARN as the peer's error report, with its code and message.
 - **Both stdio transports stopped reading on the first line that was not a JSON-RPC message.**
   `StdioAcpAgentTransport` and `StdioAcpClientTransport` ended their inbound stream on one malformed
   line, so the peer's later messages were never read; the client did so without telling anyone. Such

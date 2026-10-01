@@ -81,6 +81,13 @@ final class PendingResponses {
 	/** Completes the request this response answers. */
 	void complete(AcpSchema.JSONRPCResponse response) {
 		logger.debug("Received response for id {}", response.id());
+		AcpSchema.JSONRPCError error = response.error();
+		if (response.id() == null && error != null) {
+			// JSON-RPC 2.0: the answer to a message whose id could not be read.
+			logger.warn("The {} reported an error for a message it could not read: {} {}", this.peer, error.code(),
+					error.message());
+			return;
+		}
 		if (response.id() == null) {
 			logger.error("Discarded ACP request response without session id. "
 					+ "This is an indication of a bug in the request sender code that can lead to memory "
