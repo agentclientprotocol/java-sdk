@@ -57,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails clearly. A null result of an extension (`_`-prefixed) method completes the request's `Mono`
   empty, and a message with an `id` but no `method`, `result` or `error` is read as a response
   without a result instead of being rejected.
+- An interceptor's `afterCompletion` ran twice when a later interceptor vetoed the call or threw from
+  `preInvoke`: once inside `InterceptorChain.applyPreInvoke` and again from the invocation's cleanup.
+  `applyPreInvoke` no longer runs cleanup, and `triggerAfterCompletion` runs at most once per chain,
+  so `afterCompletion` runs exactly once per invocation on every path.
 
 Found by the NullAway adoption; each has a test.
 

@@ -6,6 +6,9 @@ package com.agentclientprotocol.sdk.agent.support;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
@@ -373,6 +376,92 @@ class AcpAgentSupportTest {
 
 		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
 			.hasMessageContaining("produced no response");
+	}
+
+	@Test
+	void afterCompletionRunsExactlyOncePerInvocationOnEveryPath() throws Exception {
+		// A veto (or a preInvoke failure) used to run afterCompletion twice: inside
+		// applyPreInvoke and again from the invocation's finally block.
+		Map<String, AtomicInteger> completions = new ConcurrentHashMap<>();
+		AcpInterceptor counting = new AcpInterceptor() {
+			@Override
+			public int getOrder() {
+				return 0;
+			}
+
+			@Override
+			public void afterCompletion(AcpInvocationContext context) {
+				completions.computeIfAbsent(context.getAcpMethod(), m -> new AtomicInteger()).incrementAndGet();
+			}
+		};
+		AcpInterceptor vetoOrFail = new AcpInterceptor() {
+			@Override
+			public int getOrder() {
+				return 1;
+			}
+
+			@Override
+			public boolean preInvoke(AcpInvocationContext context) {
+				if ("session/close".equals(context.getAcpMethod())) {
+					throw new IllegalStateException("preInvoke failed");
+				}
+				return !"session/set_mode".equals(context.getAcpMethod());
+			}
+		};
+
+		@AcpAgent
+		class LifecycleAgent {
+
+			@Initialize
+			InitializeResponse init() {
+				return InitializeResponse.ok();
+			}
+
+			@NewSession
+			NewSessionResponse newSession() {
+				return new NewSessionResponse("s", null, null);
+			}
+
+			@LoadSession
+			LoadSessionResponse load(LoadSessionRequest req) {
+				throw new IllegalStateException("handler failed");
+			}
+
+			@SetSessionMode
+			SetSessionModeResponse setMode(SetSessionModeRequest req) {
+				return new SetSessionModeResponse();
+			}
+
+			@CloseSession
+			CloseSessionResponse close(CloseSessionRequest req) {
+				return new CloseSessionResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new LifecycleAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.interceptor(counting)
+				.interceptor(vetoOrFail)
+				.build();
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+
+		client.newSession(new NewSessionRequest("/", List.of())).block(TIMEOUT);
+		assertThatThrownBy(() -> client.loadSession(new LoadSessionRequest("s", "/", List.of())).block(TIMEOUT))
+			.hasMessageContaining("handler failed");
+		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
+			.hasMessageContaining("produced no response");
+		assertThatThrownBy(() -> client.closeSession(new CloseSessionRequest("s")).block(TIMEOUT))
+			.hasMessageContaining("preInvoke failed");
+
+		assertThat(completions).containsOnlyKeys("initialize", "session/new", "session/load", "session/set_mode",
+				"session/close");
+		assertThat(completions.values()).allSatisfy(count -> assertThat(count.get()).isEqualTo(1));
 	}
 
 	@Test

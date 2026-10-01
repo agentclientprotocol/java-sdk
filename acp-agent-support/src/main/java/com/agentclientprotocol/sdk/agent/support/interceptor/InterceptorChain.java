@@ -43,25 +43,19 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Apply preInvoke to all interceptors.
+	 * Apply preInvoke to all interceptors, stopping at the first that vetoes the call or
+	 * throws. Cleanup is not run here: whichever way the invocation ends, the caller runs
+	 * {@link #triggerAfterCompletion} once, which covers the interceptors whose preInvoke
+	 * returned true.
 	 * @param context the invocation context
 	 * @return true to continue, false to abort
 	 */
 	public boolean applyPreInvoke(AcpInvocationContext context) {
 		for (int i = 0; i < interceptors.size(); i++) {
-			AcpInterceptor interceptor = interceptors.get(i);
-			try {
-				if (!interceptor.preInvoke(context)) {
-					// Short-circuit: trigger cleanup for completed interceptors
-					triggerAfterCompletion(context, null);
-					return false;
-				}
-				this.interceptorIndex = i;
+			if (!interceptors.get(i).preInvoke(context)) {
+				return false;
 			}
-			catch (Exception e) {
-				triggerAfterCompletion(context, e);
-				throw e;
-			}
+			this.interceptorIndex = i;
 		}
 		return true;
 	}
@@ -108,13 +102,16 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Trigger afterCompletion for all started interceptors.
-	 * Called in finally block - must not throw.
+	 * Trigger afterCompletion, in reverse order, for every interceptor whose preInvoke
+	 * returned true. Called in a finally block; never throws, and runs at most once per
+	 * chain, so each interceptor's afterCompletion runs exactly once per invocation.
 	 * @param context the invocation context
 	 * @param ex the exception (may be null)
 	 */
 	public void triggerAfterCompletion(AcpInvocationContext context, @Nullable Throwable ex) {
-		for (int i = this.interceptorIndex; i >= 0; i--) {
+		int started = this.interceptorIndex;
+		this.interceptorIndex = -1;
+		for (int i = started; i >= 0; i--) {
 			try {
 				interceptors.get(i).afterCompletion(context);
 			}
