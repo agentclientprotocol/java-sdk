@@ -546,7 +546,12 @@ async fn prompt(
                         step("perm.cancelled", said == "cancelled", t0, &format!("outcome {said}"));
                     } else {
                         step("perm.selected", said == "selected allow", t0, &format!("outcome {said}"));
-                        step("meta.permission", has_meta(&r), t0, &format!("response _meta {}", r.get("_meta").unwrap_or(&Value::Null)));
+                        // Only a response that carries _meta is judged: #permission allow also serves
+                        // perm.selected, against clients that cannot echo _meta at all (meta.permission
+                        // itself checks the request side; a missing PASS line still fails the cell).
+                        if let Some(m) = r.get("_meta").filter(|m| !m.is_null()) {
+                            step("meta.permission", has_meta(&r), t0, &format!("response _meta {m}"));
+                        }
                     }
                     send(&format!("permission: {said}"));
                     Ok(end(if hold { "cancelled" } else { "end_turn" }))
