@@ -182,28 +182,94 @@ class AcpAgentSessionLifecycleTest {
 		assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder("s1", "s2");
 	}
 
+	/**
+	 * ACP v1 prompt turn, Cancellation: after session/cancel the agent may still send
+	 * updates and must then answer the original session/prompt with stopReason cancelled;
+	 * "once a prompt turn completes, the Client may send another session/prompt". The turn
+	 * ends with that response, not with the cancel.
+	 */
 	@Test
-	void cancelReleasesThePromptLockOfItsSessionOnly() {
+	void cancelKeepsTheTurnUntilTheCancelledPromptAnswers() {
 		AtomicReference<Object> cancelParams = new AtomicReference<>();
 		AcpAgentSession session = promptSession(
 				Map.of(AcpSchema.METHOD_SESSION_CANCEL, params -> Mono.fromRunnable(() -> cancelParams.set(params))));
-		this.transport.deliver(prompt("p1", new AcpSchema.PromptRequest("s1", List.of()))).subscribe();
+		Mono<AcpSchema.JSONRPCMessage> cancelled = this.transport
+			.deliver(prompt("p1", new AcpSchema.PromptRequest("s1", List.of())))
+			.cache();
+		cancelled.subscribe();
 		this.transport.deliver(prompt("p2", Map.of("sessionId", "s2", "prompt", List.of()))).subscribe();
-		assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder("s1", "s2");
 
 		// In-process transports deliver the typed record...
 		AcpSchema.CancelNotification typedCancel = new AcpSchema.CancelNotification("s1");
 		assertThat(this.transport.deliver(cancel(typedCancel)).block(WAIT)).isNull();
-		assertThat(cancelParams.get()).isSameAs(typedCancel);
-		assertThat(session.hasActivePrompt("s1")).isFalse();
-		assertThat(session.hasActivePrompt("s2")).isTrue();
-
+		assertThat(cancelParams.get()).as("the agent's cancel handler still runs").isSameAs(typedCancel);
 		// ... and the JSON transports a Map.
-		this.transport.deliver(cancel(Map.of("sessionId", "s2"))).block(WAIT);
-		assertThat(session.hasActivePrompt()).isFalse();
+		this.transport.deliver(cancel(Map.of("sessionId", "s1"))).block(WAIT);
 
-		this.transport.deliver(prompt("p3", Map.of("sessionId", "s1", "prompt", List.of()))).subscribe();
-		assertThat(session.hasActivePrompt("s1")).as("a prompt after cancel is accepted").isTrue();
+		assertThat(session.getActivePromptSessionIds()).containsExactlyInAnyOrder("s1", "s2");
+		AcpSchema.JSONRPCResponse tooEarly = answer(prompt("p3", Map.of("sessionId", "s1", "prompt", List.of())));
+		assertThat(tooEarly.error()).as("a prompt before the cancelled one answered is rejected").isNotNull();
+		assertThat(tooEarly.error().code()).isEqualTo(AcpErrorCodes.CONCURRENT_PROMPT);
+
+		this.gate.tryEmitValue(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
+		AcpSchema.JSONRPCResponse cancelledAnswer = (AcpSchema.JSONRPCResponse) cancelled.block(WAIT);
+		assertThat(cancelledAnswer.error()).isNull();
+
+		AcpSchema.JSONRPCResponse next = answer(prompt("p4", Map.of("sessionId", "s1", "prompt", List.of())));
+		assertThat(next.error()).as("once the cancelled turn has answered, the next prompt is accepted").isNull();
+	}
+
+	@Test
+	void aCancelledPromptWhoseHandlerFailsEndsItsTurn() {
+		Sinks.One<AcpSchema.PromptResponse> failing = Sinks.one();
+		AcpAgentSession.RequestHandler<AcpSchema.PromptResponse> handler = params -> failing.asMono();
+		AcpAgentSession session = new AcpAgentSession(LONG_TIMEOUT, this.transport,
+				Map.of(AcpSchema.METHOD_SESSION_PROMPT, handler), Map.of());
+		Mono<AcpSchema.JSONRPCMessage> first = this.transport
+			.deliver(prompt("p1", Map.of("sessionId", "s1", "prompt", List.of())))
+			.cache();
+		first.subscribe();
+		this.transport.deliver(cancel(Map.of("sessionId", "s1"))).block(WAIT);
+		assertThat(session.hasActivePrompt("s1")).isTrue();
+
+		failing.tryEmitError(new IllegalStateException("aborted"));
+
+		assertThat(((AcpSchema.JSONRPCResponse) first.block(WAIT)).error()).isNotNull();
+		assertThat(session.hasActivePrompt("s1")).as("an error response ends the turn").isFalse();
+	}
+
+	/**
+	 * The session sets no timeout of its own on an inbound prompt: a handler that never
+	 * answers after a cancel keeps the session busy. A timeout the handler applies is an
+	 * error like any other, and ends the turn.
+	 */
+	@Test
+	void aCancelledPromptWhoseHandlerTimesOutEndsItsTurn() {
+		AcpAgentSession.RequestHandler<AcpSchema.PromptResponse> handler = params -> Mono
+			.<AcpSchema.PromptResponse>never()
+			.timeout(Duration.ofMillis(50));
+		AcpAgentSession session = new AcpAgentSession(LONG_TIMEOUT, this.transport,
+				Map.of(AcpSchema.METHOD_SESSION_PROMPT, handler), Map.of());
+		Mono<AcpSchema.JSONRPCMessage> first = this.transport
+			.deliver(prompt("p1", Map.of("sessionId", "s1", "prompt", List.of())))
+			.cache();
+		first.subscribe();
+		this.transport.deliver(cancel(Map.of("sessionId", "s1"))).block(WAIT);
+
+		assertThat(((AcpSchema.JSONRPCResponse) first.block(WAIT)).error()).isNotNull();
+		assertThat(session.hasActivePrompt("s1")).isFalse();
+	}
+
+	@Test
+	void closingTheSessionEndsACancelledTurnThatNeverAnswers() {
+		AcpAgentSession session = promptSession(Map.of());
+		this.transport.deliver(prompt("p1", Map.of("sessionId", "s1", "prompt", List.of()))).subscribe();
+		this.transport.deliver(cancel(Map.of("sessionId", "s1"))).block(WAIT);
+		assertThat(session.hasActivePrompt("s1")).as("busy while the handler has not answered").isTrue();
+
+		session.close();
+
+		assertThat(session.hasActivePrompt()).isFalse();
 	}
 
 	@Test

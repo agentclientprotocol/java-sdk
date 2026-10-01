@@ -316,6 +316,13 @@ public interface AcpAgent {
 
 	/**
 	 * Functional interface for handling cancel notifications.
+	 *
+	 * <p>
+	 * A cancel does not end the prompt turn: stop the prompt's work, send any last
+	 * updates, and answer the prompt with stop reason {@code cancelled}. The session stays
+	 * busy, rejecting a new prompt, until that answer (or an error) is sent (ACP v1, prompt
+	 * turn, Cancellation).
+	 * </p>
 	 */
 	@FunctionalInterface
 	interface CancelHandler {

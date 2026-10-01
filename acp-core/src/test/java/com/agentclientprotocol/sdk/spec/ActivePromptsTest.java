@@ -29,15 +29,28 @@ class ActivePromptsTest {
 	}
 
 	@Test
-	void aCancelledTurnDoesNotReleaseTheNextPromptWithTheSameRequestId() {
+	void cancelKeepsTheTurnUntilTheCancelledPromptEnds() {
 		ActivePrompts.Turn cancelled = prompts.tryStart("s", 1);
 		assertThat(cancelled).isNotNull();
-		assertThat(prompts.cancel("s")).isTrue();
+
+		assertThat(prompts.cancel("s")).as("a prompt was active").isTrue();
+		assertThat(prompts.current("s")).as("the turn ends with its response, not the cancel").isSameAs(cancelled);
+		assertThat(prompts.tryStart("s", 2)).as("the session is still busy").isNull();
+
+		assertThat(prompts.end(cancelled, "response")).isTrue();
 		assertThat(prompts.cancel("s")).as("nothing left to cancel").isFalse();
+		assertThat(prompts.tryStart("s", 2)).isNotNull();
+	}
+
+	@Test
+	void aTurnFromBeforeClearDoesNotReleaseTheNextPromptWithTheSameRequestId() {
+		ActivePrompts.Turn stale = prompts.tryStart("s", 1);
+		assertThat(stale).isNotNull();
+		prompts.clear();
 
 		ActivePrompts.Turn next = prompts.tryStart("s", 1);
 		assertThat(next).isNotNull();
-		assertThat(prompts.end(cancelled, "response")).isFalse();
+		assertThat(prompts.end(stale, "response")).isFalse();
 		assertThat(prompts.current("s")).isSameAs(next);
 	}
 

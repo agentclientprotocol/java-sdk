@@ -379,6 +379,14 @@ public class AcpSyncClient implements AutoCloseable {
 	 * specified session. Note that this is a notification (fire-and-forget), not a
 	 * request.
 	 * </p>
+	 *
+	 * <p>
+	 * The cancel does not end the prompt turn. The agent may still send
+	 * {@code session/update}s, which reach the session update consumers as usual, and then
+	 * answers the pending {@code prompt} with stop reason {@code cancelled}. Send the next
+	 * prompt on the session once that answer has arrived: until then the agent rejects it
+	 * (ACP v1, prompt turn, Cancellation).
+	 * </p>
 	 * @param cancelNotification the cancel notification with session ID and optional
 	 * reason
 	 * @see AcpSchema#METHOD_SESSION_CANCEL

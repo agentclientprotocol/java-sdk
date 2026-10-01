@@ -30,7 +30,8 @@ import reactor.core.publisher.Mono;
  * <li>Notification processing</li>
  * <li>Message timeout management</li>
  * <li>Transport layer abstraction</li>
- * <li>Single-turn enforcement (only one prompt active at a time per session)</li>
+ * <li>Single-turn enforcement (only one prompt active at a time per session; a turn ends
+ * with its prompt's response, also after {@code session/cancel})</li>
  * </ul>
  *
  * <p>
@@ -245,13 +246,14 @@ public class AcpAgentSession implements AcpSession {
 
 	/**
 	 * Handles an incoming JSON-RPC notification by routing it to the appropriate handler.
-	 * For session/cancel notifications, clears the active prompt.
+	 * A session/cancel notification does not end the active prompt's turn: the cancelled
+	 * prompt's response does (see ActivePrompts#cancel).
 	 * @param notification The incoming JSON-RPC notification
 	 * @return A Mono that completes when the notification is processed
 	 */
 	private Mono<Void> handleIncomingNotification(AcpSchema.JSONRPCNotification notification) {
 		return Mono.defer(() -> {
-			// Handle cancel notification specially
+			// session/cancel: the turn stays until the cancelled prompt answers
 			if (AcpSchema.METHOD_SESSION_CANCEL.equals(notification.method())) {
 				activePrompts.cancel(extractSessionId(notification.params()));
 			}
