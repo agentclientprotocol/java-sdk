@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.agent.support.handler;
 
+import java.util.List;
+
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
@@ -35,24 +37,17 @@ import org.jspecify.annotations.Nullable;
  */
 public class DirectResponseHandler implements ReturnValueHandler {
 
+	/** The response types of the ACP methods an annotated handler can serve. */
+	private static final List<Class<?>> RESPONSE_TYPES = List.of(InitializeResponse.class, LogoutResponse.class,
+			NewSessionResponse.class, LoadSessionResponse.class, PromptResponse.class, SetSessionModeResponse.class,
+			ListSessionsResponse.class, CloseSessionResponse.class, DeleteSessionResponse.class,
+			ResumeSessionResponse.class, ForkSessionResponse.class, SetSessionConfigOptionResponse.class,
+			ListProvidersResponse.class, SetProviderResponse.class, DisableProviderResponse.class);
+
 	@Override
 	public boolean supportsReturnType(AcpMethodParameter returnType) {
 		Class<?> type = returnType.getParameterType();
-		return InitializeResponse.class.isAssignableFrom(type)
-				|| LogoutResponse.class.isAssignableFrom(type)
-				|| NewSessionResponse.class.isAssignableFrom(type)
-				|| LoadSessionResponse.class.isAssignableFrom(type)
-				|| PromptResponse.class.isAssignableFrom(type)
-				|| SetSessionModeResponse.class.isAssignableFrom(type)
-				|| ListSessionsResponse.class.isAssignableFrom(type)
-				|| CloseSessionResponse.class.isAssignableFrom(type)
-				|| DeleteSessionResponse.class.isAssignableFrom(type)
-				|| ResumeSessionResponse.class.isAssignableFrom(type)
-				|| ForkSessionResponse.class.isAssignableFrom(type)
-				|| SetSessionConfigOptionResponse.class.isAssignableFrom(type)
-				|| ListProvidersResponse.class.isAssignableFrom(type)
-				|| SetProviderResponse.class.isAssignableFrom(type)
-				|| DisableProviderResponse.class.isAssignableFrom(type);
+		return RESPONSE_TYPES.stream().anyMatch(responseType -> responseType.isAssignableFrom(type));
 	}
 
 	@Override
