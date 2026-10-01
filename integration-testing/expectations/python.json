@@ -1,0 +1,70 @@
+{
+  "comment": "Expected failures caused by the Python SDK (python-sdk, paths relative to src/acp/) or the Python interop programs. Owned by programs/python. See README.md in this directory.",
+  "expectations": [
+    {
+      "step": "session.resume", "when": { "agent": "python", "transport": "http" }, "contains": "-32601",
+      "see": "peer:python-sdk http/server.py:270",
+      "reason": "The SDK's HTTP server builds each AgentSideConnection without use_unstable_protocol, so session/resume (unstable in the Python SDK) is answered method-not-found although the agent implements it"
+    },
+    {
+      "step": "session.resume", "when": { "agent": "python", "transport": "ws" }, "contains": "-32601",
+      "see": "peer:python-sdk ws/server.py:55",
+      "reason": "handle_websocket builds the AgentSideConnection without use_unstable_protocol, so session/resume is answered method-not-found although the agent implements it"
+    },
+    {
+      "step": "session.close", "when": { "agent": "python", "transport": "http" }, "contains": "-32601",
+      "see": "peer:python-sdk http/server.py:270",
+      "reason": "The SDK's HTTP server never enables the unstable router: session/close is answered method-not-found"
+    },
+    {
+      "step": "session.close", "when": { "agent": "python", "transport": "ws" }, "contains": "-32601",
+      "see": "peer:python-sdk ws/server.py:55",
+      "reason": "The SDK's WebSocket server never enables the unstable router: session/close is answered method-not-found"
+    },
+    {
+      "step": "session.fork", "when": { "agent": "python", "transport": "http" }, "contains": "-32601",
+      "see": "peer:python-sdk http/server.py:270",
+      "reason": "The SDK's HTTP server never enables the unstable router: session/fork is answered method-not-found"
+    },
+    {
+      "step": "session.fork", "when": { "agent": "python", "transport": "ws" }, "contains": "-32601",
+      "see": "peer:python-sdk ws/server.py:55",
+      "reason": "The SDK's WebSocket server never enables the unstable router: session/fork is answered method-not-found"
+    },
+    {
+      "step": "cancel-request.client", "when": { "client": "python" }, "contains": "no $/cancel_request API",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it"
+    },
+    {
+      "step": "cancel-request.unknown", "when": { "client": "python" }, "contains": "no $/cancel_request API",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it"
+    },
+    {
+      "step": "cancel-request.client", "when": { "agent": "python" }, "contains": "",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python SDK routes no $/cancel_request (only the constant exists), so the #slow handler never sees it and the prompt runs its full 10 s"
+    },
+    {
+      "step": "cancel-request.agent", "when": { "agent": "python" }, "contains": "cancel-request",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python agent cannot send $/cancel_request (no API), so it answers the chunk \"cancel-request unsupported\" instead of \"cancel-request sent\""
+    },
+    {
+      "step": "agent.cancel-request.agent", "when": { "agent": "python" }, "contains": "$/cancel_request",
+      "see": "peer:python-sdk meta.py:49",
+      "reason": "The Python agent cannot send $/cancel_request for its pending fs/read_text_file (no API)"
+    },
+    {
+      "step": "big.update-1m", "when": { "client": "python", "transport": "ws" }, "contains": "1009",
+      "see": "peer:python-sdk ws/client.py:98",
+      "reason": "create_websocket_stream connects with websockets' default max_size of 1 MiB and offers no way to raise it; a 1 MiB chunk plus its envelope exceeds it and the client closes the socket with 1009"
+    },
+    {
+      "step": "big.update-8m", "when": { "client": "python", "transport": "ws" }, "contains": "1009",
+      "see": "peer:python-sdk ws/client.py:98",
+      "reason": "create_websocket_stream connects with websockets' default max_size of 1 MiB and offers no way to raise it; the client closes the socket with 1009"
+    }
+  ]
+}
