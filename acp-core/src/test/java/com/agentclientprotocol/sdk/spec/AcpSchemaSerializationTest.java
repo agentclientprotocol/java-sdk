@@ -741,7 +741,7 @@ class AcpSchemaSerializationTest {
 	void elicitationCapabilitiesOnClientCapabilities() throws IOException {
 		var caps = new AcpSchema.ClientCapabilities(
 				new AcpSchema.FileSystemCapability(true, true), true,
-				new AcpSchema.ElicitationCapabilities(), null);
+				AcpSchema.ElicitationCapabilities.formOnly(), null);
 
 		String json = jsonMapper.writeValueAsString(caps);
 		assertThat(json).contains("\"elicitation\"");

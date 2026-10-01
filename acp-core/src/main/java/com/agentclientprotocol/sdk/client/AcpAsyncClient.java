@@ -157,6 +157,11 @@ public class AcpAsyncClient {
 	private final AtomicReference<@Nullable NegotiatedCapabilities> agentCapabilities = new AtomicReference<>();
 
 	/**
+	 * The capabilities the client advertised in its last initialize request.
+	 */
+	private final AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities;
+
+	/**
 	 * Creates a new AcpAsyncClient with the given session and transport. Uses default
 	 * client capabilities.
 	 * @param session the ACP session for communication
@@ -176,11 +181,28 @@ public class AcpAsyncClient {
 	 */
 	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
 			AcpSchema.@Nullable ClientCapabilities clientCapabilities) {
+		this(session, transport, clientCapabilities, new AtomicReference<>());
+	}
+
+	/**
+	 * Creates a new AcpAsyncClient that records the capabilities it advertises when it
+	 * initializes, so its handlers can honour them.
+	 * @param session the ACP session for communication
+	 * @param transport the transport layer for this client
+	 * @param clientCapabilities the client capabilities to use during initialization (may
+	 * be null for defaults)
+	 * @param advertisedCapabilities set to the capabilities of each initialize request
+	 * the client sends
+	 */
+	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
+			AcpSchema.@Nullable ClientCapabilities clientCapabilities,
+			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities) {
 		Assert.notNull(session, "Session must not be null");
 		Assert.notNull(transport, "Transport must not be null");
 		this.session = session;
 		this.transport = transport;
 		this.clientCapabilities = clientCapabilities != null ? clientCapabilities : new AcpSchema.ClientCapabilities();
+		this.advertisedCapabilities = advertisedCapabilities;
 	}
 
 	// --------------------------
@@ -209,7 +231,12 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.InitializeResponse> initialize(AcpSchema.InitializeRequest initializeRequest) {
 		Assert.notNull(initializeRequest, "Initialize request must not be null");
 		logger.debug("Initializing ACP client with protocol version: {}", initializeRequest.protocolVersion());
-		return session.sendRequest(AcpSchema.METHOD_INITIALIZE, initializeRequest, INITIALIZE_RESPONSE_TYPE_REF)
+		AcpSchema.ClientCapabilities advertised = initializeRequest.clientCapabilities();
+		return Mono
+			.fromRunnable(() -> advertisedCapabilities
+				.set(advertised != null ? advertised : new AcpSchema.ClientCapabilities(null, null)))
+			.then(Mono.defer(
+					() -> session.sendRequest(AcpSchema.METHOD_INITIALIZE, initializeRequest, INITIALIZE_RESPONSE_TYPE_REF)))
 			.doOnNext(response -> {
 				// Store the negotiated agent capabilities
 				NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(response.agentCapabilities());

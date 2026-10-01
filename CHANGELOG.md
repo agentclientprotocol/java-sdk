@@ -13,7 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
   0.18.0 shipped with the affected versions; applications can override the versions now.
 
+### Added
+
+- **`elicitation/complete` reaches a typed client handler:** `AcpClient.async(...)
+  .completeElicitationHandler(Function<CompleteElicitationNotification, Mono<Void>>)` and
+  `AcpClient.sync(...).completeElicitationHandler(Consumer<CompleteElicitationNotification>)`. Before,
+  the agent could send the notification but a client could only read it as raw params through
+  `notificationHandler`. The spec requires clients to ignore unknown or already-completed
+  elicitation IDs; the handler sees every notification and does that check.
+- `AcpSyncAgent.createElicitation` and `AcpSyncAgent.completeElicitation`, matching the async agent.
+- `CreateElicitationResponse.accept()` without content (for an accepted URL elicitation), and the
+  mode constants `CreateElicitationRequest.MODE_FORM` and `MODE_URL`.
+- The elicitation records carry every field of the stable schema: `_meta` on `ElicitationSchema`,
+  the five property schemas, both multi-select item types and `EnumOption`, and `description` on
+  `EnumOption`. The constructors without them remain.
+
 ### Changed
+
+- **Elicitation is stable (the ACP schema promoted it on 2026-07-24, in protocol v1.7.0), and its
+  API is no longer `@UnstableAcpApi`:** `CreateElicitationRequest`, `CreateElicitationResponse`,
+  `ElicitationAction`, `CompleteElicitationNotification`, `ElicitationSchema`, the property schemas,
+  the multi-select items, `EnumOption`, `ElicitationCapabilities` and
+  `ClientCapabilities.elicitation`.
+- **Breaking: the elicitation capability's modes are typed, and the no-argument
+  `ElicitationCapabilities()` constructor is removed.** `form` and `url` were `Object`; they are now
+  `ElicitationFormCapabilities` and `ElicitationUrlCapabilities` (each with `_meta`), as in the
+  schema. The removed constructor advertised form mode, although the spec says an empty capability
+  (`{}`) advertises no mode. Migration: `new ElicitationCapabilities()` becomes
+  `ElicitationCapabilities.formOnly()`; `urlOnly()` and `formAndUrl()` advertise the other modes, and
+  code that read `form()` or `url()` as `Object` gets the typed records.
+- **Behaviour change: the agent checks the requested elicitation mode, not only elicitation.**
+  `createElicitation` fails with `AcpCapabilityException` (`elicitation.form` or `elicitation.url`)
+  when the client did not advertise the request's mode; before, any `elicitation` object, even `{}`,
+  let both modes through. The spec says agents must not request a mode the client did not advertise.
+  A mode the SDK does not know still needs only `elicitation`.
+- **Behaviour change: a client with a typed `createElicitationHandler` answers a request for a mode
+  it did not advertise at initialization with `-32602` (invalid params)**, as the spec says, without
+  calling the handler. Before initialization, and for a mode the SDK does not know, the handler is
+  called. Migration: advertise the modes the handler supports in `clientCapabilities.elicitation`.
+  A raw `requestHandler("elicitation/create", ...)` is not checked.
 
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the

@@ -172,6 +172,25 @@ public class AcpSyncAgent {
 	}
 
 	/**
+	 * Requests structured user input from the client via a form or URL. The client must
+	 * have advertised the request's mode.
+	 * @param request The elicitation request
+	 * @return The user's response
+	 */
+	public AcpSchema.CreateElicitationResponse createElicitation(AcpSchema.CreateElicitationRequest request) {
+		return SyncBlocking.awaitResponse(asyncAgent.createElicitation(request), blockTimeout);
+	}
+
+	/**
+	 * Notifies the client that the external interaction of a URL-mode elicitation has
+	 * completed.
+	 * @param notification The completion notification
+	 */
+	public void completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
+		asyncAgent.completeElicitation(notification).block(blockTimeout);
+	}
+
+	/**
 	 * Returns the capabilities negotiated with the client during initialization.
 	 *
 	 * <p>

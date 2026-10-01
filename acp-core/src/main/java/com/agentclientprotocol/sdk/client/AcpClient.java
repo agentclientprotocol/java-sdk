@@ -14,7 +14,10 @@ import java.util.function.Function;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -198,6 +201,8 @@ public interface AcpClient {
 		private final Map<String, AcpClientSession.NotificationHandler> notificationHandlers = new HashMap<>();
 
 		private final List<Function<AcpSchema.SessionNotification, Mono<Void>>> sessionUpdateConsumers = new ArrayList<>();
+
+		private @Nullable Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> createElicitationHandler;
 
 		private AsyncSpec(AcpClientTransport transport) {
 			Assert.notNull(transport, "Transport must not be null");
@@ -415,8 +420,16 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for elicitation requests from the agent.
-		 * The agent uses elicitation to request structured user input via forms.
+		 * Adds a typed handler for {@code elicitation/create} requests from the agent,
+		 * which ask the user for structured input through a form or a URL. The handler
+		 * answers {@code accept}, {@code decline} or {@code cancel}.
+		 *
+		 * <p>
+		 * The client answers a request whose mode ({@code form} or {@code url}) it did
+		 * not advertise in {@code clientCapabilities.elicitation} at initialization with
+		 * a JSON-RPC {@code -32602} (invalid params) error, without calling the handler.
+		 * Advertise the modes the handler supports, for example with
+		 * {@link AcpSchema.ElicitationCapabilities#formOnly()}.
 		 *
 		 * @param handler The typed handler function that processes elicitation requests
 		 * @return This builder instance for method chaining
@@ -425,8 +438,30 @@ public interface AcpClient {
 		public AsyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
-			return request(AcpSchema.METHOD_ELICITATION_CREATE, new TypeRef<AcpSchema.CreateElicitationRequest>() {
-			}, handler);
+			this.requestHandlers.remove(AcpSchema.METHOD_ELICITATION_CREATE);
+			this.createElicitationHandler = handler;
+			return this;
+		}
+
+		/**
+		 * Adds a typed handler for {@code elicitation/complete} notifications: the agent
+		 * reports that the external interaction of a URL-mode elicitation has finished.
+		 * The spec requires clients to ignore unknown or already-completed elicitation
+		 * IDs, so the handler should check the ID against the URL elicitations it
+		 * accepted.
+		 *
+		 * @param handler The typed handler function that processes completion
+		 * notifications
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handler is null
+		 */
+		public AsyncSpec completeElicitationHandler(
+				Function<AcpSchema.CompleteElicitationNotification, Mono<Void>> handler) {
+			Assert.notNull(handler, "Complete elicitation handler must not be null");
+			this.notificationHandlers.put(AcpSchema.METHOD_ELICITATION_COMPLETE, params -> handler
+				.apply(transport.unmarshalFrom(params, new TypeRef<AcpSchema.CompleteElicitationNotification>() {
+				})));
+			return this;
 		}
 
 		/**
@@ -457,6 +492,9 @@ public interface AcpClient {
 		public AsyncSpec requestHandler(String method, AcpClientSession.RequestHandler<?> handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
+			if (AcpSchema.METHOD_ELICITATION_CREATE.equals(method)) {
+				this.createElicitationHandler = null;
+			}
 			this.requestHandlers.put(method, handler);
 			return this;
 		}
@@ -504,11 +542,46 @@ public interface AcpClient {
 				});
 			}
 
-			// Create session with request and notification handlers
-			AcpSession session = new AcpClientSession(requestTimeout, transport, requestHandlers, notificationHandlers,
-					Function.identity());
+			// The capabilities the client advertises when it initializes
+			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertised = new AtomicReference<>();
+			Map<String, AcpClientSession.RequestHandler<?>> handlers = new HashMap<>(requestHandlers);
+			Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> elicitation = this.createElicitationHandler;
+			if (elicitation != null) {
+				AcpClientSession.RequestHandler<AcpSchema.CreateElicitationResponse> rawHandler = params -> {
+					AcpSchema.CreateElicitationRequest request = transport.unmarshalFrom(params,
+							new TypeRef<AcpSchema.CreateElicitationRequest>() {
+							});
+					if (!advertisesMode(advertised.get(), request.mode())) {
+						return Mono.error(new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS,
+								"Elicitation mode '" + request.mode() + "' was not advertised by the client"));
+					}
+					return elicitation.apply(request);
+				};
+				handlers.put(AcpSchema.METHOD_ELICITATION_CREATE, rawHandler);
+			}
 
-			return new AcpAsyncClient(session, transport, clientCapabilities);
+			// Create session with request and notification handlers
+			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers,
+					new HashMap<>(notificationHandlers), Function.identity());
+
+			return new AcpAsyncClient(session, transport, clientCapabilities, advertised);
+		}
+
+		/**
+		 * Whether the advertised capabilities cover an elicitation mode. Before the
+		 * client initializes nothing is known and every mode passes; a mode this SDK does
+		 * not know passes too, since only the handler can judge it.
+		 */
+		private static boolean advertisesMode(AcpSchema.@Nullable ClientCapabilities advertised, String mode) {
+			if (advertised == null) {
+				return true;
+			}
+			AcpSchema.ElicitationCapabilities elicitation = advertised.elicitation();
+			return switch (mode) {
+				case AcpSchema.CreateElicitationRequest.MODE_FORM -> elicitation != null && elicitation.form() != null;
+				case AcpSchema.CreateElicitationRequest.MODE_URL -> elicitation != null && elicitation.url() != null;
+				default -> true;
+			};
 		}
 
 	}
@@ -762,8 +835,10 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for elicitation requests from the agent.
-		 * The agent uses elicitation to request structured user input via forms.
+		 * Adds a typed handler for {@code elicitation/create} requests from the agent.
+		 * See {@link AsyncSpec#createElicitationHandler(Function)}: a request for a mode
+		 * the client did not advertise is answered with {@code -32602} without calling
+		 * the handler.
 		 *
 		 * @param handler The typed handler function that processes elicitation requests
 		 * @return This builder instance for method chaining
@@ -773,6 +848,24 @@ public interface AcpClient {
 				Function<AcpSchema.CreateElicitationRequest, AcpSchema.CreateElicitationResponse> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
 			asyncSpec.createElicitationHandler(request -> onSyncHandlerThread(() -> handler.apply(request)));
+			return this;
+		}
+
+		/**
+		 * Adds a synchronous handler for {@code elicitation/complete} notifications: the
+		 * agent reports that the external interaction of a URL-mode elicitation has
+		 * finished. Clients must ignore unknown or already-completed elicitation IDs.
+		 *
+		 * @param handler The handler that processes completion notifications
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handler is null
+		 */
+		public SyncSpec completeElicitationHandler(Consumer<AcpSchema.CompleteElicitationNotification> handler) {
+			Assert.notNull(handler, "Complete elicitation handler must not be null");
+			asyncSpec.completeElicitationHandler(notification -> Mono
+				.fromRunnable(() -> handler.accept(notification))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER)
+				.then());
 			return this;
 		}
 

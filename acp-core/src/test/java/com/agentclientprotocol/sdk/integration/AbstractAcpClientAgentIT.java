@@ -578,7 +578,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Advertise elicitation capability
 			var caps = new AcpSchema.ClientCapabilities(
 					new AcpSchema.FileSystemCapability(), false,
-					new AcpSchema.ElicitationCapabilities(), null);
+					AcpSchema.ElicitationCapabilities.formOnly(), null);
 			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
@@ -642,7 +642,7 @@ public abstract class AbstractAcpClientAgentIT {
 			Thread.sleep(100);
 			var caps = new AcpSchema.ClientCapabilities(
 					new AcpSchema.FileSystemCapability(), false,
-					new AcpSchema.ElicitationCapabilities(), null);
+					AcpSchema.ElicitationCapabilities.formOnly(), null);
 			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new AcpSchema.PromptRequest("session-decline",
@@ -702,7 +702,7 @@ public abstract class AbstractAcpClientAgentIT {
 			Thread.sleep(100);
 			var caps = new AcpSchema.ClientCapabilities(
 					new AcpSchema.FileSystemCapability(), false,
-					new AcpSchema.ElicitationCapabilities(), null);
+					AcpSchema.ElicitationCapabilities.formOnly(), null);
 			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new AcpSchema.PromptRequest("session-cancel",

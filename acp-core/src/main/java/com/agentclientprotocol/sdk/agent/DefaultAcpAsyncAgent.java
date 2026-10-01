@@ -179,10 +179,20 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.CreateElicitationResponse> createElicitation(
 			AcpSchema.CreateElicitationRequest request) {
-		return sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request,
-				new TypeRef<AcpSchema.CreateElicitationResponse>() {
-				}, NegotiatedCapabilities::supportsElicitation, "elicitation");
+		return switch (request.mode()) {
+			case AcpSchema.CreateElicitationRequest.MODE_FORM -> sendRequest(AcpSchema.METHOD_ELICITATION_CREATE,
+					request, ELICITATION_RESPONSE, NegotiatedCapabilities::supportsElicitationForm, "elicitation.form");
+			case AcpSchema.CreateElicitationRequest.MODE_URL -> sendRequest(AcpSchema.METHOD_ELICITATION_CREATE,
+					request, ELICITATION_RESPONSE, NegotiatedCapabilities::supportsElicitationUrl, "elicitation.url");
+			// A mode this SDK does not know: the client can only have advertised it in a
+			// capability this SDK does not model, so only elicitation itself is checked.
+			default -> sendRequest(AcpSchema.METHOD_ELICITATION_CREATE, request, ELICITATION_RESPONSE,
+					NegotiatedCapabilities::supportsElicitation, "elicitation");
+		};
 	}
+
+	private static final TypeRef<AcpSchema.CreateElicitationResponse> ELICITATION_RESPONSE = new TypeRef<>() {
+	};
 
 	@Override
 	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {

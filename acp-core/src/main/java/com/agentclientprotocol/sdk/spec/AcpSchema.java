@@ -797,15 +797,17 @@ public final class AcpSchema {
 	}
 
 	// ---------------------------
-	// Elicitation (UNSTABLE)
+	// Elicitation
 	// ---------------------------
 
 	/**
-	 * Create elicitation request - agent asks client for structured user input.
-	 * Supports form mode (JSON Schema) and URL mode (out-of-band).
-	 * Scope is either session (sessionId) or request (requestId).
+	 * Create elicitation request: the agent asks the client for structured user input.
+	 * The mode is {@code "form"} (a restricted JSON Schema in {@code requestedSchema}) or
+	 * {@code "url"} (an out-of-band interaction at {@code url}, identified by
+	 * {@code elicitationId}). The scope is a session ({@code sessionId}, optionally with
+	 * {@code toolCallId}) or a request ({@code requestId}). An agent must not request a
+	 * mode the client did not advertise in {@link ElicitationCapabilities}.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationRequest(@JsonProperty("sessionId") @Nullable String sessionId,
 			@JsonProperty("toolCallId") @Nullable String toolCallId, @JsonProperty("requestId") @Nullable Object requestId,
@@ -814,12 +816,18 @@ public final class AcpSchema {
 			@JsonProperty("elicitationId") @Nullable String elicitationId, @JsonProperty("url") @Nullable String url,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
+		/** The form mode: the client renders {@code requestedSchema} as a form. */
+		public static final String MODE_FORM = "form";
+
+		/** The URL mode: the client opens {@code url} out of band, with the user's consent. */
+		public static final String MODE_URL = "url";
+
 		/**
 		 * Creates a form-mode elicitation request scoped to a session.
 		 */
 		public static CreateElicitationRequest form(String sessionId, String message,
 				ElicitationSchema schema) {
-			return new CreateElicitationRequest(sessionId, null, null, message, "form", schema, null,
+			return new CreateElicitationRequest(sessionId, null, null, message, MODE_FORM, schema, null,
 					null, null);
 		}
 
@@ -828,23 +836,30 @@ public final class AcpSchema {
 		 */
 		public static CreateElicitationRequest url(String sessionId, String message,
 				String elicitationId, String url) {
-			return new CreateElicitationRequest(sessionId, null, null, message, "url", null,
+			return new CreateElicitationRequest(sessionId, null, null, message, MODE_URL, null,
 					elicitationId, url, null);
 		}
 	}
 
 	/**
-	 * Create elicitation response - client returns user's input.
-	 * Action is "accept" (with content), "decline", or "cancel".
+	 * Create elicitation response: the user's answer. The action is {@code accept},
+	 * {@code decline} or {@code cancel}; {@code content} is optional and only meaningful
+	 * on {@code accept} (an accepted URL elicitation normally has none). Its values are
+	 * strings, integers, numbers, booleans or string arrays.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationResponse(@JsonProperty("action") ElicitationAction action,
 			@JsonProperty("content") @Nullable Map<String, Object> content,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
+		/** The user accepted, submitting the given form content. */
 		public static CreateElicitationResponse accept(Map<String, Object> content) {
 			return new CreateElicitationResponse(ElicitationAction.ACCEPT, content, null);
+		}
+
+		/** The user accepted without content, as for a URL elicitation the user agreed to open. */
+		public static CreateElicitationResponse accept() {
+			return new CreateElicitationResponse(ElicitationAction.ACCEPT, null, null);
 		}
 
 		public static CreateElicitationResponse decline() {
@@ -859,7 +874,6 @@ public final class AcpSchema {
 	/**
 	 * Elicitation action - user's response to an elicitation.
 	 */
-	@UnstableAcpApi
 	public enum ElicitationAction {
 
 		@JsonProperty("accept")
@@ -870,9 +884,10 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Complete elicitation notification - signals URL-mode elicitation is done.
+	 * Complete elicitation notification: the agent tells the client that the external
+	 * interaction of an accepted URL-mode elicitation has finished. Clients must ignore
+	 * unknown or already-completed IDs.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CompleteElicitationNotification(@JsonProperty("elicitationId") String elicitationId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
@@ -884,21 +899,25 @@ public final class AcpSchema {
 	/**
 	 * Elicitation schema - JSON Schema describing form fields for user input.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationSchema(@JsonProperty("type") @Nullable String type,
 			@JsonProperty("properties") @Nullable Map<String, ElicitationPropertySchema> properties,
 			@JsonProperty("required") @Nullable List<String> required, @JsonProperty("title") @Nullable String title,
-			@JsonProperty("description") @Nullable String description) {
+			@JsonProperty("description") @Nullable String description,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ElicitationSchema(@Nullable String type, @Nullable Map<String, ElicitationPropertySchema> properties,
+				@Nullable List<String> required, @Nullable String title, @Nullable String description) {
+			this(type, properties, required, title, description, null);
+		}
+
 		public ElicitationSchema(@Nullable Map<String, ElicitationPropertySchema> properties, @Nullable List<String> required) {
-			this("object", properties, required, null, null);
+			this("object", properties, required, null, null, null);
 		}
 	}
 
 	/**
 	 * Elicitation property schema - defines a single form field.
 	 */
-	@UnstableAcpApi
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = StringPropertySchema.class, name = "string"),
 			@JsonSubTypes.Type(value = NumberPropertySchema.class, name = "number"),
@@ -912,7 +931,6 @@ public final class AcpSchema {
 	/**
 	 * String property schema - text input or single-select enum.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record StringPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
@@ -920,69 +938,97 @@ public final class AcpSchema {
 			@JsonProperty("default") @Nullable String defaultValue, @JsonProperty("minLength") @Nullable Integer minLength,
 			@JsonProperty("maxLength") @Nullable Integer maxLength, @JsonProperty("pattern") @Nullable String pattern,
 			@JsonProperty("format") @Nullable String format, @JsonProperty("enum") @Nullable List<String> enumValues,
-			@JsonProperty("oneOf") @Nullable List<EnumOption> oneOf) implements ElicitationPropertySchema {
+			@JsonProperty("oneOf") @Nullable List<EnumOption> oneOf,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
+
+		public StringPropertySchema(String type, @Nullable String title, @Nullable String description,
+				@Nullable String defaultValue, @Nullable Integer minLength, @Nullable Integer maxLength,
+				@Nullable String pattern, @Nullable String format, @Nullable List<String> enumValues,
+				@Nullable List<EnumOption> oneOf) {
+			this(type, title, description, defaultValue, minLength, maxLength, pattern, format, enumValues, oneOf,
+					null);
+		}
 
 		public static StringPropertySchema text(String title) {
-			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, null);
+			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, null, null);
 		}
 
 		public static StringPropertySchema singleSelect(String title, List<EnumOption> options) {
-			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, options);
+			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, options, null);
 		}
 	}
 
 	/**
 	 * Number property schema - floating-point input.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NumberPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("description") @Nullable String description,
 			@JsonProperty("default") @Nullable Double defaultValue, @JsonProperty("minimum") @Nullable Double minimum,
-			@JsonProperty("maximum") @Nullable Double maximum) implements ElicitationPropertySchema {
+			@JsonProperty("maximum") @Nullable Double maximum,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
+
+		public NumberPropertySchema(String type, @Nullable String title, @Nullable String description,
+				@Nullable Double defaultValue, @Nullable Double minimum, @Nullable Double maximum) {
+			this(type, title, description, defaultValue, minimum, maximum, null);
+		}
 	}
 
 	/**
 	 * Integer property schema - whole number input.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record IntegerPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("description") @Nullable String description,
 			@JsonProperty("default") @Nullable Long defaultValue, @JsonProperty("minimum") @Nullable Long minimum,
-			@JsonProperty("maximum") @Nullable Long maximum) implements ElicitationPropertySchema {
+			@JsonProperty("maximum") @Nullable Long maximum,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
+
+		public IntegerPropertySchema(String type, @Nullable String title, @Nullable String description,
+				@Nullable Long defaultValue, @Nullable Long minimum, @Nullable Long maximum) {
+			this(type, title, description, defaultValue, minimum, maximum, null);
+		}
 	}
 
 	/**
 	 * Boolean property schema - checkbox/toggle input.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BooleanPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("description") @Nullable String description,
-			@JsonProperty("default") @Nullable Boolean defaultValue) implements ElicitationPropertySchema {
+			@JsonProperty("default") @Nullable Boolean defaultValue,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
+
+		public BooleanPropertySchema(String type, @Nullable String title, @Nullable String description,
+				@Nullable Boolean defaultValue) {
+			this(type, title, description, defaultValue, null);
+		}
 	}
 
 	/**
 	 * Multi-select property schema - array of selected values.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record MultiSelectPropertySchema(
 			@JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY) String type,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("description") @Nullable String description,
 			@JsonProperty("default") @Nullable List<String> defaultValues, @JsonProperty("items") MultiSelectItems items,
-			@JsonProperty("minItems") @Nullable Long minItems,
-			@JsonProperty("maxItems") @Nullable Long maxItems) implements ElicitationPropertySchema {
+			@JsonProperty("minItems") @Nullable Long minItems, @JsonProperty("maxItems") @Nullable Long maxItems,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
+
+		public MultiSelectPropertySchema(String type, @Nullable String title, @Nullable String description,
+				@Nullable List<String> defaultValues, MultiSelectItems items, @Nullable Long minItems,
+				@Nullable Long maxItems) {
+			this(type, title, description, defaultValues, items, minItems, maxItems, null);
+		}
 	}
 
 	/**
 	 * Multi-select items - defines allowed values for multi-select.
 	 */
-	@UnstableAcpApi
 	@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = UntitledMultiSelectItems.class),
 			@JsonSubTypes.Type(value = TitledMultiSelectItems.class) })
@@ -993,43 +1039,82 @@ public final class AcpSchema {
 	/**
 	 * Untitled multi-select items - plain string enum values.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UntitledMultiSelectItems(@JsonProperty("type") String type,
-			@JsonProperty("enum") List<String> enumValues) implements MultiSelectItems {
+			@JsonProperty("enum") List<String> enumValues,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements MultiSelectItems {
+		public UntitledMultiSelectItems(String type, List<String> enumValues) {
+			this(type, enumValues, null);
+		}
 	}
 
 	/**
 	 * Titled multi-select items - options with const/title pairs.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record TitledMultiSelectItems(
-			@JsonProperty("anyOf") List<EnumOption> anyOf) implements MultiSelectItems {
+	public record TitledMultiSelectItems(@JsonProperty("anyOf") List<EnumOption> anyOf,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements MultiSelectItems {
+		public TitledMultiSelectItems(List<EnumOption> anyOf) {
+			this(anyOf, null);
+		}
 	}
 
 	/**
 	 * Enum option - a named value for single-select or multi-select.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record EnumOption(@JsonProperty("const") String constValue,
-			@JsonProperty("title") String title) {
+	public record EnumOption(@JsonProperty("const") String constValue, @JsonProperty("title") String title,
+			@JsonProperty("description") @Nullable String description,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public EnumOption(String constValue, String title) {
+			this(constValue, title, null, null);
+		}
 	}
 
 	/**
-	 * Elicitation capabilities - advertised by client during initialize.
+	 * Elicitation capabilities, advertised by the client during initialize. A mode is
+	 * supported only when its object is present and non-null: {@code {}} advertises no
+	 * mode. Use {@link #formOnly()}, {@link #urlOnly()} or {@link #formAndUrl()}.
 	 */
-	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ElicitationCapabilities(@JsonProperty("form") @Nullable Object form,
-			@JsonProperty("url") @Nullable Object url,
+	public record ElicitationCapabilities(@JsonProperty("form") @Nullable ElicitationFormCapabilities form,
+			@JsonProperty("url") @Nullable ElicitationUrlCapabilities url,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		/**
-		 * Creates capabilities indicating form-mode support (the default).
-		 */
-		public ElicitationCapabilities() {
-			this(Map.of(), null, null);
+
+		/** Advertises form mode only. */
+		public static ElicitationCapabilities formOnly() {
+			return new ElicitationCapabilities(new ElicitationFormCapabilities(), null, null);
+		}
+
+		/** Advertises URL mode only. */
+		public static ElicitationCapabilities urlOnly() {
+			return new ElicitationCapabilities(null, new ElicitationUrlCapabilities(), null);
+		}
+
+		/** Advertises both form and URL mode. */
+		public static ElicitationCapabilities formAndUrl() {
+			return new ElicitationCapabilities(new ElicitationFormCapabilities(), new ElicitationUrlCapabilities(),
+					null);
+		}
+	}
+
+	/**
+	 * Form-mode elicitation capabilities. Its presence advertises form mode.
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ElicitationFormCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ElicitationFormCapabilities() {
+			this(null);
+		}
+	}
+
+	/**
+	 * URL-mode elicitation capabilities. Its presence advertises URL mode.
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record ElicitationUrlCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public ElicitationUrlCapabilities() {
+			this(null);
 		}
 	}
 
@@ -1043,7 +1128,7 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") @Nullable FileSystemCapability fs,
 			@JsonProperty("terminal") @Nullable Boolean terminal,
-			@UnstableAcpApi @JsonProperty("elicitation") @Nullable ElicitationCapabilities elicitation,
+			@JsonProperty("elicitation") @Nullable ElicitationCapabilities elicitation,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ClientCapabilities() {
 			this(new FileSystemCapability(), false, null, null);
