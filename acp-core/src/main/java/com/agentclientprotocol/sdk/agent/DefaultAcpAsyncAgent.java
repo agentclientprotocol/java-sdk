@@ -16,6 +16,7 @@ import com.agentclientprotocol.sdk.error.AcpCapabilityException;
 import com.agentclientprotocol.sdk.spec.AcpAgentSession;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -42,6 +43,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private final Duration requestTimeout;
 
+	private final PromptTimeouts promptTimeouts;
+
 	private final List<AgentHandlers.Request<?>> requestHandlers;
 
 	private final List<AgentHandlers.Notification<?>> notificationHandlers;
@@ -57,9 +60,11 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	 */
 	private final AtomicReference<@Nullable NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
-	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout, AgentHandlers handlers) {
+	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout, PromptTimeouts promptTimeouts,
+			AgentHandlers handlers) {
 		this.transport = transport;
 		this.requestTimeout = requestTimeout;
+		this.promptTimeouts = promptTimeouts;
 		this.requestHandlers = handlers.requests();
 		this.notificationHandlers = handlers.notifications();
 	}
@@ -76,7 +81,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			for (AgentHandlers.Notification<?> registration : notificationHandlers) {
 				notifications.put(registration.method(), sessionHandler(registration));
 			}
-			this.session = new AcpAgentSession(requestTimeout, transport, requests, notifications);
+			this.session = new AcpAgentSession(requestTimeout, transport, requests, notifications, promptTimeouts);
 			logger.info("ACP async agent started");
 		});
 	}

@@ -7,10 +7,12 @@ package com.agentclientprotocol.sdk.spec;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
@@ -61,6 +63,9 @@ public class AcpAgentSession implements AcpSession {
 	/** Single-turn enforcement: the active prompt of each logical ACP sessionId. */
 	private final ActivePrompts activePrompts = new ActivePrompts();
 
+	/** The cancel grace period and maximum prompt duration of each prompt. */
+	private final PromptDeadlines promptDeadlines;
+
 	/**
 	 * Set when the transport's {@code start()} fails (already started, port in use, ...).
 	 * Requests to the client are then failed immediately with the cause.
@@ -104,7 +109,8 @@ public class AcpAgentSession implements AcpSession {
 	}
 
 	/**
-	 * Creates a new AcpAgentSession with the specified configuration and handlers.
+	 * Creates a new AcpAgentSession with the specified configuration and handlers, and the
+	 * default prompt timeouts ({@link PromptTimeouts#DEFAULTS}).
 	 * @param requestTimeout Duration to wait for responses
 	 * @param transport Transport implementation for message exchange
 	 * @param requestHandlers Map of method names to request handlers
@@ -112,13 +118,37 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	public AcpAgentSession(Duration requestTimeout, AcpAgentTransport transport,
 			Map<String, RequestHandler<?>> requestHandlers, Map<String, NotificationHandler> notificationHandlers) {
+		this(requestTimeout, transport, requestHandlers, notificationHandlers, PromptTimeouts.DEFAULTS);
+	}
+
+	/**
+	 * Creates a new AcpAgentSession with the specified configuration and handlers.
+	 * @param requestTimeout Duration to wait for responses
+	 * @param transport Transport implementation for message exchange
+	 * @param requestHandlers Map of method names to request handlers
+	 * @param notificationHandlers Map of method names to notification handlers
+	 * @param promptTimeouts when the session answers a prompt its handler has not: the cancel
+	 * grace period and the maximum prompt duration
+	 */
+	public AcpAgentSession(Duration requestTimeout, AcpAgentTransport transport,
+			Map<String, RequestHandler<?>> requestHandlers, Map<String, NotificationHandler> notificationHandlers,
+			PromptTimeouts promptTimeouts) {
+		this(requestTimeout, transport, requestHandlers, notificationHandlers, promptTimeouts, AcpSchedulers::after);
+	}
+
+	/** As above, with the timer the prompt deadlines run on (a virtual-time one in tests). */
+	AcpAgentSession(Duration requestTimeout, AcpAgentTransport transport,
+			Map<String, RequestHandler<?>> requestHandlers, Map<String, NotificationHandler> notificationHandlers,
+			PromptTimeouts promptTimeouts, Function<Duration, Mono<?>> timer) {
 
 		Assert.notNull(requestTimeout, "The requestTimeout can not be null");
+		Assert.notNull(promptTimeouts, "The promptTimeouts can not be null");
 		Assert.notNull(transport, "The transport can not be null");
 		Assert.notNull(requestHandlers, "The requestHandlers can not be null");
 		Assert.notNull(notificationHandlers, "The notificationHandlers can not be null");
 
 		this.transport = transport;
+		this.promptDeadlines = new PromptDeadlines(promptTimeouts, timer);
 		this.outbound = new OutboundMessages(transport, requestTimeout, () -> this.startFailure,
 				AcpAgentSession::notStarted, "client");
 		this.requestHandlers.putAll(requestHandlers);
@@ -205,10 +235,12 @@ public class AcpAgentSession implements AcpSession {
 				// ActivePrompts.endBeforePublishing. Mono.defer keeps a handler that throws
 				// synchronously from holding the turn forever: the throw becomes an error
 				// signal that passes through the release.
-				return activePrompts.endBeforePublishing(turn,
+				// The deadlines may answer instead of the handler; either answer passes
+				// through the release.
+				return activePrompts.endBeforePublishing(turn, promptDeadlines.answer(turn, request,
 						InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 								request.method())
-							.map(result -> InboundMessages.result(request, result)));
+							.map(result -> InboundMessages.result(request, result))));
 			}
 
 			return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),

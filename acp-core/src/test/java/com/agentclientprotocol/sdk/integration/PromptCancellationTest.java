@@ -102,4 +102,60 @@ class PromptCancellationTest {
 		}
 	}
 
+	/**
+	 * A handler that ignores the cancel: once the grace period passes the agent answers the
+	 * prompt {@code cancelled} itself, after the update the handler had already sent.
+	 */
+	@Test
+	void aHandlerThatIgnoresTheCancelIsAnsweredCancelledAfterItsUpdates() {
+		Sinks.Empty<Void> updateSent = Sinks.empty();
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.cancelGracePeriod(Duration.ofMillis(200))
+			.initializeHandler(request -> Mono
+				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
+			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(SESSION, null, null)))
+			.promptHandler((request, context) -> context
+				.sendUpdate(SESSION,
+						new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent("working")))
+				.doOnSuccess(v -> updateSent.tryEmitEmpty())
+				.then(Mono.never()))
+			.build();
+		agent.start().block(TIMEOUT);
+
+		List<String> received = new CopyOnWriteArrayList<>();
+		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> received.add("update")))
+			.build();
+		try {
+			client.initialize().block(TIMEOUT);
+			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+			AcpSchema.PromptRequest prompt = new AcpSchema.PromptRequest(SESSION,
+					List.of(new AcpSchema.TextContent("work")));
+			Mono<AcpSchema.PromptResponse> ignored = client.prompt(prompt)
+				.doOnNext(response -> received.add("answer " + response.stopReason()))
+				.cache();
+			ignored.subscribe(response -> {
+			}, error -> {
+			});
+			updateSent.asMono().block(TIMEOUT);
+
+			client.cancel(new AcpSchema.CancelNotification(SESSION)).block(TIMEOUT);
+
+			assertThat(ignored.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
+			assertThat(received).containsExactly("update", "answer CANCELLED");
+			assertThatThrownBy(() -> client.prompt(prompt).block(Duration.ofMillis(300)))
+				.as("the turn has ended: the next prompt is not rejected but runs (forever, in this handler)")
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Timeout on blocking read");
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			agent.closeGracefully().block(TIMEOUT);
+			pair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
 }

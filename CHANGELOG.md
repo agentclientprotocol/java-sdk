@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
   0.18.0 shipped with the affected versions; applications can override the versions now.
 
+### Added
+
+- **Prompt timeouts on the agent builders** (`AcpAgent.async(...)`, `AcpAgent.sync(...)` and
+  `AcpAgentSupport.builder()`), also as `PromptTimeouts` on the `AcpAgentSession` constructor:
+  - `cancelGracePeriod(Duration)`: how long a prompt handler has to answer after `session/cancel`
+    before the agent answers `cancelled` itself. Default 60 seconds (see Changed).
+  - `maxPromptDuration(Duration)`: how long a prompt may run at all. When it passes, the agent
+    cancels the handler and answers with JSON-RPC error `-32800` (request cancelled), message
+    `Prompt exceeded maxPromptDuration of <duration>` and data `{"maxPromptDuration": "<ISO-8601>"}`
+    (ACP v1, Cancellation: an internally cancelled request, an internal timeout included, answers
+    `-32800`); a prompt already being cancelled is answered `cancelled` instead. Default: none, as
+    a prompt turn can legitimately run for a long time.
+
+  `Duration.ZERO` turns either off; a negative or null duration is rejected. Either way the forced
+  answer leaves through the normal path: the turn ends just before it is published, it follows
+  every update the handler had already sent, and exactly one answer is sent when the handler
+  answers just as a timer fires (model checked with Lincheck, `PromptAnswerLincheckTest`). The
+  timers run on the SDK's shared timeout timer, with no new threads. A handler that keeps running
+  after its subscription is cancelled (a blocking sync handler is not interrupted) and sends more
+  updates sends them after the answer. `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
+
 ### Changed
 
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
@@ -24,11 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session/prompt`". A prompt sent between the cancel and that answer is now rejected with
   `-32000` (`CONCURRENT_PROMPT`), like any prompt during an active turn. The turn ends when the
   answer is published (before it reaches the client, as for every prompt), when the handler fails
-  (a timeout the handler applies included), when the request is cancelled, or when the session
-  closes. The session sets no timeout of its own on an inbound prompt, so a handler that never
-  answers after a cancel keeps its session busy. Migration: clients send the next prompt after the
-  cancelled one has answered (the SDK client sends nothing on its own after `cancel`); agent
-  prompt handlers must answer a cancelled prompt.
+  (a timeout the handler applies included), when the request is cancelled, when the session
+  closes, or when the cancel grace period passes (below). Migration: clients send the next prompt
+  after the cancelled one has answered (the SDK client sends nothing on its own after `cancel`);
+  agent prompt handlers must answer a cancelled prompt.
+- **New default: a cancelled prompt is answered within 60 seconds.** If the prompt handler has not
+  answered 60 seconds after `session/cancel`, the agent cancels the handler's subscription and
+  answers the prompt with stop reason `cancelled` itself (the answer ACP v1 requires of a
+  cancelled prompt), which ends the turn. Before, a handler that never answered a cancelled prompt
+  kept its session busy for good. `cancelGracePeriod(Duration.ZERO)` restores that. The public
+  four-argument `AcpAgentSession` constructor uses the same default.
 - **Breaking (unstable providers API): the provider identifier is `providerId`, on the wire and in
   Java.** `ProviderInfo`, `SetProviderRequest` and `DisableProviderRequest` wrote and read `"id"`,
   but the unstable schema names the property `providerId`, so no spec-conforming peer could exchange

@@ -239,9 +239,8 @@ class AcpAgentSessionLifecycleTest {
 	}
 
 	/**
-	 * The session sets no timeout of its own on an inbound prompt: a handler that never
-	 * answers after a cancel keeps the session busy. A timeout the handler applies is an
-	 * error like any other, and ends the turn.
+	 * A timeout the handler applies is an error like any other, and ends the turn, well
+	 * within the session's own cancel grace period (AcpAgentSessionPromptTimeoutsTest).
 	 */
 	@Test
 	void aCancelledPromptWhoseHandlerTimesOutEndsItsTurn() {
