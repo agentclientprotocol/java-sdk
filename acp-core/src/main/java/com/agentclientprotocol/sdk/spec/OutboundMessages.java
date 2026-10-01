@@ -82,7 +82,9 @@ final class OutboundMessages {
 			SynchronousSink<T> resultSink) {
 		AcpSchema.JSONRPCError error = response.error();
 		if (error != null) {
-			logger.error("Error handling request: {}", error);
+			// Not the error's data: it is the peer's payload.
+			logger.error("Error handling request: {} {}", error.code(), error.message());
+			logger.debug("Error data for request {}: {}", method, error.data());
 			resultSink.error(new AcpError(error));
 		}
 		else if (typeRef.getType().equals(Void.class)) {

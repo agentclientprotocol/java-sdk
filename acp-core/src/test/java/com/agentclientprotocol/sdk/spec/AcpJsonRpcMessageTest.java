@@ -142,13 +142,15 @@ class AcpJsonRpcMessageTest {
 		String json = """
 				{
 					"jsonrpc": "2.0",
-					"unknownField": "value"
+					"unknownField": "someone@example.com"
 				}
 				""";
 
+		// The transports log this exception: it must not carry the peer's payload.
 		assertThatThrownBy(() -> AcpSchema.deserializeJsonRpcMessage(jsonMapper, json))
 			.isInstanceOf(IllegalArgumentException.class)
-			.hasMessageContaining("Cannot deserialize JSONRPCMessage");
+			.hasMessageContaining("Cannot deserialize JSONRPCMessage")
+			.hasMessageNotContaining("someone@example.com");
 	}
 
 	@Test

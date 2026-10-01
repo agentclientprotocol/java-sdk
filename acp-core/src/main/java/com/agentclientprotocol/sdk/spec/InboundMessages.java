@@ -5,10 +5,12 @@
 package com.agentclientprotocol.sdk.spec;
 
 import java.util.Map;
+import java.util.function.BiFunction;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
 import reactor.core.publisher.Mono;
 
 /**
@@ -27,6 +29,22 @@ final class InboundMessages {
 	 */
 	static Object paramsOrEmpty(@Nullable Object params) {
 		return (params != null) ? params : Map.of();
+	}
+
+	/**
+	 * Passes a notification to the handler registered for its method. One without a handler
+	 * is ignored with a warning that names its method only: its params can carry personal
+	 * data (agents send {@code _auth/status_update}, whose params carry the account's email
+	 * address).
+	 */
+	static <H> Mono<Void> deliver(Logger logger, AcpSchema.JSONRPCNotification notification,
+			Map<String, H> handlers, BiFunction<H, Object, Mono<Void>> handle) {
+		H handler = handlers.get(notification.method());
+		if (handler == null) {
+			logger.warn("No handler registered for notification method: {}", notification.method());
+			return Mono.empty();
+		}
+		return handle.apply(handler, paramsOrEmpty(notification.params()));
 	}
 
 	/** A request always gets a response: a handler that completes empty is answered with an error. */

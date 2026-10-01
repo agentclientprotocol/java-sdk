@@ -14,6 +14,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -173,6 +174,66 @@ class AcpClientSessionLogTest {
 			.containsIgnoringCase("capability");
 
 		session.close();
+	}
+
+	/** Personal data an agent can send: _auth/status_update carries the account's email. */
+	private static final String EMAIL = "someone@example.com";
+
+	/**
+	 * An unhandled notification is logged at WARN with its method only: its params can carry
+	 * personal data. Claude's and Codex's agents send {@code _auth/status_update}, whose
+	 * params name the account's email address in login mode.
+	 */
+	@Test
+	void unhandledNotificationIsLoggedWithoutItsParams() throws InterruptedException {
+		MockAcpClientTransport transport = new MockAcpClientTransport();
+		AcpClientSession session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
+				"_auth/status_update", Map.of("status", "logged_in", "email", EMAIL)));
+		session.closeGracefully().block(TIMEOUT);
+
+		assertThat(listAppender.list).filteredOn(event -> event.getLevel() == Level.WARN)
+			.extracting(ILoggingEvent::getFormattedMessage)
+			.anySatisfy(message -> assertThat(message).contains("No handler registered")
+				.contains("_auth/status_update"));
+		assertNoPersonalDataAboveDebug(listAppender.list);
+	}
+
+	/** An error response's data is the peer's payload: logged at DEBUG at most. */
+	@Test
+	void errorResponseIsLoggedWithoutItsData() {
+		Logger outboundLogger = (Logger) LoggerFactory.getLogger(OutboundMessages.class);
+		ListAppender<ILoggingEvent> outboundLogs = new ListAppender<>();
+		outboundLogs.start();
+		outboundLogger.addAppender(outboundLogs);
+		try {
+			MockAcpClientTransport transport = new MockAcpClientTransport();
+			AcpClientSession session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(),
+					Function.identity());
+			var response = session.sendRequest("test/method", Map.of(), new TypeRef<Object>() {
+			}).toFuture();
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(),
+					null, new AcpSchema.JSONRPCError(-32000, "Authentication required", Map.of("email", EMAIL))));
+
+			assertThat(response).failsWithin(TIMEOUT);
+			assertThat(outboundLogs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+				.extracting(ILoggingEvent::getFormattedMessage)
+				.anySatisfy(message -> assertThat(message).contains("-32000"));
+			assertNoPersonalDataAboveDebug(outboundLogs.list);
+			session.close();
+		}
+		finally {
+			outboundLogger.detachAppender(outboundLogs);
+			outboundLogs.stop();
+		}
+	}
+
+	private static void assertNoPersonalDataAboveDebug(List<ILoggingEvent> events) {
+		assertThat(events).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
+			.extracting(ILoggingEvent::getFormattedMessage)
+			.allSatisfy(message -> assertThat(message).doesNotContain(EMAIL));
 	}
 
 	/**

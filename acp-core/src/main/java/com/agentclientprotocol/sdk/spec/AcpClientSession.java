@@ -236,7 +236,7 @@ public class AcpClientSession implements AcpSession {
 			enqueue(notification);
 		}
 		else {
-			logger.warn("Received unknown message type: {}", message);
+			logger.warn("Received unknown message type: {}", message.getClass().getName());
 		}
 	}
 
@@ -340,12 +340,7 @@ public class AcpClientSession implements AcpSession {
 	 */
 	private Mono<Void> handleIncomingNotification(AcpSchema.JSONRPCNotification notification) {
 		return Mono.defer(() -> {
-			var handler = notificationHandlers.get(notification.method());
-			if (handler == null) {
-				logger.warn("No handler registered for notification method: {}", notification);
-				return Mono.empty();
-			}
-			return handler.handle(InboundMessages.paramsOrEmpty(notification.params()));
+			return InboundMessages.deliver(logger, notification, this.notificationHandlers, NotificationHandler::handle);
 		});
 	}
 

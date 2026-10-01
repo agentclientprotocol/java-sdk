@@ -204,7 +204,7 @@ public class AcpAgentSession implements AcpSession {
 			logger.debug("Received notification method={}", notification.method());
 			return handleIncomingNotification(notification).then(Mono.empty());
 		}
-		logger.warn("Received unknown message type: {}", message);
+		logger.warn("Received unknown message type: {}", message.getClass().getName());
 		return Mono.empty();
 	}
 
@@ -293,12 +293,7 @@ public class AcpAgentSession implements AcpSession {
 				activePrompts.cancel(extractSessionId(notification.params()));
 			}
 
-			var handler = notificationHandlers.get(notification.method());
-			if (handler == null) {
-				logger.warn("No handler registered for notification method: {}", notification.method());
-				return Mono.empty();
-			}
-			return handler.handle(InboundMessages.paramsOrEmpty(notification.params()));
+			return InboundMessages.deliver(logger, notification, this.notificationHandlers, NotificationHandler::handle);
 		});
 	}
 

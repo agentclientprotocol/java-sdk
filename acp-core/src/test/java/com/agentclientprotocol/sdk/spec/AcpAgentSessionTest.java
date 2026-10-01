@@ -13,9 +13,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
@@ -169,6 +174,43 @@ class AcpAgentSessionTest {
 			assertThat(receivedParams.get()).isNotNull();
 		}
 		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	/** An unhandled notification is logged at WARN by its method only: its params can carry personal data. */
+	@Test
+	void unhandledNotificationIsLoggedWithoutItsParams() throws Exception {
+		Logger sessionLogger = (Logger) LoggerFactory.getLogger(AcpAgentSession.class);
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		sessionLogger.addAppender(logs);
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
+			allowAgentTransportSubscription();
+			transportPair.clientTransport().connect(mono -> mono.then(Mono.empty())).subscribe();
+			allowClientTransportSubscription();
+			transportPair.clientTransport()
+				.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "_auth/status_update",
+						Map.of("email", "someone@example.com")))
+				.block(TIMEOUT);
+
+			long deadline = System.nanoTime() + TIMEOUT.toNanos();
+			while (logs.list.stream().noneMatch(event -> event.getLevel() == Level.WARN)
+					&& System.nanoTime() < deadline) {
+				Thread.sleep(10);
+			}
+			assertThat(logs.list).filteredOn(event -> event.getLevel() == Level.WARN)
+				.extracting(ILoggingEvent::getFormattedMessage)
+				.anySatisfy(message -> assertThat(message).contains("_auth/status_update"));
+			assertThat(logs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
+				.extracting(ILoggingEvent::getFormattedMessage)
+				.allSatisfy(message -> assertThat(message).doesNotContain("someone@example.com"));
+		}
+		finally {
+			sessionLogger.detachAppender(logs);
+			logs.stop();
 			transportPair.closeGracefully().block(TIMEOUT);
 		}
 	}

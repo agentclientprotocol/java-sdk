@@ -146,12 +146,14 @@ public final class AcpSchema {
 		var map = jsonMapper.readValue(jsonText, MAP_TYPE_REF);
 		if (map == null) {
 			// The JSON null literal: valid JSON, but no JSON-RPC message
-			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
+			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: the JSON null literal");
 		}
 
 		Class<? extends JSONRPCMessage> messageType = messageType(map);
 		if (messageType == null) {
-			throw new IllegalArgumentException("Cannot deserialize JSONRPCMessage: " + jsonText);
+			// Not the text: a transport logs this exception, and the text is the peer's payload.
+			throw new IllegalArgumentException(
+					"Cannot deserialize JSONRPCMessage: a JSON object with no method, id, result or error");
 		}
 		return jsonMapper.convertValue(map, messageType);
 	}
