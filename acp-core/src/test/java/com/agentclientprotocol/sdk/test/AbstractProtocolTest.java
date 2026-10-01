@@ -112,7 +112,7 @@ public abstract class AbstractProtocolTest {
 			AcpSchema.JSONRPCNotification notification = AcpTestFixtures.createJsonRpcNotification(
 					AcpSchema.METHOD_SESSION_UPDATE,
 					new AcpSchema.SessionNotification("session-123",
-							new AcpSchema.AgentMessageChunk("agentMessage", AcpTestFixtures.createTextContent("Hello"))));
+							new AcpSchema.AgentMessageChunk("agent_message_chunk", AcpTestFixtures.createTextContent("Hello"))));
 			agentTransport.sendMessage(notification).block(TIMEOUT);
 
 			try {
