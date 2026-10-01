@@ -498,7 +498,7 @@ public class AcpAsyncClient {
 	 */
 	public Mono<AcpSchema.SetProviderResponse> setProvider(AcpSchema.SetProviderRequest request) {
 		Assert.notNull(request, "Set provider request must not be null");
-		logger.debug("Setting provider: {}", request.id());
+		logger.debug("Setting provider: {}", request.providerId());
 		return session.sendRequest(AcpSchema.METHOD_PROVIDERS_SET, request, SET_PROVIDER_RESPONSE_TYPE_REF);
 	}
 
@@ -510,7 +510,7 @@ public class AcpAsyncClient {
 	 */
 	public Mono<AcpSchema.DisableProviderResponse> disableProvider(AcpSchema.DisableProviderRequest request) {
 		Assert.notNull(request, "Disable provider request must not be null");
-		logger.debug("Disabling provider: {}", request.id());
+		logger.debug("Disabling provider: {}", request.providerId());
 		return session.sendRequest(AcpSchema.METHOD_PROVIDERS_DISABLE, request, DISABLE_PROVIDER_RESPONSE_TYPE_REF);
 	}
 

@@ -1330,7 +1330,7 @@ public final class AcpSchema {
 	/**
 	 * Describes a configurable provider returned by {@code providers/list}.
 	 *
-	 * @param id provider identifier, for example {@code "main"} or {@code "openai"}
+	 * @param providerId provider identifier, for example {@code "main"} or {@code "openai"}
 	 * @param supported supported {@code LlmProtocol} identifiers for this provider
 	 * @param required whether this provider is mandatory and cannot be disabled
 	 * @param current current effective non-secret routing config, or {@code null}
@@ -1338,11 +1338,13 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ProviderInfo(@JsonProperty("id") String id, @JsonProperty("supported") List<String> supported,
+	public record ProviderInfo(@JsonProperty("providerId") String providerId,
+			@JsonProperty("supported") List<String> supported,
 			@JsonProperty("required") Boolean required, @JsonProperty("current") @Nullable ProviderCurrentConfig current,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		public ProviderInfo(String id, List<String> supported, Boolean required, @Nullable ProviderCurrentConfig current) {
-			this(id, supported, required, current, null);
+		public ProviderInfo(String providerId, List<String> supported, Boolean required,
+				@Nullable ProviderCurrentConfig current) {
+			this(providerId, supported, required, current, null);
 		}
 	}
 
@@ -1372,7 +1374,7 @@ public final class AcpSchema {
 	/**
 	 * Request for {@code providers/set} - configures a provider.
 	 *
-	 * @param id provider id to configure
+	 * @param providerId provider id to configure
 	 * @param apiType protocol type for this provider (an {@code LlmProtocol} identifier)
 	 * @param baseUrl base URL for requests sent through this provider
 	 * @param headers full headers map for this provider (may include authorization), or {@code null}
@@ -1380,15 +1382,16 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record SetProviderRequest(@JsonProperty("id") String id, @JsonProperty("apiType") String apiType,
+	public record SetProviderRequest(@JsonProperty("providerId") String providerId, @JsonProperty("apiType") String apiType,
 			@JsonProperty("baseUrl") String baseUrl, @JsonProperty("headers") @Nullable Map<String, String> headers,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		public SetProviderRequest(String id, String apiType, String baseUrl) {
-			this(id, apiType, baseUrl, null, null);
+		public SetProviderRequest(String providerId, String apiType, String baseUrl) {
+			this(providerId, apiType, baseUrl, null, null);
 		}
 
-		public SetProviderRequest(String id, String apiType, String baseUrl, @Nullable Map<String, String> headers) {
-			this(id, apiType, baseUrl, headers, null);
+		public SetProviderRequest(String providerId, String apiType, String baseUrl,
+				@Nullable Map<String, String> headers) {
+			this(providerId, apiType, baseUrl, headers, null);
 		}
 	}
 
@@ -1408,10 +1411,10 @@ public final class AcpSchema {
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record DisableProviderRequest(@JsonProperty("id") String id,
+	public record DisableProviderRequest(@JsonProperty("providerId") String providerId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
-		public DisableProviderRequest(String id) {
-			this(id, null);
+		public DisableProviderRequest(String providerId) {
+			this(providerId, null);
 		}
 	}
 

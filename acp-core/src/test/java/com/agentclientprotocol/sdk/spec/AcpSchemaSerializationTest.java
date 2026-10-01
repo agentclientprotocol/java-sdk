@@ -512,7 +512,7 @@ class AcpSchemaSerializationTest {
 
 		assertThat(deserialized.providers()).hasSize(1);
 		AcpSchema.ProviderInfo p = deserialized.providers().get(0);
-		assertThat(p.id()).isEqualTo("openai");
+		assertThat(p.providerId()).isEqualTo("openai");
 		assertThat(p.supported()).containsExactly("openai", "azure");
 		assertThat(p.required()).isFalse();
 		assertThat(p.current().baseUrl()).isEqualTo("https://api.openai.com/v1");
@@ -524,16 +524,50 @@ class AcpSchemaSerializationTest {
 				"https://api.anthropic.com", Map.of("x-api-version", "2026-01-01"));
 
 		String json = jsonMapper.writeValueAsString(request);
-		assertThat(json).contains("\"id\":\"main\"").contains("\"apiType\":\"anthropic\"").contains("\"headers\"");
+		assertThat(json).contains("\"providerId\":\"main\"").contains("\"apiType\":\"anthropic\"").contains("\"headers\"");
 
 		AcpSchema.SetProviderRequest deserialized = jsonMapper.readValue(json,
 				new TypeRef<AcpSchema.SetProviderRequest>() {
 				});
 
-		assertThat(deserialized.id()).isEqualTo("main");
+		assertThat(deserialized.providerId()).isEqualTo("main");
 		assertThat(deserialized.apiType()).isEqualTo("anthropic");
 		assertThat(deserialized.baseUrl()).isEqualTo("https://api.anthropic.com");
 		assertThat(deserialized.headers()).containsEntry("x-api-version", "2026-01-01");
+	}
+
+	// The unstable schema (schema.unstable.json) names the provider identifier "providerId" in
+	// ProviderInfo, SetProviderRequest and DisableProviderRequest, and requires it.
+
+	@Test
+	void providerInfoRoundTripsTheSchemaShape() throws IOException {
+		String json = "{\"providerId\":\"openai\",\"supported\":[\"openai\",\"azure\"],\"required\":false,"
+				+ "\"current\":{\"apiType\":\"openai\",\"baseUrl\":\"https://api.openai.com/v1\"}}";
+		var expected = new AcpSchema.ProviderInfo("openai", List.of("openai", "azure"), false,
+				new AcpSchema.ProviderCurrentConfig("openai", "https://api.openai.com/v1"));
+
+		assertThat(jsonMapper.readValue(json, AcpSchema.ProviderInfo.class)).isEqualTo(expected);
+		assertThat(jsonMapper.writeValueAsString(expected)).isEqualTo(json);
+	}
+
+	@Test
+	void setProviderRequestRoundTripsTheSchemaShape() throws IOException {
+		String json = "{\"providerId\":\"main\",\"apiType\":\"anthropic\",\"baseUrl\":\"https://api.anthropic.com\","
+				+ "\"headers\":{\"x-api-version\":\"2026-01-01\"}}";
+		var expected = new AcpSchema.SetProviderRequest("main", "anthropic", "https://api.anthropic.com",
+				Map.of("x-api-version", "2026-01-01"));
+
+		assertThat(jsonMapper.readValue(json, AcpSchema.SetProviderRequest.class)).isEqualTo(expected);
+		assertThat(jsonMapper.writeValueAsString(expected)).isEqualTo(json);
+	}
+
+	@Test
+	void disableProviderRequestRoundTripsTheSchemaShape() throws IOException {
+		String json = "{\"providerId\":\"openai\"}";
+		var expected = new AcpSchema.DisableProviderRequest("openai");
+
+		assertThat(jsonMapper.readValue(json, AcpSchema.DisableProviderRequest.class)).isEqualTo(expected);
+		assertThat(jsonMapper.writeValueAsString(expected)).isEqualTo(json);
 	}
 
 	// ---------------------------

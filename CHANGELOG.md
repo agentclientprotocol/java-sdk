@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (unstable providers API): the provider identifier is `providerId`, on the wire and in
+  Java.** `ProviderInfo`, `SetProviderRequest` and `DisableProviderRequest` wrote and read `"id"`,
+  but the unstable schema names the property `providerId`, so no spec-conforming peer could exchange
+  them with the SDK. The record component is renamed with it. Migration: `id()` becomes
+  `providerId()`; the constructors keep their parameter order.
 - **Breaking: `AcpProtocolException` no longer converts to or from `JSONRPCError`.** Use
   `AcpSchema.JSONRPCError.from(exception)` instead of `exception.toJsonRpcError()`, and
   `error.toException()` instead of `new AcpProtocolException(error)`. Dependencies between the `spec` and

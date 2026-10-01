@@ -706,7 +706,7 @@ class AcpAgentSupportTest {
 
 		assertThat(resp).isNotNull();
 		assertThat(resp.providers()).hasSize(1);
-		assertThat(resp.providers().get(0).id()).isEqualTo("openai");
+		assertThat(resp.providers().get(0).providerId()).isEqualTo("openai");
 	}
 
 	@Test
@@ -724,7 +724,7 @@ class AcpAgentSupportTest {
 
 			@SetProvider
 			SetProviderResponse setProvider(SetProviderRequest req) {
-				configuredId.set(req.id());
+				configuredId.set(req.providerId());
 				configuredBaseUrl.set(req.baseUrl());
 				return new SetProviderResponse();
 			}
