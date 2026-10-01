@@ -1244,20 +1244,55 @@ public final class AcpSchema {
 			@JsonProperty("sessionCapabilities") @Nullable SessionCapabilities sessionCapabilities,
 			@JsonProperty("mcpCapabilities") @Nullable McpCapabilities mcpCapabilities,
 			@JsonProperty("promptCapabilities") @Nullable PromptCapabilities promptCapabilities,
+			@JsonProperty("auth") @Nullable AgentAuthCapabilities auth,
 			@UnstableAcpApi @JsonProperty("providers") @Nullable ProvidersCapabilities providers,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public AgentCapabilities() {
-			this(false, null, new McpCapabilities(), new PromptCapabilities(), null, null);
+			this(false, null, new McpCapabilities(), new PromptCapabilities(), null, null, null);
 		}
 
 		public AgentCapabilities(@Nullable Boolean loadSession, @Nullable McpCapabilities mcpCapabilities,
 				@Nullable PromptCapabilities promptCapabilities) {
-			this(loadSession, null, mcpCapabilities, promptCapabilities, null, null);
+			this(loadSession, null, mcpCapabilities, promptCapabilities, null, null, null);
 		}
 
 		public AgentCapabilities(@Nullable Boolean loadSession, @Nullable SessionCapabilities sessionCapabilities,
 				@Nullable McpCapabilities mcpCapabilities, @Nullable PromptCapabilities promptCapabilities, @Nullable Map<String, Object> meta) {
-			this(loadSession, sessionCapabilities, mcpCapabilities, promptCapabilities, null, meta);
+			this(loadSession, sessionCapabilities, mcpCapabilities, promptCapabilities, null, null, meta);
+		}
+	}
+
+	/**
+	 * Authentication capabilities the agent advertises.
+	 *
+	 * @param logout present (even empty) when the agent supports the {@code logout} method
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record AgentAuthCapabilities(@JsonProperty("logout") @Nullable LogoutCapabilities logout,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public AgentAuthCapabilities(@Nullable LogoutCapabilities logout) {
+			this(logout, null);
+		}
+
+		/**
+		 * The capabilities of an agent that supports {@code logout}.
+		 * @return {@code {"logout": {}}}
+		 */
+		public static AgentAuthCapabilities withLogout() {
+			return new AgentAuthCapabilities(new LogoutCapabilities());
+		}
+	}
+
+	/**
+	 * Present when the agent supports the {@code logout} method.
+	 *
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record LogoutCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public LogoutCapabilities() {
+			this(null);
 		}
 	}
 

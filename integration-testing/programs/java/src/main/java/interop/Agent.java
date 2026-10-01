@@ -227,12 +227,11 @@ public class Agent {
 			.initializeHandler(r -> {
 				init.set(r);
 				log("[agent] initialize " + r);
-				// No auth.logout (P7) and no terminal auth method (P5): the records cannot carry them.
 				return Mono.just(new AcpSchema.InitializeResponse(1,
 						new AcpSchema.AgentCapabilities(true,
 								new AcpSchema.SessionCapabilities(Map.of(), Map.of(), Map.of(), Map.of(), null, null),
 								new AcpSchema.McpCapabilities(false, false), new AcpSchema.PromptCapabilities(false, false, false),
-								null),
+								AcpSchema.AgentAuthCapabilities.withLogout(), null, null),
 						authMethods(r.clientCapabilities()),
 						new AcpSchema.Implementation("interop-java-agent", "1"), null));
 			})

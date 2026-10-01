@@ -272,6 +272,8 @@ public class AcpAsyncClient {
 	 * <p>
 	 * Terminates the current authenticated session. After logout, the client must
 	 * authenticate again before performing operations that require authentication.
+	 * Only available if the agent advertises the {@code auth.logout} capability
+	 * ({@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}).
 	 * </p>
 	 * @param logoutRequest the logout request
 	 * @return a Mono emitting the logout response

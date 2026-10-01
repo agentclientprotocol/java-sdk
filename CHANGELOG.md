@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ClientCapabilities.session`, `ClientSessionCapabilities`, `SessionConfigOptionsCapabilities`,
   `BooleanConfigOptionCapabilities`; `SessionConfigOptionsCapabilities.withBoolean()`) tells the
   agent it may send them; agents check `NegotiatedCapabilities.supportsBooleanConfigOptions()`.
+- **Agent capability `auth.logout`** (`AgentCapabilities.auth`, `AgentAuthCapabilities`,
+  `LogoutCapabilities`; `AgentAuthCapabilities.withLogout()`): the agent advertises that it
+  supports `logout`, and clients check `NegotiatedCapabilities.supportsLogout()` /
+  `requireLogout()` before calling it.
 
 ### Changed
 
@@ -113,6 +117,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor, in schema order. Migration: `new ClientCapabilities(fs, terminal, elicitation,
   meta)` becomes `new ClientCapabilities(fs, terminal, session, auth, elicitation, meta)` (both
   may be `null`).
+- **Breaking: `AgentCapabilities` takes `auth` after `promptCapabilities`** in its canonical
+  constructor. Migration: `new AgentCapabilities(loadSession, session, mcp, prompt, providers,
+  meta)` becomes `new AgentCapabilities(loadSession, session, mcp, prompt, auth, providers, meta)`
+  (`auth` may be `null`); the shorter constructors are unchanged.
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's

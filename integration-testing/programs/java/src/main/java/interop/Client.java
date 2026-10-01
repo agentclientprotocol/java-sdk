@@ -171,8 +171,7 @@ public class Client {
 		STEPS.put("init.config-boolean", Client::initConfigBoolean);
 		STEPS.put("auth.authenticate", Client::authAuthenticate);
 		STEPS.put("auth.logout", Client::authLogout);
-		STEPS.put("auth.logout-capability", () -> gap("P7",
-				"AcpSchema.AgentCapabilities has no auth field, so agentCapabilities.auth.logout cannot be read"));
+		STEPS.put("auth.logout-capability", Client::authLogoutCapability);
 		STEPS.put("auth.terminal", Client::authTerminal);
 		STEPS.put("session.new", Client::sessionNew);
 		STEPS.put("session.load", Client::sessionLoad);
@@ -332,6 +331,13 @@ public class Client {
 		List<AcpSchema.AuthMethod> methods = init().authMethods();
 		check(methods != null && methods.stream().anyMatch(m -> "interop-auth".equals(m.id())), "authMethods " + methods);
 		return "authMethods has interop-auth";
+	}
+
+	static String authLogoutCapability() {
+		AcpSchema.AgentCapabilities caps = init().agentCapabilities();
+		check(caps != null && caps.auth() != null && caps.auth().logout() != null,
+				"agentCapabilities.auth " + (caps == null ? null : caps.auth()));
+		return "agentCapabilities.auth.logout present";
 	}
 
 	static String authTerminal() {
