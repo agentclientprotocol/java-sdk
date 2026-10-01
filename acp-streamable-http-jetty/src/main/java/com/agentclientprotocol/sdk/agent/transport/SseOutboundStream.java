@@ -215,36 +215,59 @@ final class SseOutboundStream {
 				try {
 					// isReady() true means no write is pending: everything written so far has
 					// been flushed and that flush has completed.
-					while (!detached && output.isReady()) {
-						if (!flushPending && !unconfirmed.isEmpty()) {
-							// A completed flush may still have failed; an empty write
-							// surfaces that before its events count as delivered.
-							output.write(NO_BYTES);
-							unconfirmed.clear();
-							continue;
-						}
-						byte[] bytes = comments.pollFirst();
-						if (bytes == null) {
-							String payload = mailbox.pollFirst();
-							if (payload == null) {
-								if (!flushPending) {
-									break;
-								}
-								output.flush();
-								flushPending = false;
-								continue;
-							}
-							unconfirmed.addLast(payload);
-							bytes = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
-						}
-						output.write(bytes);
-						flushPending = true;
+					boolean more = true;
+					while (more && !detached && output.isReady()) {
+						more = writeNext();
 					}
 				}
 				catch (IOException | IllegalStateException e) {
 					detach(this);
 				}
 			}
+		}
+
+		/**
+		 * Performs the next write this subscriber needs: confirm the events of a completed
+		 * flush, write the next comment or event, or flush what was written.
+		 * @return false when there is nothing left to write or flush
+		 */
+		private boolean writeNext() throws IOException {
+			if (!flushPending && !unconfirmed.isEmpty()) {
+				// A completed flush may still have failed; an empty write surfaces that
+				// before its events count as delivered.
+				output.write(NO_BYTES);
+				unconfirmed.clear();
+				return true;
+			}
+			byte[] frame = nextFrame();
+			if (frame != null) {
+				output.write(frame);
+				flushPending = true;
+				return true;
+			}
+			if (!flushPending) {
+				return false;
+			}
+			output.flush();
+			flushPending = false;
+			return true;
+		}
+
+		/**
+		 * The next queued comment, else the next mailbox event as an SSE frame (the event is
+		 * then unconfirmed); null when both are empty.
+		 */
+		private byte @Nullable [] nextFrame() {
+			byte[] comment = comments.pollFirst();
+			if (comment != null) {
+				return comment;
+			}
+			String payload = mailbox.pollFirst();
+			if (payload == null) {
+				return null;
+			}
+			unconfirmed.addLast(payload);
+			return ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
 		}
 
 		@Override
