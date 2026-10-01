@@ -118,7 +118,7 @@ public class AcpProtocolException extends AcpException {
 	}
 
 	private static String formatMessage(int code, String message) {
-		return String.format("[%d] %s", code, message);
+		return "[" + code + "] " + message;
 	}
 
 }

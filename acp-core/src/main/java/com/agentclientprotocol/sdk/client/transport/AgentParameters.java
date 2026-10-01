@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,7 +27,7 @@ public class AgentParameters {
 
 	// Environment variables to inherit by default
 	private static final List<String> DEFAULT_INHERITED_ENV_VARS = System.getProperty("os.name")
-		.toLowerCase()
+		.toLowerCase(Locale.ROOT)
 		.contains("win")
 				? Arrays.asList("APPDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "PATH", "PROCESSOR_ARCHITECTURE",
 						"SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "USERNAME", "USERPROFILE")

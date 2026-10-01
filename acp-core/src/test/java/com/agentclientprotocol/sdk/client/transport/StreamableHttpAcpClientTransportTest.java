@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -199,6 +200,45 @@ class StreamableHttpAcpClientTransportTest {
 				"init-1", AcpTestFixtures.createInitializeRequest())).block())
 			.isInstanceOf(AcpConnectionException.class)
 			.hasMessage("ACP initialize response id did not match initialize request");
+	}
+
+	/**
+	 * Media types are case-insensitive. The Content-Type check lower-cased with the default
+	 * locale, and in Turkish {@code "APPLICATION/JSON".toLowerCase()} is
+	 * {@code "applıcatıon/json"} (dotless i), so initialize failed against a server that sent
+	 * an upper-case media type.
+	 */
+	@Test
+	void initializeAcceptsUpperCaseContentTypeInTurkishLocale() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		String body = jsonMapper.writeValueAsString(
+				AcpTestFixtures.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+		HttpResponse<Object> response = response(200,
+				Map.of("Content-Type", "APPLICATION/JSON", "Acp-Connection-Id", "conn-1"), body);
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+			}
+			return CompletableFuture.completedFuture(response);
+		});
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		transport.setExceptionHandler(error -> {
+		});
+
+		Locale defaultLocale = Locale.getDefault();
+		Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+		try {
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+		}
+		finally {
+			Locale.setDefault(defaultLocale);
+			transport.close();
+		}
 	}
 
 	@Test

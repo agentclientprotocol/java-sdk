@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -400,7 +401,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 							"Expected 200 for initialize, got " + response.statusCode()));
 				}
 				String contentType = response.headers().firstValue("Content-Type").orElse("");
-				if (!contentType.toLowerCase().contains(CONTENT_TYPE_JSON)) {
+				if (!contentType.toLowerCase(Locale.ROOT).contains(CONTENT_TYPE_JSON)) {
 					return Mono.error(new AcpConnectionException(
 							"Expected " + CONTENT_TYPE_JSON + " initialize response, got " + contentType));
 				}
@@ -546,7 +547,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 							"Expected 200 when opening SSE stream, got " + response.statusCode()));
 				}
 				String contentType = response.headers().firstValue("Content-Type").orElse("");
-				if (!contentType.toLowerCase().contains(CONTENT_TYPE_EVENT_STREAM)) {
+				if (!contentType.toLowerCase(Locale.ROOT).contains(CONTENT_TYPE_EVENT_STREAM)) {
 					return Mono.error(new AcpConnectionException(
 							"Expected " + CONTENT_TYPE_EVENT_STREAM + " response, got " + contentType));
 				}

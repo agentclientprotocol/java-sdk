@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
@@ -412,7 +413,7 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private boolean hasContentType(HttpServletRequest request, String expected) {
 		return Optional.ofNullable(request.getContentType())
-			.map(String::toLowerCase)
+			.map(value -> value.toLowerCase(Locale.ROOT))
 			.map(contentType -> contentType.split(";", 2)[0].trim())
 			.filter(contentType -> contentType.equals(expected))
 			.isPresent();
@@ -420,7 +421,7 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private boolean accepts(HttpServletRequest request, String expected) {
 		return Optional.ofNullable(request.getHeader("Accept"))
-			.map(String::toLowerCase)
+			.map(value -> value.toLowerCase(Locale.ROOT))
 			.filter(accept -> accept.contains(expected))
 			.isPresent();
 	}
