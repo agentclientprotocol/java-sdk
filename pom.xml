@@ -66,10 +66,10 @@
 
         <!-- Dependency versions -->
         <reactor.version>2025.0.7</reactor.version>
-        <jackson.version>2.22.2</jackson.version>
+        <jackson.version>2.22.3</jackson.version>
         <!-- Jackson 3 for acp-json-jackson3: the version Spring Boot 4.1 manages. It reads
              the jackson-annotations 2.x that jackson.version manages. -->
-        <jackson3.version>3.1.5</jackson3.version>
+        <jackson3.version>3.1.7</jackson3.version>
 
         <slf4j.version>2.0.18</slf4j.version>
         <jspecify.version>1.0.0</jspecify.version>

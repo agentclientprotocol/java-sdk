@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Jackson 2.22.2 → **2.22.3** and Jackson 3.1.5 → **3.1.7**, clearing CVE-2026-89407, CVE-2026-89425,
+  CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
+  0.18.0 shipped with the affected versions; applications can override the versions now.
+
+### Security
+
+- Jackson 2.22.2 → **2.22.3** and Jackson 3.1.5 → **3.1.7**, clearing CVE-2026-89407, CVE-2026-89425,
+  CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
+  0.18.0 shipped with the affected versions; applications can override the versions now.
+
 ### Changed
 
 - **Breaking (unstable providers API): the provider identifier is `providerId`, on the wire and in
