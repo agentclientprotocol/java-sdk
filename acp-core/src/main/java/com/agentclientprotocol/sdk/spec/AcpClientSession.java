@@ -70,8 +70,8 @@ public class AcpClientSession implements AcpSession {
 	/** Map of notification handlers keyed by method name */
 	private final ConcurrentHashMap<String, NotificationHandler> notificationHandlers = new ConcurrentHashMap<>();
 
-	/** Sink for serializing notification delivery in arrival order */
-	private final Sinks.Many<AcpSchema.JSONRPCNotification> notificationSink;
+	/** Notifications waiting for in-order delivery; completed when the session closes */
+	private final NotificationQueue<AcpSchema.JSONRPCNotification> notifications = new NotificationQueue<>();
 
 	/** Subscription draining the notification sink via concatMap */
 	private final Disposable notificationSubscription;
@@ -162,8 +162,7 @@ public class AcpClientSession implements AcpSession {
 		// Serialize notification delivery: concatMap ensures each notification's Mono
 		// completes before the next one starts, preserving arrival order even when
 		// handlers do async work.
-		this.notificationSink = Sinks.many().unicast().onBackpressureBuffer();
-		this.notificationSubscription = this.notificationSink.asFlux()
+		this.notificationSubscription = this.notifications.asFlux()
 			.concatMap(notification -> handleIncomingNotification(notification).onErrorComplete(t -> {
 				logger.error("Error handling notification: {}", t.getMessage());
 				return true;
@@ -181,7 +180,7 @@ public class AcpClientSession implements AcpSession {
 		// whose first request would time out.
 		Throwable failure = this.connectFailure;
 		if (failure != null) {
-			this.notificationSink.tryEmitComplete();
+			this.notifications.complete();
 			this.notificationSubscription.dispose();
 			throw notConnected(failure);
 		}
@@ -258,11 +257,12 @@ public class AcpClientSession implements AcpSession {
 	private void enqueue(AcpSchema.JSONRPCNotification notification) {
 		logger.debug("Received notification method={}", notification.method());
 		logger.trace("Incoming notification method='{}' params={}", notification.method(), notification.params());
-		Sinks.EmitResult result = notificationSink.tryEmitNext(notification);
+		Sinks.EmitResult result = this.notifications.offer(notification);
 		if (!result.isFailure()) {
 			return;
 		}
-		if (result == Sinks.EmitResult.FAIL_TERMINATED || result == Sinks.EmitResult.FAIL_CANCELLED) {
+		if (result == Sinks.EmitResult.FAIL_TERMINATED || result == Sinks.EmitResult.FAIL_CANCELLED
+				|| this.notifications.isCompleting()) {
 			// The session is shutting down. Refusing newly arriving notifications
 			// is the intended behaviour: a graceful shutdown stops accepting new
 			// work and drains what is already queued, and JSON-RPC notifications
@@ -382,7 +382,8 @@ public class AcpClientSession implements AcpSession {
 		return Mono.<Void>fromRunnable(() -> {
 			this.closing = true;
 			dismissPendingResponses();
-			notificationSink.tryEmitComplete();
+			// Never lost to a notification being delivered concurrently (NotificationQueue).
+			this.notifications.complete();
 		})
 			// Wait for queued notifications to drain before tearing the session down;
 			// disposing immediately would discard them. Bounded so a handler that never
@@ -401,7 +402,7 @@ public class AcpClientSession implements AcpSession {
 	public void close() {
 		this.closing = true;
 		dismissPendingResponses();
-		notificationSink.tryEmitComplete();
+		this.notifications.complete();
 		notificationSubscription.dispose();
 	}
 

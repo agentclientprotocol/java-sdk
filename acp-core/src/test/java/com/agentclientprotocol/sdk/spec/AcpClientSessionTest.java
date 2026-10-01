@@ -360,6 +360,45 @@ class AcpClientSessionTest {
 	}
 
 	@Test
+	void gracefulCloseWhileANotificationIsBeingDeliveredDoesNotWaitOutTheRequestTimeout() throws Exception {
+		// The live case: an agent sends a notification just as the client closes after a turn.
+		// A handler that does its work synchronously runs on the inbound thread inside the
+		// notification sink's emission, so the close's completion of that sink collides with
+		// it. The completion must still happen: the close then waits only for the handler,
+		// not for the request timeout. The handler outlasts any bounded busy-loop retry.
+		Duration requestTimeout = Duration.ofSeconds(30);
+		CountDownLatch entered = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		List<Object> delivered = new CopyOnWriteArrayList<>();
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(requestTimeout, transport, Map.of(),
+				Map.of(TEST_NOTIFICATION, params -> {
+					entered.countDown();
+					try {
+						release.await();
+					}
+					catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
+					delivered.add(params);
+					return Mono.empty();
+				}), Function.identity());
+
+		Thread inbound = new Thread(() -> transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(
+				AcpSchema.JSONRPC_VERSION, TEST_NOTIFICATION, Map.of("index", 0))), "inbound");
+		inbound.start();
+		assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+		var closed = session.closeGracefully().toFuture();
+		Thread.sleep(300);
+		release.countDown();
+
+		closed.get(5, TimeUnit.SECONDS);
+		inbound.join(5_000);
+		assertThat(delivered).containsExactly(Map.of("index", 0));
+	}
+
+	@Test
 	void testConcurrentRequests() {
 		var transport = new MockAcpClientTransport();
 		var session = new AcpClientSession(TIMEOUT, transport, Map.of(),
