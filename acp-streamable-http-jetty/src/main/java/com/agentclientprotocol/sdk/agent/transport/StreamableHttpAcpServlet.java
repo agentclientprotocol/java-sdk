@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpConnection.UnknownSessionException;
@@ -199,110 +200,118 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	@Override
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		if (!hasContentType(request, CONTENT_TYPE_JSON)) {
-			writeText(response, HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE,
-					"Content-Type must be application/json");
-			return;
-		}
-
-		long declaredLength = request.getContentLengthLong();
-		if (declaredLength > options.maxPostBodyBytes()) {
-			writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
-					"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
-			return;
-		}
-		byte[] bodyBytes = request.getInputStream().readNBytes((int) Math.min(Integer.MAX_VALUE,
-				options.maxPostBodyBytes() + 1));
-		if (bodyBytes.length > options.maxPostBodyBytes()) {
-			writeText(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
-					"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
-			return;
-		}
-		String body = new String(bodyBytes, StandardCharsets.UTF_8);
-		if (body.stripLeading().startsWith("[")) {
-			writeText(response, HttpServletResponse.SC_NOT_IMPLEMENTED, "JSON-RPC batches are not supported");
-			return;
-		}
-
-		JSONRPCMessage message;
 		try {
-			message = AcpSchema.deserializeJsonRpcMessage(jsonMapper, body);
-		}
-		catch (Exception e) {
-			writeText(response, HttpServletResponse.SC_BAD_REQUEST, "Invalid JSON-RPC");
-			return;
-		}
-
-		if (StreamableHttpRouting.isInitialize(message)) {
-			handleInitialize(request, response, (AcpSchema.JSONRPCRequest) message);
-			return;
-		}
-
-		String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-		if (connectionId == null) {
-			writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-			return;
-		}
-		StreamableHttpConnection connection = connections.get(connectionId);
-		if (connection == null) {
-			response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-			return;
-		}
-
-		try {
-			connection.acceptClientPost(message, header(request, HEADER_SESSION_ID).orElse(null));
+			JSONRPCMessage message = readMessage(request);
+			if (StreamableHttpRouting.isInitialize(message)) {
+				handleInitialize(request, response, (AcpSchema.JSONRPCRequest) message);
+				return;
+			}
+			StreamableHttpConnection connection = requireConnection(request, connections::get);
+			acceptClientPost(connection, message, header(request, HEADER_SESSION_ID).orElse(null));
 			response.setStatus(HttpServletResponse.SC_ACCEPTED);
 		}
-		catch (UnknownSessionException e) {
-			writeText(response, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
-		}
-		catch (AcpConnectionException | IllegalArgumentException e) {
-			writeText(response, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+		catch (Rejection rejection) {
+			rejection.writeTo(response);
 		}
 	}
 
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		if (!accepts(request, CONTENT_TYPE_EVENT_STREAM)) {
-			writeText(response, HttpServletResponse.SC_NOT_ACCEPTABLE, "client must accept text/event-stream");
-			return;
-		}
-
-		String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-		if (connectionId == null) {
-			writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-			return;
-		}
-		StreamableHttpConnection connection = connections.get(connectionId);
-		if (connection == null) {
-			response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-			return;
-		}
-
 		try {
+			if (!accepts(request, CONTENT_TYPE_EVENT_STREAM)) {
+				throw new Rejection(HttpServletResponse.SC_NOT_ACCEPTABLE, "client must accept text/event-stream");
+			}
+			StreamableHttpConnection connection = requireConnection(request, connections::get);
 			connection.openStream(request, response, header(request, HEADER_SESSION_ID).orElse(null));
 		}
 		catch (UnknownSessionException e) {
 			writeText(response, HttpServletResponse.SC_NOT_FOUND, e.getMessage());
+		}
+		catch (Rejection rejection) {
+			rejection.writeTo(response);
 		}
 	}
 
 	@Override
 	protected void doDelete(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		String connectionId = header(request, HEADER_CONNECTION_ID).orElse(null);
-		if (connectionId == null) {
-			writeText(response, HttpServletResponse.SC_BAD_REQUEST, HEADER_CONNECTION_ID + " header required");
-			return;
+		try {
+			StreamableHttpConnection connection = requireConnection(request, connections::remove);
+			connection.close();
+			response.setStatus(HttpServletResponse.SC_ACCEPTED);
 		}
-		StreamableHttpConnection connection = connections.remove(connectionId);
+		catch (Rejection rejection) {
+			rejection.writeTo(response);
+		}
+	}
+
+	/** Reads a POST body and parses it as one JSON-RPC message. */
+	private JSONRPCMessage readMessage(HttpServletRequest request) throws IOException, Rejection {
+		return parseMessage(readJsonBody(request));
+	}
+
+	/** The body of a JSON POST, rejecting a wrong content type and an oversized body, declared or actual. */
+	private String readJsonBody(HttpServletRequest request) throws IOException, Rejection {
+		if (!hasContentType(request, CONTENT_TYPE_JSON)) {
+			throw new Rejection(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json");
+		}
+		long maxBytes = options.maxPostBodyBytes();
+		if (request.getContentLengthLong() > maxBytes) {
+			throw bodyTooLarge();
+		}
+		byte[] bodyBytes = request.getInputStream().readNBytes((int) Math.min(Integer.MAX_VALUE, maxBytes + 1));
+		if (bodyBytes.length > maxBytes) {
+			throw bodyTooLarge();
+		}
+		return new String(bodyBytes, StandardCharsets.UTF_8);
+	}
+
+	/** One JSON-RPC message; a batch and anything that is not JSON-RPC are rejected. */
+	private JSONRPCMessage parseMessage(String body) throws Rejection {
+		if (body.stripLeading().startsWith("[")) {
+			throw new Rejection(HttpServletResponse.SC_NOT_IMPLEMENTED, "JSON-RPC batches are not supported");
+		}
+		try {
+			return AcpSchema.deserializeJsonRpcMessage(jsonMapper, body);
+		}
+		catch (Exception e) {
+			throw new Rejection(HttpServletResponse.SC_BAD_REQUEST, "Invalid JSON-RPC");
+		}
+	}
+
+	private Rejection bodyTooLarge() {
+		return new Rejection(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+				"POST body exceeds " + options.maxPostBodyBytes() + " bytes");
+	}
+
+	/**
+	 * The connection the request's connection header names, looked up (or removed) by
+	 * {@code lookup}: rejected with 400 when the header is missing, 404 when no such connection.
+	 */
+	private StreamableHttpConnection requireConnection(HttpServletRequest request,
+			Function<String, @Nullable StreamableHttpConnection> lookup) throws Rejection {
+		String connectionId = header(request, HEADER_CONNECTION_ID)
+			.orElseThrow(() -> new Rejection(HttpServletResponse.SC_BAD_REQUEST,
+					HEADER_CONNECTION_ID + " header required"));
+		StreamableHttpConnection connection = lookup.apply(connectionId);
 		if (connection == null) {
-			response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-			return;
+			throw Rejection.statusOnly(HttpServletResponse.SC_NOT_FOUND);
 		}
-		connection.close();
-		response.setStatus(HttpServletResponse.SC_ACCEPTED);
+		return connection;
+	}
+
+	private static void acceptClientPost(StreamableHttpConnection connection, JSONRPCMessage message,
+			@Nullable String sessionId) throws Rejection {
+		try {
+			connection.acceptClientPost(message, sessionId);
+		}
+		catch (UnknownSessionException e) {
+			throw new Rejection(HttpServletResponse.SC_NOT_FOUND, e.getMessage());
+		}
+		catch (AcpConnectionException | IllegalArgumentException e) {
+			throw new Rejection(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+		}
 	}
 
 	private void handleInitialize(HttpServletRequest request, HttpServletResponse response,
@@ -432,12 +441,54 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		return Optional.ofNullable(request.getHeader(name)).filter(value -> !value.isBlank());
 	}
 
-	private void writeText(HttpServletResponse response, int status, @Nullable String body) throws IOException {
+	private static void writeText(HttpServletResponse response, int status, @Nullable String body) throws IOException {
 		response.setStatus(status);
 		response.setContentType("text/plain");
 		if (body != null) {
 			response.getWriter().write(body);
 		}
+	}
+
+	/**
+	 * A request refused with an HTTP status and an optional plain-text body. Thrown by the
+	 * request-reading helpers so each {@code do*} method states the happy path once.
+	 */
+	private static final class Rejection extends Exception {
+
+		private static final long serialVersionUID = 1L;
+
+		private final int status;
+
+		private final @Nullable String body;
+
+		private final boolean hasBody;
+
+		/** A refusal with a plain-text body (none written when {@code body} is null). */
+		Rejection(int status, @Nullable String body) {
+			this(status, body, true);
+		}
+
+		private Rejection(int status, @Nullable String body, boolean hasBody) {
+			super(body, null, false, false);
+			this.status = status;
+			this.body = body;
+			this.hasBody = hasBody;
+		}
+
+		/** A refusal that sets the status only. */
+		static Rejection statusOnly(int status) {
+			return new Rejection(status, null, false);
+		}
+
+		void writeTo(HttpServletResponse response) throws IOException {
+			if (hasBody) {
+				writeText(response, status, body);
+			}
+			else {
+				response.setStatus(status);
+			}
+		}
+
 	}
 
 }
