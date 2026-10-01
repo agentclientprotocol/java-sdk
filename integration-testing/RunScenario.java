@@ -54,7 +54,10 @@ import java.util.stream.Stream;
  * with {@code --prepared}, which touches no shared state (no install, no git, no build). Each
  * scenario has its own log directory, its own {@code ${TMP}} (also {@code TMPDIR} for every
  * process), and takes {@code ${PORT}} from {@code IT_PORT_RANGE} (e.g. 20000-20099) when set, so
- * concurrent scenarios given disjoint ranges never race for a port.
+ * concurrent scenarios given disjoint ranges never race for a port (unset: an OS-chosen ephemeral
+ * port). Every Maven call goes through scripts/mvnw.sh, so the SDK SNAPSHOT is installed into and
+ * resolved from {@code IT_M2_REPO} only (default: integration-testing/.cache/m2, or
+ * ~/.m2/repository when CI=true).
  */
 public class RunScenario {
 
@@ -126,7 +129,7 @@ public class RunScenario {
 				Options:
 				  --peer <name>=<ref>   test peer SDK <name> (see peers.json) at <ref> (branch, tag or SHA)
 				  --peers-ref <ref>     test every peer SDK at <ref> (a --peer entry wins)
-				  --skip-sdk-install    do not run ./mvnw install first (run-all.sh installs once)
+				  --skip-sdk-install    do not install the SDK first (run-all.sh installs once)
 				  --prepare <s>...      only prepare the peers and run the builds of the scenarios (no install)
 				  --prepared            the scenario was prepared: no install, no git, no build (parallel runs)
 				  --list                list scenarios
@@ -184,11 +187,11 @@ public class RunScenario {
 			String acpVersion = sdkVersion();
 			if (!skipInstall) {
 				step("Installing the SDK from " + repo + " (" + acpVersion + ")");
-				exec(logDir.resolve("sdk-install.log"), repo, 900, "./mvnw", "-q", "-B", "-DskipTests", "install");
+				exec(logDir.resolve("sdk-install.log"), repo, 900, mvnw(root), "-q", "-B", "-DskipTests", "install");
 			}
 			vars.put("ROOT", root.toString());
 			vars.put("REPO", repo.toString());
-			vars.put("MVNW", repo.resolve("mvnw").toString());
+			vars.put("MVNW", mvnw(root));
 			vars.put("ACP_VERSION", acpVersion);
 			vars.put("CACHE", root.resolve(".cache").toString());
 			vars.put("LOG_DIR", logDir.toString());
@@ -486,6 +489,14 @@ public class RunScenario {
 	}
 
 	/**
+	 * The Maven wrapper every build uses: scripts/mvnw.sh, the checkout's ./mvnw pinned to the
+	 * suite's local repository ({@code -Dmaven.repo.local=$IT_M2_REPO}, see scripts/m2-repo.sh).
+	 */
+	static String mvnw(Path root) {
+		return root.resolve("scripts").resolve("mvnw.sh").toString();
+	}
+
+	/**
 	 * A free port: the first one that binds in {@code IT_PORT_RANGE} ({@code <from>-<to>}, set by
 	 * run-all.sh so concurrent scenarios use disjoint ranges), else one the OS picks.
 	 */
@@ -528,7 +539,7 @@ public class RunScenario {
 				Map<String, String> vars = new LinkedHashMap<>();
 				vars.put("ROOT", root.toString());
 				vars.put("REPO", r.repo.toString());
-				vars.put("MVNW", r.repo.resolve("mvnw").toString());
+				vars.put("MVNW", mvnw(root));
 				vars.put("ACP_VERSION", r.sdkVersion());
 				vars.put("CACHE", root.resolve(".cache").toString());
 				vars.put("LOG_DIR", r.logDir.toString());
