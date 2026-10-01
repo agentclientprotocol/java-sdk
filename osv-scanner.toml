@@ -1,0 +1,10 @@
+# Accepted vulnerabilities for the scheduled dependency scan (.github/workflows/dependency-scan.yml).
+#
+# Add an entry only when a HIGH or CRITICAL finding cannot be fixed by a version bump yet. Every
+# entry needs an id, an ignoreUntil date and a reason; .github/scripts/osv-scan.sh fails if one is
+# missing. When the date passes the finding fails the scan again, so the decision is revisited.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2026-12-31
+# reason = "No fixed release yet; the vulnerable code path is not reachable from the SDK because ..."

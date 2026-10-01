@@ -142,6 +142,14 @@ Found by enabling Error Prone's bug checks; each has a test.
   `reactor.core.publisher`, so a Mono or Flux operator whose result is dropped (and never runs)
   fails the build; `config/errorprone/reactor-ignorable-results.txt` lists the results that may be
   dropped, with reasons. Still main sources only, still JDK 21+ only.
+- A scheduled dependency vulnerability scan (`dependency-scan.yml`) checks the resolved runtime
+  dependency tree of every module against OSV weekly, on demand, and on each push to `main` that
+  changes a `pom.xml`, so a CVE published after a release no longer waits for someone to look. Maven
+  resolves the tree (a CycloneDX BOM, test scope excluded) and osv-scanner 2.6.0 checks it; no API key
+  or secret is involved. The job fails on HIGH or CRITICAL (CVSS 7.0 or more) or an unscored finding,
+  lists lower findings without failing, and uploads SARIF to code scanning. An unfixable finding can be
+  accepted in `osv-scanner.toml` with a reason and an `ignoreUntil` date, after which it fails again.
+  Run it locally with `.github/scripts/osv-scan.sh`.
 
 ## [0.18.0] - 2026-09-25
 
