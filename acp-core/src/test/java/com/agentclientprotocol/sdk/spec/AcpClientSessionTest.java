@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -556,6 +557,23 @@ class AcpClientSessionTest {
 					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
 		}).verifyComplete();
 
+		session.close();
+	}
+
+	@Test
+	void emptyResponseFromAClientHandlerIsWrittenAsAnEmptyObjectResult() throws Exception {
+		// Java answers with "result": {} for an empty response type, never "result": null.
+		Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = Map.of(AcpSchema.METHOD_FS_WRITE_TEXT_FILE,
+				params -> Mono.just(new AcpSchema.WriteTextFileResponse()));
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, requestHandlers, Map.of(), Function.identity());
+
+		transport.simulateIncomingMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "w",
+				AcpSchema.METHOD_FS_WRITE_TEXT_FILE, Map.of("sessionId", "s", "path", "/f", "content", "x")));
+
+		AcpSchema.JSONRPCResponse response = awaitSentResponse(transport);
+		assertThat(AcpJsonMapper.createDefault().writeValueAsString(response))
+			.isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"w\",\"result\":{}}");
 		session.close();
 	}
 

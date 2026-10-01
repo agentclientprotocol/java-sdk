@@ -64,6 +64,15 @@ class WireFormatTest {
 	}
 
 	@Test
+	void responseEnvelopeWithAnEmptyResultWritesAnEmptyObject() throws IOException {
+		// Never "result": null, and never a dropped result: both break strict peers.
+		var response = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, 7,
+				new AcpSchema.WriteTextFileResponse(), null);
+
+		assertThat(mapper.writeValueAsString(response)).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}");
+	}
+
+	@Test
 	void metaIsWrittenAsGivenIncludingNullValues() throws IOException {
 		Map<String, Object> meta = new LinkedHashMap<>();
 		meta.put("trace", "t1");
