@@ -35,7 +35,7 @@ Three API styles for building agents:
 ```
 
 From 0.18.0, `acp-core` contains no JSON implementation. If you depend on `acp-core` alone, add one
-JSON module next to it; `acp-agent-support`, `acp-test`, `acp-websocket-jetty` and
+JSON module next to it; `acp-agent-support`, `acp-test` and
 `acp-streamable-http-jetty` already bring `acp-json-jackson2`, so users of those need nothing more:
 ```xml
 <!-- Jackson 2 (com.fasterxml.jackson.databind) -->
@@ -382,9 +382,6 @@ var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefau
 server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/acp
 ```
 
-`WebSocketAcpAgentTransport` in `acp-websocket-jetty` is deprecated for removal: it serves a single
-client. Existing `WebSocketAcpClientTransport` clients connect to the transport above unchanged.
-
 ---
 
 ## API Reference
@@ -408,11 +405,10 @@ client. Existing `WebSocketAcpClientTransport` clients connect to the transport 
 | [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports; needs one JSON module |
 | `acp-json-jackson2` | JSON implementation on Jackson 2 (`JacksonAcpJsonMapper`); brought in by the transport and agent-support modules |
 | `acp-json-jackson3` | JSON implementation on Jackson 3 (`Jackson3AcpJsonMapper`) |
-| `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents |
+| `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents; also accepts WebSocket upgrades on the same path |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
-| [`acp-websocket-jetty`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-websocket-jetty) | **Deprecated** single-client WebSocket agent transport; use `acp-streamable-http-jetty` |
 
 ### Transports
 

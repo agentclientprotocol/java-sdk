@@ -21,7 +21,6 @@
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
-        <module>acp-websocket-jetty</module>
     </modules>
 
     <licenses>

@@ -382,7 +382,7 @@ class SchedulerBestPracticesTest {
 	 * <li>Configure the underlying API with a custom executor (e.g., HttpClient.newBuilder().executor(...))</li>
 	 * </ul>
 	 *
-	 * <p>Note: WebSocket transports are excluded because they configure HttpClient with a custom
+	 * <p>Note: the WebSocket client transport is excluded because it configures HttpClient with a custom
 	 * executor (acp-ws-client daemon threads), so their CompletableFutures don't use ForkJoinPool.
 	 */
 	@Test
@@ -393,10 +393,9 @@ class SchedulerBestPracticesTest {
 		Pattern pattern = Pattern.compile("Mono\\.fromFuture\\(");
 
 		// Files that are known to use properly configured executors (not ForkJoinPool.commonPool)
-		// WebSocket transports configure HttpClient with custom executor, so they're safe
+		// The WebSocket client transport configures HttpClient with a custom executor, so it's safe
 		List<String> excludedFiles = List.of(
-			"WebSocketAcpClientTransport.java",
-			"WebSocketAcpAgentTransport.java"
+			"WebSocketAcpClientTransport.java"
 		);
 
 		try (Stream<Path> paths = productionSources()) {

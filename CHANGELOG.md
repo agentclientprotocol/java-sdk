@@ -73,6 +73,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection as a session config option whose `category` is `"model"`, and change it with
   `session/set_config_option` (`setSessionConfigOptionHandler`, `@SetSessionConfigOption`,
   `AcpAsyncClient.setSessionConfigOption`).
+- **Breaking: the `acp-websocket-jetty` module and its `WebSocketAcpAgentTransport` are removed.**
+  Deprecated for removal in 0.18.0; the module held only that class, a WebSocket agent transport
+  that served a single client. Migration: depend on `acp-streamable-http-jetty` and serve agents with
+  `StreamableHttpAcpAgentTransport`, which accepts WebSocket upgrades at `/acp` (and the Streamable
+  HTTP profile on the same path) and creates one agent per connection through an `AcpAgentFactory`:
+  replace `AcpAgent.async(new WebSocketAcpAgentTransport(port, mapper))...build()` with
+  `new StreamableHttpAcpAgentTransport(port, mapper, AcpAgentFactory.async(t -> AcpAgent.async(t)...build()))`.
+  `WebSocketAcpClientTransport` (in `acp-core`) is unchanged and connects to it as before.
 
 ### Fixed
 

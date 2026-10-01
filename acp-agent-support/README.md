@@ -282,18 +282,19 @@ AcpAgentSupport.create(new MyAgent())
     .run();
 ```
 
-### WebSocket Transport
+### Remote Transport (Streamable HTTP and WebSocket)
+
+`StreamableHttpAcpAgentTransport` (module `acp-streamable-http-jetty`) serves the Streamable HTTP
+profile and the WebSocket upgrade on one path and creates one agent per connection:
 
 ```java
-WebSocketAcpAgentTransport transport = WebSocketAcpAgentTransport.builder()
-    .host("localhost")
-    .port(8080)
-    .path("/acp")
-    .build();
-
-AcpAgentSupport.create(new MyAgent())
+AcpAgentFactory agents = AcpAgentFactory.sync(transport -> AcpAgentSupport.create(new MyAgent())
     .transport(transport)
-    .run();
+    .build()
+    .getAgent());
+
+var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefault(), agents);
+server.start().block();  // http://localhost:8080/acp and ws://localhost:8080/acp
 ```
 
 ### InMemory Transport (For Testing)
