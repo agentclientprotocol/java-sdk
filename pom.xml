@@ -393,19 +393,28 @@
                 </executions>
             </plugin>
 
-            <!-- SpotBugs gate: spotbugs:check fails verify on any finding of rank 9 or less
-                 (SpotBugs' "scariest" 1-4 and "scary" 5-9 bands), on main sources, in every
-                 module and on every JDK the build runs on (17 and 21; unlike the errorprone
-                 profile it does not need JDK 21). Rank, not confidence, is the gate: rank
-                 combines the pattern's severity with its confidence, so it keeps the bugs and
-                 drops the long tail (exposed arrays, missing static on inner classes,
-                 serialization advice) that a confidence threshold alone would keep. threshold
-                 Medium (the default) also drops low-confidence findings; effort Max runs the
-                 interprocedural detectors. find-sec-bugs is not used: on this code base it adds
-                 no finding at rank 9 or less, and its findings below that are the library's
-                 purpose (spawning the configured agent process, writing JSON-RPC responses).
-                 A false positive is excluded narrowly (class, method, pattern), with its reason,
-                 in config/spotbugs/spotbugs-exclude.xml. -->
+            <!-- SpotBugs gate: spotbugs:check fails verify on main sources, in every module and
+                 on every JDK the build runs on (17 and 21; unlike the errorprone profile it does
+                 not need JDK 21). The analysis reports findings up to rank 20; the include filter
+                 config/spotbugs/spotbugs-include.xml keeps the ones that fail the build:
+                 - every pattern of rank 9 or less (SpotBugs' "scariest" 1-4 and "scary" 5-9
+                   bands). Rank, not confidence, is the gate: rank combines the pattern's severity
+                   with its confidence, so it keeps the bugs and drops the long tail (exposed
+                   arrays, missing static on inner classes, serialization advice) that a
+                   confidence threshold alone would keep;
+                 - a listed set of multithreaded-correctness patterns at any rank (inconsistent
+                   synchronization, wait/notify and lock misuse, wrong lock objects), which
+                   SpotBugs ranks 14 to 17 and the rank gate alone would miss.
+                 One analysis and one filter, not two check executions: check forks the
+                 spotbugs goal with the plugin-level configuration only, so a second check
+                 execution with its own filter would analyse with the first one's settings and
+                 then pass silently on a report that was never written.
+                 threshold Medium (the default) also drops low-confidence findings; effort Max
+                 runs the interprocedural detectors. find-sec-bugs is not used: on this code base
+                 it adds no finding at rank 9 or less, and its findings below that are the
+                 library's purpose (spawning the configured agent process, writing JSON-RPC
+                 responses). A false positive is excluded narrowly (class, method, pattern), with
+                 its reason, in config/spotbugs/spotbugs-exclude.xml. -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
@@ -420,7 +429,8 @@
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Medium</threshold>
-                    <maxRank>9</maxRank>
+                    <maxRank>20</maxRank>
+                    <includeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs/spotbugs-include.xml</includeFilterFile>
                     <includeTests>false</includeTests>
                     <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs/spotbugs-exclude.xml</excludeFilterFile>
                     <failOnError>true</failOnError>
