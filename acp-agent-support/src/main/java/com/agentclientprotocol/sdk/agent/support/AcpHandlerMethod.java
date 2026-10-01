@@ -8,6 +8,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.function.Supplier;
 
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import org.jspecify.annotations.Nullable;
 
 /**

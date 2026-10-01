@@ -4,7 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent.support.interceptor;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import org.jspecify.annotations.Nullable;
 
 /**

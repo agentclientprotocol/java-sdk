@@ -470,8 +470,9 @@ Both approaches produce identical runtime behavior and can coexist in the same a
 acp-agent-support
 ├── AcpAgentSupport          # Bootstrap and builder
 ├── AcpHandlerMethod         # Method + bean encapsulation
-├── AcpMethodParameter       # Parameter metadata
-├── AcpInvocationContext     # Request context during invocation
+├── invocation/              # Invocation model shared by the extension points
+│   ├── AcpMethodParameter   # Parameter metadata
+│   └── AcpInvocationContext # Request context during invocation
 ├── resolver/                # Argument resolvers
 │   ├── ArgumentResolver     # Interface
 │   ├── ArgumentResolverComposite
@@ -490,6 +491,9 @@ acp-agent-support
     ├── AcpInterceptor       # Interface
     └── InterceptorChain     # Execution chain
 ```
+
+`AcpAgentSupport` uses `resolver`, `handler` and `interceptor`; those use only `invocation`, never
+`AcpAgentSupport`, so there are no package cycles. The module uses acp-core's public API only.
 
 ## Dependencies
 

@@ -7,8 +7,8 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
-import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import org.jspecify.annotations.Nullable;
 
 /**

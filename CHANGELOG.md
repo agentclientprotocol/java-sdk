@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `StdioAcpClientTransport.awaitForExit()` before `connect` throws `IllegalStateException` instead of
   `NullPointerException`.
 - `AcpInvocationContext.Builder.build()` requires `acpMethod` and `request`.
+- **Breaking: `AcpInvocationContext` and `AcpMethodParameter` moved to
+  `com.agentclientprotocol.sdk.agent.support.invocation`.** The resolver, handler and interceptor
+  packages used them from `agent.support`, which in turn used those packages, so the four packages
+  formed a cycle. They now depend on the `invocation` package and `AcpAgentSupport` depends on them,
+  one way. Migration: change the imports in custom `ArgumentResolver`, `ReturnValueHandler` and
+  `AcpInterceptor` implementations to `com.agentclientprotocol.sdk.agent.support.invocation.*`.
 
 ### Fixed
 

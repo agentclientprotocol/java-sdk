@@ -4,8 +4,8 @@
 
 package com.agentclientprotocol.sdk.agent.support.resolver;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
-import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderRequest;
 
 /**

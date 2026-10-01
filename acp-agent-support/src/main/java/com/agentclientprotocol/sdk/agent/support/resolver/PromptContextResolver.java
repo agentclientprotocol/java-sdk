@@ -6,8 +6,8 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
 
 import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
-import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 
 /**
  * Resolves {@link PromptContext} and {@link SyncPromptContext} parameters.

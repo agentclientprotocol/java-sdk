@@ -23,6 +23,8 @@ import com.agentclientprotocol.sdk.agent.support.handler.StringToPromptResponseH
 import com.agentclientprotocol.sdk.agent.support.handler.VoidHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.interceptor.InterceptorChain;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite;
 import com.agentclientprotocol.sdk.agent.support.resolver.CancelNotificationResolver;

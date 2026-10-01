@@ -2,7 +2,7 @@
  * Copyright 2025-2026 the original author or authors.
  */
 
-package com.agentclientprotocol.sdk.agent.support;
+package com.agentclientprotocol.sdk.agent.support.invocation;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;

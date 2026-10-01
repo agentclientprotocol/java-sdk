@@ -60,6 +60,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModelResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 
 import org.junit.jupiter.api.AfterEach;

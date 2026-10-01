@@ -10,8 +10,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
-import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import org.jspecify.annotations.Nullable;
 
 /**

@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;

@@ -7,8 +7,8 @@ package com.agentclientprotocol.sdk.agent.support.handler;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
-import com.agentclientprotocol.sdk.agent.support.AcpInvocationContext;
-import com.agentclientprotocol.sdk.agent.support.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 
 import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
