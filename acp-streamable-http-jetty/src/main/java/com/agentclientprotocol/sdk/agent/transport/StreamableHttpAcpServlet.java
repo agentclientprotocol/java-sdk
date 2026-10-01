@@ -18,7 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
-import com.agentclientprotocol.sdk.agent.transport.StreamableHttpConnection.UnknownSessionException;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;

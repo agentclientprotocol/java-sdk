@@ -17,7 +17,6 @@ import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.MethodC
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RequestKind;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.ResolvedInboundRoute;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.RouteScope;
-import com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.SessionState;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -37,9 +36,9 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.
 
 /**
  * One remote ACP connection over Streamable HTTP (POST/SSE): its agent runtime, its
- * connection stream and session streams, the sessions it knows (including provisional
- * {@code session/load} sessions), and the request-id route maps that send each response
- * back on the stream its request came from.
+ * connection stream, its sessions and their streams ({@link StreamableHttpSessions}), and
+ * the request-id route maps that send each response back on the stream its request came
+ * from.
  *
  * @author Kaiser Dandangi
  */
@@ -54,9 +53,7 @@ final class StreamableHttpConnection {
 
 	private final SseOutboundStream connectionStream;
 
-	private final ConcurrentMap<String, SseOutboundStream> sessionStreams = new ConcurrentHashMap<>();
-
-	private final ConcurrentMap<String, SessionState> sessions = new ConcurrentHashMap<>();
+	private final StreamableHttpSessions sessions;
 
 	// Client-originated request id -> route expected for the later agent response.
 	private final ConcurrentMap<Object, ClientRequestRoute> clientRequestRoutes = new ConcurrentHashMap<>();
@@ -76,8 +73,6 @@ final class StreamableHttpConnection {
 
 	private final StreamableHttpRouting routing;
 
-	private final StreamableHttpAcpAgentTransportOptions options;
-
 	private final Consumer<StreamableHttpConnection> deregister;
 
 	StreamableHttpConnection(String id, AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory,
@@ -87,9 +82,9 @@ final class StreamableHttpConnection {
 		this.jsonMapper = jsonMapper;
 		this.agentFactory = agentFactory;
 		this.routing = routing;
-		this.options = options;
 		this.deregister = deregister;
 		this.connectionStream = new SseOutboundStream(options.mailboxCapacity(), options.maxPendingSseEvents());
+		this.sessions = new StreamableHttpSessions(id, options);
 		this.connection = new RemoteAcpConnection(id, jsonMapper, this::routeAgentMessage);
 	}
 
@@ -116,7 +111,9 @@ final class StreamableHttpConnection {
 
 		ResolvedInboundRoute resolved = routing.resolveInboundRoute(message, sessionHeader);
 		if (resolved.requestScope().isSession()) {
-			prepareSessionForInbound(resolved.requestScope().boundSessionId(), resolved.requestRoute());
+			ClientRequestRoute route = resolved.requestRoute();
+			sessions.admitInbound(resolved.requestScope().boundSessionId(),
+					route != null && route.kind() == RequestKind.SESSION_LOAD);
 		}
 		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null
 				&& resolved.requestRoute() != null) {
@@ -130,7 +127,7 @@ final class StreamableHttpConnection {
 		RouteScope scope = sessionId == null ? RouteScope.connection() : RouteScope.session(sessionId);
 		SseOutboundStream stream;
 		if (scope.isSession()) {
-			stream = openSessionStream(scope.boundSessionId());
+			stream = sessions.openStream(scope.boundSessionId());
 		}
 		else {
 			stream = connectionStream;
@@ -151,7 +148,7 @@ final class StreamableHttpConnection {
 	Mono<Void> closeGracefully() {
 		deregister.accept(this);
 		connectionStream.close();
-		sessionStreams.values().forEach(SseOutboundStream::close);
+		sessions.close();
 		return connection.closeGracefully();
 	}
 
@@ -171,7 +168,7 @@ final class StreamableHttpConnection {
 			RouteScope scope = resolveAgentOutboundScope(message);
 			String payload = jsonMapper.writeValueAsString(message);
 			if (scope.isSession()) {
-				sessionStream(scope.boundSessionId()).push(payload);
+				sessions.stream(scope.boundSessionId()).push(payload);
 			}
 			else {
 				connectionStream.push(payload);
@@ -221,34 +218,20 @@ final class StreamableHttpConnection {
 			case SESSION_NEW, SESSION_FORK -> {
 				// Both replies carry the id of a session that now exists on this connection.
 				if (succeeded) {
-					markSessionKnown(routing.extractSessionIdFromNewSessionResponse(response));
+					sessions.markKnown(routing.extractSessionIdFromNewSessionResponse(response));
 				}
 			}
 			case SESSION_LOAD -> {
 				if (succeeded) {
-					markSessionKnown(route.requestScope().boundSessionId());
+					sessions.markKnown(route.requestScope().boundSessionId());
 				}
 				else {
-					discardProvisionalSession(route.requestScope().boundSessionId());
+					sessions.discardProvisional(route.requestScope().boundSessionId());
 				}
 			}
 			default -> {
 				// No session changes state.
 			}
-		}
-	}
-
-	private void prepareSessionForInbound(String sessionId, @Nullable ClientRequestRoute route) {
-		SessionState current = sessions.get(sessionId);
-		if (route != null && route.kind() == RequestKind.SESSION_LOAD) {
-			if (current == null) {
-				addProvisionalSession(sessionId);
-				sessionStream(sessionId);
-			}
-			return;
-		}
-		if (current != SessionState.KNOWN) {
-			throw new UnknownSessionException("Unknown session " + sessionId);
 		}
 	}
 
@@ -281,62 +264,9 @@ final class StreamableHttpConnection {
 		agentRequestRoutes.remove(responseId, expected);
 	}
 
-	private SseOutboundStream openSessionStream(String sessionId) {
-		SessionState current = sessions.get(sessionId);
-		if (current == null) {
-			/*
-			 * RFD gap:
-			 * The current text says unknown session-scoped GET requests return 404,
-			 * but its resume flow also asks clients to open a session stream before
-			 * sending session/load. Keep a provisional stream so practical resume can work.
-			 */
-			addProvisionalSession(sessionId);
-		}
-		return sessionStream(sessionId);
-	}
-
-	/** Provisional sessions are bounded: a client cannot grow state with arbitrary ids. */
-	private synchronized void addProvisionalSession(String sessionId) {
-		long provisional = sessions.values().stream().filter(state -> state == SessionState.PENDING_LOAD).count();
-		if (provisional >= options.maxProvisionalSessions()
-				&& sessions.get(sessionId) != SessionState.PENDING_LOAD) {
-			throw new UnknownSessionException("Too many provisional sessions on connection " + id
-					+ " (limit " + options.maxProvisionalSessions() + ")");
-		}
-		sessions.putIfAbsent(sessionId, SessionState.PENDING_LOAD);
-	}
-
-	/** A failed session/load leaves no provisional state behind. */
-	private void discardProvisionalSession(String sessionId) {
-		if (sessions.remove(sessionId, SessionState.PENDING_LOAD)) {
-			SseOutboundStream stream = sessionStreams.remove(sessionId);
-			if (stream != null) {
-				stream.close();
-			}
-		}
-	}
-
 	void keepAlive() {
 		connectionStream.keepAlive();
-		sessionStreams.values().forEach(SseOutboundStream::keepAlive);
-	}
-
-	private SseOutboundStream sessionStream(String sessionId) {
-		return sessionStreams.computeIfAbsent(sessionId,
-				ignored -> new SseOutboundStream(options.mailboxCapacity(), options.maxPendingSseEvents()));
-	}
-
-	private void markSessionKnown(String sessionId) {
-		sessions.put(sessionId, SessionState.KNOWN);
-		sessionStream(sessionId);
-	}
-
-	static final class UnknownSessionException extends RuntimeException {
-
-		UnknownSessionException(String message) {
-			super(message);
-		}
-
+		sessions.keepAlive();
 	}
 
 }
