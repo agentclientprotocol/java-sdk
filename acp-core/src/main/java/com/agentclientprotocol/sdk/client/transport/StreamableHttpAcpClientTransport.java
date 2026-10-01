@@ -498,7 +498,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	private Mono<Void> openConnectionStream() {
-		return openSseStream(RouteScope.connection()).doOnSuccess(stream -> {
+		return openSseStream(RouteScope.connection()).doOnNext(stream -> {
 			this.connectionStream.set(stream);
 			stream.start();
 		}).then();
@@ -511,7 +511,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private Mono<Void> createSessionStreamOpenMono(String sessionId) {
 		AtomicReference<Mono<Void>> operation = new AtomicReference<>();
 		Mono<Void> openOperation = openSseStream(RouteScope.session(sessionId))
-			.doOnSuccess(stream -> {
+			.doOnNext(stream -> {
 				SseStream existing = sessionStreams.putIfAbsent(sessionId, stream);
 				if (existing == null) {
 					try {
@@ -535,6 +535,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return openOperation;
 	}
 
+	/** Emits the opened stream or an error; it never completes empty. */
 	private Mono<SseStream> openSseStream(RouteScope scope) {
 		HttpRequest.Builder builder = newRequest().GET().header("Accept", CONTENT_TYPE_EVENT_STREAM);
 		addScopeHeaders(builder, scope);
