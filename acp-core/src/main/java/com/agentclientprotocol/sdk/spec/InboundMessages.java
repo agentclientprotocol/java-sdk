@@ -5,10 +5,12 @@
 package com.agentclientprotocol.sdk.spec;
 
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import org.jspecify.annotations.Nullable;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
 
 /**
@@ -47,13 +49,32 @@ final class InboundMessages {
 
 	/**
 	 * The response to a request whose handling failed: an {@link AcpProtocolException} keeps
-	 * its code and data, anything else is an internal error.
+	 * its code and data, a cancellation ({@link #isCancellation}) is the handler cancelling
+	 * its own work (ACP v1 internal cancellation: the same {@code -32800} as a cancel from the
+	 * caller), anything else is an internal error.
 	 */
 	static AcpSchema.JSONRPCResponse error(AcpSchema.JSONRPCRequest request, Throwable error) {
 		if (error instanceof AcpProtocolException protocolException) {
 			return error(request, protocolException.getCode(), errorMessage(error), protocolException.getData());
 		}
+		if (isCancellation(error)) {
+			String message = error.getMessage();
+			return error(request, AcpErrorCodes.REQUEST_CANCELLED,
+					(message != null) ? message : InboundRequests.CANCELLED_MESSAGE, null);
+		}
 		return error(request, AcpErrorCodes.INTERNAL_ERROR, errorMessage(error), null);
+	}
+
+	/**
+	 * Whether a handler's failure means its work was cancelled: a
+	 * {@link CancellationException} or an interrupt (Reactor's {@code block()} wraps it), or
+	 * an {@link AcpProtocolException} with code -32800.
+	 */
+	static boolean isCancellation(Throwable error) {
+		Throwable unwrapped = Exceptions.unwrap(error);
+		return unwrapped instanceof CancellationException || unwrapped instanceof InterruptedException
+				|| (error instanceof AcpProtocolException protocolException
+						&& protocolException.getCode() == AcpErrorCodes.REQUEST_CANCELLED);
 	}
 
 	/** JSON-RPC requires an error message; an exception without one is named by its type. */

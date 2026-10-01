@@ -85,9 +85,22 @@ final class StreamableHttpRoutes {
 			return requestScope;
 		}
 		if (message instanceof AcpSchema.JSONRPCNotification notification) {
+			if (AcpSchema.METHOD_CANCEL_REQUEST.equals(notification.method())) {
+				return cancelRequestScope(notification.params());
+			}
 			return requestScope(notification.method(), notification.params());
 		}
 		throw new AcpConnectionException("Unsupported outbound JSON-RPC message type: " + message);
+	}
+
+	/**
+	 * A {@code $/cancel_request} is posted in the scope of the request it cancels, or on the
+	 * connection when that request is unknown (already answered, say).
+	 */
+	private RouteScope cancelRequestScope(@Nullable Object params) {
+		Object requestId = (params != null) ? jsonMapper.convertValue(params, Map.class).get("requestId") : null;
+		OutboundRequestRoute route = (requestId != null) ? outboundRequestRoutes.get(requestId) : null;
+		return (route != null) ? route.requestScope() : RouteScope.connection();
 	}
 
 	/** The scope of the agent request this client response answers. */

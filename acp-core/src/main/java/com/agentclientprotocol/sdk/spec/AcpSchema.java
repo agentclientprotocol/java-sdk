@@ -172,6 +172,13 @@ public final class AcpSchema {
 
 	public static final String METHOD_ELICITATION_COMPLETE = "elicitation/complete";
 
+	// ---------------------------
+	// Method Names (protocol level, both sides)
+	// ---------------------------
+
+	/** Cancels a request the sender sent earlier (ACP v1, Cancellation). */
+	public static final String METHOD_CANCEL_REQUEST = "$/cancel_request";
+
 	// Provider configuration (UNSTABLE)
 	public static final String METHOD_PROVIDERS_LIST = "providers/list";
 
@@ -511,6 +518,21 @@ public final class AcpSchema {
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public CancelNotification(String sessionId) {
 			this(sessionId, null);
+		}
+	}
+
+	/**
+	 * Cancel request notification ({@code $/cancel_request}) - cancels a request its sender
+	 * sent earlier. The receiver still answers that request, with its result or with the
+	 * error {@code -32800} (Request cancelled).
+	 * @param requestId the id of the request to cancel: a string or an integer
+	 * @param meta extension metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record CancelRequestNotification(@JsonProperty("requestId") Object requestId,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public CancelRequestNotification(Object requestId) {
+			this(requestId, null);
 		}
 	}
 

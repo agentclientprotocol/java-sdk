@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.publisher.SynchronousSink;
 
 /**
@@ -59,21 +60,29 @@ final class OutboundMessages {
 	 * response fails the returned Mono with {@link AcpError}.
 	 */
 	<T> Mono<T> sendRequest(String method, Object params, TypeRef<T> typeRef) {
-		String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
-		return Mono.deferContextual(ctx -> Mono.<AcpSchema.JSONRPCResponse>create(responseSink -> {
-			if (!this.pendingResponses.register(requestId, responseSink)) {
-				return;
-			}
-			logger.debug("Sending request for method {} with id {}", method, requestId);
-			logger.trace("Outgoing request method='{}' id={} params={}", method, requestId, params);
-			AcpSchema.JSONRPCRequest request = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
-					method, params);
-			this.transport.sendMessage(request).contextWrite(ctx).subscribe(v -> {
-			}, error -> {
-				this.pendingResponses.abandon(requestId, responseSink);
-				responseSink.error(error);
+		return Mono.deferContextual(ctx -> {
+			// One id per subscription: a resubscribed request (a retry) is a new request.
+			String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
+			// Completes once the request is handed to the transport; a $/cancel_request
+			// waits for it, so it never overtakes its request on an ordered transport.
+			Sinks.Empty<Void> written = Sinks.empty();
+			return Mono.<AcpSchema.JSONRPCResponse>create(responseSink -> {
+				if (!this.pendingResponses.register(requestId, responseSink,
+						() -> cancelRequest(requestId, written.asMono()))) {
+					return;
+				}
+				logger.debug("Sending request for method {} with id {}", method, requestId);
+				logger.trace("Outgoing request method='{}' id={} params={}", method, requestId, params);
+				AcpSchema.JSONRPCRequest request = new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, requestId,
+						method, params);
+				this.transport.sendMessage(request).contextWrite(ctx).subscribe(v -> {
+				}, error -> {
+					written.tryEmitError(error);
+					this.pendingResponses.abandon(requestId, responseSink);
+					responseSink.error(error);
+				}, written::tryEmitEmpty);
 			});
-		}))
+		})
 			.transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout))
 			.handle((response, resultSink) -> deliver(method, response, typeRef, resultSink));
 	}
@@ -91,6 +100,22 @@ final class OutboundMessages {
 		else {
 			ResponseResults.deliver(method, response.result(), typeRef, this.transport, resultSink);
 		}
+	}
+
+	/**
+	 * Tells the peer that the caller gave up on a request (ACP v1 {@code $/cancel_request}):
+	 * its subscription was cancelled, by the caller or by its timeout, before a response.
+	 * Sent once the request itself has been handed to the transport, and not at all if that
+	 * failed. Fire and forget: the transport may be why the caller gave up.
+	 */
+	private void cancelRequest(String requestId, Mono<Void> written) {
+		written.then(sendNotification(AcpSchema.METHOD_CANCEL_REQUEST, new AcpSchema.CancelRequestNotification(requestId)))
+			// Off the thread that cancelled, which may be the shared timeout timer: the
+			// transport's emission can wait for a busy outbound sink.
+			.subscribeOn(AcpSchedulers.timeoutDelivery())
+			.subscribe(v -> {
+			}, error -> logger.debug("No $/cancel_request sent for id {}: {}", requestId, error.getMessage()),
+					() -> logger.debug("Sent $/cancel_request for id {}", requestId));
 	}
 
 	/** Sends a notification, or fails at once when the transport cannot deliver. */

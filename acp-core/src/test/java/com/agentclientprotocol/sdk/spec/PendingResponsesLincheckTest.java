@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.LongConsumer;
@@ -28,16 +29,18 @@ import reactor.util.context.Context;
 
 /**
  * Model checks {@link PendingResponses}, the table of requests waiting for a response, with
- * Lincheck. Requests are registered, answered, timed out (their sink is disposed, as
- * {@code Mono.timeout} cancels the {@code Mono.create} source), failed by a transport failure
- * and dismissed by close, in any interleaving.
+ * Lincheck. Requests are registered, answered, cancelled (their sink is disposed, as a
+ * disposed subscription or {@code Mono.timeout} cancels the {@code Mono.create} source),
+ * failed by a transport failure and dismissed by close, in any interleaving.
  *
  * <p>
  * The sequential specification covers what {@code send} returns. The invariant that matters,
  * checked after every interleaving by {@link Requests#noLostOrDoubleCompletion()}: every
- * request is signalled at most once, and a request that was neither signalled nor timed out
- * is still waiting (its response can still complete it), while a timed-out one is not
- * (nothing leaks until the session ends).
+ * request is signalled at most once, and a request that was neither signalled nor cancelled
+ * is still waiting (its response can still complete it), while a cancelled one is not
+ * (nothing leaks until the session ends); and a {@code $/cancel_request} is sent for a request
+ * exactly when its caller gave up before any signal, never twice and never after a response,
+ * a dismissal or a transport failure.
  * </p>
  */
 class PendingResponsesLincheckTest {
@@ -87,6 +90,9 @@ class PendingResponsesLincheckTest {
 
 		private final AtomicReference<@Nullable Throwable> transportFailure = new AtomicReference<>();
 
+		/** How many $/cancel_request notifications each request id caused. */
+		private final AtomicIntegerArray cancelsSent = new AtomicIntegerArray(REQUESTS);
+
 		private final PendingResponses pending = new PendingResponses(transportFailure::get,
 				cause -> new IllegalStateException("not started", cause), "agent");
 
@@ -104,7 +110,7 @@ class PendingResponsesLincheckTest {
 			}
 			used[id] = true;
 			RecordingSink sink = new RecordingSink();
-			if (!pending.register(id, sink)) {
+			if (!pending.register(id, sink, () -> cancelsSent.incrementAndGet(id))) {
 				return "FAILED_AT_ONCE";
 			}
 			sinks.set(id, sink);
@@ -116,9 +122,12 @@ class PendingResponsesLincheckTest {
 			pending.complete(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, "result", null));
 		}
 
-		/** The request's timeout fires: Reactor cancels and disposes its sink. */
+		/**
+		 * The caller gives up: it disposes the request, or its timeout fires. Reactor cancels
+		 * and disposes the sink.
+		 */
 		@Operation
-		public void timeOut(@Param(name = "id") int id) {
+		public void cancel(@Param(name = "id") int id) {
 			RecordingSink sink = sinks.get(id);
 			if (sink != null) {
 				sink.cancel();
@@ -148,6 +157,12 @@ class PendingResponsesLincheckTest {
 				}
 				if (sink.signals.get() > 1) {
 					throw new IllegalStateException("request " + id + " was completed " + sink.signals.get() + " times");
+				}
+				int cancels = cancelsSent.get(id);
+				boolean gaveUpUnanswered = sink.cancelled && sink.signals.get() == 0;
+				if (cancels != (gaveUpUnanswered ? 1 : 0)) {
+					throw new IllegalStateException("request " + id + " caused " + cancels
+							+ " $/cancel_request, cancelled before any signal: " + gaveUpUnanswered);
 				}
 				if (sink.signals.get() == 0 && !sink.cancelled) {
 					waiting++;
@@ -181,7 +196,7 @@ class PendingResponsesLincheckTest {
 		public void respond(int id) {
 		}
 
-		public void timeOut(int id) {
+		public void cancel(int id) {
 		}
 
 		public void transportFails() {
@@ -205,12 +220,20 @@ class PendingResponsesLincheckTest {
 
 		private final AtomicReference<@Nullable Disposable> onDispose = new AtomicReference<>();
 
+		private final AtomicReference<@Nullable Disposable> onCancel = new AtomicReference<>();
+
+		/** Like Reactor's: the cancel callback, then the dispose callback, unless already signalled. */
 		void cancel() {
 			cancelled = true;
+			Disposable callback = onCancel.getAndSet(null);
+			if (callback != null && signals.get() == 0) {
+				callback.dispose();
+			}
 			dispose();
 		}
 
 		private void dispose() {
+			onCancel.set(null);
 			Disposable callback = onDispose.getAndSet(null);
 			if (callback != null) {
 				callback.dispose();
@@ -248,6 +271,12 @@ class PendingResponsesLincheckTest {
 
 		@Override
 		public MonoSink<AcpSchema.JSONRPCResponse> onCancel(Disposable d) {
+			if (cancelled) {
+				d.dispose();
+			}
+			else {
+				onCancel.set(d);
+			}
 			return this;
 		}
 

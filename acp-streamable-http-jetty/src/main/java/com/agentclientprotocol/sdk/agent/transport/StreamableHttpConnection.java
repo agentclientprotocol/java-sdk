@@ -192,6 +192,12 @@ final class StreamableHttpConnection {
 			return resolveResponseScope(response);
 		}
 		MethodCall call = MethodCall.of(message, "outbound");
+		if (AcpSchema.METHOD_CANCEL_REQUEST.equals(call.method())) {
+			// On the stream its request went out on, so it cannot overtake that request.
+			Object cancelled = routing.extractCancelledRequestId(call.params());
+			RouteScope requestScope = (cancelled != null) ? agentRequestRoutes.get(cancelled) : null;
+			return (requestScope != null) ? requestScope : RouteScope.connection();
+		}
 		RouteScope scope = routing.resolveAgentRequestOrNotificationScope(call.method(), call.params());
 		Object requestId = call.id();
 		if (requestId != null) {

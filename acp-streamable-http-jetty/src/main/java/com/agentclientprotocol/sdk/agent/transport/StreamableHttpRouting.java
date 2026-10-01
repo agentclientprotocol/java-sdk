@@ -244,6 +244,15 @@ final class StreamableHttpRouting {
 		return sessionId == null ? Optional.empty() : Optional.of(sessionId.toString());
 	}
 
+	/** The request id a {@code $/cancel_request} names, or null. */
+	@Nullable Object extractCancelledRequestId(@Nullable Object params) {
+		if (params == null) {
+			return null;
+		}
+		Map<?, ?> paramsMap = jsonMapper.convertValue(params, Map.class);
+		return paramsMap.get("requestId");
+	}
+
 	String requireSessionId(@Nullable Object params, String method) {
 		return extractSessionId(params)
 			.filter(sessionId -> !sessionId.isBlank())
