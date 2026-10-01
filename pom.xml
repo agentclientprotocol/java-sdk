@@ -95,6 +95,10 @@
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <pmd.version>7.28.0</pmd.version>
         <cpd.minimumTokens>100</cpd.minimumTokens>
+        <!-- spotbugs-maven-plugin 4.10.x requires Maven 3.8.9+, and the wrapper is 3.8.6; the
+             4.9.8.x plugin runs the current SpotBugs engine below. -->
+        <spotbugs-maven-plugin.version>4.9.8.5</spotbugs-maven-plugin.version>
+        <spotbugs.version>4.10.4</spotbugs.version>
 
         <!-- Error Prone and NullAway (errorprone profile, JDK 21+ only) -->
         <errorprone.version>2.50.0</errorprone.version>
@@ -384,6 +388,49 @@
                         <goals>
                             <goal>check</goal>
                             <goal>cpd-check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- SpotBugs gate: spotbugs:check fails verify on any finding of rank 9 or less
+                 (SpotBugs' "scariest" 1-4 and "scary" 5-9 bands), on main sources, in every
+                 module and on every JDK the build runs on (17 and 21; unlike the errorprone
+                 profile it does not need JDK 21). Rank, not confidence, is the gate: rank
+                 combines the pattern's severity with its confidence, so it keeps the bugs and
+                 drops the long tail (exposed arrays, missing static on inner classes,
+                 serialization advice) that a confidence threshold alone would keep. threshold
+                 Medium (the default) also drops low-confidence findings; effort Max runs the
+                 interprocedural detectors. find-sec-bugs is not used: on this code base it adds
+                 no finding at rank 9 or less, and its findings below that are the library's
+                 purpose (spawning the configured agent process, writing JSON-RPC responses).
+                 A false positive is excluded narrowly (class, method, pattern), with its reason,
+                 in config/spotbugs/spotbugs-exclude.xml. -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs-maven-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs</artifactId>
+                        <version>${spotbugs.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <maxRank>9</maxRank>
+                    <includeTests>false</includeTests>
+                    <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs/spotbugs-exclude.xml</excludeFilterFile>
+                    <failOnError>true</failOnError>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-gate</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>

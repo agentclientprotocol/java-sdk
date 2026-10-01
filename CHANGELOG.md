@@ -226,6 +226,18 @@ Found by enabling Error Prone's bug checks; each has a test.
   request plumbing. The class-cycle rule in acp-core's `ArchitectureTest` now covers every package
   except `json` (whose default-mapper lookup is a cycle by design), with the `AcpAgent` <->
   `DefaultAcpAsyncAgent` cycle gone.
+- A bug-pattern gate fails `verify`: SpotBugs 4.10.4 (spotbugs-maven-plugin 4.9.8.5; the 4.10
+  plugin needs Maven 3.8.9 and the wrapper is 3.8.6) runs `spotbugs:check` on main sources in every
+  module, on JDK 17 and JDK 21 alike, at effort Max, and fails on any finding of rank 9 or less
+  (SpotBugs' "scariest" and "scary" bands). Rank, not confidence alone, is the gate: it weighs the
+  pattern's severity with its confidence, so the long tail of rank 10 to 20 advice (exposed record
+  arrays and collections, inner classes that could be static, serialization hygiene) does not fail
+  the build. find-sec-bugs was evaluated and not added: it raised nothing at rank 9 or less, and its
+  findings below that are the library's purpose (starting the configured agent process, writing
+  JSON-RPC to a servlet response). The first run found three: two false positives, excluded one by
+  one with their reasons in `config/spotbugs/spotbugs-exclude.xml`, and the Streamable HTTP SSE
+  stream locking on its own monitor, which any code holding the stream could also take; it now
+  locks a private object.
 
 ## [0.18.0] - 2026-09-25
 

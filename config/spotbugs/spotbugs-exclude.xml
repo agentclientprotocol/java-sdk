@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ACP Java SDK SpotBugs exclusions (spotbugs-maven-plugin, `verify`, main sources, rank 9 or less).
+
+  Each entry is one false positive, named by class, method and bug pattern, with the reason it is
+  false. Never exclude a whole pattern or package: a real instance of the same pattern elsewhere
+  must still fail the build. A finding that is a real bug or a risky pattern is fixed in the code.
+
+  Exposure patterns (EI_EXPOSE_REP, EI_EXPOSE_REP2: records and value objects handing out the
+  components they hold) are rank 18, outside the gate, so they need no entry here.
+-->
+<FindBugsFilter
+        xmlns="https://github.com/spotbugs/filter/3.0.0"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+
+    <!--
+      UR_UNINIT_READ (rank 3): "constructor reads a field which has not yet been assigned".
+      The constructor starts the transport with this::onStartFailure as its error callback; a
+      transport that refuses synchronously calls it during subscribe(), and it assigns
+      startFailure. The read after subscribe() is how the constructor learns that, and fails
+      construction instead of returning a session that can never talk. SpotBugs does not follow
+      the assignment through the method reference, so it sees only the default value.
+    -->
+    <Match>
+        <Class name="com.agentclientprotocol.sdk.spec.AcpAgentSession"/>
+        <Method name="&lt;init&gt;"/>
+        <Field name="startFailure"/>
+        <Bug pattern="UR_UNINIT_READ"/>
+    </Match>
+
+    <!--
+      UR_UNINIT_READ (rank 3): the same construction as AcpAgentSession, on the client side:
+      connect()'s error callback this::onConnectFailure assigns connectFailure synchronously when
+      the transport refuses to connect (stdio does, and every transport does on a second connect).
+    -->
+    <Match>
+        <Class name="com.agentclientprotocol.sdk.spec.AcpClientSession"/>
+        <Method name="&lt;init&gt;"/>
+        <Field name="connectFailure"/>
+        <Bug pattern="UR_UNINIT_READ"/>
+    </Match>
+
+</FindBugsFilter>
