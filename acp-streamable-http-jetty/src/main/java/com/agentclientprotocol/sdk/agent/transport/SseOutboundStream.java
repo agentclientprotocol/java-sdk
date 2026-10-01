@@ -144,6 +144,10 @@ final class SseOutboundStream {
 		mailbox.clear();
 	}
 
+	synchronized boolean isClosed() {
+		return closed;
+	}
+
 	/** Detaches a subscriber if it is still the attached one, and completes its response. */
 	private synchronized void detach(SseSubscriber subscriber) {
 		if (subscriber.detached) {

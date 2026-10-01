@@ -6,7 +6,6 @@ package com.agentclientprotocol.sdk.spec;
 
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -17,7 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.SynchronousSink;
 
 /**
@@ -39,11 +37,8 @@ final class OutboundMessages {
 	/** Wraps the transport failure into the error a caller receives. */
 	private final Function<Throwable, RuntimeException> unavailable;
 
-	/** Names the peer in the error a dismissed request fails with ("agent", "client"). */
-	private final String peer;
-
 	/** Requests waiting for a response, keyed by request id. */
-	private final ConcurrentHashMap<Object, MonoSink<AcpSchema.JSONRPCResponse>> pendingResponses = new ConcurrentHashMap<>();
+	private final PendingResponses pendingResponses;
 
 	/** Session-specific prefix for request ids. */
 	private final String idPrefix = UUID.randomUUID().toString().substring(0, 8);
@@ -56,7 +51,7 @@ final class OutboundMessages {
 		this.requestTimeout = requestTimeout;
 		this.transportFailure = transportFailure;
 		this.unavailable = unavailable;
-		this.peer = peer;
+		this.pendingResponses = new PendingResponses(transportFailure, unavailable, peer);
 	}
 
 	/**
@@ -66,7 +61,7 @@ final class OutboundMessages {
 	<T> Mono<T> sendRequest(String method, Object params, TypeRef<T> typeRef) {
 		String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
 		return Mono.deferContextual(ctx -> Mono.<AcpSchema.JSONRPCResponse>create(responseSink -> {
-			if (!register(requestId, responseSink)) {
+			if (!this.pendingResponses.register(requestId, responseSink)) {
 				return;
 			}
 			logger.debug("Sending request for method {} with id {}", method, requestId);
@@ -75,35 +70,12 @@ final class OutboundMessages {
 					method, params);
 			this.transport.sendMessage(request).contextWrite(ctx).subscribe(v -> {
 			}, error -> {
-				this.pendingResponses.remove(requestId);
+				this.pendingResponses.abandon(requestId, responseSink);
 				responseSink.error(error);
 			});
 		}))
 			.transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout))
 			.handle((response, resultSink) -> deliver(method, response, typeRef, resultSink));
-	}
-
-	/**
-	 * Records the request as waiting for its response, or fails it at once when the
-	 * transport cannot deliver.
-	 * @return whether the request was registered and should be sent
-	 */
-	private boolean register(String requestId, MonoSink<AcpSchema.JSONRPCResponse> responseSink) {
-		Throwable failure = this.transportFailure.get();
-		if (failure != null) {
-			responseSink.error(this.unavailable.apply(failure));
-			return false;
-		}
-		this.pendingResponses.put(requestId, responseSink);
-		// Re-check after registering: a failure recorded between the check above and the
-		// put may already have dismissed the map without seeing this request.
-		Throwable lateFailure = this.transportFailure.get();
-		if (lateFailure != null) {
-			this.pendingResponses.remove(requestId);
-			responseSink.error(this.unavailable.apply(lateFailure));
-			return false;
-		}
-		return true;
 	}
 
 	private <T> void deliver(String method, AcpSchema.JSONRPCResponse response, TypeRef<T> typeRef,
@@ -135,30 +107,17 @@ final class OutboundMessages {
 
 	/** Completes the request this response answers. */
 	void complete(AcpSchema.JSONRPCResponse response) {
-		logger.debug("Received response for id {}", response.id());
-		if (response.id() == null) {
-			logger.error("Discarded ACP request response without session id. "
-					+ "This is an indication of a bug in the request sender code that can lead to memory "
-					+ "leaks as pending requests will never be completed.");
-			return;
-		}
-		MonoSink<AcpSchema.JSONRPCResponse> sink = this.pendingResponses.remove(response.id());
-		if (sink == null) {
-			logger.warn("Unexpected response for unknown id {}", response.id());
-		}
-		else {
-			logger.trace("Completing pending response for id {}", response.id());
-			sink.success(response);
-		}
+		this.pendingResponses.complete(response);
 	}
 
 	/** Fails every request still waiting for a response. */
 	void dismissPending(@Nullable Throwable cause) {
-		this.pendingResponses.forEach((id, sink) -> {
-			logger.warn("Abruptly terminating exchange for request {}", id);
-			sink.error(new RuntimeException("ACP session with " + this.peer + " terminated", cause));
-		});
-		this.pendingResponses.clear();
+		this.pendingResponses.dismissAll(cause);
+	}
+
+	/** The number of requests waiting for a response. */
+	int pendingCount() {
+		return this.pendingResponses.size();
 	}
 
 }

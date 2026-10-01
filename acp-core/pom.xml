@@ -16,6 +16,11 @@
     <name>ACP Core</name>
     <description>Core ACP implementation with stdio transport; needs one JSON module (acp-json-jackson2 or acp-json-jackson3) at runtime</description>
 
+    <properties>
+        <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
+        <argLine/>
+    </properties>
+
     <dependencies>
         <!-- JSpecify null-marking annotations (@NullMarked packages, @Nullable) -->
         <dependency>
@@ -76,6 +81,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.jetbrains.lincheck</groupId>
+            <artifactId>lincheck</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
@@ -106,6 +116,17 @@
             </testResource>
         </testResources>
         <plugins>
+            <!-- Lincheck (the *LincheckTest classes) attaches its instrumentation agent at
+                 runtime. JDK 21+ warns about a dynamically loaded agent unless
+                 EnableDynamicAgentLoading is set; JDK 17 does not know the flag, hence
+                 IgnoreUnrecognizedVMOptions. @{argLine} keeps JaCoCo's agent. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -XX:+IgnoreUnrecognizedVMOptions -XX:+EnableDynamicAgentLoading</argLine>
+                </configuration>
+            </plugin>
             <!-- The JSON contract suite: the schema serialization tests that every JSON
                  module runs against its own mapper (surefire dependenciesToScan). They
                  obtain their mapper from AcpJsonMapper.createDefault(), so the test-only

@@ -57,30 +57,14 @@ public class AcpAgentSession implements AcpSession {
 	/** Map of notification handlers keyed by method name */
 	private final ConcurrentHashMap<String, NotificationHandler> notificationHandlers = new ConcurrentHashMap<>();
 
-	/**
-	 * Active prompt tracking for single-turn enforcement, keyed by logical ACP
-	 * sessionId.
-	 *
-	 * <p>
-	 * Kotlin SDK precedent: its Agent.SessionWrapper owns a single active prompt guard
-	 * per logical session wrapper. This Java session can multiplex multiple logical ACP
-	 * sessionIds over one transport connection, so the same single-turn rule needs to
-	 * be applied per sessionId instead of once for the whole connection.
-	 * </p>
-	 */
-	private final ConcurrentHashMap<String, ActivePrompt> activePrompts = new ConcurrentHashMap<>();
+	/** Single-turn enforcement: the active prompt of each logical ACP sessionId. */
+	private final ActivePrompts activePrompts = new ActivePrompts();
 
 	/**
 	 * Set when the transport's {@code start()} fails (already started, port in use, ...).
 	 * Requests to the client are then failed immediately with the cause.
 	 */
 	private volatile @Nullable Throwable startFailure;
-
-	/**
-	 * Represents an active prompt session for single-turn enforcement.
-	 */
-	private record ActivePrompt(String sessionId, @Nullable Object requestId) {
-	}
 
 	/**
 	 * Functional interface for handling incoming JSON-RPC requests. Implementations
@@ -210,53 +194,26 @@ public class AcpAgentSession implements AcpSession {
 
 			// Single-turn enforcement for session/prompt requests
 			if (AcpSchema.METHOD_SESSION_PROMPT.equals(request.method())) {
-				// Extract sessionId from params
-				String sessionId = extractSessionId(request.params());
-				ActivePrompt newPrompt = new ActivePrompt(sessionId, request.id());
-
-				// Try to set as active prompt - fails if this logical session already has
-				// a prompt active.
-				ActivePrompt current = activePrompts.putIfAbsent(sessionId, newPrompt);
-				if (current != null) {
-					logger.warn("Rejected concurrent prompt request for sessionId={}. Active requestId={}", sessionId,
-							current.requestId());
+				ActivePrompts.Turn turn = activePrompts.tryStart(extractSessionId(request.params()), request.id());
+				if (turn == null) {
 					return Mono.just(InboundMessages.error(request, AcpErrorCodes.CONCURRENT_PROMPT,
 							"There is already an active prompt execution", null));
 				}
 
-				// The prompt response ends the turn (ACP semantics), so the lock is released
-				// *before* the response is handed downstream to the transport. Releasing in
-				// doFinally instead ran after the response had already reached the client;
-				// under CPU contention the client's next prompt then arrived before the
-				// release and was rejected with -32000 (#14). doOnNext and doOnError run before
-				// the signal propagates, and a Mono emits at most once, so the release is
-				// ordered before publication on every path; doFinally covers cancellation.
-				// Mono.defer keeps a handler that throws synchronously from holding the lock
-				// forever: the throw becomes an error signal that passes through the release.
-				return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
-						request.method())
-					.map(result -> InboundMessages.result(request, result))
-					.doOnNext(response -> releasePrompt(sessionId, newPrompt, "response"))
-					.doOnError(error -> releasePrompt(sessionId, newPrompt, "error"))
-					.doFinally(signal -> releasePrompt(sessionId, newPrompt, signal.toString()));
+				// The turn ends before the response is published (#14): see
+				// ActivePrompts.endBeforePublishing. Mono.defer keeps a handler that throws
+				// synchronously from holding the turn forever: the throw becomes an error
+				// signal that passes through the release.
+				return activePrompts.endBeforePublishing(turn,
+						InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+								request.method())
+							.map(result -> InboundMessages.result(request, result)));
 			}
 
 			return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 						request.method())
 				.map(result -> InboundMessages.result(request, result));
 		});
-	}
-
-	/**
-	 * Releases the single-turn lock if {@code prompt} still holds it. Idempotent: the
-	 * release is attempted on the response, on an error and on the terminal signal, and
-	 * only the first attempt does anything.
-	 */
-	private void releasePrompt(String sessionId, ActivePrompt prompt, String reason) {
-		if (activePrompts.remove(sessionId, prompt)) {
-			logger.debug("Prompt lock released for sessionId={} requestId={} ({})", sessionId, prompt.requestId(),
-					reason);
-		}
 	}
 
 	/**
@@ -296,11 +253,7 @@ public class AcpAgentSession implements AcpSession {
 		return Mono.defer(() -> {
 			// Handle cancel notification specially
 			if (AcpSchema.METHOD_SESSION_CANCEL.equals(notification.method())) {
-				String sessionId = extractSessionId(notification.params());
-				ActivePrompt current = activePrompts.remove(sessionId);
-				if (current != null) {
-					logger.debug("Cancelled active prompt for session: {}", sessionId);
-				}
+				activePrompts.cancel(extractSessionId(notification.params()));
 			}
 
 			var handler = notificationHandlers.get(notification.method());
@@ -355,7 +308,7 @@ public class AcpAgentSession implements AcpSession {
 	 */
 	public boolean hasActivePrompt(String sessionId) {
 		Assert.hasText(sessionId, "The sessionId can not be empty");
-		return activePrompts.containsKey(sessionId);
+		return activePrompts.isActive(sessionId);
 	}
 
 	/**
@@ -368,7 +321,7 @@ public class AcpAgentSession implements AcpSession {
 	 * @return one active session ID or null if no prompt is active
 	 */
 	public @Nullable String getActivePromptSessionId() {
-		return activePrompts.keySet().stream().findFirst().orElse(null);
+		return activePrompts.anySessionId();
 	}
 
 	/**
@@ -376,7 +329,7 @@ public class AcpAgentSession implements AcpSession {
 	 * @return an immutable snapshot of active prompt session IDs
 	 */
 	public Set<String> getActivePromptSessionIds() {
-		return Set.copyOf(activePrompts.keySet());
+		return activePrompts.sessionIds();
 	}
 
 	/**

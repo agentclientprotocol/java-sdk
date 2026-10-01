@@ -172,7 +172,39 @@ Found by enabling Error Prone's bug checks; each has a test.
   failed with an opaque `ClassCastException` message; the `INTERNAL_ERROR` now names the method and
   both types.
 
+Found by model checking with Lincheck; each has a Lincheck test as its regression.
+
+- **A request to the peer that timed out, or whose subscriber cancelled it, stayed in the session's
+  table of requests waiting for a response until the session closed**: one entry per timeout for
+  the life of a long-running connection. It is now removed when its `Mono` is disposed.
+- **`AcpAgentSession.hasActivePrompt()` and `getActivePromptSessionIds()` could report no active
+  prompt while one was active**, when a prompt of another session started or ended at the same
+  moment: they asked the `ConcurrentHashMap` for its size, whose counters concurrent updates change
+  after the entries themselves. They now look at the entries.
+- When the transport terminated while the session was closing, each request still waiting for a
+  response was failed twice (Reactor dropped the second failure), and a request registered during
+  that dismissal could be cleared from the table without being failed, leaving its caller to wait
+  for the timeout. Each request is now removed from the table before it is failed, so it is failed
+  exactly once.
+- **Streamable HTTP: a session stream first used after the connection closed stayed open.** A
+  session GET that raced the connection's close (a `DELETE`, or the agent ending the connection)
+  held its response open until the client gave up, and agent messages for a session after close
+  queued in a new stream nobody would read. Such a stream is now closed, so the GET completes at
+  once, as on the connection stream. The connection's session table now makes each check and the
+  change it decides one step.
+
 ### Build
+
+- Model checking with Lincheck (`org.jetbrains.lincheck:lincheck` 3.7, test scope) for the SDK's
+  concurrent state: the single-turn prompt rule and its release before the response is published
+  (#14), the requests waiting for a response, emission on a transport's outbound sink, the
+  Streamable HTTP SSE mailbox (no event lost or reordered across reconnects, client resets and
+  pending writes) and the connection's session table. Each test checks every interleaving of a
+  bounded, seeded set of scenarios against a sequential specification and invariants, and was
+  shown to fail, with a minimal interleaving, against the bug it guards. They run in the normal
+  build (about a minute in total); the `lincheck` CI job runs them with ten times the scenarios.
+  The single-turn rule and the requests table moved into their own classes (`ActivePrompts`,
+  `PendingResponses`) so that they can be checked without a transport.
 
 - Architecture rules (ArchUnit) guard the package structure: acp-core's layers (util and json under the
   protocol, protocol under capabilities, capabilities under client and agent, which never depend on each
