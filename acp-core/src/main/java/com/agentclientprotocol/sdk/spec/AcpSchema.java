@@ -1134,14 +1134,15 @@ public final class AcpSchema {
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") @Nullable FileSystemCapability fs,
 			@JsonProperty("terminal") @Nullable Boolean terminal,
+			@JsonProperty("auth") @Nullable AuthCapabilities auth,
 			@UnstableAcpApi @JsonProperty("elicitation") @Nullable ElicitationCapabilities elicitation,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ClientCapabilities() {
-			this(new FileSystemCapability(), false, null, null);
+			this(new FileSystemCapability(), false, null, null, null);
 		}
 
 		public ClientCapabilities(@Nullable FileSystemCapability fs, @Nullable Boolean terminal) {
-			this(fs, terminal, null, null);
+			this(fs, terminal, null, null, null);
 		}
 	}
 
@@ -2144,11 +2145,99 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Authentication method
+	 * An authentication method the agent offers, discriminated by {@code type}.
+	 *
+	 * <p>
+	 * A method without a {@code type} is an {@link AuthMethodAgent}: the client calls
+	 * {@code authenticate} with its id and the agent does the rest. {@code "terminal"} is an
+	 * {@link AuthMethodTerminal}: the client runs the agent program itself, interactively,
+	 * with the method's extra arguments and environment. A method of any other type,
+	 * including {@code "agent"} (which the Kotlin SDK writes), also reads as an
+	 * {@link AuthMethodAgent}, as in the Rust SDK, where the agent variant is the untagged
+	 * fallback (see {@link AcpSchema} on forward compatibility); its {@code type} is not
+	 * kept.
+	 * </p>
+	 */
+	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
+			defaultImpl = AuthMethodAgent.class)
+	@JsonSubTypes({ @JsonSubTypes.Type(value = AuthMethodTerminal.class, name = "terminal") })
+	public interface AuthMethod {
+
+		/** The id the client passes to {@code authenticate}. */
+		String id();
+
+		/** Human-readable name of the method. */
+		String name();
+
+		/** Optional description of the method. */
+		@Nullable String description();
+
+	}
+
+	/**
+	 * Agent authentication: the agent handles it in {@code authenticate}. Written without a
+	 * {@code type}, which is how the schema marks the agent method.
+	 *
+	 * @param id the method id
+	 * @param name human-readable name
+	 * @param description optional description
+	 * @param meta reserved metadata
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record AuthMethod(@JsonProperty("id") String id, @JsonProperty("name") String name,
-			@JsonProperty("description") @Nullable String description) {
+	public record AuthMethodAgent(@JsonProperty("id") String id, @JsonProperty("name") String name,
+			@JsonProperty("description") @Nullable String description,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements AuthMethod {
+		public AuthMethodAgent(String id, String name, @Nullable String description) {
+			this(id, name, description, null);
+		}
+	}
+
+	/**
+	 * Terminal authentication: the client runs the agent program as a separate interactive
+	 * process (a TUI login), adding {@code args} to its arguments and {@code env} to its
+	 * environment, and does not pass this method to {@code authenticate}. Offered only to a
+	 * client that advertises {@code clientCapabilities.auth.terminal}.
+	 *
+	 * @param id the method id
+	 * @param name human-readable name
+	 * @param description optional description
+	 * @param args extra arguments for the agent program
+	 * @param env extra environment variables for the agent program
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record AuthMethodTerminal(@JsonProperty("id") String id, @JsonProperty("name") String name,
+			@JsonProperty("description") @Nullable String description,
+			@JsonProperty("args") @Nullable List<String> args, @JsonProperty("env") @Nullable Map<String, String> env,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements AuthMethod {
+		public AuthMethodTerminal(String id, String name, @Nullable List<String> args,
+				@Nullable Map<String, String> env) {
+			this(id, name, null, args, env, null);
+		}
+
+		/**
+		 * The discriminator, {@code "terminal"}.
+		 * @return {@code "terminal"}
+		 */
+		@JsonProperty("type")
+		public String type() {
+			return "terminal";
+		}
+	}
+
+	/**
+	 * Authentication capabilities the client advertises.
+	 *
+	 * @param terminal whether the client supports {@code terminal} auth methods (default
+	 * false)
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record AuthCapabilities(@JsonProperty("terminal") @Nullable Boolean terminal,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		public AuthCapabilities(@Nullable Boolean terminal) {
+			this(terminal, null);
+		}
 	}
 
 	/**

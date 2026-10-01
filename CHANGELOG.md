@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool call `name`** on `ToolCall`, `ToolCallUpdateNotification` and `ToolCallUpdate` (stable in
   ACP v1 since 2026-09-17): the programmatic name of the tool being invoked, next to the
   human-readable `title`. Optional; absent and `null` both mean no name.
+- **Terminal authentication** (stable in ACP v1 since 2026-08-20): the `terminal` auth method
+  (`AcpSchema.AuthMethodTerminal`, with the extra `args` and `env` the client runs the agent
+  program with for an interactive login) and the client capability `auth.terminal`
+  (`AcpSchema.AuthCapabilities` on `ClientCapabilities.auth`). Agents check it with
+  `NegotiatedCapabilities.supportsTerminalAuth()` / `requireTerminalAuth()`.
 
 ### Changed
 
@@ -59,6 +64,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking: `ToolCall`, `ToolCallUpdate` and `ToolCallUpdateNotification` take `name` after
   `title`.** Migration: insert the tool's name, or `null`, after the title argument of the
   canonical constructor.
+- **Breaking: `AuthMethod` is an interface; the agent method is `AuthMethodAgent`.** The schema
+  makes `AuthMethod` a union (no `type`: agent; `"terminal"`: terminal). A method of any other
+  type reads as `AuthMethodAgent`, as in the Rust SDK. Migration: `new AuthMethod(id, name,
+  description)` becomes `new AcpSchema.AuthMethodAgent(id, name, description)`; `id()`, `name()`
+  and `description()` stay on the interface. `AuthMethodAgent` also carries `_meta`.
+- **Breaking: `ClientCapabilities` takes `auth` after `terminal`** in its canonical constructor.
+  Migration: `new ClientCapabilities(fs, terminal, elicitation, meta)` becomes
+  `new ClientCapabilities(fs, terminal, auth, elicitation, meta)` (`auth` may be `null`).
 - **Behaviour change: `session/cancel` no longer ends the prompt turn; the cancelled prompt's
   response does.** The agent session used to free the session for a new prompt as soon as the
   cancel notification arrived, so a client could start a second prompt while the cancelled one's
