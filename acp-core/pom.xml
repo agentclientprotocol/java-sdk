@@ -146,5 +146,78 @@
         </plugins>
     </build>
 
+    <profiles>
+        <!-- Mutation testing pilot (PIT), not part of the default build. Measures how well
+             the tests catch injected bugs in the protocol core: the two session classes,
+             the request/response plumbing they share, and the json package. AcpSchema
+             (records: mutated accessors are noise) and logging calls are left out.
+             Run: ./mvnw -Ppit -pl acp-core test-compile org.pitest:pitest-maven:mutationCoverage
+             Report: acp-core/target/pit-reports/index.html -->
+        <profile>
+            <id>pit</id>
+            <properties>
+                <pitest-maven.version>1.30.0</pitest-maven.version>
+                <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>${pitest-maven.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5-plugin.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.agentclientprotocol.sdk.spec.AcpClientSession*</param>
+                                <param>com.agentclientprotocol.sdk.spec.AcpAgentSession*</param>
+                                <param>com.agentclientprotocol.sdk.spec.OutboundMessages*</param>
+                                <param>com.agentclientprotocol.sdk.spec.InboundMessages*</param>
+                                <param>com.agentclientprotocol.sdk.spec.ResponseResults*</param>
+                                <param>com.agentclientprotocol.sdk.spec.AcpError*</param>
+                                <param>com.agentclientprotocol.sdk.json.*</param>
+                            </targetClasses>
+                            <excludedClasses>
+                                <param>com.agentclientprotocol.sdk.spec.AcpSchema*</param>
+                            </excludedClasses>
+                            <targetTests>
+                                <param>com.agentclientprotocol.sdk.*</param>
+                            </targetTests>
+                            <excludedTestClasses>
+                                <!-- Integration tests: a real CLI process and a stdio
+                                     subprocess shutdown; slow, and run by failsafe. -->
+                                <param>com.agentclientprotocol.sdk.*IT</param>
+                                <!-- Architecture rules: never kill a mutant, cost a class scan. -->
+                                <param>com.agentclientprotocol.sdk.ArchitectureTest</param>
+                                <param>com.agentclientprotocol.sdk.SchedulerBestPracticesTest</param>
+                            </excludedTestClasses>
+                            <avoidCallsTo>
+                                <avoidCallsTo>org.slf4j</avoidCallsTo>
+                            </avoidCallsTo>
+                            <mutators>
+                                <mutator>DEFAULTS</mutator>
+                            </mutators>
+                            <threads>8</threads>
+                            <!-- The session tests wait on Reactor timeouts; give a
+                                 mutant room before calling it TIMED_OUT. -->
+                            <timeoutConstant>8000</timeoutConstant>
+                            <timeoutFactor>2.0</timeoutFactor>
+                            <timestampedReports>false</timestampedReports>
+                            <outputFormats>
+                                <outputFormat>HTML</outputFormat>
+                                <outputFormat>XML</outputFormat>
+                            </outputFormats>
+                            <exportLineCoverage>true</exportLineCoverage>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
