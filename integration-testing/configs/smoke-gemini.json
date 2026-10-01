@@ -1,0 +1,31 @@
+{
+  "name": "smoke-gemini",
+  "description": "Real-agent smoke: the Java stdio client from this checkout against the published gemini ACP agent (programs/smoke). Not part of the default run (tag: smoke).",
+  "comment": "Tag smoke: run-all.sh must skip smoke-* unless asked. Without credentials the prompt step prints SKIP, which the runner ignores; set the agent's key (or log in to its CLI locally) to run it.",
+  "timeoutSec": 900,
+  "peers": [],
+  "processes": [
+    {
+      "name": "client",
+      "language": "java",
+      "role": "client",
+      "dir": "${ROOT}/programs/smoke",
+      "build": "${MVNW} -q -B -Dacp.version=${ACP_VERSION} compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+      "run": "./smoke.sh gemini",
+      "timeoutSec": 720
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {
+      "client": [
+        "STEP initialize PASS",
+        "STEP session/new PASS",
+        "STEP close PASS"
+      ]
+    },
+    "checks": [
+      "client RESULT fail == 0",
+      "client RESULT protocol_version == 1"
+    ]
+  }
+}
