@@ -22,6 +22,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
+import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
@@ -189,6 +190,10 @@ public interface AcpClient {
 	 * </ul>
 	 */
 	class AsyncSpec {
+
+		/** Reads params as the raw JSON value, for the untyped extension handlers. */
+		private static final TypeRef<Object> RAW_PARAMS = new TypeRef<>() {
+		};
 
 		private final AcpClientTransport transport;
 
@@ -512,6 +517,83 @@ public interface AcpClient {
 			Assert.notNull(handler, "Handler must not be null");
 			this.notificationHandlers.put(method, handler);
 			return this;
+		}
+
+		/**
+		 * Registers the handler for a custom extension request ({@code _}-prefixed method
+		 * name, ACP v1 Extensibility) from the agent, its params read as the given type. A
+		 * request for an extension method without a handler is answered with "Method not
+		 * found" (-32601).
+		 *
+		 * <p>Example usage:
+		 * <pre>{@code
+		 * .extRequestHandler("_example.com/workspace/buffers", new TypeRef<BuffersRequest>() {},
+		 *     req -> Mono.just(new BuffersResponse(openBuffers(req.language()))))
+		 * }</pre>
+		 * @param <T> the params type
+		 * @param method the method name, which must start with {@code _}
+		 * @param paramsType the type the params are read as
+		 * @param handler the handler; its result is any value the JSON mapper can write,
+		 * and it must not complete empty (the request is then answered with an internal
+		 * error): answer with an empty map when there is nothing to return
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with
+		 * {@code _}, or the type or handler is null
+		 */
+		public <T> AsyncSpec extRequestHandler(String method, TypeRef<T> paramsType,
+				Function<T, ? extends Mono<?>> handler) {
+			ExtensionMethods.requireExtension(method);
+			Assert.notNull(paramsType, "Params type must not be null");
+			Assert.notNull(handler, "Handler must not be null");
+			return request(method, paramsType, params -> handler.apply(params).cast(Object.class));
+		}
+
+		/**
+		 * Registers the handler for a custom extension request from the agent, its params
+		 * delivered as the raw JSON value (a {@code Map}, {@code List}, {@code String},
+		 * {@code Number} or {@code Boolean}).
+		 * @param method the method name, which must start with {@code _}
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 * @see #extRequestHandler(String, TypeRef, Function)
+		 */
+		public AsyncSpec extRequestHandler(String method, Function<Object, ? extends Mono<?>> handler) {
+			return extRequestHandler(method, RAW_PARAMS, handler);
+		}
+
+		/**
+		 * Registers the handler for a custom extension notification ({@code _}-prefixed
+		 * method name) from the agent, its params read as the given type. An extension
+		 * notification without a handler is ignored, as the protocol asks.
+		 * @param <T> the params type
+		 * @param method the method name, which must start with {@code _}
+		 * @param paramsType the type the params are read as
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with
+		 * {@code _}, or the type or handler is null
+		 */
+		public <T> AsyncSpec extNotificationHandler(String method, TypeRef<T> paramsType,
+				Function<T, Mono<Void>> handler) {
+			ExtensionMethods.requireExtension(method);
+			Assert.notNull(paramsType, "Params type must not be null");
+			Assert.notNull(handler, "Handler must not be null");
+			this.notificationHandlers.put(method, params -> handler.apply(transport.unmarshalParams(params, paramsType)));
+			return this;
+		}
+
+		/**
+		 * Registers the handler for a custom extension notification from the agent, its
+		 * params delivered as the raw JSON value.
+		 * @param method the method name, which must start with {@code _}
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 * @see #extNotificationHandler(String, TypeRef, Function)
+		 */
+		public AsyncSpec extNotificationHandler(String method, Function<Object, Mono<Void>> handler) {
+			return extNotificationHandler(method, RAW_PARAMS, handler);
 		}
 
 		/** Reads the params as the request type, then calls the handler. */
@@ -925,6 +1007,72 @@ public interface AcpClient {
 		public SyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
 			asyncSpec.notificationHandler(method, handler);
 			return this;
+		}
+
+		/**
+		 * Registers the synchronous handler for a custom extension request
+		 * ({@code _}-prefixed method name) from the agent, its params read as the given
+		 * type.
+		 * @param <T> the params type
+		 * @param method the method name, which must start with {@code _}
+		 * @param paramsType the type the params are read as
+		 * @param handler the handler; it returns the result, any value the JSON mapper can
+		 * write, and returning null answers the request with an internal error
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with
+		 * {@code _}, or the type or handler is null
+		 * @see AsyncSpec#extRequestHandler(String, TypeRef, Function)
+		 */
+		public <T> SyncSpec extRequestHandler(String method, TypeRef<T> paramsType, Function<T, ?> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncSpec.extRequestHandler(method, paramsType,
+					params -> onSyncHandlerThread(() -> handler.apply(params)));
+			return this;
+		}
+
+		/**
+		 * Registers the synchronous handler for a custom extension request from the agent,
+		 * its params delivered as the raw JSON value.
+		 * @param method the method name, which must start with {@code _}
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 */
+		public SyncSpec extRequestHandler(String method, Function<Object, ?> handler) {
+			return extRequestHandler(method, AsyncSpec.RAW_PARAMS, handler);
+		}
+
+		/**
+		 * Registers the synchronous handler for a custom extension notification
+		 * ({@code _}-prefixed method name) from the agent, its params read as the given
+		 * type.
+		 * @param <T> the params type
+		 * @param method the method name, which must start with {@code _}
+		 * @param paramsType the type the params are read as
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with
+		 * {@code _}, or the type or handler is null
+		 * @see AsyncSpec#extNotificationHandler(String, TypeRef, Function)
+		 */
+		public <T> SyncSpec extNotificationHandler(String method, TypeRef<T> paramsType, Consumer<T> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncSpec.extNotificationHandler(method, paramsType, params -> Mono
+				.<Void>fromRunnable(() -> handler.accept(params))
+				.subscribeOn(SYNC_HANDLER_SCHEDULER));
+			return this;
+		}
+
+		/**
+		 * Registers the synchronous handler for a custom extension notification from the
+		 * agent, its params delivered as the raw JSON value.
+		 * @param method the method name, which must start with {@code _}
+		 * @param handler the handler
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 */
+		public SyncSpec extNotificationHandler(String method, Consumer<Object> handler) {
+			return extNotificationHandler(method, AsyncSpec.RAW_PARAMS, handler);
 		}
 
 		/**

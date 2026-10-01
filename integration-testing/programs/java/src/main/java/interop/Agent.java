@@ -53,9 +53,8 @@ import reactor.core.publisher.Mono;
  * </p>
  *
  * <p>
- * What the Java SDK cannot do yet is answered honestly, never faked: no generic send or receive of
- * extension methods (P9). The unknown update is an {@code AcpSchema.UnknownSessionUpdate}, which
- * writes the type and fields it is given.
+ * The unknown update is an {@code AcpSchema.UnknownSessionUpdate}, which writes the type and
+ * fields it is given.
  * </p>
  */
 public class Agent {
@@ -220,6 +219,8 @@ public class Agent {
 	static AcpAsyncAgent build(AcpAgentTransport transport) {
 		AtomicReference<AcpSchema.InitializeRequest> init = new AtomicReference<>();
 		AtomicReference<AcpAsyncAgent> self = new AtomicReference<>();
+		AtomicReference<String> lastExtNotification = new AtomicReference<>("none");
+		Connection connection = new Connection(self, lastExtNotification);
 		AcpAsyncAgent agent = AcpAgent.async(transport)
 			.cancelGracePeriod(CANCEL_GRACE)
 			.maxPromptDuration(MAX_PROMPT)
@@ -330,7 +331,16 @@ public class Agent {
 				}
 				return Mono.empty();
 			})
-			.promptHandler((request, context) -> prompt(request, context, init.get()))
+			.extRequestHandler(EXT_METHOD, params -> {
+				log("[agent] extension request " + EXT_METHOD + " " + params);
+				return Mono.just(EXT_RESULT);
+			})
+			.extNotificationHandler(EXT_NOTIFICATION, params -> {
+				log("[agent] extension notification " + EXT_NOTIFICATION + " " + params);
+				lastExtNotification.set(EXT_NOTIFICATION);
+				return Mono.empty();
+			})
+			.promptHandler((request, context) -> prompt(request, context, init.get(), connection))
 			.build();
 		self.set(agent);
 		return agent;
@@ -358,19 +368,23 @@ public class Agent {
 		return Mono.just(s);
 	}
 
+	/** What a prompt can reach of its connection: the agent, and the last extension notification it received. */
+	record Connection(AtomicReference<AcpAsyncAgent> agent, AtomicReference<String> lastExtNotification) {
+	}
+
 	static Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest request, PromptContext context,
-			AcpSchema.InitializeRequest init) {
+			AcpSchema.InitializeRequest init, Connection connection) {
 		String text = request.text();
 		log("[agent] session/prompt " + request.sessionId() + ": " + abbreviate(text));
 		return known(request.sessionId()).flatMap(s -> {
 			Turn turn = new Turn();
 			s.turn.set(turn);
-			return directive(s, turn, request, context, init).doFinally(sig -> s.turn.compareAndSet(turn, null));
+			return directive(s, turn, request, context, init, connection).doFinally(sig -> s.turn.compareAndSet(turn, null));
 		});
 	}
 
 	static Mono<AcpSchema.PromptResponse> directive(SessionState s, Turn turn, AcpSchema.PromptRequest request,
-			PromptContext context, AcpSchema.InitializeRequest init) {
+			PromptContext context, AcpSchema.InitializeRequest init, Connection connection) {
 		String text = request.text();
 		if (!text.startsWith("#")) {
 			s.history.add(new AcpSchema.UserMessageChunk("user_message_chunk", new AcpSchema.TextContent(text)));
@@ -409,14 +423,14 @@ public class Agent {
 				default -> unknown(text);
 			};
 			case "#ext" -> switch (sub) {
-				case "request" -> {
-					step("ext.agent-request", false, System.nanoTime(),
-							"P9: the Java agent has no generic request send for " + (words.length > 2 ? words[2] : "?"));
-					yield context.sendMessage("ext: unsupported (P9)").thenReturn(endTurn());
-				}
-				case "notify" -> context.sendMessage("ext notify unsupported (P9)").thenReturn(endTurn());
-				// Extension notifications cannot be registered on the Java agent (P9): none is ever recorded.
-				case "last-notification" -> context.sendMessage("ext last: none").thenReturn(endTurn());
+				case "request" -> extRequest(context, connection.agent().get(), words.length > 2 ? words[2] : EXT_METHOD);
+				case "notify" -> connection.agent()
+					.get()
+					.sendExtNotification(words.length > 2 ? words[2] : EXT_NOTIFICATION, EXT_PARAMS)
+					.then(context.sendMessage("ext notified"))
+					.thenReturn(endTurn());
+				case "last-notification" -> context.sendMessage("ext last: " + connection.lastExtNotification().get())
+					.thenReturn(endTurn());
 				default -> unknown(text);
 			};
 			case "#meta" -> meta(context, request);
@@ -813,6 +827,36 @@ public class Agent {
 			return Mono.error(new AcpProtocolException(-32602, "unknown directive: #big " + bytes));
 		}
 		return context.sendMessage("x".repeat(n)).thenReturn(endTurn());
+	}
+
+	// ---------------------------------------------------------------- extensions
+
+	static final String EXT_METHOD = "_interop/ping";
+
+	static final String EXT_NOTIFICATION = "_interop/note";
+
+	static final Map<String, Object> EXT_PARAMS = Map.of("n", 1);
+
+	static final Map<String, Object> EXT_RESULT = Map.of("pong", 1);
+
+	/** #ext request: sends the extension request to the client and reports its raw result. */
+	static Mono<AcpSchema.PromptResponse> extRequest(PromptContext context, AcpAsyncAgent agent, String method) {
+		long t0 = System.nanoTime();
+		return agent.sendExtRequest(method, EXT_PARAMS)
+			.map(java.util.Optional::of)
+			.defaultIfEmpty(java.util.Optional.empty())
+			.flatMap(result -> {
+				Object value = result.orElse(null);
+				boolean pass = value instanceof Map<?, ?> m && m.size() == 1 && m.get("pong") instanceof Number n
+						&& n.longValue() == 1;
+				step("ext.agent-request", pass, t0, "result " + toJson(value));
+				return context.sendMessage("ext: " + toJson(value));
+			})
+			.onErrorResume(e -> {
+				step("ext.agent-request", false, t0, method + " failed: " + e);
+				return context.sendMessage("ext error " + (e instanceof AcpError a ? a.getCode() : e.toString()));
+			})
+			.thenReturn(endTurn());
 	}
 
 	// ---------------------------------------------------------------- helpers

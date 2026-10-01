@@ -240,8 +240,8 @@ public class Client {
 		STEPS.put("cancel-request.unknown", Client::cancelRequestUnknown);
 		STEPS.put("ext.agent-request", Client::extAgentRequest);
 		STEPS.put("ext.agent-notification", Client::extAgentNotification);
-		STEPS.put("ext.client-request", () -> gap("P9", "AcpAsyncClient has no generic request send"));
-		STEPS.put("ext.client-notification", () -> gap("P9", "AcpAsyncClient has no generic notification send"));
+		STEPS.put("ext.client-request", Client::extClientRequest);
+		STEPS.put("ext.client-notification", Client::extClientNotification);
 		STEPS.put("meta.prompt", Client::metaPrompt);
 		STEPS.put("meta.permission", Client::metaPermission);
 		STEPS.put("error.method-not-found", Client::methodNotFound);
@@ -912,6 +912,23 @@ public class Client {
 		return "_interop/note arrived with {n: 1}";
 	}
 
+	static String extClientRequest() {
+		Object result = block(main().client.sendExtRequest("_interop/ping", Map.of("n", 1)));
+		check(result instanceof Map<?, ?> m && m.size() == 1 && Objects.equals(number(m.get("pong")), 1L),
+				"result " + result);
+		return "result " + result;
+	}
+
+	static String extClientNotification() {
+		Conn c = main();
+		block(c.client.sendExtNotification("_interop/note", Map.of("n", 1)));
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "#ext last-notification");
+		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		await(() -> c.chunks(sid).contains("ext last: _interop/note"), () -> "chunks " + quoteAll(c.chunks(sid)));
+		return "ext last: _interop/note";
+	}
+
 	static String metaPrompt() {
 		Conn c = main();
 		String sid = c.newSession();
@@ -1188,11 +1205,11 @@ public class Client {
 					this.completedElicitations.add(notification.elicitationId());
 					return Mono.empty();
 				})
-				.requestHandler("_interop/ping", params -> {
+				.extRequestHandler("_interop/ping", params -> {
 					System.out.println("  _interop/ping " + params);
 					return Mono.just(Map.of("pong", 1));
 				})
-				.notificationHandler("_interop/note", params -> {
+				.extNotificationHandler("_interop/note", params -> {
 					System.out.println("  _interop/note " + params);
 					this.extNotes.add(params);
 					return Mono.empty();

@@ -39,6 +39,7 @@ import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.junit.jupiter.api.Test;
@@ -602,6 +603,21 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 
 		@Override
 		public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
+			return unsupported();
+		}
+
+		@Override
+		public <T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<Object> sendExtRequest(String method, Object params) {
+			return unsupported();
+		}
+
+		@Override
+		public Mono<Void> sendExtNotification(String method, Object params) {
 			return unsupported();
 		}
 
