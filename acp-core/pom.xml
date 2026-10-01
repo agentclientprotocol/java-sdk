@@ -151,13 +151,17 @@
              the tests catch injected bugs in the protocol core: the two session classes,
              the request/response plumbing they share, and the json package. AcpSchema
              (records: mutated accessors are noise) and logging calls are left out.
-             Run: ./mvnw -Ppit -pl acp-core test-compile org.pitest:pitest-maven:mutationCoverage
+             Run: ./mvnw -Ppit -pl acp-core -am test
              Report: acp-core/target/pit-reports/index.html -->
         <profile>
             <id>pit</id>
             <properties>
                 <pitest-maven.version>1.30.0</pitest-maven.version>
                 <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+                <!-- -Dpit.mutators=STRONGER for the larger set -->
+                <pit.mutators>DEFAULTS</pit.mutators>
+                <!-- -Dpit.threads=8 on a larger machine -->
+                <pit.threads>4</pit.threads>
             </properties>
             <build>
                 <plugins>
@@ -172,7 +176,20 @@
                                 <version>${pitest-junit5-plugin.version}</version>
                             </dependency>
                         </dependencies>
+                        <executions>
+                            <execution>
+                                <id>pit</id>
+                                <phase>test</phase>
+                                <goals>
+                                    <goal>mutationCoverage</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                         <configuration>
+                            <!-- The pilot scored 90% (DEFAULTS) and 88% (STRONGER) once the
+                                 gaps it found were tested; every remaining survivor is
+                                 equivalent or log-only. The run fails below this. -->
+                            <mutationThreshold>85</mutationThreshold>
                             <targetClasses>
                                 <param>com.agentclientprotocol.sdk.spec.AcpClientSession*</param>
                                 <param>com.agentclientprotocol.sdk.spec.AcpAgentSession*</param>
@@ -200,9 +217,9 @@
                                 <avoidCallsTo>org.slf4j</avoidCallsTo>
                             </avoidCallsTo>
                             <mutators>
-                                <mutator>DEFAULTS</mutator>
+                                <mutator>${pit.mutators}</mutator>
                             </mutators>
-                            <threads>8</threads>
+                            <threads>${pit.threads}</threads>
                             <!-- The session tests wait on Reactor timeouts; give a
                                  mutant room before calling it TIMED_OUT. -->
                             <timeoutConstant>8000</timeoutConstant>

@@ -446,6 +446,22 @@ export GEMINI_API_KEY=your_key_here
 | Clean shutdown IT | `./mvnw verify` | 4 | None |
 | Gemini CLI IT | `./mvnw verify` | 5 | `GEMINI_API_KEY`, `gemini` CLI in PATH |
 
+### Mutation Testing
+
+The `pit` profile runs [PIT](https://pitest.org) mutation testing over acp-core's protocol core
+(the client and agent session classes, their shared request/response plumbing, and the `json`
+package). It is not part of the default build:
+
+```bash
+./mvnw -Ppit -pl acp-core -am test                         # DEFAULTS mutators, about 3 minutes
+./mvnw -Ppit -pl acp-core -am test -Dpit.mutators=STRONGER # larger mutator set
+./mvnw -Ppit -pl acp-core -am test -Dpit.threads=8         # more threads on a larger machine
+```
+
+The report is written to `acp-core/target/pit-reports/index.html`. The run fails if the mutation
+score drops below the profile's `mutationThreshold`. The `Mutation testing (PIT)` workflow runs the
+profile on demand and uploads the report.
+
 ## Testing Your Code
 
 Use the mock utilities for testing:
