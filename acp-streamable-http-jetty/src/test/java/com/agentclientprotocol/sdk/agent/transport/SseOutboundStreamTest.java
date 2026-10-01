@@ -150,6 +150,66 @@ class SseOutboundStreamTest {
 		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"lost?\"\n\n");
 	}
 
+	/**
+	 * The client reset the stream, but the container accepts the next write and its flush
+	 * as if the stream were open; only a later write sees the failure. This is what Jetty's
+	 * HTTP/2 output does for a write to a stream it has already seen reset. The accepted
+	 * event never reached the client, so it must be kept, ahead of the event whose write
+	 * failed.
+	 */
+	@Test
+	void anEventAcceptedByAStreamThatHadAlreadyFailedIsKeptInOrder() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached reset = attach(stream, true);
+		reset.output.failSilentlyOnNextFlush = true;
+		stream.push("\"update\"");
+		stream.push("\"result\"");
+
+		Attached next = attach(stream, true);
+		assertThat(next.output.written()).as("the update the reset stream swallowed is redelivered, in order")
+			.isEqualTo(OPEN + "data: \"update\"\n\n" + "data: \"result\"\n\n");
+	}
+
+	/**
+	 * The flush is still in progress when the container reports the stream's failure. The
+	 * event in that flush was not delivered, so it goes back to the mailbox.
+	 */
+	@Test
+	void anEventWhoseFlushFailsAsynchronouslyIsKept() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached reset = attach(stream, true);
+		reset.output.pendingAfterFlush = true;
+		stream.push("\"update\"");
+		reset.output.listener.onError(new IOException("stream reset"));
+		stream.push("\"result\"");
+
+		Attached next = attach(stream, true);
+		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"update\"\n\n" + "data: \"result\"\n\n");
+	}
+
+	/** An event whose flush completed is delivered: a later close does not replay it. */
+	@Test
+	void anEventWhoseFlushCompletedIsNotReplayed() throws IOException {
+		SseOutboundStream stream = new SseOutboundStream(8, 8);
+		Attached synchronous = attach(stream, true);
+		stream.push("\"a\"");
+		synchronous.output.listener.onError(new IOException("client went away"));
+
+		Attached asynchronous = attach(stream, true);
+		asynchronous.output.pendingAfterFlush = true;
+		stream.push("\"b\"");
+		asynchronous.output.pendingAfterFlush = false;
+		asynchronous.output.ready = true;
+		asynchronous.output.listener.onWritePossible();
+		asynchronous.output.listener.onError(new IOException("client went away"));
+
+		Attached next = attach(stream, true);
+		stream.push("\"c\"");
+		assertThat(synchronous.output.written()).isEqualTo(OPEN + "data: \"a\"\n\n");
+		assertThat(asynchronous.output.written()).isEqualTo(OPEN + "data: \"b\"\n\n");
+		assertThat(next.output.written()).isEqualTo(OPEN + "data: \"c\"\n\n");
+	}
+
 	private static Attached attach(SseOutboundStream stream, boolean ready) throws IOException {
 		FakeOutput output = new FakeOutput(ready);
 		AsyncContext asyncContext = mock(AsyncContext.class);
@@ -166,7 +226,13 @@ class SseOutboundStreamTest {
 
 		private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
-		private final boolean ready;
+		private boolean ready;
+
+		/** The next flush appears to succeed, but the stream is failed: later writes throw. */
+		boolean failSilentlyOnNextFlush;
+
+		/** A flush does not complete before {@code isReady()} is asked again. */
+		boolean pendingAfterFlush;
 
 		FakeOutput(boolean ready) {
 			this.ready = ready;
@@ -192,10 +258,26 @@ class SseOutboundStreamTest {
 
 		@Override
 		public void write(int b) throws IOException {
+			write(new byte[] { (byte) b }, 0, 1);
+		}
+
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException {
 			if (failWrites) {
 				throw new IOException("broken pipe");
 			}
-			bytes.write(b);
+			bytes.write(b, off, len);
+		}
+
+		@Override
+		public void flush() {
+			if (failSilentlyOnNextFlush) {
+				failSilentlyOnNextFlush = false;
+				failWrites = true;
+			}
+			if (pendingAfterFlush) {
+				ready = false;
+			}
 		}
 
 	}

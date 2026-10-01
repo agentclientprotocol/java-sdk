@@ -89,6 +89,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ended the session. The single-client `WebSocketAcpAgentTransport` accepted 4 MB. The upgrade now
   accepts messages up to `StreamableHttpAcpAgentTransportOptions.maxPostBodyBytes` (16 MB by
   default), the same inbound limit as a Streamable HTTP POST body.
+- **Streamable HTTP: an event written as the client dropped its SSE stream could be lost.** When a
+  client closed a session stream (an HTTP/2 reset) and the agent emitted an event before the server
+  had detached that stream, Jetty accepted the write and its flush, and reported the failure only on
+  the next write; the event was counted as sent and the reconnecting client never received it (a
+  prompt's `session/update` went missing while its result arrived). A subscriber now keeps each event
+  it writes until the write has completed without error, checking a write that completed at once
+  with an empty write, and returns unconfirmed events to the front of the stream's mailbox when it
+  goes away, so the next GET receives them in order. An event whose write was still pending when its
+  stream was replaced may now arrive twice rather than not at all. Bytes the server did put on the
+  wire before the client's reset arrived can still be lost: closing that needs SSE event ids and
+  `Last-Event-ID`, which the transport RFD defers to v2.
 - **A response with `"result": null` failed the request** ("carried no result") even where the
   result is an empty object, a regression in this release: the Python SDK answers
   `fs/write_text_file` with `"result": null` when its handler returns `None`, so a Java agent could
