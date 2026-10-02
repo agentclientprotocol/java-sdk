@@ -9,6 +9,7 @@ import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,6 +58,12 @@ import org.slf4j.LoggerFactory;
  * in push order; and an event arrived twice only if it was written to a subscriber that was
  * detached before the write was confirmed (the documented pending-write takeover case).
  * </p>
+ *
+ * <p>
+ * A second model races GETs attaching against the stream closing (a DELETE of the
+ * connection): once closed, no GET may hold an open response, whether it attached before the
+ * close, while a write was pending, or after it.
+ * </p>
  */
 class SseOutboundStreamLincheckTest {
 
@@ -104,6 +111,83 @@ class SseOutboundStreamLincheckTest {
 			.actorsBefore(1)
 			.actorsAfter(1)
 			.check(Mailbox.class);
+	}
+
+	@Test
+	void closingLeavesNoResponseOpen() {
+		new ModelCheckingOptions().iterations(50 * SCALE)
+			.invocationsPerIteration(300)
+			.threads(2)
+			.actorsPerThread(2)
+			.actorsBefore(1)
+			.actorsAfter(0)
+			.check(OpenAndClose.class);
+	}
+
+	/**
+	 * GETs attaching race DELETE closing the stream, while the container completes pending
+	 * writes. Once the stream is closed, no GET may be left holding an open response: one
+	 * attached before the close is completed by it, one attaching after it is completed at
+	 * once.
+	 *
+	 * <p>
+	 * The clients are created up front. Creating one inside an operation creates a response
+	 * proxy, and on Java 17 Lincheck then misses a GET that checks for the close outside the
+	 * stream's lock and attaches after it (planted, it was found only on Java 21).
+	 * </p>
+	 */
+	@Param(name = "client", gen = IntGen.class, conf = "0:1")
+	public static class OpenAndClose {
+
+		/** At most one GET per actor: one before the parallel part, two in each thread. */
+		private static final int MAX_GETS = 5;
+
+		private final SseOutboundStream stream = new SseOutboundStream(64, 2);
+
+		private final Queue<Client> unusedSync = new ConcurrentLinkedQueue<>();
+
+		private final Queue<Client> unusedAsync = new ConcurrentLinkedQueue<>();
+
+		private final List<Client> clients = new CopyOnWriteArrayList<>();
+
+		public OpenAndClose() {
+			Deliveries deliveries = new Deliveries();
+			for (int i = 0; i < MAX_GETS; i++) {
+				unusedSync.add(new Client(false, deliveries));
+				unusedAsync.add(new Client(true, deliveries));
+			}
+		}
+
+		@Operation
+		public void subscribe(@Param(gen = BooleanGen.class) boolean asyncWrites) throws IOException {
+			Client client = Objects.requireNonNull((asyncWrites ? unusedAsync : unusedSync).poll());
+			clients.add(client);
+			stream.subscribe(client.context, client.response);
+		}
+
+		@Operation
+		public void completeWrite(@Param(name = "client") int index) {
+			if (index < clients.size()) {
+				clients.get(index).output.completePendingWrite();
+			}
+		}
+
+		@Operation
+		public void close() {
+			stream.close();
+		}
+
+		@Validate
+		public void aClosedStreamHoldsNoOpenResponse() {
+			stream.close();
+			for (int i = 0; i < clients.size(); i++) {
+				if (!clients.get(i).output.isCompleted()) {
+					throw new IllegalStateException("GET " + i + " of " + clients.size()
+							+ " still holds an open response after the stream closed");
+				}
+			}
+		}
+
 	}
 
 	@Param(name = "client", gen = IntGen.class, conf = "0:1")
@@ -351,6 +435,10 @@ class SseOutboundStreamLincheckTest {
 
 		synchronized void reset() {
 			reset = true;
+		}
+
+		synchronized boolean isCompleted() {
+			return completed;
 		}
 
 		/** The response completes: what this stream holds unconfirmed may also reach the client. */
