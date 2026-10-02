@@ -38,6 +38,7 @@ from fixtures import (
     EXT_PARAMS,
     EXT_RESULT,
     FS_READ_CONTENT,
+    GROUPED_VALUES,
     META_KEY,
     META_VALUE,
     MODE_IDS,
@@ -45,6 +46,10 @@ from fixtures import (
     PERMISSION_OPTIONS,
     PERMISSION_TOOL_CALL,
     TERMINAL_AUTH_METHOD,
+    UNKNOWN_AUDIENCE,
+    UNKNOWN_ENUM_PLAN,
+    UNKNOWN_ENUM_TOOL_CALL,
+    UNKNOWN_STOP_REASON,
     UNKNOWN_UPDATE,
     compact,
     config_options,
@@ -64,6 +69,7 @@ class Turn:
     def __init__(self) -> None:
         self.stop = asyncio.Event()
         self.reason: str | None = None
+        self.blocks: list = []  # the prompt's content blocks, as the SDK validated them
 
     def cancel(self, reason: str) -> None:
         if self.reason is None:
@@ -79,6 +85,7 @@ class Session:
         self.mode = MODES["currentModeId"]
         self.model = "model-a"
         self.verbose = False
+        self.effort: str | None = None  # set by #config grouped
         self.closed = False
         self.turns: set[Turn] = set()
 
@@ -118,7 +125,10 @@ class InteropAgent:
     def _session_state(self, s: Session) -> dict:
         state = dict(MODES)
         state["currentModeId"] = s.mode
-        return {"modes": state, "configOptions": config_options(s.model, s.verbose, self._with_boolean())}
+        return {"modes": state, "configOptions": self._options(s)}
+
+    def _options(self, s: Session) -> list:
+        return config_options(s.model, s.verbose, self._with_boolean(), s.effort)
 
     async def initialize(self, protocol_version: int, client_capabilities=None, client_info=None, **kw):
         if client_capabilities is not None:
@@ -211,9 +221,12 @@ class InteropAgent:
             s.model = value
         elif config_id == "verbose" and isinstance(value, bool) and self._with_boolean():
             s.verbose = value
+        elif config_id == "effort" and s.effort is not None and value in GROUPED_VALUES:
+            s.effort = value
+            agent_step("config.grouped", value == "effort-high", time.monotonic(), f"effort set to {value}")
         else:
             raise RequestError.invalid_params({"details": f"unknown config option {config_id}={value!r}"})
-        return {"configOptions": config_options(s.model, s.verbose, self._with_boolean())}
+        return {"configOptions": self._options(s)}
 
     async def cancel(self, session_id: str, **kw):
         s = SESSIONS.get(session_id)
@@ -248,6 +261,7 @@ class InteropAgent:
         meta = dict(kw)
         log(f"[agent] session/prompt {session_id} {text[:80]!r}{'...' if len(text) > 80 else ''}")
         turn = Turn()
+        turn.blocks = prompt
         s.turns.add(turn)
         try:
             if not text.startswith("#"):
@@ -378,6 +392,38 @@ class InteropAgent:
         if kind == "tool_call" and "name" in opts:
             body["name"] = opts["name"]
         await self._update(s.id, {"sessionUpdate": kind, **body})
+        return {"stopReason": "end_turn"}
+
+    async def _d_enum(self, s: Session, turn: Turn, rest: str, meta: dict):
+        what = rest.strip()
+        if what in ("tool_call", "plan"):
+            # The typed session_update validates against Literal enums (acp/schema.py:5789-5793):
+            # send the raw notification.
+            update = UNKNOWN_ENUM_TOOL_CALL if what == "tool_call" else UNKNOWN_ENUM_PLAN
+            await self.conn._conn.send_notification("session/update", {"sessionId": s.id, "update": update})
+            await self._chunk(s.id, "after-enum")
+            return {"stopReason": "end_turn"}
+        if what == "stop":
+            # The prompt handler's dict result is sent as is (acp/connection.py:201-208).
+            await self._chunk(s.id, "stop")
+            return {"stopReason": UNKNOWN_STOP_REASON}
+        if what == "audience":
+            started = time.monotonic()
+            blocks = turn.blocks
+            first = blocks[0] if blocks else None
+            ann = getattr(first, "annotations", None)
+            audience = list(ann.audience) if ann is not None and ann.audience is not None else None
+            agent_step("enum.audience", audience == UNKNOWN_AUDIENCE, started, f"audience {audience}")
+            await self._chunk(s.id, "audience: " + (",".join(audience) if audience is not None else "none"))
+            return {"stopReason": "end_turn"}
+        raise RequestError(-32602, f"unknown directive: #enum {what}")
+
+    async def _d_config(self, s: Session, turn: Turn, rest: str, meta: dict):
+        if rest.strip() != "grouped":
+            raise RequestError(-32602, f"unknown directive: #config {rest.strip()}")
+        if s.effort is None:
+            s.effort = "effort-low"
+        await self._update(s.id, {"sessionUpdate": "config_option_update", "configOptions": self._options(s)})
         return {"stopReason": "end_turn"}
 
     async def _d_stop(self, s: Session, turn: Turn, rest: str, meta: dict):

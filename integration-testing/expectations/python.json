@@ -143,6 +143,51 @@
       "contains": "1009",
       "see": "peer:python-sdk ws/client.py:98",
       "reason": "create_websocket_stream connects with websockets' default max_size of 1 MiB and offers no way to raise it; the client closes the socket with 1009"
+    },
+    {
+      "step": "enum.tool_call",
+      "when": {
+        "client": "python"
+      },
+      "contains": "status None",
+      "see": "peer:python-sdk schema.py:4983",
+      "reason": "ToolCall's kind and status are closed Literals whose wrap validator (use_default_on_error) replaces an unknown value with None: the tool call surfaces with the raw status interop_future_status (and kind) dropped, so the value is lost rather than kept open"
+    },
+    {
+      "step": "enum.plan",
+      "when": {
+        "client": "python"
+      },
+      "contains": "entries []",
+      "see": "peer:python-sdk schema.py:3578",
+      "reason": "PlanEntry.priority and status are closed Literals (schema.py:3542, :3547) and Plan.entries skips invalid items: the entry with interop_future_priority/interop_future_status is silently dropped and the plan surfaces empty"
+    },
+    {
+      "step": "enum.stop",
+      "when": {
+        "client": "python"
+      },
+      "contains": "ValidationError",
+      "see": "peer:python-sdk schema.py:3414",
+      "reason": "PromptResponse.stopReason is a closed Literal with no lenient validator: a response with stopReason interop_future_stop fails the prompt call with a pydantic ValidationError (the connection survives)"
+    },
+    {
+      "step": "enum.audience",
+      "when": {
+        "agent": "python"
+      },
+      "contains": "audience: user\"",
+      "see": "peer:python-sdk schema.py:2648",
+      "reason": "Annotations.audience is List[Literal[\"assistant\", \"user\"]] with skip_invalid_items: the agent receives the prompt but the unknown Role interop_future_role is silently dropped, so it reads [user] and chunks \"audience: user\""
+    },
+    {
+      "step": "agent.enum.audience",
+      "when": {
+        "agent": "python"
+      },
+      "contains": "['user']",
+      "see": "peer:python-sdk schema.py:2648",
+      "reason": "Annotations.audience skips invalid items: the Python agent's handler sees audience ['user'], interop_future_role dropped before it"
     }
   ]
 }
