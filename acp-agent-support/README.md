@@ -285,17 +285,20 @@ AcpAgentSupport.create(new MyAgent())
 ### Remote Transport (Streamable HTTP and WebSocket)
 
 `StreamableHttpAcpAgentTransport` (module `acp-streamable-http-jetty`) serves the Streamable HTTP
-profile and the WebSocket upgrade on one path and creates one agent per connection:
+profile and the WebSocket upgrade on one path and creates one agent per connection, which
+`buildFactory()` provides:
 
 ```java
-AcpAgentFactory agents = AcpAgentFactory.sync(transport -> AcpAgentSupport.create(new MyAgent())
-    .transport(transport)
-    .build()
-    .getAgent());
+AcpAgentFactory agents = AcpAgentSupport.create(new MyAgent()).buildFactory();
 
 var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefault(), agents);
 server.start().block();  // http://localhost:8080/acp and ws://localhost:8080/acp
 ```
+
+Every connection's agent invokes the same `MyAgent` instance, the way every request to a Spring
+controller reaches one bean: its handler methods run concurrently across connections and sessions,
+so they must be thread-safe, with per-session state keyed by session id. Port `0` listens on an
+ephemeral port; `server.getPort()` returns it once started.
 
 ### InMemory Transport (For Testing)
 
@@ -323,6 +326,10 @@ AcpAgentSupport.create(agentInstance)      // Start with agent instance
     .returnValueHandler(handler)            // Optional: add custom handler
     .build();                               // Build the support instance
 ```
+
+A builder can be built more than once: `build()` and `buildFactory()` add the default resolvers
+and return value handlers after the custom ones at build time without changing the builder, and
+later builder changes do not affect what was already built.
 
 ### Alternative Creation Methods
 

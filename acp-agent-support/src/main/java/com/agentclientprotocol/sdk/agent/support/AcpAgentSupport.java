@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.handler.DirectResponseHandler;
@@ -81,6 +82,7 @@ import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
+import com.agentclientprotocol.sdk.util.Assert;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -114,6 +116,21 @@ import org.slf4j.LoggerFactory;
  *     .run();
  * }</pre>
  *
+ * <p>A listener transport accepts many connections and needs one agent per connection:
+ * {@link Builder#buildFactory()} gives it an {@link AcpAgentFactory} instead.
+ * <pre>{@code
+ * AcpAgentFactory factory = AcpAgentSupport.create(new MyAgent()).buildFactory();
+ * new StreamableHttpAcpAgentTransport(8080, jsonMapper, factory).start().block();
+ * }</pre>
+ *
+ * <p><b>One handler bean, shared.</b> The annotated object is the application's bean, like a
+ * Spring controller: the builder discovers its handler methods once, and every agent the
+ * builder builds, every connection a factory serves included, invokes the same instance.
+ * Its handler methods are therefore called concurrently, from different connections and
+ * from different sessions of one connection, and must be thread-safe; keep per-connection
+ * or per-session state keyed by session id (or in the agent's session state), not in plain
+ * fields. The same holds for interceptors and custom resolvers and return value handlers.
+ *
  * @author Mark Pollack
  * @since 1.0.0
  */
@@ -134,17 +151,17 @@ public class AcpAgentSupport {
 
 	private final AcpSyncAgent agent;
 
-	private AcpAgentSupport(Builder builder, AcpAgentTransport transport) {
-		this.handlers = builder.handlers;
-		this.argumentResolvers = builder.argumentResolvers;
-		this.returnValueHandlers = builder.returnValueHandlers;
-		this.interceptors = builder.interceptors;
+	private AcpAgentSupport(Definition definition, AcpAgentTransport transport) {
+		this.handlers = definition.handlers();
+		this.argumentResolvers = definition.argumentResolvers();
+		this.returnValueHandlers = definition.returnValueHandlers();
+		this.interceptors = definition.interceptors();
 
 		// Build the underlying sync agent
 		var agentBuilder = AcpAgent.sync(transport)
-				.requestTimeout(builder.requestTimeout)
-				.cancelGracePeriod(builder.cancelGracePeriod)
-				.maxPromptDuration(builder.maxPromptDuration);
+				.requestTimeout(definition.requestTimeout())
+				.cancelGracePeriod(definition.cancelGracePeriod())
+				.maxPromptDuration(definition.maxPromptDuration());
 
 		// Wire discovered handlers to the agent builder
 		wireHandlers(agentBuilder);
@@ -414,18 +431,32 @@ public class AcpAgentSupport {
 		return Collections.unmodifiableMap(annotations);
 	}
 
+	/**
+	 * What a builder held when it built: the agents it builds share it, and a later change
+	 * to the builder does not reach them. The composites are complete (custom entries first,
+	 * then the defaults) and never change after construction, so connections share them.
+	 */
+	private record Definition(Map<String, AcpHandlerMethod> handlers, ArgumentResolverComposite argumentResolvers,
+			ReturnValueHandlerComposite returnValueHandlers, List<AcpInterceptor> interceptors,
+			Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration) {
+	}
+
 	// ========== BUILDER ==========
 
 	/**
-	 * Builder for AcpAgentSupport.
+	 * Builder for AcpAgentSupport. A builder can be built any number of times: each
+	 * {@link #build()} and {@link #buildFactory()} composes the default argument resolvers
+	 * and return value handlers after the custom ones without changing the builder, and
+	 * what is built is not affected by later changes to the builder. Every agent built from
+	 * one builder invokes the same annotated handler instance (see {@link AcpAgentSupport}).
 	 */
 	public static class Builder {
 
 		private final Map<String, AcpHandlerMethod> handlers = new HashMap<>();
 
-		private final ArgumentResolverComposite argumentResolvers = new ArgumentResolverComposite();
+		private final List<ArgumentResolver> customArgumentResolvers = new ArrayList<>();
 
-		private final ReturnValueHandlerComposite returnValueHandlers = new ReturnValueHandlerComposite();
+		private final List<ReturnValueHandler> customReturnValueHandlers = new ArrayList<>();
 
 		private final List<AcpInterceptor> interceptors = new ArrayList<>();
 
@@ -540,7 +571,8 @@ public class AcpAgentSupport {
 		 * @return this builder
 		 */
 		public Builder argumentResolver(ArgumentResolver resolver) {
-			this.argumentResolvers.addResolver(resolver);
+			Assert.notNull(resolver, "The resolver must not be null");
+			this.customArgumentResolvers.add(resolver);
 			return this;
 		}
 
@@ -550,25 +582,50 @@ public class AcpAgentSupport {
 		 * @return this builder
 		 */
 		public Builder returnValueHandler(ReturnValueHandler handler) {
-			this.returnValueHandlers.addHandler(handler);
+			Assert.notNull(handler, "The handler must not be null");
+			this.customReturnValueHandlers.add(handler);
 			return this;
 		}
 
 		/**
-		 * Build the AcpAgentSupport instance.
+		 * Build the AcpAgentSupport instance on the configured transport. May be called
+		 * again, with the same or another transport, for another agent.
 		 * @return the configured instance
+		 * @throws IllegalStateException if no transport is configured
 		 */
 		public AcpAgentSupport build() {
 			AcpAgentTransport transport = this.transport;
 			if (transport == null) {
 				throw new IllegalStateException("Transport must be configured");
 			}
+			return new AcpAgentSupport(definition(), transport);
+		}
 
-			// Add default resolvers (custom ones added first take precedence)
-			addDefaultResolvers();
-			addDefaultReturnValueHandlers();
+		/**
+		 * Build a factory for a listener transport, such as
+		 * {@code StreamableHttpAcpAgentTransport} or {@code StreamableHttpAcpServlet}, that
+		 * creates a fresh agent for each connection it accepts. Every agent invokes the same
+		 * annotated handler instance, concurrently across connections, so its handlers must
+		 * be thread-safe (see {@link AcpAgentSupport}). The factory captures the builder as
+		 * it is now; a {@link #transport} set on the builder is not used, as the listener
+		 * supplies one per connection.
+		 * @return a factory creating one agent per connection
+		 */
+		public AcpAgentFactory buildFactory() {
+			Definition definition = definition();
+			return AcpAgentFactory.sync(connection -> new AcpAgentSupport(definition, connection).getAgent());
+		}
 
-			return new AcpAgentSupport(this, transport);
+		/** The builder's configuration now, with the defaults after the custom entries. */
+		private Definition definition() {
+			ArgumentResolverComposite argumentResolvers = new ArgumentResolverComposite()
+				.addResolvers(customArgumentResolvers)
+				.addResolvers(defaultResolvers());
+			ReturnValueHandlerComposite returnValueHandlers = new ReturnValueHandlerComposite()
+				.addHandlers(customReturnValueHandlers)
+				.addHandlers(defaultReturnValueHandlers());
+			return new Definition(Map.copyOf(handlers), argumentResolvers, returnValueHandlers,
+					List.copyOf(interceptors), requestTimeout, cancelGracePeriod, maxPromptDuration);
 		}
 
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> instanceFactory) {
@@ -613,43 +670,37 @@ public class AcpAgentSupport {
 			return name;
 		}
 
-		private void addDefaultResolvers() {
-			// Built-in resolvers (order matters - first match wins)
-			// Custom resolvers added via builder go first
-			argumentResolvers.addResolver(new ExtensionParamsResolver());
-			argumentResolvers.addResolver(new InitializeRequestResolver());
-			argumentResolvers.addResolver(new LogoutRequestResolver());
-			argumentResolvers.addResolver(new NewSessionRequestResolver());
-			argumentResolvers.addResolver(new LoadSessionRequestResolver());
-			argumentResolvers.addResolver(new PromptRequestResolver());
-			argumentResolvers.addResolver(new SetSessionModeRequestResolver());
-			argumentResolvers.addResolver(new ListSessionsRequestResolver());
-			argumentResolvers.addResolver(new CloseSessionRequestResolver());
-			argumentResolvers.addResolver(new DeleteSessionRequestResolver());
-			argumentResolvers.addResolver(new ResumeSessionRequestResolver());
-			argumentResolvers.addResolver(new ForkSessionRequestResolver());
-			argumentResolvers.addResolver(new SetSessionConfigOptionRequestResolver());
-			argumentResolvers.addResolver(new ListProvidersRequestResolver());
-			argumentResolvers.addResolver(new SetProviderRequestResolver());
-			argumentResolvers.addResolver(new DisableProviderRequestResolver());
-			argumentResolvers.addResolver(new CancelNotificationResolver());
-			argumentResolvers.addResolver(new PromptContextResolver());
-			argumentResolvers.addResolver(new SessionIdResolver());
-			argumentResolvers.addResolver(new CapabilitiesResolver());
+		private static List<ArgumentResolver> defaultResolvers() {
+			// Built-in resolvers (order matters - first match wins), after the custom ones
+			return List.of(
+					new ExtensionParamsResolver(),
+					new InitializeRequestResolver(),
+					new LogoutRequestResolver(),
+					new NewSessionRequestResolver(),
+					new LoadSessionRequestResolver(),
+					new PromptRequestResolver(),
+					new SetSessionModeRequestResolver(),
+					new ListSessionsRequestResolver(),
+					new CloseSessionRequestResolver(),
+					new DeleteSessionRequestResolver(),
+					new ResumeSessionRequestResolver(),
+					new ForkSessionRequestResolver(),
+					new SetSessionConfigOptionRequestResolver(),
+					new ListProvidersRequestResolver(),
+					new SetProviderRequestResolver(),
+					new DisableProviderRequestResolver(),
+					new CancelNotificationResolver(),
+					new PromptContextResolver(),
+					new SessionIdResolver(),
+					new CapabilitiesResolver());
 		}
 
-		private void addDefaultReturnValueHandlers() {
-			// Built-in handlers (order matters - first match wins)
-			// Custom handlers added via builder go first
-			returnValueHandlers.addHandler(new DirectResponseHandler());
-			returnValueHandlers.addHandler(new StringToPromptResponseHandler());
-			returnValueHandlers.addHandler(new VoidHandler());
-
-			// Async handlers (Reactor is available since acp-core depends on it)
-			returnValueHandlers.addHandler(new MonoHandler());
-
-			// Extension results are any value: last, after Mono and void
-			returnValueHandlers.addHandler(new ExtensionResultHandler());
+		private static List<ReturnValueHandler> defaultReturnValueHandlers() {
+			// Built-in handlers (order matters - first match wins), after the custom ones.
+			// Mono is supported as Reactor is available (acp-core depends on it); extension
+			// results are any value, so their handler is last, after Mono and void.
+			return List.of(new DirectResponseHandler(), new StringToPromptResponseHandler(), new VoidHandler(),
+					new MonoHandler(), new ExtensionResultHandler());
 		}
 
 	}
