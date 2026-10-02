@@ -22,18 +22,24 @@ Two roles, three transports each:
 
 client role: runs the cases of CLIENT_CASES that apply to the transport (or --cases a,b), prints
 one "STEP raw.<case> PASS|FAIL (<ms> ms) -> <detail>" per case and a final RESULT line, exits 0.
-After each case it checks that the connection survived (a session/new still answers).
+After each case it checks that the connection survived (a session/new still answers). A stdio
+agent's stderr is relayed as the Contracts say (STEP lines verbatim, the rest "agent| ...").
 
 agent role: serves the catalogue steps of AGENT_ROLE_STEPS to an SDK client, answering some of
 its requests in ways no SDK agent would (an error without "message", "result": null for the
-all-optional responses). During the plain-text prompt it runs AGENT_CASES against the client,
-printing "STEP agent.raw.<case> PASS|FAIL ..." on stderr.
+all-optional responses), and the "#raw <case>" prompts of the Java client's raw mode. During the
+plain-text prompt "hello" (update.agent_message_chunk) it runs AGENT_CASES against the client,
+printing "STEP agent.raw.<case> PASS|FAIL ..." on stderr. RAW_AGENT_CASES=a,b runs only those.
 
---target <name> (client role, or an agent role run against a peer client): evidence mode. Every
-case line is printed as "EVIDENCE <name> <transport> <case> PASS|FAIL ..." instead of STEP, so a
-run against a peer SDK documents its behaviour and never gates a scenario.
+Silence checks ("no reply") use a fence rather than a fixed wait: after the frame under test the
+driver sends an ordinary request; a receiver answers in order, so an answer to the frame under
+test arrives before the fence's (plus FENCE_GRACE for one a handler sends late).
 
-gen_conf.py turns these case lists and expectations/raw.json into configs/conf-*.json.
+--target <name>: evidence mode, for running the driver against a peer SDK. Every case line is
+printed as "EVIDENCE <name> <transport> <case> PASS|FAIL ..." instead of STEP, so the run documents
+the peer's behaviour and never gates a scenario; the client role also runs EVIDENCE_ONLY cases.
+
+gen_conf.py turns these case lists and expectations/raw.json into configs/conf-java-*.json.
 """
 
 import base64
@@ -42,7 +48,6 @@ import http.client
 import json
 import os
 import queue
-import random
 import socket
 import struct
 import subprocess
@@ -173,7 +178,8 @@ class StdioChannel:
             if not line.strip():
                 continue
             m = parse(line)
-            if not isinstance(m, dict) or "_unparsed" in m or "jsonrpc" not in m:
+            msgs = m if isinstance(m, list) and m else [m]  # a batch reply is JSON-RPC too
+            if any(not isinstance(x, dict) or "_unparsed" in x or "jsonrpc" not in x for x in msgs):
                 self.unclean.append(short(line, 120))
             self.q.put(m)
         self.closed = True
@@ -722,7 +728,11 @@ def http_status(p, status_got, want, body):
 def unreadable_case(text, code, http_want):
     def case(p):
         if p.transport == "http":
+            # The RFD defines no status for an unreadable body: refused with a 4xx (or the 501 it
+            # names for a batch), or accepted and answered like on the other transports.
             status, body = p.send(text)
+            if status == 202:
+                return "HTTP 202, then " + null_id_error(p, code)
             return http_status(p, status, http_want, body)
         p.send(text)
         return null_id_error(p, code)
@@ -834,8 +844,8 @@ def c_id(rid):
                 raise Fail("POST answered %d: %s" % (status, short(body)))
         else:
             p.send(text)
-        m = p.wait(lambda x: is_response(x) and "id" in x and (same_id(x["id"], rid) or x["id"] is None
-                                                             or (x["id"] == rid)), what="the reply to id %s" % dumps(rid))
+        # Any response: the flow is sequential, so one with another id is this request's, changed.
+        m = p.wait(lambda x: is_response(x) and "id" in x, what="the reply to id %s" % dumps(rid))
         if not same_id(m["id"], rid):
             raise Fail("answered with id %s for request id %s: %s" % (dumps(m["id"]), dumps(rid), short(m)))
         if "result" not in m:
@@ -891,11 +901,6 @@ def ans_null_result(m):
     return dumps({"jsonrpc": "2.0", "id": m["id"], "result": None})
 
 
-def chk_answered(p, sid, r, seen):
-    what = "error %s" % error_code(r) if "error" in r else "stopReason %s" % (r.get("result") or {}).get("stopReason")
-    return "%s answered as shaped; the prompt ended (%s), no hang" % (seen[0]["method"], what)
-
-
 def chk_fs_write_ok(p, sid, r, seen):
     if "result" not in r or r["result"].get("stopReason") != "end_turn":
         raise Fail("the prompt did not end end_turn: %s" % short(r))
@@ -914,21 +919,22 @@ def chk_fs_read_error(p, sid, r, seen):
         p.drain(0.05)
     chunks = p.chunks(sid)
     if "error" in r:
-        raise Fail("the prompt failed: %s" % short(r))
+        # The agent program let the failed call fail its prompt: still an error, not a hang.
+        return "the prompt failed with %s (the agent got an error, not a hang)" % short(r["error"], 120)
     if not any(c.startswith("fs read error") for c in chunks if c):
-        raise Fail("the agent did not treat \"result\": null for fs/read_text_file (content is required) as an "
-                   "error: chunks %s" % chunks)
-    return "fs/read_text_file \"result\": null surfaced as an error to the agent: %s" % short(chunks[-1], 60)
+        raise Fail("the agent did not get an error from fs/read_text_file: chunks %s" % chunks)
+    return "the agent got an error, not a hang: chunk %s" % short([c for c in chunks if c.startswith("fs read error")][0], 60)
 
 
-def raw_post(p, body, timeout=30):
+def raw_post(p, body, timeout=30, session=None):
     """A POST written by hand, so a server that answers before reading the whole body (413 on
     Content-Length) is still heard: (status, body)."""
     sock = socket.create_connection((p.ch.host, p.ch.port), timeout=timeout)
     try:
         head = ("POST %s HTTP/1.1\r\nHost: %s:%d\r\nContent-Type: application/json\r\n"
-                "Accept: application/json, text/event-stream\r\nAcp-Connection-Id: %s\r\nContent-Length: %d\r\n"
-                "Connection: close\r\n\r\n") % (p.ch.path, p.ch.host, p.ch.port, p.ch.connection_id, len(body))
+                "Accept: application/json, text/event-stream\r\nAcp-Connection-Id: %s\r\n%sContent-Length: %d\r\n"
+                "Connection: close\r\n\r\n") % (p.ch.path, p.ch.host, p.ch.port, p.ch.connection_id,
+                                                  "Acp-Session-Id: %s\r\n" % session if session else "", len(body))
         try:
             sock.sendall(head.encode() + body)
         except OSError:
@@ -982,29 +988,98 @@ def c_prompt_concurrent(p):
     return "the second prompt was rejected with %d; the first completed end_turn" % code
 
 
+def big_prompt(p, sid, size):
+    """A session/prompt frame of exactly `size` bytes: plain text, so an agent echoes it."""
+    f = p.frame("session/prompt", {"sessionId": sid, "prompt": [{"type": "text", "text": ""}]})
+    pad = size - len(dumps(f))
+    f["params"]["prompt"][0]["text"] = "x" * pad
+    return f
+
+
 def c_oversized(p):
+    """A valid prompt frame of 16 MB + 1 byte. No spec text limits a message; the Java agent
+    limits a POST body and a WebSocket message to 16 MB (G0c). Either the transport refuses it
+    the way HTTP and WebSocket define (413; close 1009) and the server takes a new connection,
+    or the prompt is answered and the connection survives. stdio has no limit: answered."""
     big = MAX_FRAME + 1
+    sid = p.new_session()
+    f = big_prompt(p, sid, big)
+    text = dumps(f)
     if p.transport == "http":
-        status, text = raw_post(p, b"x" * big)
-        return http_status(p, status, (413,), text) + " for a %d-byte body" % big
+        status, body = raw_post(p, text.encode("utf-8"), session=sid)
+        if status == 413:
+            return "HTTP 413 for a %d-byte prompt" % big
+        if status != 202:
+            raise Fail("HTTP %d for a %d-byte prompt (expected 413, or 202 and an answer): %s" % (status, big, short(body)))
+        r = p.reply_to(f["id"], timeout=max(STEP_TIMEOUT, 30))
+        return "accepted (202) and answered (%s)" % ("error %s" % error_code(r) if "error" in r else "result")
     if p.transport == "ws":
-        p.ch.send("x" * big)
-        deadline = time.time() + STEP_TIMEOUT
+        try:
+            p.ch.send(text)
+        except Fail as e:
+            note = str(e)  # the server may close before the whole frame is written
+            deadline = time.time() + 2
+            while not p.ch.closed and time.time() < deadline:
+                time.sleep(0.05)
+            if p.ch.close_code is None:
+                raise Fail("the connection was dropped without a close frame (%s); expected close 1009" % note)
+        deadline = time.time() + max(STEP_TIMEOUT, 30)
+        r = None
         while not p.ch.closed and time.time() < deadline:
             m = p.ch.recv(0.2)
-            if m is not None and not is_response(m):
+            if m is None:
+                continue
+            if is_response(m) and same_id(m.get("id"), f["id"]):
+                r = m
+                break
+            if not is_response(m):
                 p.handle(m)
+        if r is not None:
+            return "answered (%s)" % ("error %s" % error_code(r) if "error" in r else "result")
         if not p.ch.closed:
-            raise Fail("TIMEOUT: a %d-byte text message did not close the WebSocket" % big)
+            raise Fail("TIMEOUT: a %d-byte message was neither answered nor refused (close 1009)" % big)
         if p.ch.close_code != 1009:
             raise Fail("closed with code %s, expected 1009 (message too big)" % p.ch.close_code)
         # The connection is gone by design; the server must still take a new one.
         p.close()
         p.open()
-        return "closed with 1009; a new connection initializes"
-    # stdio has no frame limit (transports.mdx): a 16 MB + 1 line that is not JSON is a parse error.
+        return "closed with 1009 for a %d-byte message; a new connection initializes" % big
+    p.send(text)
+    r = p.reply_to(f["id"], timeout=max(STEP_TIMEOUT, 30))
+    return "answered a %d-byte line (%s)" % (big, "error %s" % error_code(r) if "error" in r else "result")
+
+
+def c_parse_error_large(p):
+    """16 MB + 1 byte that is not JSON, on stdio: a parse error like any other."""
+    big = MAX_FRAME + 1
     p.send("x" * big)
     return null_id_error(p, PARSE_ERROR) + " (for a %d-byte line)" % big
+
+
+def c_eof_answers(p):
+    """Requests written just before stdin closes are still answered before the agent exits.
+    No spec text requires it; an agent that exits at EOF with answers unwritten loses replies a
+    client that pipes requests and closes stdin (`printf ... | agent`) waits for. Racy by
+    nature, so evidence only (EVIDENCE_ONLY), never a gate."""
+    proc = subprocess.Popen(["bash", "-c", "exec " + os.environ["AGENT_CMD"]], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    frames = [dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": CLIENT_INIT})]
+    frames += [dumps({"jsonrpc": "2.0", "id": 2 + i, "method": "session/new",
+                      "params": {"cwd": p.dir, "mcpServers": []}}) for i in range(5)]
+    try:
+        out, _ = proc.communicate(("\n".join(frames) + "\n").encode(), timeout=STEP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise Fail("TIMEOUT: the agent did not exit within %d ms of stdin's EOF" % int(STEP_TIMEOUT * 1000))
+    ids = set()
+    for line in out.decode("utf-8", "replace").splitlines():
+        m = parse(line)
+        if is_response(m) and isinstance(m.get("id"), int):
+            ids.add(m["id"])
+    missing = sorted(set(range(1, 7)) - ids)
+    if missing:
+        raise Fail("the agent exited at EOF with %d of 6 requests unanswered (ids %s)" % (len(missing), missing))
+    return "all 6 requests written before EOF were answered"
 
 
 def c_stdout_clean(p):
@@ -1095,13 +1170,15 @@ CLIENT_CASES = [
     ("raw.stray-response.null-id", ALL, c_no_reply(lambda p: '{"jsonrpc":"2.0","id":null,"result":{}}')),
     ("raw.stray-response.null-id-error", ALL, c_no_reply(
         lambda p: '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}')),
-    ("raw.callee.error-without-message", ALL, c_callee("#permission allow", ans_error_without_message, chk_answered)),
-    ("raw.callee.result-null-required", ALL, c_callee("#permission allow", ans_null_result, chk_answered)),
+    ("raw.callee.error-without-message", ALL, c_callee("#fs read {dir}/no-such-file.txt", ans_error_without_message,
+                                                       chk_fs_read_error)),
+    ("raw.callee.result-null-required", ALL, c_callee("#fs read {dir}/no-such-file.txt", ans_null_result,
+                                                      chk_fs_read_error)),
     ("raw.callee.result-null-optional", ALL, c_callee("#fs write {dir}/raw-null.txt raw", ans_null_result,
                                                       chk_fs_write_ok)),
-    ("raw.callee.fs-read-null", ALL, c_callee("#fs read {dir}/no-such-file.txt", ans_null_result, chk_fs_read_error)),
     ("raw.prompt.concurrent", ALL, c_prompt_concurrent),
     ("raw.oversized", ALL, c_oversized),
+    ("raw.parse-error.large", ("stdio",), c_parse_error_large),
     ("raw.http.content-type", ("http",), h_content_type),
     ("raw.http.get-accept", ("http",), h_get_accept),
     ("raw.http.missing-connection", ("http",), h_missing_connection),
@@ -1109,12 +1186,16 @@ CLIENT_CASES = [
     ("raw.http.unknown-session-stream", ("http",), h_unknown_session_stream),
     ("raw.http.missing-session-header", ("http",), h_missing_session_header),
     ("raw.http.delete-missing", ("http",), h_delete_missing),
+    ("raw.stdio.eof-answers", ("stdio",), c_eof_answers),
     ("raw.stdio.stdout-clean", ("stdio",), c_stdout_clean),
 ]
+# Cases whose outcome is timing-dependent: run with --target (evidence) or --cases, never in the
+# generated scenarios.
+EVIDENCE_ONLY = {"raw.stdio.eof-answers"}
 
 
-def client_case_ids(transport):
-    return [c for c, ts, _ in CLIENT_CASES if transport in ts]
+def client_case_ids(transport, evidence=False):
+    return [c for c, ts, _ in CLIENT_CASES if transport in ts and (evidence or c not in EVIDENCE_ONLY)]
 
 
 class Reporter:
@@ -1207,6 +1288,7 @@ AGENT_ROLE_STEPS = [
     "session.new",                # answered with fixtures.modes; stray frames precede it (stdio, ws)
     "session.load",               # session/load answered "result": null (all-optional response)
     "update.agent_message_chunk",  # the AGENT_CASES run during this prompt, then an unknown update
+    "update.unknown",             # #emit unknown: the unknown update, then the chunk "after-unknown"
     "perm.selected",              # normal
     "fs.write",                   # normal; the client's answer is checked
     "error.method-not-found",     # answered -32601 without "message"
@@ -1218,6 +1300,10 @@ AGENT_ROLE_STEPS = [
     "stdio.eof-exit",             # stdio only
     "conn.close",
 ]
+# The Java client's own raw mode (client.sh --mode raw, programs/java Raw.java): one prompt
+# "#raw <case>" per step, answered by the raw agent as that file describes.
+JAVA_RAW_MODE_STEPS = ["init.initialize", "raw.error-no-message", "raw.null-id-response", "raw.unknown-update",
+                       "raw.null-result", "conn.close"]
 AGENT_ROLE_STEP_TRANSPORTS = {"http.reconnect": ("http",), "stdio.eof-exit": ("stdio",)}
 
 # What the raw agent sends the client during the plain-text prompt: (case, transports).
@@ -1242,7 +1328,8 @@ def agent_step_ids(transport):
 
 
 def agent_case_ids(transport):
-    return [c for c, ts in AGENT_CASES if transport in ts]
+    only = [c.strip() for c in os.environ.get("RAW_AGENT_CASES", "").split(",") if c.strip()]
+    return [c for c, ts in AGENT_CASES if transport in ts and (not only or c in only)]
 
 
 SESSIONS = set()  # every session the agent created, across connections (http.reconnect loads one)
@@ -1400,9 +1487,18 @@ class AgentConn:
             # LoadSessionResponse has only optional fields: "result": null must read as {}.
             return self.answer(m, None, session=None)
         if method in ("session/set_mode", "authenticate", "logout", "session/delete"):
-            ok = method != "session/set_mode" or p.get("modeId") in ("interop-mode-a", "interop-mode-b")
-            if not ok:
-                return self.answer(m, error={"code": INVALID_PARAMS, "message": "unknown mode"}, session=scope)
+            # Each response type has only optional fields: "result": null must read as {}.
+            t0 = time.time()
+            if method == "session/set_mode":
+                with SESSIONS_LOCK:
+                    known = sid in SESSIONS
+                ok = known and p.get("modeId") == "interop-mode-b"
+                self.step("mode.set", ok, t0, "set_mode %s on %s session %s" % (
+                    p.get("modeId"), "a known" if known else "an unknown", sid))
+                if p.get("modeId") not in ("interop-mode-a", "interop-mode-b"):
+                    return self.answer(m, error={"code": INVALID_PARAMS, "message": "unknown mode"}, session=scope)
+            if method == "authenticate":
+                self.step("auth.authenticate", p.get("methodId") == "interop-auth", t0, "methodId %s" % p.get("methodId"))
             return self.answer(m, None, session=scope)
         if method == "session/prompt":
             return self.prompt(m, sid, p)
@@ -1442,6 +1538,27 @@ class AgentConn:
             except Fail as e:
                 self.step("fs.write", False, t0, str(e))
                 self.chunk(sid, "fs write error timeout")
+        elif text == "#emit unknown":
+            self.out({"jsonrpc": "2.0", "method": "session/update",
+                      "params": {"sessionId": sid, "update": UNKNOWN_UPDATE}}, sid)
+            self.chunk(sid, "after-unknown")
+        elif text.startswith("#raw "):
+            # The Java client's --mode raw steps (programs/java Raw.java): raw.<case>.
+            case = text[len("#raw "):].strip()
+            if case == "error-no-message":
+                return self.answer(m, raw='{"jsonrpc":"2.0","id":%s,"error":{"code":-32603}}' % dumps(m["id"]),
+                                   session=sid)
+            if case == "null-id-response":
+                self.out('{"jsonrpc":"2.0","id":null,"result":{}}', sid)
+            elif case == "unknown-update":
+                self.out({"jsonrpc": "2.0", "method": "session/update",
+                          "params": {"sessionId": sid, "update": UNKNOWN_UPDATE}}, sid)
+                self.chunk(sid, "after-unknown")
+            elif case == "null-result":
+                return self.answer(m, None, session=sid)  # PromptResponse requires stopReason
+            else:
+                return self.answer(m, error={"code": INVALID_PARAMS, "message": "unknown raw case: " + case},
+                                   session=sid)
         elif text.startswith("#"):
             return self.answer(m, error={"code": INVALID_PARAMS, "message": "unknown directive: %s"
                                          % text.split(" ")[0]}, session=sid)
@@ -1564,9 +1681,7 @@ class AgentConn:
             rid = {"raw.id.null": None, "raw.id.string": "raw-id-1", "raw.id.zero": 0,
                    "raw.id.large": 9007199254740993}[case]
             self.out({"jsonrpc": "2.0", "id": rid, "method": "session/request_permission", "params": perm}, sid)
-            m = self.await_reply(lambda x: is_response(x) and "id" in x and (same_id(x["id"], rid) or x["id"] == rid
-                                                                            or x["id"] is None), STEP_TIMEOUT,
-                                 "the reply to id %s" % dumps(rid))
+            m = self.await_reply(lambda x: is_response(x) and "id" in x, STEP_TIMEOUT, "the reply to id %s" % dumps(rid))
             if not same_id(m["id"], rid):
                 raise Fail("answered with id %s for request id %s: %s" % (dumps(m["id"]), dumps(rid), short(m)))
             if "result" not in m:
@@ -1793,7 +1908,7 @@ def main(argv):
             usage("AGENT_CMD is required for stdio")
         if transport != "stdio" and not opts["--url"]:
             usage("--url is required for " + transport)
-        cases = opts["--cases"].split(",") if opts["--cases"] else client_case_ids(transport)
+        cases = opts["--cases"].split(",") if opts["--cases"] else client_case_ids(transport, evidence=bool(target))
         run_client(transport, opts["--url"], [c.strip() for c in cases if c.strip()], target)
         sys.exit(0)
     if transport == "stdio":

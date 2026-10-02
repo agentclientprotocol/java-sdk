@@ -1,0 +1,115 @@
+{
+  "comment": "The raw conformance driver (programs/raw). \"expectations\" is read by GenConfigs.java like every expectations file; the raw driver is no matrix language, so it holds nothing. \"conformance\" holds the expected failures of the conf-java-* scenarios, which programs/raw/gen_conf.py generates (see its header for the fields).",
+  "expectations": [],
+  "conformance": [
+    {
+      "case": "raw.invalid-request.method-type",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "-32601",
+      "see": "spec:jsonrpc.org/specification \u00a74 (method MUST be a String; -32600 Invalid Request)",
+      "reason": "A request whose method is the number 42 is read as a request for method \"42\" and answered -32601; JSON-RPC 2.0 makes it an invalid request, -32600 (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-request.id-type",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "\"id\":{\"x\":1}",
+      "see": "spec:jsonrpc.org/specification \u00a74 (id MUST be a String, Number or Null; -32600 with id null)",
+      "reason": "A request with an object id is executed and its result echoes the object id; JSON-RPC 2.0 allows only a string, number or null id, so -32600 with id null is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-request.version",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "was executed",
+      "see": "spec:jsonrpc.org/specification \u00a74 (jsonrpc MUST be exactly \"2.0\"; -32600)",
+      "reason": "A request with \"jsonrpc\": \"1.0\" is executed; JSON-RPC 2.0 says jsonrpc MUST be exactly \"2.0\", so -32600 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-params.type",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "\"result\":{\"sessionId\"",
+      "see": "spec:schema/v1/schema.json NewSessionRequest.cwd (string) + jsonrpc.org/specification \u00a75.1 (-32602)",
+      "reason": "session/new with cwd 42 succeeds: Jackson coerces the number to a string and nothing checks the schema type; -32602 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-params.by-position",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "-32603",
+      "see": "spec:schema/v1/schema.json NewSessionRequest (object) + jsonrpc.org/specification \u00a75.1 (-32602)",
+      "reason": "params that cannot be read as the request type (an array for session/new) fail inside the handler and are answered -32603 with the Jackson message; -32602 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-params.missing",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "\"result\":{\"sessionId\"",
+      "see": "spec:schema/v1/schema.json NewSessionRequest.required [cwd, mcpServers] + jsonrpc.org/specification \u00a75.1 (-32602)",
+      "reason": "session/new without the required cwd succeeds: required params are not checked; -32602 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.invalid-params.prompt",
+      "when": {
+        "side": "agent"
+      },
+      "contains": "-32603",
+      "see": "spec:schema/v1/schema.json PromptRequest.prompt (array) + jsonrpc.org/specification \u00a75.1 (-32602)",
+      "reason": "session/prompt whose prompt is a string, not an array, is answered -32603 with the Jackson message; -32602 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "raw.http.unknown-session-stream",
+      "when": {
+        "side": "agent",
+        "transport": "http"
+      },
+      "contains": "held open",
+      "see": "spec:docs/rfds/streamable-http-websocket-transport.mdx:268",
+      "reason": "RFD gap B: the RFD answers an unknown Acp-Session-Id with 404 (:268, :301) but its reconnect flow opens the session stream before session/load (:237-244); the Java server keeps it open as a provisional stream."
+    },
+    {
+      "case": "agent.raw.invalid-request.method-type",
+      "when": {
+        "side": "client-catalogue"
+      },
+      "contains": "-32601",
+      "see": "spec:jsonrpc.org/specification \u00a74 (method MUST be a String; -32600 Invalid Request)",
+      "reason": "The Java client answers a request whose method is the number 42 with -32601; -32600 is expected (as on the agent side) (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "agent.raw.invalid-request.id-type",
+      "when": {
+        "side": "client-catalogue"
+      },
+      "contains": "\"id\":{\"x\":1}",
+      "see": "spec:jsonrpc.org/specification \u00a74 (id MUST be a String, Number or Null; -32600 with id null)",
+      "reason": "The Java client executes a permission request with an object id and echoes it; -32600 with id null is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "agent.raw.invalid-request.version",
+      "when": {
+        "side": "client-catalogue"
+      },
+      "contains": "was executed",
+      "see": "spec:jsonrpc.org/specification \u00a74 (jsonrpc MUST be exactly \"2.0\"; -32600)",
+      "reason": "The Java client executes a permission request with \"jsonrpc\": \"1.0\"; -32600 is expected (Java: being fixed in a parallel SDK branch)."
+    },
+    {
+      "case": "agent.raw.invalid-params",
+      "when": {
+        "side": "client-catalogue"
+      },
+      "contains": "-32603",
+      "see": "spec:schema/v1/schema.json RequestPermissionRequest.options (array) + jsonrpc.org/specification \u00a75.1 (-32602)",
+      "reason": "A permission request whose options is a string fails in the client's handler and is answered -32603 with the Jackson message; -32602 is expected (Java: being fixed in a parallel SDK branch)."
+    }
+  ]
+}
