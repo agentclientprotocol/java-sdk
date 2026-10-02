@@ -31,25 +31,37 @@ class AcpErrorTest {
 	}
 
 	@Test
-	void messageWithoutDataIsMessageAndCode() {
-		assertThat(error(null)).hasMessage("Invalid params [code=-32602]");
+	void messageWithoutDataIsThePeersMessageAlone() {
+		assertThat(error(null)).hasMessage("Invalid params");
 	}
 
 	@Test
 	void messagePrefersTheDetailsOfMapData() {
 		assertThat(error(Map.of("details", "path must be absolute", "reason", "bad path")))
-			.hasMessage("Invalid params [code=-32602]: path must be absolute");
+			.hasMessage("Invalid params: path must be absolute");
 	}
 
 	@Test
 	void messageFallsBackToTheReasonOfMapData() {
-		assertThat(error(Map.of("reason", "bad path"))).hasMessage("Invalid params [code=-32602]: bad path");
+		assertThat(error(Map.of("reason", "bad path"))).hasMessage("Invalid params: bad path");
 	}
 
 	@Test
 	void messageShowsOtherDataWhole() {
-		assertThat(error(Map.of("line", 3))).hasMessage("Invalid params [code=-32602]: {line=3}");
-		assertThat(error("plain")).hasMessage("Invalid params [code=-32602]: plain");
+		assertThat(error(Map.of("line", 3))).hasMessage("Invalid params: {line=3}");
+		assertThat(error("plain")).hasMessage("Invalid params: plain");
+	}
+
+	@Test
+	void theCodeIsNamedOnceWhenPrintedWithTheMessage() {
+		AcpError error = error(null);
+		assertThat(error.getCode() + " " + error.getMessage()).isEqualTo("-32602 Invalid params");
+	}
+
+	@Test
+	void toStringNamesTheCode() {
+		assertThat(error("plain"))
+			.hasToString("com.agentclientprotocol.sdk.spec.AcpError: Invalid params [code=-32602]: plain");
 	}
 
 }
