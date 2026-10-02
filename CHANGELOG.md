@@ -157,6 +157,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the configured port (0 for an ephemeral one) until `start()` completes, then the port actually
   bound, which it keeps reporting after the listener closes (before, Jetty's negative "not open"
   value).
+- **`AcpAgentSupport.Builder.buildFactory()`**: an `AcpAgentFactory` for a listener transport
+  (`StreamableHttpAcpAgentTransport`, `StreamableHttpAcpServlet`) that creates a fresh agent per
+  connection from one annotated handler bean. The bean is shared, like a Spring controller: every
+  connection's agent invokes the same instance, concurrently, so its handlers (and interceptors,
+  custom resolvers and return value handlers) must be thread-safe. Before, the documented pattern
+  rebuilt the builder, and rediscovered the handler methods, per connection.
 
 ### Changed
 
@@ -385,6 +391,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WebSocketAcpClientTransport` (in `acp-core`) is unchanged and connects to it as before.
 
 ### Fixed
+
+- **`AcpAgentSupport.Builder` could not be built twice.** `build()` appended the default argument
+  resolvers and return value handlers to the builder's own lists, so a second build duplicated
+  them, a custom resolver or handler added after the first build came after the defaults and never
+  ran, and agents already built shared, and saw changes to, the builder's lists. `build()` now
+  composes the custom entries and then the defaults into a snapshot without changing the builder;
+  each agent keeps the configuration it was built with.
 
 - **Params of an application's own record type were rejected as missing their fields.** The
   required-field check on inbound params (`-32602`) walked every record, so a non-public record
