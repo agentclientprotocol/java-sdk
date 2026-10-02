@@ -401,8 +401,7 @@ class AcpSchemaSerializationTest {
 
 	@Test
 	void messageChunkWithMessageIdSerialization() throws IOException {
-		AcpSchema.AgentMessageChunk update = new AcpSchema.AgentMessageChunk("agent_message_chunk",
-				new AcpSchema.TextContent("Hello"), "msg-42");
+		AcpSchema.AgentMessageChunk update = new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Hello"), "msg-42");
 
 		String json = jsonMapper.writeValueAsString(update);
 		assertThat(json).contains("\"messageId\":\"msg-42\"");
@@ -416,8 +415,7 @@ class AcpSchemaSerializationTest {
 
 	@Test
 	void messageChunkWithoutMessageIdOmitsField() throws IOException {
-		AcpSchema.AgentMessageChunk update = new AcpSchema.AgentMessageChunk("agent_message_chunk",
-				new AcpSchema.TextContent("Hello"));
+		AcpSchema.AgentMessageChunk update = new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Hello"));
 
 		String json = jsonMapper.writeValueAsString(update);
 		assertThat(json).doesNotContain("messageId");
@@ -725,8 +723,7 @@ class AcpSchemaSerializationTest {
 
 	@Test
 	void configOptionUpdateAsSessionUpdate() throws IOException {
-		var update = new AcpSchema.ConfigOptionUpdate("config_option_update",
-				List.of(new AcpSchema.SessionConfigSelect("mode", "Mode", "code",
+		var update = new AcpSchema.ConfigOptionUpdate(List.of(new AcpSchema.SessionConfigSelect("mode", "Mode", "code",
 						List.of(new AcpSchema.SessionConfigSelectOption("code", "Code")))));
 
 		String json = jsonMapper.writeValueAsString(update);

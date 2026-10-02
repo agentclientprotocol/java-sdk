@@ -262,11 +262,9 @@ public abstract class AbstractAcpClientAgentIT {
 					// Send streaming updates during prompt processing
 					return updater
 						.sendUpdate("session-updates",
-								new AcpSchema.AgentThoughtChunk("agent_thought_chunk",
-										new AcpSchema.TextContent("Analyzing code...")))
+								new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("Analyzing code...")))
 						.then(updater.sendUpdate("session-updates",
-								new AcpSchema.AgentMessageChunk("agent_message_chunk",
-										new AcpSchema.TextContent("Found the issue"))))
+								new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Found the issue"))))
 						.then(Mono.just(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN)));
 				})
 				.build();

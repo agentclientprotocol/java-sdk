@@ -55,8 +55,7 @@ class AcpAgentTest {
 		try {
 			AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).build();
 			List<Mono<?>> calls = List.of(
-					agent.sendSessionUpdate("s", new AcpSchema.AgentMessageChunk("agent_message_chunk",
-							new AcpSchema.TextContent("hi"))),
+					agent.sendSessionUpdate("s", new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("hi"))),
 					agent.readTextFile(new AcpSchema.ReadTextFileRequest("s", "/f", null, null)),
 					agent.writeTextFile(new AcpSchema.WriteTextFileRequest("s", "/f", "x")),
 					agent.createTerminal(new AcpSchema.CreateTerminalRequest("s", "ls", null, null, null, null)),

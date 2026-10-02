@@ -423,7 +423,7 @@ public class Agent {
 			PromptContext context, AcpSchema.InitializeRequest init, Connection connection) {
 		String text = request.text();
 		if (!text.startsWith("#")) {
-			s.history.add(new AcpSchema.UserMessageChunk("user_message_chunk", new AcpSchema.TextContent(text)));
+			s.history.add(new AcpSchema.UserMessageChunk(new AcpSchema.TextContent(text)));
 			s.history.add(chunk("echo: "));
 			s.history.add(chunk(text));
 			return context.sendMessage("echo: ").then(context.sendMessage(text)).thenReturn(endTurn());
@@ -500,7 +500,7 @@ public class Agent {
 	}
 
 	static AcpSchema.AgentMessageChunk chunk(String text) {
-		return new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent(text));
+		return new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text));
 	}
 
 	/** Everything after the first {@code n} space-separated words. */
@@ -655,26 +655,21 @@ public class Agent {
 		AcpSchema.SessionUpdate toolCall = new AcpSchema.ToolCall("tool_call", "call-1", "interop tool", name,
 				AcpSchema.ToolKind.READ, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null);
 		List<AcpSchema.SessionUpdate> updates = switch (kind) {
-			case "user_message_chunk" -> List.of(new AcpSchema.UserMessageChunk("user_message_chunk",
-					new AcpSchema.TextContent("user-chunk")));
-			case "agent_thought_chunk" -> List.of(new AcpSchema.AgentThoughtChunk("agent_thought_chunk",
-					new AcpSchema.TextContent("thinking")));
+			case "user_message_chunk" -> List.of(new AcpSchema.UserMessageChunk(new AcpSchema.TextContent("user-chunk")));
+			case "agent_thought_chunk" -> List.of(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("thinking")));
 			case "tool_call" -> List.of(toolCall);
 			case "tool_call_update" -> List.of(toolCall,
 					new AcpSchema.ToolCallUpdateNotification("tool_call_update", "call-1", null, null, null,
 							AcpSchema.ToolCallStatus.COMPLETED,
 							List.of(new AcpSchema.ToolCallContentBlock("content", new AcpSchema.TextContent("tool output"))),
 							null, null, null, null));
-			case "plan" -> List.of(new AcpSchema.Plan("plan",
-					List.of(new AcpSchema.PlanEntry("step one", AcpSchema.PlanEntryPriority.HIGH, AcpSchema.PlanEntryStatus.PENDING),
+			case "plan" -> List.of(new AcpSchema.Plan(List.of(new AcpSchema.PlanEntry("step one", AcpSchema.PlanEntryPriority.HIGH, AcpSchema.PlanEntryStatus.PENDING),
 							new AcpSchema.PlanEntry("step two", AcpSchema.PlanEntryPriority.LOW,
 									AcpSchema.PlanEntryStatus.COMPLETED))));
-			case "available_commands_update" -> List.of(new AcpSchema.AvailableCommandsUpdate("available_commands_update",
-					List.of(new AcpSchema.AvailableCommand("interop", "interop command",
+			case "available_commands_update" -> List.of(new AcpSchema.AvailableCommandsUpdate(List.of(new AcpSchema.AvailableCommand("interop", "interop command",
 							new AcpSchema.AvailableCommandInput("args")))));
-			case "current_mode_update" -> List.of(new AcpSchema.CurrentModeUpdate("current_mode_update", "interop-mode-b"));
-			case "config_option_update" -> List.of(new AcpSchema.ConfigOptionUpdate("config_option_update",
-					configOptions("model-b")));
+			case "current_mode_update" -> List.of(new AcpSchema.CurrentModeUpdate("interop-mode-b"));
+			case "config_option_update" -> List.of(new AcpSchema.ConfigOptionUpdate(configOptions("model-b")));
 			case "usage_update" -> List.of(new AcpSchema.UsageUpdate("usage_update", 100L, 1000L,
 					new AcpSchema.Cost(0.01, "USD"), null));
 			case "session_info_update" -> List.of(new AcpSchema.SessionInfoUpdate("interop title", null));
@@ -702,7 +697,7 @@ public class Agent {
 		AcpSchema.SessionUpdate update = what.equals("tool_call")
 				? new AcpSchema.UnknownSessionUpdate("tool_call", Map.of("toolCallId", "call-enum", "title", "interop enum tool",
 						"kind", "interop_future_kind", "status", FUTURE_STATUS))
-				: new AcpSchema.Plan("plan", List.of(new AcpSchema.PlanEntry("future entry",
+				: new AcpSchema.Plan(List.of(new AcpSchema.PlanEntry("future entry",
 						new AcpSchema.PlanEntryPriority("interop_future_priority"), new AcpSchema.PlanEntryStatus(FUTURE_STATUS))));
 		return context.sendUpdate(sid, update).then(context.sendMessage("after-enum")).thenReturn(endTurn());
 	}
@@ -727,7 +722,7 @@ public class Agent {
 	static Mono<AcpSchema.PromptResponse> configGrouped(SessionState s, PromptContext context,
 			AcpSchema.InitializeRequest init) {
 		s.grouped = true;
-		return context.sendUpdate(s.id, new AcpSchema.ConfigOptionUpdate("config_option_update", configOptions(s, init)))
+		return context.sendUpdate(s.id, new AcpSchema.ConfigOptionUpdate(configOptions(s, init)))
 			.thenReturn(endTurn());
 	}
 
