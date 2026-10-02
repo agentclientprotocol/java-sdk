@@ -167,7 +167,7 @@ class GeminiCliIT {
 
 				// Find the allow_once option or use first option
 				String optionId = request.options().stream()
-					.filter(opt -> opt.kind() == AcpSchema.PermissionOptionKind.ALLOW_ONCE)
+					.filter(opt -> AcpSchema.PermissionOptionKind.ALLOW_ONCE.equals(opt.kind()))
 					.findFirst()
 					.map(AcpSchema.PermissionOption::optionId)
 					.orElse(request.options().get(0).optionId());
@@ -428,7 +428,7 @@ class GeminiCliIT {
 			.requestPermissionHandler((AcpSchema.RequestPermissionRequest request) -> {
 				logger.info("Permission request: {}", request.toolCall().title());
 				String optionId = request.options().stream()
-					.filter(opt -> opt.kind() == AcpSchema.PermissionOptionKind.ALLOW_ONCE)
+					.filter(opt -> AcpSchema.PermissionOptionKind.ALLOW_ONCE.equals(opt.kind()))
 					.findFirst()
 					.map(AcpSchema.PermissionOption::optionId)
 					.orElse(request.options().get(0).optionId());

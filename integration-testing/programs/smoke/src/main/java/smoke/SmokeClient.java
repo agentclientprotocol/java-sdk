@@ -221,7 +221,7 @@ public final class SmokeClient {
 			if (r == null || r.stopReason() == null) {
 				throw new IllegalStateException("no stopReason");
 			}
-			result.put("stop_reason", r.stopReason().name().toLowerCase());
+			result.put("stop_reason", r.stopReason().value());
 			int n = updatesTotal.get();
 			String text = agentText.length() > 200 ? agentText.substring(0, 200) + "..." : agentText.toString();
 			String detail = "stopReason=" + r.stopReason() + " updates=" + n + " kinds=" + updateKinds + " text="

@@ -145,7 +145,7 @@ class PromptCancellationTest {
 			client.cancel(new AcpSchema.CancelNotification(SESSION)).block(TIMEOUT);
 
 			assertThat(ignored.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
-			assertThat(received).containsExactly("update", "answer CANCELLED");
+			assertThat(received).containsExactly("update", "answer cancelled");
 			assertThatThrownBy(() -> client.prompt(prompt).block(Duration.ofMillis(300)))
 				.as("the turn has ended: the next prompt is not rejected but runs (forever, in this handler)")
 				.isInstanceOf(IllegalStateException.class)

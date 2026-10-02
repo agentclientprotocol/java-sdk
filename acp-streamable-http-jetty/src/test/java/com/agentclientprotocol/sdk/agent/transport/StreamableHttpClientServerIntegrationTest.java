@@ -173,7 +173,7 @@ class StreamableHttpClientServerIntegrationTest {
 			List<AcpSchema.PromptResponse> both = Mono.zip(firstPrompt, secondPrompt)
 				.map(tuple -> List.of(tuple.getT1(), tuple.getT2()))
 				.block(TIMEOUT);
-			assertThat(both).allMatch(response -> response.stopReason() == AcpSchema.StopReason.END_TURN);
+			assertThat(both).allMatch(response -> AcpSchema.StopReason.END_TURN.equals(response.stopReason()));
 		}
 		finally {
 			client.closeGracefully().block(TIMEOUT);

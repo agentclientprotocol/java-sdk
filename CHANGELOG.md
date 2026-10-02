@@ -105,6 +105,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDKs drop such a notification; the Kotlin SDK and the v2 schema keep the raw payload, which this
   SDK follows. The rule is documented on `AcpSchema`. Unions with a default variant keep it
   (`McpServer` reads an unknown `type` as stdio).
+- **Breaking: unknown enum values no longer fail the message; most schema enums are open value
+  types.** A newer peer's stop reason, tool call status, permission option kind, plan entry status
+  or priority, or annotation role failed deserialization of the whole message (a prompt's
+  response included). `StopReason`, `ToolCallStatus`, `PermissionOptionKind`, `PlanEntryStatus`,
+  `PlanEntryPriority` and `Role` are now records over the wire string: the constants keep their
+  names (`StopReason.END_TURN`), `of(String)` returns the constant for a known value, an unknown
+  value is kept and written back (`isKnown()` false), `known()` lists the defined values and
+  `toString()` is the wire value. `ToolKind` stays an enum and reads an unknown kind as `OTHER`,
+  the schema's catch-all (as in the Rust SDK); it gains `value()` and `of(String)`. The rule is
+  documented on `AcpSchema`. Migration: compare with `equals` instead of `==` (a value built with
+  `new` is not the constant); replace `switch` over these types with `if`/`equals` or a switch on
+  `value()`; `values()` becomes `known()`, `name()` becomes `value()` (the wire name, e.g.
+  `end_turn`, not `END_TURN`).
 - **Breaking: union records write their own discriminator, and reject a wrong one.** Every union
   above is now declared `include = EXISTING_PROPERTY`, so the `sessionUpdate`, `type` or `outcome`
   component of a record such as `AgentMessageChunk` or `TextContent` is written as is. Before,
