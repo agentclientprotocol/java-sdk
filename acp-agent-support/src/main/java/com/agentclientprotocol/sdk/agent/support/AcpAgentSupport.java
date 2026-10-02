@@ -34,6 +34,7 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite;
+import com.agentclientprotocol.sdk.agent.support.resolver.AuthenticateRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CancelNotificationResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CapabilitiesResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CloseSessionRequestResolver;
@@ -54,6 +55,7 @@ import com.agentclientprotocol.sdk.agent.support.resolver.SessionIdResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetProviderRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionConfigOptionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModeRequestResolver;
+import com.agentclientprotocol.sdk.annotation.Authenticate;
 import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
@@ -240,6 +242,8 @@ public class AcpAgentSupport {
 		bind(AcpSchema.METHOD_SESSION_NEW,
 				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
 				() -> agent.newSessionHandler(req -> new NewSessionResponse(UUID.randomUUID().toString(), null, null)));
+		bind(AcpSchema.METHOD_AUTHENTICATE, handler -> agent
+			.authenticateHandler(req -> respond(handler, AcpSchema.AuthenticateResponse.class, req, null)));
 		bind(AcpSchema.METHOD_LOGOUT,
 				handler -> agent.logoutHandler(req -> respond(handler, AcpSchema.LogoutResponse.class, req, null)));
 		bind(AcpSchema.METHOD_SESSION_LOAD, handler -> agent.loadSessionHandler(
@@ -411,9 +415,14 @@ public class AcpAgentSupport {
 		return args;
 	}
 
-	private static Map<Class<? extends Annotation>, String> handlerAnnotations() {
+	/**
+	 * The handler annotations and the ACP method each one marks a handler for, in a stable order.
+	 * @return the annotations, by annotation type
+	 */
+	static Map<Class<? extends Annotation>, String> handlerAnnotations() {
 		Map<Class<? extends Annotation>, String> annotations = new LinkedHashMap<>();
 		annotations.put(Initialize.class, AcpSchema.METHOD_INITIALIZE);
+		annotations.put(Authenticate.class, AcpSchema.METHOD_AUTHENTICATE);
 		annotations.put(Logout.class, AcpSchema.METHOD_LOGOUT);
 		annotations.put(NewSession.class, AcpSchema.METHOD_SESSION_NEW);
 		annotations.put(LoadSession.class, AcpSchema.METHOD_SESSION_LOAD);
@@ -676,6 +685,7 @@ public class AcpAgentSupport {
 			return List.of(
 					new ExtensionParamsResolver(),
 					new InitializeRequestResolver(),
+					new AuthenticateRequestResolver(),
 					new LogoutRequestResolver(),
 					new NewSessionRequestResolver(),
 					new LoadSessionRequestResolver(),

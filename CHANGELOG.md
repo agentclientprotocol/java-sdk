@@ -163,6 +163,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection's agent invokes the same instance, concurrently, so its handlers (and interceptors,
   custom resolvers and return value handlers) must be thread-safe. Before, the documented pattern
   rebuilt the builder, and rediscovered the handler methods, per connection.
+- **`@Authenticate`**: the annotation for an `authenticate` handler, which an annotated agent could
+  not serve before (the client got `-32601`, Method not found). The method takes an optional
+  `AuthenticateRequest` (`AuthenticateRequestResolver`) and returns an `AuthenticateResponse` or a
+  `Mono` of one; throw `AcpProtocolException` with `AcpErrorCodes.AUTHENTICATION_REQUIRED` to reject
+  the attempt.
 
 ### Changed
 
