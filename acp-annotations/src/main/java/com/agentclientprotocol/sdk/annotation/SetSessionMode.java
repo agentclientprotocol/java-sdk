@@ -20,21 +20,20 @@ import java.lang.annotation.Target;
  * <ul>
  *   <li>{@code SetSessionModeRequest} - the request containing sessionId and modeId</li>
  *   <li>{@code @SessionId String} - the session ID</li>
- *   <li>{@code String modeId} - the mode ID to set (when parameter name matches)</li>
  * </ul>
  *
  * <p>The method should return one of:
  * <ul>
  *   <li>{@code SetSessionModeResponse} - the response (typically empty)</li>
- *   <li>{@code void} - auto-converts to empty response</li>
  *   <li>{@code Mono<SetSessionModeResponse>} - for async handling</li>
  * </ul>
  *
  * <p>Example usage:
  * <pre>{@code
  * @SetSessionMode
- * public void setMode(SetSessionModeRequest req) {
- *     currentMode = req.modeId();
+ * public SetSessionModeResponse setMode(SetSessionModeRequest req) {
+ *     modes.put(req.sessionId(), req.modeId());
+ *     return new SetSessionModeResponse();
  * }
  * }</pre>
  *

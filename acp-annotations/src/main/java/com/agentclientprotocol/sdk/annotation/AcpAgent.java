@@ -16,6 +16,11 @@ import java.lang.annotation.Target;
  * <p>Classes annotated with {@code @AcpAgent} can define handler methods
  * using annotations like {@link Prompt}, {@link Initialize}, and {@link NewSession}.
  *
+ * <p>A request handler returns its method's response (or a {@code Mono} of it); only a
+ * {@link Prompt} handler may return {@code void}, which ends the turn. A request handler that
+ * returns nothing, or {@code null}, is answered with an internal error ({@code -32603}),
+ * because a request must get a result.
+ *
  * <p><b>Connection parameters.</b> Besides the parameters its annotation lists, every handler
  * method, extension handlers included, can take any of these, resolved for the connection the
  * request or notification arrived on (with one handler bean serving many connections, each call
@@ -59,13 +64,15 @@ import java.lang.annotation.Target;
 public @interface AcpAgent {
 
 	/**
-	 * The name of the agent. If not specified, the class name will be used.
+	 * The name of the agent, descriptive only: {@code AcpAgentSupport} does not read it.
+	 * Report the agent's identity to the client in the {@code InitializeResponse}
+	 * ({@code agentInfo}).
 	 * @return the agent name
 	 */
 	String name() default "";
 
 	/**
-	 * The version of the agent.
+	 * The version of the agent, descriptive only, like {@link #name()}.
 	 * @return the agent version
 	 */
 	String version() default "";
