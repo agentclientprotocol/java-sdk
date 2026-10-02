@@ -22,7 +22,6 @@ import java.lang.annotation.Target;
  *   <li>{@code SyncPromptContext} - context for sync handlers with convenience methods</li>
  *   <li>{@code PromptContext} - context for async handlers returning Mono</li>
  *   <li>{@code NegotiatedCapabilities} - the negotiated client capabilities</li>
- *   <li>Custom types annotated with {@code @SessionState} - session-scoped state</li>
  * </ul>
  *
  * <p>The method should return one of:
@@ -49,7 +48,6 @@ import java.lang.annotation.Target;
  * @author Mark Pollack
  * @since 1.0.0
  * @see AcpAgent
- * @see SessionState
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

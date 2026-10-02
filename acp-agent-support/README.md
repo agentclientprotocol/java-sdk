@@ -69,13 +69,6 @@ This module transitively includes `acp-annotations` and `acp-core`.
 | Annotation | Description |
 |------------|-------------|
 | `@SessionId` | Injects the current session ID as a `String`. |
-| `@SessionState` | Injects session-specific state (placeholder for future). |
-
-### Exception Handling
-
-| Annotation | Description |
-|------------|-------------|
-| `@AcpExceptionHandler` | Marks a method as an exception handler (runtime support pending). |
 
 ## Handler Method Signatures
 
