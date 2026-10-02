@@ -14,7 +14,9 @@ never in the configs. `GenConfigs.java` copies every matching entry into the cel
 One file per language package, owned by that package: `java.json`, `typescript.json`, `rust.json`,
 `python.json`, `kotlin.json`, `raw.json`. A file declares the failures caused by its own SDK or
 program. `java.json` holds the Java gaps (`see: "P<n>"`); a peer file holds that peer's bugs
-(`see: "peer:..."`).
+(`see: "peer:..."`) and the spec disagreements its pairs show (`see: "spec:..."`). `raw.json`'s
+`expectations` array stays empty (the raw driver is no matrix language); its `conformance` array
+is read only by `programs/raw/gen_conf.py`, for the `conf-java-*` scenarios.
 
 ```json
 {

@@ -265,11 +265,13 @@ A cell is one generated config, `configs/x-<client>-<agent>-<transport>[-unstabl
 - the **profile** is `stable`, or `unstable` (the `unstable` steps only, plus the mandatory first
   and last; suffix `-unstable`, run on demand).
 
-`matrix.json` per language: `enabled` (cells are generated only when both languages are enabled),
-`dir`, `peers` (from `peers.json`), `env`, `transports`, `readyTimeoutSec`. `stepSelection` is
-`seed` (only `"seed": true` steps) or `all`. `facts` add transport assertions to the cells their
-`when` matches, with roles `client` and `agent` mapped to processes: the h2c checks of the Java
-pair, DELETE -> 202 on the Java agent, the WebSocket 101.
+`matrix.json` per language: `enabled` (cells are generated only when both languages are enabled;
+all five are), `dir`, `peers` (from `peers.json`), `env`, `transports`, `readyTimeoutSec`.
+`stepSelection` is `all` (`seed`, only the `"seed": true` steps, or a comma-separated id list
+also work). `facts` add transport assertions to the cells their `when` matches, with roles
+`client` and `agent` mapped to processes: the HTTP version each HTTP pair negotiates (h2c between
+the Java client and the Java and Python agents, HTTP/1.1 otherwise, on both sides), DELETE -> 202
+on every agent, the WebSocket 101 on the Java agent.
 
 Each cell is an ordinary runner config: on HTTP/WS an `agent` process (role `server`, `ready` on
 `READY`) and a `client` process; on stdio a single `client` process with `AGENT_CMD`. The checks are
@@ -295,25 +297,37 @@ and never part of the nightly. **Language packages never commit generated config
 integration step regenerates and commits them, after enabling the languages. `--check` reports
 locally generated extra cells as "extra", which is the reminder.
 
-### 6. The Java seed
+### 6. The Java programs and the expectations
 
-The Java programs, `programs/java` (`interop.Agent`, `interop.Client`), are every package's first
-partner. Today they implement the eight `seed` steps on all three transports:
+The Java programs, `programs/java` (`interop.Agent`, `interop.Client`), are every package's
+partner: every cell has a Java client or a Java agent. They implement the whole catalogue on all
+three transports and advertise the full `fixtures.client` / `fixtures.agent` profiles. The `seed`
+flag marks the eight steps the first Java seed implemented; `matrix.json` now selects every step
+(`"stepSelection": "all"`), and `--steps seed` still generates the seed subset.
 
-| Step | stdio | http | ws |
-|---|---|---|---|
-| `init.initialize` | yes | yes | yes |
-| `session.new` | yes | yes | yes |
-| `session.load` | yes | yes | yes |
-| `update.agent_message_chunk` | yes | yes | yes |
-| `perm.selected` (agent asserts too) | yes | yes | yes |
-| `fs.write` (agent asserts too) | yes | yes | yes |
-| `http.reconnect` | - | yes | - |
-| `conn.close` | yes | yes | yes |
+A step that fails in a cell is either fixed or declared in exactly one expectations file
+([expectations/README.md](expectations/README.md)), chosen by whose code has to change:
 
-The Java agent answers every other directive with `-32602 unknown directive`, and the Java client
-prints `unknown-step` for every other step. The Java agent advertises `loadSession` only; the Java
-client advertises `fs.writeTextFile` only. The rest of the catalogue lands with the Java package.
+- **A Java gap** goes in `expectations/java.json`, with `when.client: java` or `when.agent: java`
+  and `see: "P<n>"`, the open Phase B item that closes it. The step's `phaseB` in `steps.json`
+  names the same item. Today there is none: every Phase B item the catalogue
+  depends on has landed, and `java.json` is empty.
+- **A peer gap** goes in the peer's own file (`typescript.json`, `rust.json`, `python.json`,
+  `kotlin.json`), with `see: "peer:<sdk> <file:line>"` in that SDK, or `see: "spec:<where>"` when
+  the RFD or schema contradicts itself and the peer and Java read it differently.
+- A spec disagreement that only a Java pair shows goes in `java.json` with `see: "spec:..."`
+  (none today).
+
+The Kotlin package has stdio and WebSocket only: the Kotlin SDK has no Streamable HTTP transport,
+so `matrix.json` lists `"transports": ["stdio", "ws"]` for it and no `x-*-kotlin-http` cell exists.
+Kotlin's Gradle build needs JDK 21 while everything else stays on 17.
+
+`expectations/raw.json` belongs to the raw driver, which is no matrix language: its
+`expectations` array stays empty (`GenConfigs.java` reads it like every other file), and its
+`conformance` array holds the expected failures of the `conf-java-*` scenarios, which only
+`programs/raw/gen_conf.py` reads (its header documents the fields: `case`, `when.side`,
+`when.transport`, `contains`, `see`, `reason`). `gen_conf.py --check` runs next to
+`GenConfigs.java --check` in CI.
 
 ### 7. Isolation: every scenario must be safe to run next to any other
 
@@ -391,8 +405,8 @@ language too, run on the same host at the same time.
     "requiredOutput":  { "agent": ["STEP agent.fs.write PASS"], "client": ["negotiated HTTP_1_1"] },
     "forbiddenOutput": { "client": ["negotiated HTTP_2"] },
     "requiredPatterns": { "agent": ["\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202"] },
-    "checks": ["client RESULT pass == 60", "client RESULT fail == 5"],
-    "expectedFailures": [ { "process": "client", "step": "cancel-request.client", "contains": "P2:", "reason": "...", "see": "..." } ],
+    "checks": ["client RESULT pass == 65", "client RESULT fail == 0"],
+    "expectedFailures": [],     // from expectations/*.json, e.g. { "process": "client", "step": "...", "contains": "-32601", "reason": "...", "see": "peer:..." }
     "report": { "client": ["TIMEOUT"] }
   }
 }
