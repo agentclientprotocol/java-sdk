@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       peers-ref:
-        description: 'Branch, tag or SHA to test every peer SDK at'
+        description: 'Branch, tag or SHA to test every peer SDK at (empty: each peer''s ref in peers.json)'
         required: false
-        default: 'main'
+        default: ''
       peer-overrides:
         description: 'Per-peer refs, space separated, e.g. "typescript-sdk=v0.5.0 rust-sdk=v1.2.0"'
         required: false
@@ -152,7 +152,7 @@ jobs:
         id: peer
         env:
           SDK: ${{ matrix.sdk }}
-          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
         run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
 
@@ -168,12 +168,13 @@ jobs:
 
       - name: Fetch and build the ${{ matrix.peer }} peer and programs
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
           ALLOW_EMPTY: ${{ matrix.allow-empty }}
         run: |
-          args=(--peers-ref "$PEERS_REF" --only "$ONLY" --prepare-only)
+          args=(--only "$ONLY" --prepare-only)
+          if [ -n "$PEERS_REF" ]; then args+=(--peers-ref "$PEERS_REF"); fi
           for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
           if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
           integration-testing/scripts/run-all.sh "${args[@]}"
@@ -257,7 +258,7 @@ jobs:
         id: peer
         env:
           SDK: ${{ matrix.sdk }}
-          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
         run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
 
@@ -273,13 +274,14 @@ jobs:
 
       - name: Run the ${{ matrix.leg }} scenarios
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || 'main' }}
+          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
           ALLOW_EMPTY: ${{ matrix.allow-empty }}
           RUN_LABEL: ${{ matrix.leg }}
         run: |
-          args=(--peers-ref "$PEERS_REF" --only "$ONLY")
+          args=(--only "$ONLY")
+          if [ -n "$PEERS_REF" ]; then args+=(--peers-ref "$PEERS_REF"); fi
           for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
           if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
           integration-testing/scripts/run-all.sh "${args[@]}"
