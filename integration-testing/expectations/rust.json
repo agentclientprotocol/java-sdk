@@ -1,4 +1,59 @@
 {
   "comment": "Expected failures caused by the Rust SDK or the Rust interop programs (programs/rust). See README.md in this directory.",
-  "expectations": []
+  "expectations": [
+    {
+      "step": "enum.tool_call",
+      "when": {
+        "client": "rust"
+      },
+      "contains": "surfaced without the raw values",
+      "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/tool_call.rs:49",
+      "reason": "ToolCall.status is a closed enum read with DefaultOnError, so the unknown status interop_future_status silently becomes the default (pending) instead of being kept; the turn continues"
+    },
+    {
+      "step": "enum.plan",
+      "when": {
+        "client": "rust"
+      },
+      "contains": "surfaced without the raw values",
+      "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/plan.rs:38",
+      "reason": "Plan.entries is read with VecSkipError and PlanEntryPriority/PlanEntryStatus are closed enums, so the entry with unknown values is silently dropped (entries []); the turn continues"
+    },
+    {
+      "step": "enum.stop",
+      "when": {
+        "client": "rust"
+      },
+      "contains": "-32700",
+      "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/agent.rs:3182",
+      "reason": "StopReason is a closed enum: the PromptResponse with stopReason interop_future_stop fails to parse and the prompt fails with -32700 (the session stays usable)"
+    },
+    {
+      "step": "enum.stop",
+      "when": {
+        "agent": "rust"
+      },
+      "contains": "-32700",
+      "see": "peer:rust-sdk src/agent-client-protocol/src/jsonrpc.rs:4777",
+      "reason": "The Rust agent cannot answer an unknown stopReason: a typed prompt Responder re-parses even an erase_to_json() answer into PromptResponse (closed StopReason, schema src/v1/agent.rs:3182), so the SDK answers -32700 instead"
+    },
+    {
+      "step": "enum.audience",
+      "when": {
+        "agent": "rust"
+      },
+      "contains": "audience: user",
+      "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/content.rs:568",
+      "reason": "Annotations.audience is read with VecSkipError over the closed Role enum, so the agent silently drops interop_future_role and echoes \"audience: user\""
+    },
+    {
+      "step": "agent.enum.audience",
+      "when": {
+        "agent": "rust"
+      },
+      "contains": "[\"user\"]",
+      "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/content.rs:568",
+      "reason": "Annotations.audience is read with VecSkipError over the closed Role enum: the unknown Role is silently dropped, so the agent reads [\"user\"]"
+    }
+  ]
 }
