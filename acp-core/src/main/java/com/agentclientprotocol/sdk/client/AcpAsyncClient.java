@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.client;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -455,6 +456,7 @@ public class AcpAsyncClient {
 	 * @return a Mono emitting the fork response with the new session ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
+	@UnstableAcpApi
 	public Mono<AcpSchema.ForkSessionResponse> forkSession(AcpSchema.ForkSessionRequest forkSessionRequest) {
 		Assert.notNull(forkSessionRequest, "Fork session request must not be null");
 		logger.debug("Forking session: {}", forkSessionRequest.sessionId());
@@ -488,6 +490,7 @@ public class AcpAsyncClient {
 	 * @return a Mono emitting the list of configurable providers
 	 * @see AcpSchema#METHOD_PROVIDERS_LIST
 	 */
+	@UnstableAcpApi
 	public Mono<AcpSchema.ListProvidersResponse> listProviders(AcpSchema.ListProvidersRequest request) {
 		Assert.notNull(request, "List providers request must not be null");
 		logger.debug("Listing providers");
@@ -500,6 +503,7 @@ public class AcpAsyncClient {
 	 * @return a Mono emitting the response
 	 * @see AcpSchema#METHOD_PROVIDERS_SET
 	 */
+	@UnstableAcpApi
 	public Mono<AcpSchema.SetProviderResponse> setProvider(AcpSchema.SetProviderRequest request) {
 		Assert.notNull(request, "Set provider request must not be null");
 		logger.debug("Setting provider: {}", request.providerId());
@@ -512,6 +516,7 @@ public class AcpAsyncClient {
 	 * @return a Mono emitting the response
 	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
 	 */
+	@UnstableAcpApi
 	public Mono<AcpSchema.DisableProviderResponse> disableProvider(AcpSchema.DisableProviderRequest request) {
 		Assert.notNull(request, "Disable provider request must not be null");
 		logger.debug("Disabling provider: {}", request.providerId());

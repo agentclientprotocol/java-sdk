@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.capabilities;
 
+import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.error.AcpCapabilityException;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
@@ -381,6 +382,7 @@ public final class NegotiatedCapabilities {
 	 * Returns true if the agent supports forking sessions.
 	 * @return true if sessionCapabilities.fork was advertised
 	 */
+	@UnstableAcpApi
 	public boolean supportsForkSession() {
 		return forkSession;
 	}
@@ -389,6 +391,7 @@ public final class NegotiatedCapabilities {
 	 * Returns true if the agent supports the {@code providers/*} configuration methods.
 	 * @return true if {@code providers} capability was advertised
 	 */
+	@UnstableAcpApi
 	public boolean supportsProviders() {
 		return providers;
 	}
@@ -481,6 +484,7 @@ public final class NegotiatedCapabilities {
 		require(additionalDirectories, "sessionCapabilities.additionalDirectories");
 	}
 
+	@UnstableAcpApi
 	public void requireForkSession() {
 		require(forkSession, "sessionCapabilities.fork");
 	}
@@ -489,6 +493,7 @@ public final class NegotiatedCapabilities {
 	 * Requires provider configuration capability, throwing if not supported.
 	 * @throws AcpCapabilityException if the agent doesn't support the {@code providers/*} methods
 	 */
+	@UnstableAcpApi
 	public void requireProviders() {
 		require(providers, "providers");
 	}
@@ -653,11 +658,13 @@ public final class NegotiatedCapabilities {
 			return this;
 		}
 
+		@UnstableAcpApi
 		public Builder forkSession(boolean value) {
 			this.forkSession = value;
 			return this;
 		}
 
+		@UnstableAcpApi
 		public Builder providers(boolean value) {
 			this.providers = value;
 			return this;
