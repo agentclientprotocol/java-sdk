@@ -436,6 +436,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   servlet Javadoc now documents the remedy: call `closeGracefully()` before the server stops (a
   `SmartLifecycle` in the default phase).
 
+- **The stdio agent transport's hold on `System.in` is documented.** Closing a
+  `StdioAcpAgentTransport` built on `System.in` cannot end a read already in progress, because a
+  read of `System.in` cannot be interrupted: its `acp-agent-inbound` thread stays blocked, holding
+  `System.in`'s lock, until the next line or the end of standard input, then discards what it read
+  and ends (now covered by a test). Under Maven Surefire, standard input is the fork's command
+  stream, so such a reader, left by a test that builds the transport on `System.in`, took the
+  fork's commands and stalled its exit until Surefire killed it 30 seconds after `System.exit(0)`.
+  The class, its `System.in` constructors and `closeGracefully()` now say so, and that embedders and
+  tests should pass explicit streams, use `acp-test`'s in-memory transport, or install an empty
+  standard input before the tests run. The SDK's own tests never start a reader on `System.in`; the
+  one that built the transport on it now passes explicit streams. The `AcpAgentSupport` Javadoc
+  example no longer calls a `StdioAcpAgentTransport.create()` that does not exist.
+
 - **A handler that threw an `Error` left the peer waiting.** Reactor rethrows what it treats as
   JVM-fatal (`LinkageError`, `VirtualMachineError`) instead of signalling it, so a handler that
   threw, say, the `NoSuchMethodError` of code compiled against 0.18.0 calling a removed constructor

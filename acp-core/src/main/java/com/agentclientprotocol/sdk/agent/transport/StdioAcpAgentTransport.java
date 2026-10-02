@@ -74,6 +74,29 @@ import reactor.core.scheduler.Schedulers;
  * without waiting for it; its handler's late answer is dropped.
  * </p>
  *
+ * <p>
+ * <b>Closing does not release {@code System.in}.</b> The transport reads standard input on
+ * its own thread ({@code acp-agent-inbound}), and a read of {@code System.in} cannot be
+ * interrupted. Closing the transport stops it handing on messages, but a reader blocked in
+ * a read stays blocked, holding {@code System.in}'s lock, until the next line arrives or
+ * standard input ends; it then reads that line, discards it and ends. The transport never
+ * closes {@code System.in} itself, which belongs to the process. In an agent process that
+ * is harmless: the process owns its standard input and exits with it. In a process whose
+ * standard input belongs to someone else it is not: under Maven Surefire, for instance,
+ * standard input carries the test fork's command stream, and a reader left on it takes
+ * those bytes and can stall the fork's exit. Embedders and tests should therefore use the
+ * {@linkplain #StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream) constructor
+ * taking explicit streams}, or the in-memory transport of {@code acp-test}, and keep the
+ * {@code System.in} constructors for an agent process's {@code main}. A test suite that
+ * cannot avoid them (an application whose configuration builds this transport by
+ * default) can install an empty standard input before any test runs, for instance with
+ * {@code System.setIn(new ByteArrayInputStream(new byte[0]))} in a JUnit
+ * {@code LauncherSessionListener}: the transport takes {@code System.in} when it is
+ * constructed, so its reader then sees the end of the stream and ends (and, as at any end
+ * of input, the transport closes the output stream it was given), while Surefire keeps its
+ * own reference to the real standard input.
+ * </p>
+ *
  * @author Mark Pollack
  */
 public class StdioAcpAgentTransport implements AcpAgentTransport {
@@ -134,7 +157,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	/**
 	 * Creates a new StdioAcpAgentTransport with the default JsonMapper using
-	 * System.in and System.out for communication.
+	 * System.in and System.out for communication. For an agent process's {@code main}:
+	 * closing the transport does not release {@code System.in} (see the class
+	 * documentation); embedders and tests pass explicit streams instead.
 	 */
 	public StdioAcpAgentTransport() {
 		this(AcpJsonMapper.createDefault());
@@ -142,7 +167,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	/**
 	 * Creates a new StdioAcpAgentTransport with the specified JsonMapper using
-	 * System.in and System.out for communication.
+	 * System.in and System.out for communication. For an agent process's {@code main}:
+	 * closing the transport does not release {@code System.in} (see the class
+	 * documentation); embedders and tests pass explicit streams instead.
 	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
 	 */
 	@SuppressWarnings("SystemOut") // the stdio transport is the one owner of System.out
@@ -507,6 +534,15 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		}));
 	}
 
+	/**
+	 * Closes the transport: nothing more is handed on or written, standard output is
+	 * closed once the agent's requests to the client are settled, and
+	 * {@link #awaitTermination()} completes. The input stream is not closed, and a read of
+	 * it already in progress is not ended: on {@code System.in}, which cannot be
+	 * interrupted, the reader thread stays blocked until the next line or the end of
+	 * standard input, then discards what it read and ends (see the class documentation).
+	 * {@link #close()} does the same without waiting.
+	 */
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {

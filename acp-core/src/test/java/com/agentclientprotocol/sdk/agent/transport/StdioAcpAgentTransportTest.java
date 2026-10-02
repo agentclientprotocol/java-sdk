@@ -69,8 +69,99 @@ class StdioAcpAgentTransportTest {
 
 	@Test
 	void protocolVersionsReturnsLatest() {
-		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper);
+		// Never System.in in a test: under Surefire it carries the fork's command stream.
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper,
+				new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream());
 		assertThat(transport.protocolVersions()).contains(AcpSchema.LATEST_PROTOCOL_VERSION);
+	}
+
+	/**
+	 * A read on System.in cannot be interrupted, so closing cannot end it: the reader stays
+	 * blocked until the next line arrives. That line, and anything after it, is not handed
+	 * on and not answered, and the reader thread ends at once without reading again.
+	 */
+	@Test
+	void aReaderThatWakesAfterCloseHandsNothingOnAndEnds() throws Exception {
+		String line = jsonMapper.writeValueAsString(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE,
+				"1", AcpTestFixtures.createInitializeRequest())) + "\n";
+		UninterruptibleInput in = new UninterruptibleInput(line.getBytes(StandardCharsets.UTF_8));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper, in, out);
+		List<AcpSchema.JSONRPCMessage> handed = new CopyOnWriteArrayList<>();
+		transport.start(messages -> messages.doOnNext(handed::add).then(Mono.empty())).block(TIMEOUT);
+		Thread reader = in.awaitReader();
+
+		transport.closeGracefully().block(TIMEOUT);
+		assertThat(reader.isAlive()).as("a blocked read outlives the close").isTrue();
+		in.release();
+
+		reader.join(TIMEOUT.toMillis());
+		assertThat(reader.isAlive()).as("the reader ends once its read returns").isFalse();
+		assertThat(in.reads()).as("the reader does not read again").isEqualTo(1);
+		assertThat(handed).isEmpty();
+		assertThat(out.toString(StandardCharsets.UTF_8)).isEmpty();
+	}
+
+	/** Blocks its first read, ignoring interrupts as a read on System.in does, until released. */
+	private static final class UninterruptibleInput extends java.io.InputStream {
+
+		private final byte[] line;
+
+		private final CountDownLatch released = new CountDownLatch(1);
+
+		private final java.util.concurrent.CompletableFuture<Thread> reader = new java.util.concurrent.CompletableFuture<>();
+
+		private final java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+
+		UninterruptibleInput(byte[] line) {
+			this.line = line;
+		}
+
+		@Override
+		public int read() {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public int read(byte[] buffer, int offset, int length) {
+			if (reads.incrementAndGet() > 1) {
+				awaitUninterruptibly(new CountDownLatch(1));
+			}
+			reader.complete(Thread.currentThread());
+			awaitUninterruptibly(released);
+			int count = Math.min(length, line.length);
+			System.arraycopy(line, 0, buffer, offset, count);
+			return count;
+		}
+
+		Thread awaitReader() throws Exception {
+			return reader.get(5, TimeUnit.SECONDS);
+		}
+
+		void release() {
+			released.countDown();
+		}
+
+		int reads() {
+			return reads.get();
+		}
+
+		private static void awaitUninterruptibly(CountDownLatch latch) {
+			boolean interrupted = false;
+			while (true) {
+				try {
+					latch.await();
+					break;
+				}
+				catch (InterruptedException e) {
+					interrupted = true;
+				}
+			}
+			if (interrupted) {
+				Thread.currentThread().interrupt();
+			}
+		}
+
 	}
 
 	@Test
