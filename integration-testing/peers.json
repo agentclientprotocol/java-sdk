@@ -16,7 +16,7 @@
   },
   "kotlin-sdk": {
     "url": "https://github.com/agentclientprotocol/kotlin-sdk.git",
-    "ref": "main",
+    "ref": "master",
     "build": "./gradlew --quiet help"
   }
 }
