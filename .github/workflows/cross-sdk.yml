@@ -137,6 +137,8 @@ jobs:
         run: |
           mkdir -p ~/.gradle
           echo "org.gradle.java.installations.fromEnv=JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
+          # The Kotlin SDK's buildSrc needs Gradle itself to run on JDK 21 (JAVA_HOME is 17 here).
+          echo "org.gradle.java.home=$JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
 
       - name: Set up JBang
         uses: jbangdev/setup-jbang@2b1b465a7b75f4222b81426f23a01e013aa7b95c # v0.1.1
@@ -235,6 +237,8 @@ jobs:
         run: |
           mkdir -p ~/.gradle
           echo "org.gradle.java.installations.fromEnv=JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
+          # The Kotlin SDK's buildSrc needs Gradle itself to run on JDK 21 (JAVA_HOME is 17 here).
+          echo "org.gradle.java.home=$JAVA_HOME_21_X64" >> ~/.gradle/gradle.properties
 
       - name: Set up JBang
         uses: jbangdev/setup-jbang@2b1b465a7b75f4222b81426f23a01e013aa7b95c # v0.1.1
