@@ -135,7 +135,7 @@
       "pass": { "client": "agentInfo.name starts with \"interop-\"." }
     },
     {
-      "id": "init.config-boolean", "group": "init", "prompt": "#echo-caps", "phaseB": "P6",
+      "id": "init.config-boolean", "group": "init", "prompt": "#echo-caps",
       "requires": ["client.session.configOptions.boolean"],
       "client": "session/new, then the prompt.",
       "agent": "#echo-caps",
@@ -154,12 +154,12 @@
       "pass": { "client": "A non-error response." }
     },
     {
-      "id": "auth.logout-capability", "group": "auth", "phaseB": "P7",
+      "id": "auth.logout-capability", "group": "auth",
       "client": "Check the stored initialize response.",
       "pass": { "client": "agentCapabilities.auth.logout is present." }
     },
     {
-      "id": "auth.terminal", "group": "auth", "phaseB": "P5",
+      "id": "auth.terminal", "group": "auth",
       "requires": ["client.auth.terminal"],
       "client": "Check the stored initialize response.",
       "agent": "List fixtures.agent.terminalAuthMethod in authMethods iff the client advertised auth.terminal.",
@@ -248,7 +248,7 @@
       "pass": { "client": "tool_call call-1, then tool_call_update call-1 with status completed and text content \"tool output\"." }
     },
     {
-      "id": "update.tool_call-name", "group": "update", "prompt": "#emit tool_call name=read_file", "phaseB": "P3",
+      "id": "update.tool_call-name", "group": "update", "prompt": "#emit tool_call name=read_file",
       "client": "session/new; the prompt.",
       "pass": { "client": "The received tool_call has name \"read_file\"." }
     },
@@ -273,7 +273,7 @@
       "pass": { "client": "A config_option_update whose model option has currentValue model-b." }
     },
     {
-      "id": "update.session_info_update", "group": "update", "prompt": "#emit session_info_update", "phaseB": "P1",
+      "id": "update.session_info_update", "group": "update", "prompt": "#emit session_info_update",
       "client": "session/new; the prompt.",
       "pass": { "client": "A session_info_update with title \"interop title\"." }
     },
@@ -283,7 +283,7 @@
       "pass": { "client": "A usage_update with used 100, size 1000 and cost 0.01 USD." }
     },
     {
-      "id": "update.unknown", "group": "update", "prompt": "#emit unknown", "phaseB": "P1",
+      "id": "update.unknown", "group": "update", "prompt": "#emit unknown",
       "client": "session/new; the prompt.",
       "agent": "Send the unknown variant through an untyped/raw notification send if the typed API refuses it.",
       "pass": { "client": "The chunk \"after-unknown\" arrives and the prompt answers end_turn: the unknown update was dropped or surfaced, never fatal." }
@@ -310,7 +310,7 @@
       "pass": { "client": "session/new returned availableModes with interop-mode-b, and set_mode answers without error.", "agent": "STEP agent.mode.set PASS when set_mode named a known session and interop-mode-b." }
     },
     {
-      "id": "config.on-new", "group": "config", "phaseB": "P1b",
+      "id": "config.on-new", "group": "config",
       "client": "session/new.",
       "agent": "Return fixtures.configOptions (verbose only if the client advertised configOptions.boolean) on session/new, session/load and session/resume.",
       "pass": { "client": "The response has a select option model with currentValue model-a." }
@@ -321,7 +321,7 @@
       "pass": { "client": "The response is the complete list of options, with model at currentValue model-b." }
     },
     {
-      "id": "config.boolean", "group": "config", "phaseB": "P6",
+      "id": "config.boolean", "group": "config",
       "requires": ["client.session.configOptions.boolean"],
       "client": "session/new; session/set_config_option {configId: verbose, type: boolean, value: true}.",
       "pass": { "client": "The response has verbose at currentValue true." }
@@ -388,7 +388,7 @@
       "pass": { "client": "The chunk \"elicit: accept {\\\"name\\\":\\\"interop\\\"}\" (JSON compared semantically).", "agent": "STEP agent.elicit.form PASS when the action is accept with content name == interop." }
     },
     {
-      "id": "elicit.complete", "group": "elicit", "prompt": "#elicit url", "phaseB": "P4",
+      "id": "elicit.complete", "group": "elicit", "prompt": "#elicit url",
       "requires": ["client.elicitation.url"],
       "client": "session/new; the prompt; accept the url-mode elicitation.",
       "agent": "#elicit url",
@@ -414,20 +414,20 @@
       "pass": { "client": "stopReason cancelled within 6 s of the cancel: the SDK answered for the handler (G0f)." }
     },
     {
-      "id": "cancel-request.client", "group": "cancel-request", "prompt": "#slow", "phaseB": "P2",
+      "id": "cancel-request.client", "group": "cancel-request", "prompt": "#slow",
       "client": "session/new; the prompt; after the first tick, $/cancel_request {requestId: <the prompt's id>}.",
       "agent": "#slow; the SDK surfaces the cancel request to the handler.",
       "pass": { "client": "The prompt ends within 5 s, with error -32800 or stopReason cancelled.", "agent": "STEP agent.cancel-request.client PASS when the handler observed the cancel request." }
     },
     {
-      "id": "cancel-request.agent", "group": "cancel-request", "prompt": "#fs read-slow {dir}/slow.txt", "phaseB": "P2",
+      "id": "cancel-request.agent", "group": "cancel-request", "prompt": "#fs read-slow {dir}/slow.txt",
       "requires": ["client.fs.readTextFile"],
       "client": "session/new; the prompt. The fs/read_text_file handler, for a path ending slow.txt, waits up to 10 s or until cancelled.",
       "agent": "#fs read-slow",
       "pass": { "client": "The chunk \"cancel-request sent\" and end_turn within 5 s.", "agent": "STEP agent.cancel-request.agent PASS when the fs request ended with error -32800 within 5 s." }
     },
     {
-      "id": "cancel-request.unknown", "group": "cancel-request", "phaseB": "P2",
+      "id": "cancel-request.unknown", "group": "cancel-request",
       "client": "$/cancel_request for requestId 999999, and for the id of a request that already completed; then session/new and prompt \"after cancel-request\".",
       "pass": { "client": "No error comes back for either cancel request, and the prompt answers end_turn." }
     },
@@ -444,13 +444,13 @@
       "pass": { "client": "The notification arrived with params {n: 1}." }
     },
     {
-      "id": "ext.client-request", "group": "ext", "phaseB": "P9",
+      "id": "ext.client-request", "group": "ext",
       "client": "Send the request _interop/ping {n: 1} to the agent.",
       "agent": "Answer fixtures.ext.result.",
       "pass": { "client": "The result is {pong: 1}." }
     },
     {
-      "id": "ext.client-notification", "group": "ext", "prompt": "#ext last-notification", "phaseB": "P9",
+      "id": "ext.client-notification", "group": "ext", "prompt": "#ext last-notification",
       "client": "Send the notification _interop/note {n: 1}; session/new; the prompt.",
       "agent": "Record extension notifications; #ext last-notification.",
       "pass": { "client": "The chunk \"ext last: _interop/note\"." }
@@ -462,7 +462,7 @@
       "pass": { "client": "The \"meta\" chunk's update _meta and the PromptResponse _meta both have interop == m1." }
     },
     {
-      "id": "meta.permission", "group": "meta", "prompt": "#permission allow meta", "phaseB": "P8",
+      "id": "meta.permission", "group": "meta", "prompt": "#permission allow meta",
       "client": "As perm.selected, and put the request's _meta into the RequestPermissionResponse's _meta.",
       "agent": "#permission allow meta",
       "pass": { "client": "The request carried _meta interop == m1.", "agent": "STEP agent.meta.permission PASS when the response carried _meta interop == m1." }

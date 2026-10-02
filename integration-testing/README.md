@@ -250,7 +250,8 @@ the scenario.
   step depends on: `client.<path>` in the client's `initialize`, `agent.<path>` in the agent's),
   `transports` (default all three), `only` (`{"client": [...], "agent": [...]}`: languages the
   step applies to, e.g. Java SDK policy), `profile` (`stable` default, or `unstable`), `phaseB`
-  (the Java Phase B item that blocks it, informative) and `seed` (implemented by the WP0 Java seed).
+  (the open Java Phase B item that blocks it, exactly the steps with `see: "P<n>"` entries in
+  `expectations/java.json`; the item's commit removes both; informative) and `seed` (implemented by the WP0 Java seed).
 
 Rules for every step:
 
