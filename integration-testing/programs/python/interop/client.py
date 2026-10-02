@@ -704,28 +704,28 @@ async def s_fs_write() -> str:
     return "written through the client (handler answered null): \"interop write\""
 
 
-async def fs_read(directive_suffix: str) -> tuple[Conn, str, dict]:
+async def fs_read(directive: str) -> tuple[Conn, str, dict]:
     (DIR / "fs-read.txt").write_text(FS_READ_CONTENT)
     c = main_conn()
     sid, _ = await c.new_session()
-    r = await c.prompt(sid, f"#fs read {directive_suffix}")
+    r = await c.prompt(sid, directive)
     return c, sid, r
 
 
 async def s_fs_read() -> str:
-    c, sid, r = await fs_read(f"{DIR}/fs-read.txt")
+    c, sid, r = await fs_read(f"#fs read {DIR}/fs-read.txt")
     await wait_for(lambda: FS_READ_CONTENT in c.rec.chunks(sid), lambda: f"chunks {c.rec.chunks(sid)}")
     return "chunk equals fixtures.fsReadContent"
 
 
 async def s_fs_read_range() -> str:
-    c, sid, r = await fs_read(f"{DIR}/fs-read.txt line=2 limit=1")
+    c, sid, r = await fs_read(f"#fs read-range {DIR}/fs-read.txt line=2 limit=1")
     await wait_for(lambda: any(x.strip() == "line2" for x in c.rec.chunks(sid)), lambda: f"chunks {c.rec.chunks(sid)}")
     return "chunk \"line2\""
 
 
 async def s_fs_read_missing() -> str:
-    c, sid, r = await fs_read(f"{DIR}/no-such-file.txt")
+    c, sid, r = await fs_read(f"#fs read-missing {DIR}/no-such-file.txt")
     end_turn(r)
     await wait_for(lambda: any(x.startswith("fs read error") for x in c.rec.chunks(sid)),
                    lambda: f"chunks {c.rec.chunks(sid)}")

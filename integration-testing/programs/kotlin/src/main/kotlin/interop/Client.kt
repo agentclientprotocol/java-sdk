@@ -860,13 +860,13 @@ object Steps {
         },
         "fs.read-range" to {
             val file = ClientMain.dir.resolve("fs-read.txt").also { it.writeText(Fixtures.FS_READ_CONTENT) }
-            val (sid, r) = promptNew("#fs read ${file.absolutePathString()} line=2 limit=1")
+            val (sid, r) = promptNew("#fs read-range ${file.absolutePathString()} line=2 limit=1")
             endTurn(r)
             await(failure = { "no chunk \"line2\" in ${main().chunks(sid)}" }) { main().chunks(sid).any { it.trim() == "line2" } }
             "line=2 limit=1 read \"line2\""
         },
         "fs.read-missing" to {
-            val (sid, r) = promptNew("#fs read ${ClientMain.dir.resolve("no-such-file.txt").absolutePathString()}")
+            val (sid, r) = promptNew("#fs read-missing ${ClientMain.dir.resolve("no-such-file.txt").absolutePathString()}")
             endTurn(r)
             await(failure = { "no chunk starting \"fs read error\" in ${main().chunks(sid)}" }) {
                 main().chunks(sid).any { it.startsWith("fs read error") }

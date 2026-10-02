@@ -345,11 +345,11 @@ async function fs(ctx, sid, clientCaps, args, rest, kw, chunk) {
     }
     return { stopReason: "end_turn" };
   }
-  if (op === "read") {
+  if (op === "read" || op === "read-range" || op === "read-missing") {
     const path = args[1];
     const line = kw("line");
     const limit = kw("limit");
-    const id = line !== undefined || limit !== undefined ? "fs.read-range" : path.endsWith("/fs-read.txt") ? "fs.read" : "fs.read-missing";
+    const id = `fs.${op}`;
     const t0 = Date.now();
     if (clientCaps?.fs?.readTextFile !== true) {
       agentStep(id, false, "the client did not advertise fs.readTextFile", t0);

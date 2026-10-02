@@ -317,13 +317,13 @@ class InteropAgent:
             agent_step("fs.write", True, started, f"fs/write_text_file answered {compact(dump(r))}")
             await self._chunk(s.id, "fs write ok")
             return {"stopReason": "end_turn"}
-        if op in ("read", "read-slow"):
+        if op in ("read", "read-range", "read-missing", "read-slow"):
             parts = args.split(" ")
             path = parts[0]
             opts = dict(p.split("=", 1) for p in parts[1:] if "=" in p)
             line = int(opts["line"]) if "line" in opts else None
             limit = int(opts["limit"]) if "limit" in opts else None
-            step_id = "cancel-request.agent" if op == "read-slow" else ("fs.read-range" if opts else "fs.read")
+            step_id = "cancel-request.agent" if op == "read-slow" else f"fs.{op}"
             if fs.get("readTextFile") is not True:
                 agent_step(step_id, False, started, "client did not advertise fs.readTextFile")
                 await self._chunk(s.id, "fs read error capability")
@@ -333,12 +333,14 @@ class InteropAgent:
             try:
                 r = await self.conn.read_text_file(session_id=s.id, path=path, line=line, limit=limit)
             except RequestError as e:
-                agent_step("fs.read-missing", True, started, f"fs/read_text_file failed with {e.code} {e}")
+                agent_step(step_id, step_id == "fs.read-missing", started, f"fs/read_text_file failed with {e.code} {e}")
                 await self._chunk(s.id, f"fs read error {e.code}")
                 return {"stopReason": "end_turn"}
             content = r.content
             if step_id == "fs.read-range":
                 agent_step(step_id, content.strip() == "line2", started, f"content {content!r}")
+            elif step_id == "fs.read-missing":
+                agent_step(step_id, False, started, f"reading a missing file succeeded: {content!r}")
             else:
                 agent_step(step_id, content == FS_READ_CONTENT, started, f"content {content!r}")
             await self._chunk(s.id, content)

@@ -390,7 +390,9 @@ public class Agent {
 			};
 			case "#fs" -> switch (sub) {
 				case "write" -> fsWrite(s.id, context, caps, rest(text, 2));
-				case "read" -> fsRead(s.id, context, caps, words);
+				case "read" -> fsRead(s.id, context, caps, words, "fs.read");
+				case "read-range" -> fsRead(s.id, context, caps, words, "fs.read-range");
+				case "read-missing" -> fsRead(s.id, context, caps, words, "fs.read-missing");
 				case "read-slow" -> {
 					// The catalogue's agent sends $/cancel_request for its own fs read; the Java SDK
 					// has no $/cancel_request (P2), so the read is not even started.
@@ -524,9 +526,12 @@ public class Agent {
 			.thenReturn(endTurn());
 	}
 
-	/** {@code #fs read <path> [line=<n>] [limit=<n>]}: fs.read, fs.read-range or fs.read-missing. */
+	/**
+	 * {@code #fs read <path>}, {@code #fs read-range <path> [line=<n>] [limit=<n>]} and
+	 * {@code #fs read-missing <path>}: the steps fs.read, fs.read-range and fs.read-missing.
+	 */
 	static Mono<AcpSchema.PromptResponse> fsRead(String sessionId, PromptContext context,
-			AcpSchema.ClientCapabilities caps, String[] words) {
+			AcpSchema.ClientCapabilities caps, String[] words, String id) {
 		long t0 = System.nanoTime();
 		String path = words.length > 2 ? words[2] : "";
 		Integer line = null;
@@ -539,8 +544,6 @@ public class Agent {
 				limit = Integer.valueOf(words[i].substring(6));
 			}
 		}
-		String id = line != null || limit != null ? "fs.read-range" : path.endsWith("/no-such-file.txt") ? "fs.read-missing"
-				: "fs.read";
 		if (!fsAllowed(caps, false)) {
 			step(id, false, t0, "the client did not advertise fs.readTextFile");
 			return context.sendMessage("fs read error capability").thenReturn(endTurn());
