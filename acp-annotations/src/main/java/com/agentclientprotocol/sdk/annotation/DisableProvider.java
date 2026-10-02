@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
  *
  * <p>The annotated method disables a provider by id. It may take a {@code DisableProviderRequest}
  * parameter and should return a {@code DisableProviderResponse} (or
- * {@code Mono<DisableProviderResponse>}, or {@code void} for an empty response).
+ * {@code Mono<DisableProviderResponse>}).
  *
  * @author Mark Pollack
  * @since 0.13.0

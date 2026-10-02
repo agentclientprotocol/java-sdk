@@ -28,7 +28,7 @@ Three API styles for building agents:
 | [**Async**](#4-hello-world-agent-async) | Reactive applications using Project Reactor `Mono` | [Jump to example](#4-hello-world-agent-async) |
 
 **Key Features:**
-- Java 17+, type-safe, stdio and WebSocket transports
+- Java 17+, type-safe, stdio, WebSocket and Streamable HTTP transports
 - Capability negotiation and structured error handling
 - For a hands-on walkthrough, see the **[ACP Java Tutorial](https://github.com/markpollack/acp-java-tutorial)**
 
@@ -423,13 +423,18 @@ server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/ac
 
 | Package | Description |
 |---------|-------------|
-| `com.agentclientprotocol.sdk.spec` | Protocol types (`AcpSchema.*`) |
+| `com.agentclientprotocol.sdk.spec` | Protocol types (`AcpSchema.*`), the JSON-RPC sessions and the transport contracts (`AcpClientTransport`, `AcpAgentTransport`) |
 | `com.agentclientprotocol.sdk.client` | Client SDK (`AcpClient`, `AcpAsyncClient`, `AcpSyncClient`) |
-| `com.agentclientprotocol.sdk.agent` | Agent SDK (`AcpAgent`, `AcpAsyncAgent`, `AcpSyncAgent`) |
-| `com.agentclientprotocol.sdk.agent.support` | Annotation-based agent runtime (`AcpAgentSupport`) |
+| `com.agentclientprotocol.sdk.client.transport` | Client transports (`StdioAcpClientTransport`, `WebSocketAcpClientTransport`, `StreamableHttpAcpClientTransport`) |
+| `com.agentclientprotocol.sdk.agent` | Agent SDK (`AcpAgent`, `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAgentFactory`) |
+| `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; `StreamableHttpAcpAgentTransport` and `StreamableHttpAcpServlet` from acp-streamable-http-jetty) |
+| `com.agentclientprotocol.sdk.agent.support` | Annotation-based agent runtime (`AcpAgentSupport`), with its `resolver`, `handler`, `interceptor` and `invocation` extension points |
 | `com.agentclientprotocol.sdk.annotation` | Agent annotations (`@AcpAgent`, `@Prompt`, etc.) |
 | `com.agentclientprotocol.sdk.capabilities` | Capability negotiation (`NegotiatedCapabilities`) |
 | `com.agentclientprotocol.sdk.error` | Exceptions (`AcpProtocolException`, `AcpCapabilityException`) |
+| `com.agentclientprotocol.sdk.json` | JSON mapping abstraction (`AcpJsonMapper`, `TypeRef`); the Jackson 2 implementation (`JacksonAcpJsonMapper`) from acp-json-jackson2 |
+| `com.agentclientprotocol.sdk.json.jackson3` | Jackson 3 implementation (`Jackson3AcpJsonMapper`) from acp-json-jackson3 |
+| `com.agentclientprotocol.sdk.test` | Test support from acp-test (`InMemoryTransportPair`, `MockAcpAgent`, `MockAcpClient`) |
 
 ### Maven Artifacts
 
@@ -450,6 +455,7 @@ server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/ac
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
 | WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
+| Streamable HTTP in your own Servlet 6 container | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpServlet` (HTTP/SSE only; the WebSocket upgrade needs `StreamableHttpAcpAgentTransport`) | acp-core / acp-streamable-http-jetty |
 
 ---
 

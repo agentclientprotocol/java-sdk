@@ -30,7 +30,6 @@ import java.lang.annotation.Target;
  * <ul>
  *   <li>{@code DeleteSessionResponse} - the delete session response</li>
  *   <li>{@code Mono<DeleteSessionResponse>} - for async handling</li>
- *   <li>{@code void} - an empty response is sent automatically</li>
  * </ul>
  *
  * <p>Example usage:

@@ -27,7 +27,7 @@ class MyAgent {
 
 // Bootstrap and run
 AcpAgentSupport.create(new MyAgent())
-    .transport(StdioAcpAgentTransport.create())
+    .transport(new StdioAcpAgentTransport())
     .run();
 ```
 
@@ -51,24 +51,40 @@ This module transitively includes `acp-annotations` and `acp-core`.
 
 | Annotation | Description |
 |------------|-------------|
-| `@AcpAgent` | Marks a class as an ACP agent. Required on all agent classes. Optional `name` and `version` attributes. |
+| `@AcpAgent` | Marks a class as an ACP agent. Required on all agent classes. Its optional `name` and `version` attributes are descriptive only: the runtime does not read them, so report the agent's identity in the `InitializeResponse` (`agentInfo`). |
 
 ### Handler Methods
 
 | Annotation | JSON-RPC Method | Description |
 |------------|-----------------|-------------|
-| `@Initialize` | `initialize` | Handles protocol initialization and capability negotiation. |
-| `@NewSession` | `session/new` | Creates a new agent session. |
-| `@LoadSession` | `session/load` | Loads an existing session by ID. |
+| `@Initialize` | `initialize` | Handles protocol initialization and capability negotiation. Without one, the agent answers `InitializeResponse.ok()`. |
+| `@Authenticate` | `authenticate` | Authenticates with one of the methods the agent advertised in `authMethods`. |
+| `@Logout` | `logout` | Clears stored credentials. |
+| `@NewSession` | `session/new` | Creates a new agent session. Without one, the agent answers with a random session ID. |
+| `@LoadSession` | `session/load` | Loads an existing session by ID, replaying its history. |
+| `@ResumeSession` | `session/resume` | Reconnects to an existing session without replaying history. |
+| `@ListSessions` | `session/list` | Lists sessions, optionally filtered by working directory. |
+| `@CloseSession` | `session/close` | Closes an active session. |
+| `@DeleteSession` | `session/delete` | Permanently deletes a stored session. |
+| `@ForkSession` | `session/fork` | Creates a session branched from an existing one (unstable, `@UnstableAcpApi`). |
 | `@Prompt` | `session/prompt` | Handles user prompts within a session. |
 | `@SetSessionMode` | `session/set_mode` | Changes the operational mode of a session. |
+| `@SetSessionConfigOption` | `session/set_config_option` | Changes a session configuration option. |
+| `@ListProviders` | `providers/list` | Lists the providers the agent can route to (unstable). |
+| `@SetProvider` | `providers/set` | Configures a provider (unstable). |
+| `@DisableProvider` | `providers/disable` | Disables a provider (unstable). |
 | `@Cancel` | `session/cancel` | Handles cancellation notifications (fire-and-forget). The cancel does not end the prompt turn: the cancelled `@Prompt` method still returns, with stop reason `cancelled`, and the session rejects a new prompt until it has, or until the cancel grace period (default 60 s, `cancelGracePeriod`) passes and the agent answers `cancelled` itself. |
+| `@ExtRequest("_name")` | any `_`-prefixed request | Serves a custom extension request; the name must start with `_`. |
+| `@ExtNotification("_name")` | any `_`-prefixed notification | Handles a custom extension notification; the name must start with `_`. |
+
+A method without a handler for it is answered with `-32601` (Method not found); a notification
+without one is ignored.
 
 ### Parameter Annotations
 
 | Annotation | Description |
 |------------|-------------|
-| `@SessionId` | Injects the current session ID as a `String`. |
+| `@SessionId` | Injects the current session ID as a `String`, in handlers of session-scoped methods. |
 
 ## Handler Method Signatures
 
@@ -78,15 +94,12 @@ Handler methods support flexible signatures. The runtime automatically resolves 
 
 | Parameter Type | Source |
 |----------------|--------|
-| `InitializeRequest` | The raw initialize request (in `@Initialize` handlers). |
-| `NewSessionRequest` | The raw new session request (in `@NewSession` handlers). |
-| `LoadSessionRequest` | The raw load session request (in `@LoadSession` handlers). |
-| `PromptRequest` | The raw prompt request (in `@Prompt` handlers). |
-| `SetSessionModeRequest` | The raw set mode request (in `@SetSessionMode` handlers). |
-| `CancelNotification` | The raw cancel notification (in `@Cancel` handlers). |
-| `SyncPromptContext` | Synchronous context for sending messages, file I/O, permissions, etc. |
-| `NegotiatedCapabilities` | The capabilities negotiated with the client. |
+| The method's request type | The raw request or notification, in its handler: `InitializeRequest`, `AuthenticateRequest`, `LogoutRequest`, `NewSessionRequest`, `LoadSessionRequest`, `ResumeSessionRequest`, `ListSessionsRequest`, `CloseSessionRequest`, `DeleteSessionRequest`, `ForkSessionRequest`, `PromptRequest`, `SetSessionModeRequest`, `SetSessionConfigOptionRequest`, `ListProvidersRequest`, `SetProviderRequest`, `DisableProviderRequest`, `CancelNotification`. |
+| Any type the JSON mapper can read | The params of an `@ExtRequest` or `@ExtNotification` (at most one such parameter). |
+| `SyncPromptContext` | Synchronous context for sending messages, file I/O, permissions, etc. (in `@Prompt` handlers). |
+| `PromptContext` | The async context the sync one wraps, for a `@Prompt` handler that composes `Mono`s. |
 | `@SessionId String` | The current session ID. |
+| `NegotiatedCapabilities` | The capabilities negotiated with the client on the request's connection (any handler). |
 | `AcpSyncAgent` / `AcpAsyncAgent` | The agent serving the request's connection (any handler). |
 
 Every handler, extension handlers included, can take `NegotiatedCapabilities`, `AcpSyncAgent` or
@@ -138,14 +151,15 @@ The runtime automatically converts return values to protocol response types:
 
 | Return Type | Conversion |
 |-------------|------------|
-| `InitializeResponse` | Passed through directly. |
-| `NewSessionResponse` | Passed through directly. |
-| `LoadSessionResponse` | Passed through directly. |
-| `PromptResponse` | Passed through directly. |
-| `SetSessionModeResponse` | Passed through directly. |
-| `String` | Converted to `PromptResponse.text(value)`. |
-| `void` | Converted to `PromptResponse.endTurn()`. |
-| `Mono<PromptResponse>` | Unwrapped and returned (for async handlers). |
+| The method's response type (`InitializeResponse`, `NewSessionResponse`, `PromptResponse`, ...) | Passed through directly. |
+| `Mono` of the response type | Unwrapped (blocked on) and returned. |
+| `String` (`@Prompt` only) | Converted to `PromptResponse.text(value)`. |
+| `void` (`@Prompt` only) | Converted to `PromptResponse.endTurn()`. |
+| `void` (`@Cancel`, `@ExtNotification`) | Notifications have no response. |
+| Any value the JSON mapper can write (`@ExtRequest`) | Sent as the extension request's result. |
+
+A request handler other than `@Prompt` that returns `void` or `null` (or an empty `Mono`) is
+answered with `-32603` (Internal error): a request must get a result.
 
 ## Using SyncPromptContext
 
@@ -211,7 +225,7 @@ public class LoggingInterceptor implements AcpInterceptor {
     }
 
     @Override
-    public void afterCompletion(AcpInvocationContext context, Throwable error) {
+    public void afterCompletion(AcpInvocationContext context) {
         // Always called, even if exceptions occur
     }
 
@@ -242,7 +256,7 @@ public class UserResolver implements ArgumentResolver {
 
     @Override
     public Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
-        String sessionId = context.getSessionId();
+        String sessionId = context.getSessionId().orElseThrow();
         return userService.findBySession(sessionId);
     }
 }
@@ -287,7 +301,7 @@ AcpAgentSupport.create(new MyAgent())
 
 ```java
 AcpAgentSupport.create(new MyAgent())
-    .transport(StdioAcpAgentTransport.create())
+    .transport(new StdioAcpAgentTransport())
     .run();
 ```
 
@@ -330,6 +344,8 @@ AcpAsyncClient client = AcpClient.async(pair.clientTransport()).build();
 AcpAgentSupport.create(agentInstance)      // Start with agent instance
     .transport(transport)                   // Required: set transport
     .requestTimeout(Duration.ofSeconds(60)) // Optional: request timeout (default: 30s)
+    .cancelGracePeriod(Duration.ofSeconds(10)) // Optional: time a cancelled prompt has to return (default: 60s)
+    .maxPromptDuration(Duration.ofMinutes(5))  // Optional: longest a prompt may run (default: none)
     .interceptor(interceptor)               // Optional: add interceptor
     .argumentResolver(resolver)             // Optional: add custom resolver
     .returnValueHandler(handler)            // Optional: add custom handler
@@ -387,7 +403,7 @@ class CodeAssistant {
     NewSessionResponse newSession(NewSessionRequest req) {
         String sessionId = UUID.randomUUID().toString();
         sessionHistory.put(sessionId, new ArrayList<>());
-        return new NewSessionResponse(sessionId, List.of(), List.of());
+        return new NewSessionResponse(sessionId, null, null);
     }
 
     @LoadSession
@@ -396,7 +412,7 @@ class CodeAssistant {
             throw new AcpProtocolException(AcpErrorCodes.RESOURCE_NOT_FOUND,
                 "Session not found: " + req.sessionId());
         }
-        return new LoadSessionResponse(List.of(), List.of());
+        return new LoadSessionResponse(null, null);
     }
 
     @Prompt
@@ -438,7 +454,7 @@ class CodeAssistant {
 public class Main {
     public static void main(String[] args) {
         AcpAgentSupport.create(new CodeAssistant())
-            .transport(StdioAcpAgentTransport.create())
+            .transport(new StdioAcpAgentTransport())
             .interceptor(new MetricsInterceptor())
             .run();
     }
@@ -503,7 +519,8 @@ acp-agent-support
 │   ├── DirectResponseHandler
 │   ├── StringToPromptResponseHandler
 │   ├── VoidHandler
-│   └── MonoHandler
+│   ├── MonoHandler
+│   └── ExtensionResultHandler
 └── interceptor/             # Interceptor chain
     ├── AcpInterceptor       # Interface
     └── InterceptorChain     # Execution chain

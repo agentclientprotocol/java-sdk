@@ -26,7 +26,6 @@ import java.lang.annotation.Target;
  * <ul>
  *   <li>{@code LogoutResponse} - the logout response</li>
  *   <li>{@code Mono<LogoutResponse>} - for async handling</li>
- *   <li>{@code void} - an empty response is sent automatically</li>
  * </ul>
  *
  * <p>Example usage:

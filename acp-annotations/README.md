@@ -7,12 +7,27 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 | Annotation | Target | Purpose |
 |-----------|--------|---------|
 | `@AcpAgent` | Class | Marks a class as an ACP agent |
-| `@Initialize` | Method | Handles initialization requests |
-| `@NewSession` | Method | Handles new session creation |
-| `@LoadSession` | Method | Handles session resume |
-| `@Prompt` | Method | Handles prompt requests |
-| `@Cancel` | Method | Handles cancel notifications |
-| `@SetSessionMode` | Method | Handles mode change requests |
+| `@Initialize` | Method | Handles `initialize` |
+| `@Authenticate` | Method | Handles `authenticate` |
+| `@Logout` | Method | Handles `logout` |
+| `@NewSession` | Method | Handles `session/new` |
+| `@LoadSession` | Method | Handles `session/load` (with history replay) |
+| `@ResumeSession` | Method | Handles `session/resume` (without history replay) |
+| `@ListSessions` | Method | Handles `session/list` |
+| `@CloseSession` | Method | Handles `session/close` |
+| `@DeleteSession` | Method | Handles `session/delete` |
+| `@ForkSession` | Method | Handles `session/fork` (unstable) |
+| `@Prompt` | Method | Handles `session/prompt` |
+| `@SetSessionMode` | Method | Handles `session/set_mode` |
+| `@SetSessionConfigOption` | Method | Handles `session/set_config_option` |
+| `@ListProviders` | Method | Handles `providers/list` (unstable) |
+| `@SetProvider` | Method | Handles `providers/set` (unstable) |
+| `@DisableProvider` | Method | Handles `providers/disable` (unstable) |
+| `@Cancel` | Method | Handles the `session/cancel` notification |
+| `@ExtRequest` | Method | Handles a `_`-prefixed extension request |
+| `@ExtNotification` | Method | Handles a `_`-prefixed extension notification |
+| `@SessionId` | Parameter | Injects the current session ID |
+| `@UnstableAcpApi` | Any | Marks API for protocol elements not in the stable schema |
 
 ## Installation
 
@@ -20,7 +35,7 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-annotations</artifactId>
-    <version>0.9.0</version>
+    <version>0.18.0</version>
 </dependency>
 ```
 

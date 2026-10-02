@@ -116,7 +116,7 @@ import org.slf4j.LoggerFactory;
  *
  * // Bootstrap
  * AcpAgentSupport.create(new MyAgent())
- *     .transport(StdioAcpAgentTransport.create())
+ *     .transport(new StdioAcpAgentTransport())
  *     .run();
  * }</pre>
  *

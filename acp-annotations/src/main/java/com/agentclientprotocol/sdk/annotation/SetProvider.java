@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
  *
  * <p>The annotated method configures a provider's routing (protocol, base URL, headers). It may
  * take a {@code SetProviderRequest} parameter and should return a {@code SetProviderResponse}
- * (or {@code Mono<SetProviderResponse>}, or {@code void} for an empty response).
+ * (or {@code Mono<SetProviderResponse>}).
  *
  * @author Mark Pollack
  * @since 0.13.0
