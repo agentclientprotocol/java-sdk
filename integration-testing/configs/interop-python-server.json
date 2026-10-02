@@ -64,29 +64,13 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 10",
-      "client RESULT fail == 2",
+      "client RESULT pass == 12",
+      "client RESULT fail == 0",
       "client RESULT prompt1_updates >= 2",
       "client RESULT prompt2_updates >= 2",
       "client RESULT prompt3_permission_updates >= 2",
       "client RESULT prompt_after_load_updates >= 2"
-    ],
-    "expectedFailures": [
-      {
-        "process": "client",
-        "step": "reconnect-session/load",
-        "contains": "404",
-        "reason": "RFD contradiction, not a Java bug: the Java client follows the reconnect diagram and pre-opens the session GET before session/load on the new connection; the Python server follows the rule that an Acp-Session-Id unknown to the connection is a 404",
-        "see": "RFD streamable-http-websocket-transport: the reconnect sequence opens the session GET before session/load, while the server rules say an unknown Acp-Session-Id returns 404; the Python server follows the latter"
-      },
-      {
-        "process": "client",
-        "step": "reconnect-prompt",
-        "contains": "404",
-        "reason": "follows from reconnect-session/load: the session was never attached to the new connection",
-        "see": "RFD streamable-http-websocket-transport: the reconnect sequence opens the session GET before session/load, while the server rules say an unknown Acp-Session-Id returns 404; the Python server follows the latter"
-      }
     ]
   },
-  "comment": "Reconnect-then-load is an EXPECTED failure (RFD contradiction, not a Java bug); if the Python server starts accepting it the scenario fails so the expectation gets updated."
+  "comment": "Reconnect-then-load passes against the Python server since fe7567a: when a server answers the session-stream GET with 404 (as Python does for a session unknown to the connection), the Java client posts session/load on the connection without Acp-Session-Id. The RFD still contradicts itself here (reconnect diagram vs the unknown-session 404 rule)."
 }
