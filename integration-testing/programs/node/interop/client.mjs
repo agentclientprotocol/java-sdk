@@ -700,6 +700,42 @@ const steps = {
   "stop.max_tokens": () => stopStep("max_tokens"),
   "stop.refusal": () => stopStep("refusal"),
   "stop.max_turn_requests": () => stopStep("max_turn_requests"),
+  "enum.tool_call": async () => {
+    const { c, sid } = await endTurn("#enum tool_call");
+    await waitFor(() => c.chunks(sid).includes("after-enum"), () => `no "after-enum" chunk in ${abbreviate(c.chunks(sid))}`);
+    const u = await updateOf(c, sid, (u) => u.sessionUpdate === "tool_call" && u.toolCallId === "call-enum", "no tool_call call-enum");
+    check(u.status === "interop_future_status", `status ${u.status}`);
+    check(u.kind === "interop_future_kind" || u.kind === "other", `kind ${u.kind}`);
+    return `tool_call status ${u.status}, kind ${u.kind}; after-enum; end_turn`;
+  },
+  "enum.plan": async () => {
+    const { c, sid } = await endTurn("#enum plan");
+    await waitFor(() => c.chunks(sid).includes("after-enum"), () => `no "after-enum" chunk in ${abbreviate(c.chunks(sid))}`);
+    const u = await updateOf(c, sid, (u) => u.sessionUpdate === "plan", "no plan");
+    const e = u.entries?.[0];
+    check(u.entries?.length === 1 && e.content === "future entry", `entries ${abbreviate(u.entries)}`);
+    check(e.priority === "interop_future_priority" && e.status === "interop_future_status", `entry ${abbreviate(e)}`);
+    return `plan entry priority ${e.priority}, status ${e.status}; after-enum; end_turn`;
+  },
+  "enum.stop": async () => {
+    const { c, sid, r } = await promptNew("#enum stop");
+    check(r?.stopReason === "interop_future_stop", `stopReason ${r?.stopReason}`);
+    const after = await c.prompt(sid, "after enum");
+    check(after?.stopReason === "end_turn", `"after enum": stopReason ${after?.stopReason}`);
+    return 'stopReason interop_future_stop; "after enum" end_turn';
+  },
+  "enum.audience": async () => {
+    const c = mainConn();
+    const { sessionId: sid } = await c.newSession();
+    // Role is a closed string union in the TS types; request() sends the params as given.
+    const r = await c.request(M.agent.session.prompt, {
+      sessionId: sid,
+      prompt: [{ type: "text", text: "#enum audience", annotations: { audience: [...fixtures.unknownEnums.audience] } }],
+    });
+    check(r?.stopReason === "end_turn", `stopReason ${r?.stopReason}`);
+    await waitFor(() => c.chunks(sid).includes("audience: user,interop_future_role"), () => `chunks ${abbreviate(c.chunks(sid))}`);
+    return "audience: user,interop_future_role; end_turn";
+  },
   "mode.set": async () => {
     const c = mainConn();
     const s = await c.newSession();
@@ -732,6 +768,21 @@ const steps = {
     const r = await c.request(M.agent.session.setConfigOption, { sessionId: s.sessionId, configId: "verbose", type: "boolean", value: true });
     check((r?.configOptions ?? []).some((o) => o.id === "verbose" && o.currentValue === true), `configOptions ${abbreviate(r?.configOptions)}`);
     return "verbose at true";
+  },
+  "config.grouped": async () => {
+    const { c, sid } = await endTurn("#config grouped");
+    const u = await updateOf(c, sid, (u) => u.sessionUpdate === "config_option_update", "no config_option_update");
+    const effort = (u.configOptions ?? []).find((o) => o.id === "effort");
+    check(effort?.type === "select", `configOptions ${abbreviate(u.configOptions)}`);
+    const groups = (effort.options ?? []).map((g) => g.group);
+    check(groups.join(",") === "fast,deep", `effort groups ${abbreviate(effort.options)}`);
+    const values = effort.options.flatMap((g) => g.options ?? []).map((o) => o.value);
+    check(values.join(",") === "effort-low,effort-medium,effort-high", `effort values ${values}`);
+    const r = await c.request(M.agent.session.setConfigOption, { sessionId: sid, configId: "effort", value: "effort-high" });
+    const opts = r?.configOptions ?? [];
+    check(opts.some((o) => o.id === "effort" && o.currentValue === "effort-high") && opts.some((o) => o.id === "model"),
+      `configOptions ${abbreviate(opts)}`);
+    return `effort grouped fast/deep, values ${values}; set to effort-high`;
   },
   "perm.selected": async () => {
     const { c, sid } = await endTurn("#permission allow");
@@ -860,6 +911,21 @@ const steps = {
     check(ended !== undefined, "TIMEOUT: no answer within 6 s of the cancel");
     check(ended.ok && ended.value?.stopReason === "cancelled", () => (ended.ok ? `stopReason ${ended.value?.stopReason}` : describeError(ended.error)));
     return `the SDK answered cancelled ${Date.now() - tCancel} ms after the cancel`;
+  },
+  "cancel.max-duration": async () => {
+    const c = mainConn();
+    const { sessionId: sid } = await c.newSession();
+    const t0 = Date.now();
+    const pending = c.prompt(sid, "#hang");
+    pending.catch(() => {});
+    const ended = await settle(pending, 11000);
+    const ms = Date.now() - t0;
+    check(ended !== undefined, "TIMEOUT: no answer within 11 s");
+    check(!ended.ok && ended.error?.code === -32800, () => (ended.ok ? `answered ${abbreviate(ended.value)}` : `failed with ${describeError(ended.error)}, expected -32800`));
+    check(ms >= 7000, `-32800 after ${ms} ms, before the 8 s maxPromptDuration`);
+    const after = await c.prompt(sid, "after max-duration");
+    check(after?.stopReason === "end_turn", `"after max-duration": stopReason ${after?.stopReason}`);
+    return `-32800 after ${ms} ms; "after max-duration" end_turn`;
   },
   "cancel-request.client": async () => {
     const c = mainConn();
