@@ -38,6 +38,9 @@ struct Session {
     mode: String,
     model: String,
     verbose: bool,
+    /// Whether #config grouped added fixtures.groupedConfigOption (config.grouped), and its value.
+    grouped: bool,
+    effort: String,
 }
 
 impl Session {
@@ -51,6 +54,8 @@ impl Session {
             mode: "interop-mode-a".into(),
             model: "model-a".into(),
             verbose: false,
+            grouped: false,
+            effort: "effort-low".into(),
         }
     }
 
@@ -113,8 +118,26 @@ fn session_options(sid: &str, conn: &Conn) -> (Value, Value) {
     let mode = s.map(|s| s.mode.clone()).unwrap_or_else(|| "interop-mode-a".into());
     let model = s.map(|s| s.model.clone()).unwrap_or_else(|| "model-a".into());
     let verbose = conn.boolean_options().map(|_| s.map(|s| s.verbose).unwrap_or(false));
-    (modes(&mode), config_options(&model, verbose))
+    let mut options = config_options(&model, verbose);
+    if let Some(s) = s.filter(|s| s.grouped)
+        && let Value::Array(list) = &mut options
+    {
+        list.push(grouped_config_option(&s.effort));
+    }
+    (modes(&mode), options)
 }
+
+/// fixtures.groupedConfigOption: the select effort, its options in the groups fast and deep.
+fn grouped_config_option(effort: &str) -> Value {
+    json!({ "id": "effort", "name": "Effort", "type": "select", "currentValue": effort,
+        "options": [
+            { "group": "fast", "name": "Fast", "options": [ { "value": "effort-low", "name": "Low" } ] },
+            { "group": "deep", "name": "Deep", "options": [
+                { "value": "effort-medium", "name": "Medium" }, { "value": "effort-high", "name": "High" } ] }
+        ] })
+}
+
+const EFFORT_VALUES: [&str; 3] = ["effort-low", "effort-medium", "effort-high"];
 
 #[derive(Clone)]
 struct InteropAgent;
@@ -353,6 +376,11 @@ impl ConnectTo<Client> for InteropAgent {
                                     s.model = v.clone();
                                     Ok(())
                                 }
+                                ("effort", Value::String(v)) if s.grouped && EFFORT_VALUES.contains(&v.as_str()) => {
+                                    s.effort = v.clone();
+                                    step("config.grouped", v == "effort-high", Instant::now(), &format!("effort set to {v}"));
+                                    Ok(())
+                                }
                                 ("verbose", Value::Bool(b)) if c_cfg.boolean_options().is_some() => {
                                     s.verbose = *b;
                                     Ok(())
@@ -393,6 +421,8 @@ impl ConnectTo<Client> for InteropAgent {
                 async move |req: PromptRequest, responder: Responder<PromptResponse>, cx: ConnectionTo<Client>| {
                     let conn = c_prompt.clone();
                     let cx2 = cx.clone();
+                    // Answered as JSON: #enum stop answers a stopReason the typed StopReason cannot hold.
+                    let responder = responder.erase_to_json();
                     cx.spawn(async move {
                         let sid = req.session_id.to_string();
                         let cancellation = responder.cancellation();
@@ -447,8 +477,8 @@ fn chunk(sid: &str, text: &str) -> SessionNotification {
     notification(sid, json!({ "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": text } }))
 }
 
-fn end(reason: &str) -> PromptResponse {
-    typed(json!({ "stopReason": reason }))
+fn end(reason: &str) -> Value {
+    json!({ "stopReason": reason })
 }
 
 /// Tracks a running turn for session/cancel and session/close.
@@ -498,7 +528,7 @@ async fn prompt(
     conn: &Conn,
     req: PromptRequest,
     cancellation: agent_client_protocol::RequestCancellation,
-) -> Option<Result<PromptResponse, agent_client_protocol::Error>> {
+) -> Option<Result<Value, agent_client_protocol::Error>> {
     let sid = req.session_id.to_string();
     let text: String = req
         .prompt
@@ -658,7 +688,7 @@ async fn prompt(
         ("#stop", reason) => {
             send("stop");
             match serde_json::from_value::<StopReason>(json!(reason)) {
-                Ok(r) => Ok(typed(json!({ "stopReason": r }))),
+                Ok(r) => Ok(json!({ "stopReason": r })),
                 Err(_) => Err(invalid(format!("unknown stop reason {reason}"))),
             }
         }
@@ -688,6 +718,45 @@ async fn prompt(
             Ok(end("cancelled"))
         }
         ("#hang", _) => return None,
+        // Values the v1 schema does not define: the typed ToolCallStatus, PlanEntryPriority,
+        // PlanEntryStatus and StopReason are closed enums, so these go out untyped.
+        ("#enum", what @ ("tool_call" | "plan")) => {
+            let update = if what == "tool_call" {
+                json!({ "sessionUpdate": "tool_call", "toolCallId": "call-enum", "title": "interop enum tool",
+                    "kind": "interop_future_kind", "status": "interop_future_status" })
+            } else {
+                json!({ "sessionUpdate": "plan", "entries": [ { "content": "future entry",
+                    "priority": "interop_future_priority", "status": "interop_future_status" } ] })
+            };
+            let raw = UntypedMessage::new("session/update", json!({ "sessionId": sid, "update": update }))
+                .expect("untyped session/update");
+            let _ = cx.send_notification(raw);
+            send("after-enum");
+            Ok(end("end_turn"))
+        }
+        ("#enum", "stop") => {
+            send("stop");
+            Ok(end("interop_future_stop"))
+        }
+        ("#enum", "audience") => {
+            // Reached only if the SDK parsed the PromptRequest, i.e. accepted the unknown Role.
+            let first = req.prompt.first().map(to_json).unwrap_or(Value::Null);
+            let audience: Option<Vec<String>> = first["annotations"]["audience"]
+                .as_array()
+                .map(|a| a.iter().map(|r| r.as_str().unwrap_or("?").to_string()).collect());
+            let ok = audience.as_deref() == Some(&["user".to_string(), "interop_future_role".to_string()][..]);
+            step("enum.audience", ok, t0, &format!("audience {audience:?}"));
+            send(&format!("audience: {}", audience.map(|a| a.join(",")).unwrap_or_else(|| "none".into())));
+            Ok(end("end_turn"))
+        }
+        ("#config", "grouped") => {
+            if let Some(s) = SESSIONS.lock().unwrap().get_mut(&sid) {
+                s.grouped = true;
+            }
+            let (_, options) = session_options(&sid, conn);
+            let _ = cx.send_notification(notification(&sid, json!({ "sessionUpdate": "config_option_update", "configOptions": options })));
+            Ok(end("end_turn"))
+        }
         ("#terminal", "run") | ("#terminal", "kill") => {
             let kill = arg1 == "kill";
             let id = if kill { "term.kill" } else { "term.run" };
@@ -785,7 +854,7 @@ async fn prompt(
                 resp["_meta"] = m;
             }
             let _ = cx.send_notification(notification(&sid, update));
-            Ok(typed(resp))
+            Ok(resp)
         }
         ("#echo-caps", _) => {
             let caps = conn.caps.lock().unwrap().clone();

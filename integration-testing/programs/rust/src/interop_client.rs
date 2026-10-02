@@ -875,6 +875,74 @@ async fn stop(reason: &str) -> Result<String, String> {
     Ok(format!("stopReason {reason}"))
 }
 
+/// enum.tool_call / enum.plan: an update carrying values v1 does not define, through the typed
+/// SessionNotification handler; then the chunk "after-enum" and end_turn.
+async fn enum_update(what: &str, check: impl Fn(&Value) -> bool) -> Result<String, String> {
+    let cx = main_cx()?;
+    let sid = new_session(&cx).await?;
+    let r = prompt(&cx, &sid, &format!("#enum {what}")).await?;
+    ensure(stop_reason(&r) == "end_turn", format!("stopReason {}", stop_reason(&r)))?;
+    ensure(wait_chunk(&sid, UPDATE_GRACE, |t| t == "after-enum").await.is_some(), "no after-enum chunk")?;
+    let found = updates(&sid).into_iter().find(|u| u["sessionUpdate"] == what);
+    match found {
+        Some(u) if check(&u) => Ok(format!("{what} kept the unknown values: {}; after-enum; end_turn", one_line(&u.to_string()))),
+        Some(u) => Err(format!("{what} surfaced without the raw values: {}", one_line(&u.to_string()))),
+        None => Err(format!("the {what} update was dropped (after-enum and end_turn arrived); updates {}",
+            one_line(&Value::Array(updates(&sid)).to_string()))),
+    }
+}
+
+async fn enum_stop() -> Result<String, String> {
+    let cx = main_cx()?;
+    let sid = new_session(&cx).await?;
+    let r = prompt(&cx, &sid, "#enum stop").await?;
+    ensure(stop_reason(&r) == "interop_future_stop", format!("stopReason {}", stop_reason(&r)))?;
+    prompt_end_turn(&cx, &sid, "after enum").await?;
+    Ok("stopReason interop_future_stop; after enum end_turn".into())
+}
+
+/// enum.audience: the typed Role is closed, so the prompt goes out untyped.
+async fn enum_audience() -> Result<String, String> {
+    let cx = main_cx()?;
+    let sid = new_session(&cx).await?;
+    let req = UntypedMessage::new("session/prompt", json!({ "sessionId": sid, "prompt": [ { "type": "text",
+        "text": "#enum audience", "annotations": { "audience": ["user", "interop_future_role"] } } ] }))
+        .map_err(|e| describe(&e))?;
+    let r = cx.send_request(req).block_task().await.ctx("session/prompt")?;
+    ensure(stop_reason(&r) == "end_turn", format!("stopReason {}", stop_reason(&r)))?;
+    let c = wait_chunk(&sid, UPDATE_GRACE, |t| t.starts_with("audience: ")).await;
+    ensure(c.as_deref() == Some("audience: user,interop_future_role"), format!("chunk {c:?}"))?;
+    Ok("audience: user,interop_future_role; end_turn".into())
+}
+
+async fn config_grouped() -> Result<String, String> {
+    let cx = main_cx()?;
+    let sid = new_session(&cx).await?;
+    prompt_end_turn(&cx, &sid, "#config grouped").await?;
+    ensure(wait_for(UPDATE_GRACE, || updates(&sid).iter().any(|u| u["sessionUpdate"] == "config_option_update")).await,
+        "no config_option_update")?;
+    let u = updates(&sid).into_iter().find(|u| u["sessionUpdate"] == "config_option_update").unwrap();
+    let effort = option(&u["configOptions"], "effort").ok_or(format!("no effort in {}", u["configOptions"]))?.clone();
+    let groups: Vec<Value> = effort["options"].as_array().cloned().unwrap_or_default();
+    let names: Vec<&str> = groups.iter().filter_map(|g| g["group"].as_str()).collect();
+    ensure(names == ["fast", "deep"], format!("effort options {}", effort["options"]))?;
+    let values: Vec<String> = groups
+        .iter()
+        .flat_map(|g| g["options"].as_array().cloned().unwrap_or_default())
+        .filter_map(|o| o["value"].as_str().map(String::from))
+        .collect();
+    ensure(values == ["effort-low", "effort-medium", "effort-high"], format!("effort values {values:?}"))?;
+    let r = cx
+        .send_request::<SetSessionConfigOptionRequest>(typed(json!({ "sessionId": sid, "configId": "effort", "value": "effort-high" })))
+        .block_task()
+        .await
+        .ctx("session/set_config_option")?;
+    let list = to_json(&r)["configOptions"].clone();
+    let e = option(&list, "effort").ok_or(format!("configOptions {list}"))?;
+    ensure(e["currentValue"] == "effort-high" && option(&list, "model").is_some(), format!("configOptions {list}"))?;
+    Ok(format!("effort grouped fast/deep, values {values:?}; set to effort-high"))
+}
+
 async fn mode_set() -> Result<String, String> {
     let cx = main_cx()?;
     let (sid, r) = new_session_in(&cx, &dir()).await?;
@@ -1064,6 +1132,27 @@ async fn cancel_grace() -> Result<String, String> {
     let r = to_json(&r);
     ensure(stop_reason(&r) == "cancelled", format!("stopReason {}", stop_reason(&r)))?;
     Ok(format!("cancelled {} ms after the cancel", t.elapsed().as_millis()))
+}
+
+/// cancel.max-duration: #hang, never cancelled; the Java agent answers -32800 at 8 s.
+async fn cancel_max_duration() -> Result<String, String> {
+    let cx = main_cx()?;
+    let sid = new_session(&cx).await?;
+    let t0 = Instant::now();
+    let hang = cx.send_request(prompt_request(&sid, "#hang", false));
+    let r = tokio::time::timeout(Duration::from_secs(11), hang.block_task())
+        .await
+        .map_err(|_| "TIMEOUT: no answer within 11 s".to_string())?;
+    let ms = t0.elapsed().as_millis();
+    match r {
+        Ok(r) => Err(format!("the prompt answered {}, expected error -32800", to_json(&r))),
+        Err(e) => {
+            ensure(code_of(&e) == -32800, format!("the prompt failed with {}, expected -32800", describe(&e)))?;
+            ensure(ms >= 7000, format!("-32800 after {ms} ms, before the 8 s maxPromptDuration"))?;
+            prompt_end_turn(&cx, &sid, "after max-duration").await?;
+            Ok(format!("-32800 after {ms} ms; after max-duration end_turn"))
+        }
+    }
 }
 
 async fn cancel_request_client() -> Result<String, String> {
@@ -1337,10 +1426,26 @@ async fn step(id: &str) {
         "stop.max_tokens" => run(id, stop("max_tokens")).await,
         "stop.refusal" => run(id, stop("refusal")).await,
         "stop.max_turn_requests" => run(id, stop("max_turn_requests")).await,
+        "enum.tool_call" => {
+            run(id, enum_update("tool_call", |u| {
+                u["toolCallId"] == "call-enum" && u["status"] == "interop_future_status"
+                    && (u["kind"] == "interop_future_kind" || u["kind"] == "other")
+            }))
+            .await
+        }
+        "enum.plan" => {
+            run(id, enum_update("plan", |u| {
+                u["entries"] == json!([ { "content": "future entry", "priority": "interop_future_priority", "status": "interop_future_status" } ])
+            }))
+            .await
+        }
+        "enum.stop" => run(id, enum_stop()).await,
+        "enum.audience" => run(id, enum_audience()).await,
         "mode.set" => run(id, mode_set()).await,
         "config.on-new" => run(id, config_on_new()).await,
         "config.select" => run(id, config_select()).await,
         "config.boolean" => run(id, config_boolean()).await,
+        "config.grouped" => run(id, config_grouped()).await,
         "perm.selected" => run(id, perm_selected()).await,
         "perm.cancelled" => run(id, perm_cancelled()).await,
         "fs.write" => run(id, fs_write()).await,
@@ -1354,6 +1459,7 @@ async fn step(id: &str) {
         "cancel.prompt" => run(id, cancel_prompt()).await,
         "cancel.prompt-while-cancelling" => run(id, cancel_prompt_while_cancelling()).await,
         "cancel.grace" => run(id, cancel_grace()).await,
+        "cancel.max-duration" => run(id, cancel_max_duration()).await,
         "cancel-request.client" => run(id, cancel_request_client()).await,
         "cancel-request.agent" => {
             run(id, chunk_step(&format!("#fs read-slow {}/slow.txt", dir()), Duration::from_secs(5), |t| t == "cancel-request sent"))
