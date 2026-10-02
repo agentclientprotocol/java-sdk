@@ -111,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   `build()` throws `IllegalStateException` naming the first missing required field (`id`, `name`,
   `currentValue`, and for a select the options).
+- **`ClientCapabilities.builder()` and `AgentCapabilities.builder()`** reach every field without
+  positional `null`s. Advertising boolean config options was the 6-argument canonical
+  constructor with three `null`s; it is now
+  `ClientCapabilities.builder().session(ClientSessionCapabilities.withBooleanConfigOptions()).build()`.
+  - `ClientCapabilities.Builder`: `fs`, `terminal`, `session`, `auth`, `elicitation`, `meta`.
+    It starts from `new ClientCapabilities()` (file system `false`/`false`, terminal `false`).
+  - `AgentCapabilities.Builder`: `loadSession`, `sessionCapabilities`, `mcpCapabilities`,
+    `promptCapabilities`, `auth`, `providers` (`@UnstableAcpApi`), `meta`. It starts from
+    `new AgentCapabilities()` (no `session/load`, default MCP and prompt capabilities).
+  - `ClientSessionCapabilities.withBooleanConfigOptions()`: `{"configOptions": {"boolean": {}}}`.
 - **Agent capability `auth.logout`** (`AgentCapabilities.auth`, `AgentAuthCapabilities`,
   `LogoutCapabilities`; `AgentAuthCapabilities.withLogout()`): the agent advertises that it
   supports `logout`, and clients check `NegotiatedCapabilities.supportsLogout()` /
