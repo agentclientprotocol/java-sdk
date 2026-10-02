@@ -94,6 +94,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ClientCapabilities.session`, `ClientSessionCapabilities`, `SessionConfigOptionsCapabilities`,
   `BooleanConfigOptionCapabilities`; `SessionConfigOptionsCapabilities.withBoolean()`) tells the
   agent it may send them; agents check `NegotiatedCapabilities.supportsBooleanConfigOptions()`.
+- **Building a model picker and other categorized config options.** Model choice is a select
+  config option with `category: "model"`, and before only the 8-argument canonical
+  `SessionConfigSelect` constructor took a category. New:
+  - `SessionConfigSelect.model(id, name, currentValue, options)`, with `options` a
+    `List<SessionConfigSelectOption>` or a (grouped) `SessionConfigSelectOptions`: a select
+    option with category `"model"`.
+  - `SessionConfigSelect.builder()`: `id`, `name`, `description`, `category`, `currentValue`,
+    `options(List)` (flat), `groups(List<SessionConfigSelectGroup>)`, `options(SessionConfigSelectOptions)`
+    and `meta`, then `build()`.
+  - `SessionConfigBoolean.builder()`: `id`, `name`, `description`, `category`,
+    `currentValue(boolean)` and `meta`, then `build()`.
+  - `AcpSchema.SessionConfigOptionCategory`: the categories ACP v1 reserves, as `String`
+    constants `MODE`, `MODEL`, `MODEL_CONFIG` and `THOUGHT_LEVEL`. `category` stays an open
+    `String`; custom categories start with `_`.
+
+  `build()` throws `IllegalStateException` naming the first missing required field (`id`, `name`,
+  `currentValue`, and for a select the options).
 - **Agent capability `auth.logout`** (`AgentCapabilities.auth`, `AgentAuthCapabilities`,
   `LogoutCapabilities`; `AgentAuthCapabilities.withLogout()`): the agent advertises that it
   supports `logout`, and clients check `NegotiatedCapabilities.supportsLogout()` /
