@@ -47,15 +47,15 @@ public class AcpProtocolException extends AcpException {
 
 	private final @Nullable Object data;
 
+	private final String errorMessage;
+
 	/**
 	 * Constructs a new protocol exception with the specified code and message.
 	 * @param code the JSON-RPC error code
 	 * @param message the error message
 	 */
 	public AcpProtocolException(int code, String message) {
-		super(formatMessage(code, message));
-		this.code = code;
-		this.data = null;
+		this(code, message, null);
 	}
 
 	/**
@@ -68,6 +68,7 @@ public class AcpProtocolException extends AcpException {
 		super(formatMessage(code, message));
 		this.code = code;
 		this.data = data;
+		this.errorMessage = message;
 	}
 
 	/**
@@ -85,6 +86,15 @@ public class AcpProtocolException extends AcpException {
 	 */
 	public @Nullable Object getData() {
 		return data;
+	}
+
+	/**
+	 * Returns the error message without the code: the JSON-RPC error {@code message}.
+	 * {@link #getMessage()} prefixes the code, for logs.
+	 * @return the plain error message
+	 */
+	public String getErrorMessage() {
+		return errorMessage;
 	}
 
 	/**

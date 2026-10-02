@@ -51,7 +51,8 @@ final class InboundMessages {
 	 */
 	static AcpSchema.JSONRPCResponse error(AcpSchema.JSONRPCRequest request, Throwable error) {
 		if (error instanceof AcpProtocolException protocolException) {
-			return error(request, protocolException.getCode(), errorMessage(error), protocolException.getData());
+			return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
+					AcpSchema.JSONRPCError.from(protocolException));
 		}
 		return error(request, AcpErrorCodes.INTERNAL_ERROR, errorMessage(error), null);
 	}
