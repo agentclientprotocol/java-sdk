@@ -97,6 +97,11 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 		return asyncContext.getClientCapabilities();
 	}
 
+	@Override
+	public PromptContext async() {
+		return asyncContext;
+	}
+
 	// ========================================================================
 	// Convenience API
 	// ========================================================================

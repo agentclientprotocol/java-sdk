@@ -358,6 +358,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking: `SyncPromptContext.askChoice` returns `Optional<String>`**, empty when the client cancels
   the choice (it was documented to return null, and failed instead, below). `PromptContext.askChoice`
   completes empty on cancellation. Migration: `askChoice(...).orElse(...)`, or test `isPresent()`.
+- **Breaking: `SyncPromptContext` has an abstract `async()` method**, returning the `PromptContext` it
+  blocks on (the same session, turn and client). Migration: an implementation of `SyncPromptContext`,
+  such as a test double, implements `async()`.
 - **Breaking: `CommandResult` carries a nullable exit code and the terminating signal, and no
   `timedOut` flag.** Its components are `(String output, @Nullable Integer exitCode,
   @Nullable String signal)`: a command killed by a signal has no exit code. `timedOut` is removed,
@@ -456,6 +459,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standard input before the tests run. The SDK's own tests never start a reader on `System.in`; the
   one that built the transport on it now passes explicit streams. The `AcpAgentSupport` Javadoc
   example no longer calls a `StdioAcpAgentTransport.create()` that does not exist.
+
+- **An `@Prompt` method taking the async `PromptContext` failed every call.** `PromptContextResolver`
+  accepted the parameter, but `AcpAgentSupport` supplied only the `SyncPromptContext`, so the prompt
+  was answered with `-32603` "PromptContext is only available for @Prompt handlers". The parameter
+  now receives the context the sync one wraps (`SyncPromptContext.async()`), so a `@Prompt` method
+  can take either and return a `Mono<PromptResponse>` composed from the async calls.
 
 - **A handler that threw an `Error` left the peer waiting.** Reactor rethrows what it treats as
   JVM-fatal (`LinkageError`, `VirtualMachineError`) instead of signalling it, so a handler that

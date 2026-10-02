@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Cancel;
@@ -59,6 +60,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+
+import reactor.core.publisher.Mono;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -668,6 +671,56 @@ class AcpAgentSupportTest {
 
 		assertThat(closedSessionId.get()).isEqualTo("session-to-close");
 		assertThat(resp).isNotNull();
+	}
+
+	@Test
+	void promptHandlerTakingAsyncPromptContextIsInvoked() throws Exception {
+		// PromptContextResolver accepted a PromptContext parameter, but only the sync context
+		// was ever supplied, so the call failed with an ArgumentResolutionException.
+		AtomicReference<String> receivedSessionId = new AtomicReference<>();
+		List<String> updates = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+		@AcpAgent
+		class AsyncContextAgent {
+
+			@NewSession
+			NewSessionResponse newSession() {
+				return new NewSessionResponse("async-context-session", null, null);
+			}
+
+			@Prompt
+			Mono<PromptResponse> prompt(PromptRequest req, PromptContext ctx) {
+				receivedSessionId.set(ctx.getSessionId());
+				return ctx.sendMessage("from the async context").then(Mono.just(PromptResponse.endTurn()));
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new AsyncContextAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.sessionUpdateConsumer(notification -> {
+					updates.add(notification.update().toString());
+					return Mono.empty();
+				})
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+		PromptResponse resp = client
+				.prompt(new PromptRequest("async-context-session", List.of(new TextContent("Hi"))))
+				.block(TIMEOUT);
+
+		assertThat(resp.stopReason()).isEqualTo(PromptResponse.endTurn().stopReason());
+		assertThat(receivedSessionId.get()).isEqualTo("async-context-session");
+		assertThat(updates).anySatisfy(update -> assertThat(update).contains("from the async context"));
 	}
 
 	@Test

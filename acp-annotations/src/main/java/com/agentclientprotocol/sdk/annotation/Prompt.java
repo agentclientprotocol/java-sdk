@@ -20,7 +20,7 @@ import java.lang.annotation.Target;
  * <ul>
  *   <li>{@code PromptRequest} - the prompt request containing user message</li>
  *   <li>{@code SyncPromptContext} - context for sync handlers with convenience methods</li>
- *   <li>{@code PromptContext} - context for async handlers returning Mono</li>
+ *   <li>{@code PromptContext} - the async context, for handlers returning Mono</li>
  *   <li>{@code NegotiatedCapabilities} - the negotiated client capabilities</li>
  * </ul>
  *
