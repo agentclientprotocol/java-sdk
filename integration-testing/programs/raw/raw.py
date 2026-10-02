@@ -1170,9 +1170,9 @@ CLIENT_CASES = [
     ("raw.stray-response.null-id", ALL, c_no_reply(lambda p: '{"jsonrpc":"2.0","id":null,"result":{}}')),
     ("raw.stray-response.null-id-error", ALL, c_no_reply(
         lambda p: '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}')),
-    ("raw.callee.error-without-message", ALL, c_callee("#fs read {dir}/no-such-file.txt", ans_error_without_message,
+    ("raw.callee.error-without-message", ALL, c_callee("#fs read-missing {dir}/no-such-file.txt", ans_error_without_message,
                                                        chk_fs_read_error)),
-    ("raw.callee.result-null-required", ALL, c_callee("#fs read {dir}/no-such-file.txt", ans_null_result,
+    ("raw.callee.result-null-required", ALL, c_callee("#fs read-missing {dir}/no-such-file.txt", ans_null_result,
                                                       chk_fs_read_error)),
     ("raw.callee.result-null-optional", ALL, c_callee("#fs write {dir}/raw-null.txt raw", ans_null_result,
                                                       chk_fs_write_ok)),

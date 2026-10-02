@@ -462,15 +462,11 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
                 }
                 done()
             }
-            "read" -> {
+            "read", "read-range", "read-missing" -> {
                 val path = args.getOrNull(1) ?: ""
                 val line = args.firstOrNull { it.startsWith("line=") }?.removePrefix("line=")?.toUIntOrNull()
                 val limit = args.firstOrNull { it.startsWith("limit=") }?.removePrefix("limit=")?.toUIntOrNull()
-                val step = when {
-                    line != null || limit != null -> "fs.read-range"
-                    path.endsWith("no-such-file.txt") -> "fs.read-missing"
-                    else -> "fs.read"
-                }
+                val step = "fs.${args.first()}"
                 if (!conn.clientCap("fs", "readTextFile")) {
                     agentStep(step, false, t0, "the client did not advertise fs.readTextFile")
                     chunk("fs read error capability")

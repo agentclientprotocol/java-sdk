@@ -86,7 +86,9 @@
     { "syntax": "#permission allow meta", "agent": "As allow, with _meta {\"interop\": \"m1\"} (fixtures.meta) on the permission request. Print STEP agent.meta.permission PASS iff the response carried _meta interop == m1 (and no agent.perm.selected line)." },
     { "syntax": "#permission hold", "agent": "As allow, but the client cancels the turn while the request is pending. Print STEP agent.perm.cancelled PASS iff the outcome is cancelled, and answer stopReason cancelled." },
     { "syntax": "#fs write <path> <content...>", "agent": "Require client.fs.writeTextFile. fs/write_text_file {path, content}; accept {} or a null result. Send the chunk \"fs write ok\" (or \"fs write error <code>\") and answer end_turn." },
-    { "syntax": "#fs read <path> [line=<n>] [limit=<n>]", "agent": "Require client.fs.readTextFile. fs/read_text_file; send the returned content as one chunk (or \"fs read error <code>\") and answer end_turn." },
+    { "syntax": "#fs read <path>", "agent": "Require client.fs.readTextFile. fs/read_text_file; send the returned content as one chunk (or \"fs read error <code>\") and answer end_turn. Print STEP agent.fs.read." },
+    { "syntax": "#fs read-range <path> [line=<n>] [limit=<n>]", "agent": "As read, passing line and limit. Print STEP agent.fs.read-range." },
+    { "syntax": "#fs read-missing <path>", "agent": "As read, for a file that does not exist. Print STEP agent.fs.read-missing." },
     { "syntax": "#fs read-slow <path>", "agent": "fs/read_text_file, then after 200 ms send $/cancel_request for that request. Chunk \"cancel-request sent\"; answer end_turn." },
     { "syntax": "#emit <kind> [name=<tool name>]", "agent": "Send one session/update of <kind> from fixtures.emit (tool_call_update is preceded by its tool_call; unknown is followed by the chunk \"after-unknown\"; name= sets the tool call name), then answer end_turn." },
     { "syntax": "#stop <reason>", "agent": "Send the chunk \"stop\" and answer with stopReason <reason>." },
@@ -351,17 +353,17 @@
       "pass": { "client": "A chunk equal to fixtures.fsReadContent.", "agent": "STEP agent.fs.read PASS when the content equals fixtures.fsReadContent." }
     },
     {
-      "id": "fs.read-range", "group": "fs", "prompt": "#fs read {dir}/fs-read.txt line=2 limit=1",
+      "id": "fs.read-range", "group": "fs", "prompt": "#fs read-range {dir}/fs-read.txt line=2 limit=1",
       "requires": ["client.fs.readTextFile"],
       "client": "As fs.read; the handler honours line (1-based) and limit.",
-      "agent": "#fs read",
+      "agent": "#fs read-range",
       "pass": { "client": "A chunk that, trimmed, equals \"line2\".", "agent": "STEP agent.fs.read-range PASS when the content, trimmed, equals \"line2\"." }
     },
     {
-      "id": "fs.read-missing", "group": "fs", "prompt": "#fs read {dir}/no-such-file.txt",
+      "id": "fs.read-missing", "group": "fs", "prompt": "#fs read-missing {dir}/no-such-file.txt",
       "requires": ["client.fs.readTextFile"],
       "client": "session/new; the prompt. The handler answers a JSON-RPC error for a missing file.",
-      "agent": "#fs read",
+      "agent": "#fs read-missing",
       "pass": { "client": "A chunk starting \"fs read error\" and end_turn: the agent got an error, not a hang.", "agent": "STEP agent.fs.read-missing PASS when fs/read_text_file failed with a JSON-RPC error." }
     },
     {

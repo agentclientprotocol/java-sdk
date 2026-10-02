@@ -225,8 +225,8 @@ public class Client {
 		STEPS.put("fs.write", Client::fsWrite);
 		STEPS.put("fs.read", () -> fsRead("#fs read " + fsReadFile(), c -> c.equals(FS_READ_CONTENT)));
 		STEPS.put("fs.read-range",
-				() -> fsRead("#fs read " + fsReadFile() + " line=2 limit=1", c -> c.trim().equals("line2")));
-		STEPS.put("fs.read-missing", () -> fsRead("#fs read " + dir.resolve("no-such-file.txt"),
+				() -> fsRead("#fs read-range " + fsReadFile() + " line=2 limit=1", c -> c.trim().equals("line2")));
+		STEPS.put("fs.read-missing", () -> fsRead("#fs read-missing " + dir.resolve("no-such-file.txt"),
 				c -> c.startsWith("fs read error")));
 		STEPS.put("term.run", () -> chunkStep("#terminal run echo hi", "terminal: hi exit=0", T));
 		STEPS.put("term.kill", () -> chunkStep("#terminal kill sleep 30", "terminal killed", Duration.ofSeconds(5)));

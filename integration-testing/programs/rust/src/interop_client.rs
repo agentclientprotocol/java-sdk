@@ -970,12 +970,12 @@ async fn fs_write() -> Result<String, String> {
     Ok("fs write ok".into())
 }
 
-async fn fs_read(args: &str, check: impl Fn(&str) -> bool) -> Result<String, String> {
+async fn fs_read(op: &str, args: &str, check: impl Fn(&str) -> bool) -> Result<String, String> {
     let cx = main_cx()?;
     let path = format!("{}/fs-read.txt", dir());
     std::fs::write(&path, FS_READ_CONTENT).map_err(|e| e.to_string())?;
     let sid = new_session(&cx).await?;
-    prompt_end_turn(&cx, &sid, &format!("#fs read {path}{args}")).await?;
+    prompt_end_turn(&cx, &sid, &format!("#fs {op} {path}{args}")).await?;
     let t = wait_chunk(&sid, UPDATE_GRACE, &check).await;
     ensure(t.is_some(), format!("chunks {:?}", agent_text(&sid)))?;
     Ok(format!("chunk {:?}", t.unwrap_or_default()))
@@ -984,7 +984,7 @@ async fn fs_read(args: &str, check: impl Fn(&str) -> bool) -> Result<String, Str
 async fn fs_read_missing() -> Result<String, String> {
     let cx = main_cx()?;
     let sid = new_session(&cx).await?;
-    prompt_end_turn(&cx, &sid, &format!("#fs read {}/no-such-file.txt", dir())).await?;
+    prompt_end_turn(&cx, &sid, &format!("#fs read-missing {}/no-such-file.txt", dir())).await?;
     let t = wait_chunk(&sid, UPDATE_GRACE, |t| t.starts_with("fs read error")).await;
     ensure(t.is_some(), format!("chunks {:?}", agent_text(&sid)))?;
     Ok(t.unwrap_or_default())
@@ -1344,8 +1344,8 @@ async fn step(id: &str) {
         "perm.selected" => run(id, perm_selected()).await,
         "perm.cancelled" => run(id, perm_cancelled()).await,
         "fs.write" => run(id, fs_write()).await,
-        "fs.read" => run(id, fs_read("", |t| t == FS_READ_CONTENT)).await,
-        "fs.read-range" => run(id, fs_read(" line=2 limit=1", |t| t.trim() == "line2")).await,
+        "fs.read" => run(id, fs_read("read", "", |t| t == FS_READ_CONTENT)).await,
+        "fs.read-range" => run(id, fs_read("read-range", " line=2 limit=1", |t| t.trim() == "line2")).await,
         "fs.read-missing" => run(id, fs_read_missing()).await,
         "term.run" => run(id, chunk_step("#terminal run echo hi", to, |t| t == "terminal: hi exit=0")).await,
         "term.kill" => run(id, chunk_step("#terminal kill sleep 30", Duration::from_secs(5), |t| t == "terminal killed")).await,

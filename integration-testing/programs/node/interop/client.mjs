@@ -770,12 +770,12 @@ const steps = {
   "fs.read-range": async () => {
     const file = path.join(dir, "fs-read.txt");
     await fsp.writeFile(file, fixtures.fsReadContent, "utf8");
-    const { c, sid } = await promptNew(`#fs read ${file} line=2 limit=1`);
+    const { c, sid } = await promptNew(`#fs read-range ${file} line=2 limit=1`);
     await waitFor(() => c.chunks(sid).some((t) => t.trim() === "line2"), () => `chunks ${abbreviate(c.chunks(sid))}`);
     return 'the agent read "line2"';
   },
   "fs.read-missing": async () => {
-    const { c, sid, r } = await promptNew(`#fs read ${path.join(dir, "no-such-file.txt")}`);
+    const { c, sid, r } = await promptNew(`#fs read-missing ${path.join(dir, "no-such-file.txt")}`);
     check(r?.stopReason === "end_turn", `stopReason ${r?.stopReason}`);
     await waitFor(() => c.chunks(sid).some((t) => t.startsWith("fs read error")), () => `chunks ${abbreviate(c.chunks(sid))}`);
     return `agent saw ${c.chunks(sid).find((t) => t.startsWith("fs read error"))}`;
