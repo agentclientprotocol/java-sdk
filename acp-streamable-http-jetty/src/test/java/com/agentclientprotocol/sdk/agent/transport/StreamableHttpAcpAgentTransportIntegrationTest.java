@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -513,11 +514,21 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	/**
+	 * A GET for the connection stream racing the DELETE of its connection must not leave the
+	 * stream open. Depending on where the DELETE lands, the GET is refused (404), or answered
+	 * and then ended, or answered and then reset: the server completes the response, and a
+	 * completion that finds the ": connected" write still unready makes Jetty cancel the
+	 * HTTP/2 stream. The JDK client reports such a reset from the body read or, when the reset
+	 * frame is processed before its body future completes, from {@code send()} itself. All
+	 * three end the GET; a GET that is still open after the timeout fails the test.
+	 */
 	@RepeatedTest(10)
 	void concurrentSseOpenAndDeleteDoesNotLeaveStreamOpen() throws Exception {
 		try (FixtureServer server = FixtureServer.start()) {
 			HttpClient rawClient = HttpClient.newHttpClient();
 			String connectionId = initializeRaw(rawClient, server.endpoint());
+			upgradeToHttp2(rawClient, server.endpoint());
 			ExecutorService executor = Executors.newFixedThreadPool(2);
 			CountDownLatch start = new CountDownLatch(1);
 			try {
@@ -538,32 +549,66 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				});
 
 				start.countDown();
-				HttpResponse<InputStream> streamResponse = openStream.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 				assertThat(delete.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).statusCode()).isEqualTo(202);
-				assertThat(streamResponse.statusCode()).isIn(200, 404);
-				if (streamResponse.statusCode() == 200) {
-					try (InputStream body = streamResponse.body()) {
-						Future<byte[]> remainingBody = executor.submit(() -> {
-							try {
-								return body.readAllBytes();
-							}
-							catch (IOException error) {
-								// HTTP/2 can cancel the deleted stream instead of ending it with EOF.
-								assertThat(error.getCause()).isInstanceOf(IOException.class)
-									.hasMessage("Received RST_STREAM: Stream cancelled");
-								return new byte[0];
-							}
-						});
-						assertThat(new String(remainingBody.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS),
-								StandardCharsets.UTF_8)).isIn("", ": connected\n\n");
-					}
-				}
+				awaitEndOfRacedStream(openStream, executor);
 				assertEventuallyPostStatus(rawClient, server.endpoint(), connectionId, 404);
 			}
 			finally {
 				executor.shutdownNow();
 			}
 		}
+	}
+
+	/**
+	 * Waits, bounded by {@link #TIMEOUT}, until the raced GET has ended: refused, ended, or
+	 * reset by the server. Any other failure, a body other than the open comment, or a GET
+	 * still open fails the test.
+	 */
+	private static void awaitEndOfRacedStream(Future<HttpResponse<InputStream>> openStream,
+			ExecutorService executor) throws Exception {
+		HttpResponse<InputStream> response;
+		try {
+			response = openStream.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (ExecutionException error) {
+			assertResetByServer(error.getCause());
+			return;
+		}
+		if (response.statusCode() == 404) {
+			return;
+		}
+		assertThat(response.statusCode()).isEqualTo(200);
+		try (InputStream body = response.body()) {
+			Future<byte[]> remainingBody = executor.submit(body::readAllBytes);
+			try {
+				assertThat(new String(remainingBody.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS),
+						StandardCharsets.UTF_8)).isIn("", ": connected\n\n");
+			}
+			catch (ExecutionException error) {
+				// The body stream fails with IOException("closed", <the reset>).
+				assertThat(error.getCause()).isInstanceOf(IOException.class);
+				assertResetByServer(error.getCause().getCause());
+			}
+		}
+	}
+
+	private static void assertResetByServer(Throwable error) {
+		assertThat(error).isInstanceOf(IOException.class).hasMessage("Received RST_STREAM: Stream cancelled");
+	}
+
+	/**
+	 * The JDK client sends a POST over HTTP/1.1 without offering h2c, so after
+	 * {@link #initializeRaw} it holds no HTTP/2 connection. A bodiless request upgrades one
+	 * now, so that requests racing afterwards are streams of that one connection, as a real
+	 * client's are, rather than concurrent h2c upgrades on separate connections.
+	 */
+	private static void upgradeToHttp2(HttpClient client, URI endpoint) throws Exception {
+		HttpResponse<Void> unknownConnection = client.send(HttpRequest.newBuilder(endpoint)
+			.header("Acp-Connection-Id", "no-such-connection")
+			.DELETE()
+			.build(), HttpResponse.BodyHandlers.discarding());
+		assertThat(unknownConnection.statusCode()).isEqualTo(404);
+		assertThat(unknownConnection.version()).isEqualTo(HttpClient.Version.HTTP_2);
 	}
 
 	@Test
