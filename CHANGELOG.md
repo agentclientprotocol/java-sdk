@@ -354,6 +354,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Params of an application's own record type were rejected as missing their fields.** The
+  required-field check on inbound params (`-32602`) walked every record, so a non-public record
+  that the SDK could not read reported each of its fields missing, and an application record was
+  held to rules only the schema defines. It now checks the schema's records (`AcpSchema`) only.
+
 - **A stdio agent dropped the replies to requests that arrived just before its input ended.** When
   the client closed the agent's standard input, `StdioAcpAgentTransport` completed
   `awaitTermination()` at once and stopped writing, so an agent written as documented
