@@ -1,5 +1,13 @@
 # ACP Java SDK
 
+[![CI](https://img.shields.io/github/actions/workflow/status/agentclientprotocol/java-sdk/ci.yml?branch=main&label=CI)](https://github.com/agentclientprotocol/java-sdk/actions/workflows/ci.yml)
+[![Cross-SDK nightly](https://img.shields.io/github/actions/workflow/status/agentclientprotocol/java-sdk/cross-sdk.yml?branch=main&label=cross-SDK%20nightly)](https://github.com/agentclientprotocol/java-sdk/actions/workflows/cross-sdk.yml)
+[![Dependency scan](https://img.shields.io/github/actions/workflow/status/agentclientprotocol/java-sdk/dependency-scan.yml?branch=main&label=dependency%20scan)](https://github.com/agentclientprotocol/java-sdk/actions/workflows/dependency-scan.yml)
+[![Java interop](https://img.shields.io/github/actions/workflow/status/agentclientprotocol/java-sdk/interop-java.yml?branch=main&label=Java%20interop)](https://github.com/agentclientprotocol/java-sdk/actions/workflows/interop-java.yml)
+[![Maven Central](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo1.maven.org%2Fmaven2%2Fcom%2Fagentclientprotocol%2Facp-core%2Fmaven-metadata.xml&label=Maven%20Central)](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](pom.xml)
+
 > **Documentation**: https://lab.pollack.ai/docs/acp-java-sdk | [API Reference](https://lab.pollack.ai/docs/acp-java-sdk/reference/java) | [Tutorial](https://lab.pollack.ai/docs/acp-java-sdk/tutorial)
 
 Pure Java implementation of the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) specification for building both clients and agents.
@@ -23,6 +31,26 @@ Three API styles for building agents:
 - Java 17+, type-safe, stdio and WebSocket transports
 - Capability negotiation and structured error handling
 - For a hands-on walkthrough, see the **[ACP Java Tutorial](https://github.com/markpollack/acp-java-tutorial)**
+
+## Quality
+
+Every gate below runs in `./mvnw verify` (or in the workflow named) and fails the build; violations
+are fixed, never baselined. Each badge links to the file that enforces it.
+
+| Gate | What it guarantees |
+|------|--------------------|
+| [![NullAway](https://img.shields.io/badge/NullAway-JSpecify%20%C2%B7%20%40NullMarked-brightgreen)](pom.xml) | Every SDK package is `@NullMarked`; a possible null dereference is a compile error (JDK 21+ build, `errorprone` profile). |
+| [![Error Prone](https://img.shields.io/badge/Error%20Prone-warnings%20fail-brightgreen)](pom.xml) | Error Prone's default checks, plus unused Reactor results and stray `System.out`, fail compilation. |
+| [![ArchUnit](https://img.shields.io/badge/ArchUnit-every%20module%20%C2%B7%20no%20cycles-brightgreen)](acp-core/src/test/java/com/agentclientprotocol/sdk/ArchitectureTest.java) | Each module's layering is tested; no package cycles, and transports never reach session internals. |
+| [![PMD](https://img.shields.io/badge/PMD-complexity%20%2B%20duplication%20%C2%B7%20no%20baseline-brightgreen)](config/pmd/ruleset.xml) | Methods stay below cognitive and cyclomatic complexity limits; copy-paste over 100 tokens fails. |
+| [![SpotBugs](https://img.shields.io/badge/SpotBugs-rank%20%E2%89%A4%209%20%2B%20concurrency-brightgreen)](config/spotbugs/spotbugs-include.xml) | Every bug at rank 9 or worse, and the multithreading bug patterns at any rank, fail the build. |
+| [![JaCoCo](https://img.shields.io/badge/JaCoCo-acp--core%2082%25%20line%20%C2%B7%2070%25%20branch-brightgreen)](acp-core/pom.xml) | Each module has line and branch coverage floors in its `pom.xml`; coverage cannot silently drop. |
+| [![Lincheck](https://img.shields.io/badge/Lincheck-model--checked%20concurrency-brightgreen)](acp-core/src/test/java/com/agentclientprotocol/sdk/spec/ActivePromptsLincheckTest.java) | The concurrent core (prompt turns, pending responses, inbound requests, SSE streams) is model-checked for linearizability. |
+| [![PIT](https://img.shields.io/badge/PIT-protocol%20core%20%E2%89%A5%2085%25-brightgreen)](acp-core/pom.xml) | Mutation testing proves the protocol core's tests catch at least 85% of injected bugs (`-Ppit`, `pit.yml`). |
+| [![OSV scan](https://img.shields.io/badge/OSV-dependency%20scan-brightgreen)](.github/workflows/dependency-scan.yml) | Resolved dependencies are scanned weekly and on every pom change; CVSS 7 or higher (or unscored) fails. |
+| [![Cross-SDK interop](https://img.shields.io/badge/interop-TypeScript%20%C2%B7%20Rust%20%C2%B7%20Python%20%C2%B7%20Kotlin%20%C3%97%20stdio%20%C2%B7%20HTTP%20%C2%B7%20WebSocket-brightgreen)](integration-testing/README.md) | The Java client and agent talk to the other ACP SDKs over every transport each supports (Kotlin: stdio and WebSocket). |
+
+The interop and conformance suite is described in [`integration-testing/README.md`](integration-testing/README.md).
 
 ## Installation
 
