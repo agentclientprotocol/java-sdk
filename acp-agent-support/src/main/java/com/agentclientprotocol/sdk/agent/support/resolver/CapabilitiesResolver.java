@@ -9,7 +9,10 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 
 /**
- * Resolves {@link NegotiatedCapabilities} parameters.
+ * Resolves {@link NegotiatedCapabilities} parameters to the capabilities negotiated on the
+ * connection a request arrived on, in any handler. The agent records them from the client's
+ * {@code initialize} request before the {@code @Initialize} handler runs, so that handler can
+ * take them too.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -25,7 +28,7 @@ public class CapabilitiesResolver implements ArgumentResolver {
 	public Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
 		return context.getCapabilities()
 				.orElseThrow(() -> new ArgumentResolutionException(
-						"NegotiatedCapabilities not available in current context"));
+						"NegotiatedCapabilities are not available: the client has not sent initialize"));
 	}
 
 }

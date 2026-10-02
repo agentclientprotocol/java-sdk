@@ -18,9 +18,11 @@ import java.lang.annotation.Target;
  * other. An extension notification that no handler serves is ignored, as the protocol
  * asks.
  *
- * <p>The method takes at most one parameter, which receives the notification's params
- * read as that parameter's type: a record, a {@code Map<String, Object>} for the raw
- * object, or any other type the JSON mapper can read. It returns {@code void}.
+ * <p>The method takes at most one params parameter, which receives the notification's
+ * params read as that parameter's type: a record, a {@code Map<String, Object>} for the raw
+ * object, or any other type the JSON mapper can read. It may also take the connection
+ * parameters ({@code NegotiatedCapabilities}, {@code AcpSyncAgent}, {@code AcpAsyncAgent}; see
+ * {@link AcpAgent}). It returns {@code void}.
  *
  * <p>Example usage:
  * <pre>{@code

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
@@ -35,6 +36,8 @@ public final class AcpInvocationContext {
 
 	private final @Nullable NegotiatedCapabilities capabilities;
 
+	private final @Nullable AcpSyncAgent agent;
+
 	private final Map<String, Object> attributes = new HashMap<>();
 
 	private AcpInvocationContext(Builder builder) {
@@ -44,6 +47,7 @@ public final class AcpInvocationContext {
 		this.promptContext = builder.promptContext;
 		this.syncPromptContext = builder.syncPromptContext;
 		this.capabilities = builder.capabilities;
+		this.agent = builder.agent;
 	}
 
 	/**
@@ -109,11 +113,22 @@ public final class AcpInvocationContext {
 	}
 
 	/**
-	 * Get the negotiated capabilities.
+	 * Get the capabilities negotiated on this invocation's connection. Present for every
+	 * handler once the client has sent {@code initialize}, the initialize handler included.
 	 * @return optional capabilities
 	 */
 	public Optional<NegotiatedCapabilities> getCapabilities() {
 		return Optional.ofNullable(capabilities);
+	}
+
+	/**
+	 * Get the agent serving this invocation's connection: under
+	 * {@code AcpAgentSupport.Builder#buildFactory()}, the agent of the connection the request
+	 * arrived on. Use it to send session updates and requests to that client.
+	 * @return optional agent
+	 */
+	public Optional<AcpSyncAgent> getAgent() {
+		return Optional.ofNullable(agent);
 	}
 
 	/**
@@ -167,6 +182,8 @@ public final class AcpInvocationContext {
 
 		private @Nullable NegotiatedCapabilities capabilities;
 
+		private @Nullable AcpSyncAgent agent;
+
 		public Builder acpMethod(String acpMethod) {
 			this.acpMethod = acpMethod;
 			return this;
@@ -194,6 +211,11 @@ public final class AcpInvocationContext {
 
 		public Builder capabilities(@Nullable NegotiatedCapabilities capabilities) {
 			this.capabilities = capabilities;
+			return this;
+		}
+
+		public Builder agent(@Nullable AcpSyncAgent agent) {
+			this.agent = agent;
 			return this;
 		}
 

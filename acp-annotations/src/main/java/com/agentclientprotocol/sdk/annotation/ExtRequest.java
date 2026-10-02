@@ -18,9 +18,11 @@ import java.lang.annotation.Target;
  * other. A request for an extension method that no handler serves is answered with
  * "Method not found" (-32601).
  *
- * <p>The method takes at most one parameter, which receives the request's params read as
- * that parameter's type: a record, a {@code Map<String, Object>} for the raw object, or
- * any other type the JSON mapper can read. An omitted params arrives as an empty object.
+ * <p>The method takes at most one params parameter, which receives the request's params
+ * read as that parameter's type: a record, a {@code Map<String, Object>} for the raw object,
+ * or any other type the JSON mapper can read. An omitted params arrives as an empty object.
+ * It may also take the connection parameters ({@code NegotiatedCapabilities},
+ * {@code AcpSyncAgent}, {@code AcpAsyncAgent}; see {@link AcpAgent}).
  *
  * <p>The method returns the result, any value the JSON mapper can write, or a
  * {@code Mono} of it. A null result (or an empty {@code Mono}) answers the request with an

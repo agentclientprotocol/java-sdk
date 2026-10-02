@@ -22,6 +22,8 @@ import java.lang.annotation.Target;
  *   <li>{@code SyncPromptContext} - context for sync handlers with convenience methods</li>
  *   <li>{@code PromptContext} - the async context, for handlers returning Mono</li>
  *   <li>{@code NegotiatedCapabilities} - the negotiated client capabilities</li>
+ *   <li>{@code AcpSyncAgent} or {@code AcpAsyncAgent} - the connection's agent (see
+ *   {@link AcpAgent})</li>
  * </ul>
  *
  * <p>The method should return one of:

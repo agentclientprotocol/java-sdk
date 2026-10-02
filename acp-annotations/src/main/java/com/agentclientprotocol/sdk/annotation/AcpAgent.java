@@ -16,6 +16,19 @@ import java.lang.annotation.Target;
  * <p>Classes annotated with {@code @AcpAgent} can define handler methods
  * using annotations like {@link Prompt}, {@link Initialize}, and {@link NewSession}.
  *
+ * <p><b>Connection parameters.</b> Besides the parameters its annotation lists, every handler
+ * method, extension handlers included, can take any of these, resolved for the connection the
+ * request or notification arrived on (with one handler bean serving many connections, each call
+ * gets its own connection's):
+ * <ul>
+ *   <li>{@code NegotiatedCapabilities} - the capabilities the client offered in its
+ *   {@code initialize} request, available from the {@code @Initialize} handler on, to gate
+ *   options and calls on what the client supports</li>
+ *   <li>{@code AcpSyncAgent} or {@code AcpAsyncAgent} - the connection's agent, to send session
+ *   updates (such as a {@code ConfigOptionUpdate}) and requests to the client outside a prompt
+ *   turn</li>
+ * </ul>
+ *
  * <p>Example usage:
  * <pre>{@code
  * @AcpAgent(name = "support-agent", version = "1.0")
