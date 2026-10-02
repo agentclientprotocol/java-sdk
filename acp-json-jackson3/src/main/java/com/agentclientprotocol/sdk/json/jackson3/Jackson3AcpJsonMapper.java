@@ -18,9 +18,12 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JavaType;
 import tools.jackson.databind.MapperFeature;
 import tools.jackson.databind.ValueDeserializer;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
 import tools.jackson.databind.cfg.EnumFeature;
 import tools.jackson.databind.deser.DeserializationProblemHandler;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.type.LogicalType;
 
 /**
  * Jackson 3 ({@code tools.jackson}) implementation of {@link AcpJsonMapper}, shipped in
@@ -82,6 +85,12 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	 * first unknown field. Jackson 3 mappers are immutable; to customise this one, start
 	 * from {@code defaultJsonMapper().rebuild()}.
 	 * </p>
+	 * <p>
+	 * A scalar of the wrong JSON type is refused rather than coerced (a number or boolean for
+	 * a string, a string for a number or boolean): JSON-RPC answers such params -32602 Invalid
+	 * params, and a coerced value would hide a peer's bug.
+	 * </p>
+	 *
 	 * @return a new, independently configurable lenient mapper
 	 */
 	public static JsonMapper defaultJsonMapper() {
@@ -91,6 +100,11 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 			.disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
 			.disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
 			.disable(EnumFeature.READ_ENUMS_USING_TO_STRING, EnumFeature.WRITE_ENUMS_USING_TO_STRING)
+			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
+			.withCoercionConfig(LogicalType.Textual,
+					config -> config.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+						.setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+						.setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
 			.addHandler(new UnknownPropertyLogger())
 			.build();
 	}

@@ -102,6 +102,31 @@ class HandlerExceptionTest {
      * handler runs asynchronously, so a fixed sleep races the dispatch and fails
      * intermittently on a loaded machine; poll to a generous deadline instead.
      */
+    /**
+     * JSON-RPC 2.0 section 5.1: params the method cannot read are -32602 Invalid params, not
+     * -32603 Internal error, and the handler is never called.
+     */
+    @Test
+    void paramsOfTheWrongTypeAreInvalidParams() {
+        MockAcpClientTransport transport = new MockAcpClientTransport();
+        java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
+        AcpSyncClient client = AcpClient.sync(transport).readTextFileHandler(req -> {
+            called.set(true);
+            return new AcpSchema.ReadTextFileResponse("x");
+        }).build();
+
+        transport.simulateIncomingMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "bad-params",
+                AcpSchema.METHOD_FS_READ_TEXT_FILE, Map.of("sessionId", "s", "path", "/f", "line", "not-a-number")));
+        awaitSentMessages(transport, 1);
+
+        AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) transport.getSentMessages().get(0);
+        assertThat(response.id()).isEqualTo("bad-params");
+        assertThat(response.error().code()).isEqualTo(-32602);
+        assertThat(response.error().message()).isEqualTo("Invalid params");
+        assertThat(called).isFalse();
+        client.close();
+    }
+
     private static void awaitSentMessages(MockAcpClientTransport transport, int expected) {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
         while (transport.getSentMessages().size() < expected && System.nanoTime() < deadline) {

@@ -89,9 +89,8 @@ final class PendingResponses {
 			return;
 		}
 		if (response.id() == null) {
-			logger.error("Discarded ACP request response without session id. "
-					+ "This is an indication of a bug in the request sender code that can lead to memory "
-					+ "leaks as pending requests will never be completed.");
+			// A stray response: it names no request, so it answers nothing this side sent.
+			logger.warn("Discarded a response from the {} without an id: it answers no request", this.peer);
 			return;
 		}
 		MonoSink<AcpSchema.JSONRPCResponse> sink = this.pending.remove(response.id());

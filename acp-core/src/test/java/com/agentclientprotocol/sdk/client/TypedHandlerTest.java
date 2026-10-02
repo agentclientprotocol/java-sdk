@@ -57,7 +57,7 @@ class TypedHandlerTest {
 				AcpSchema.JSONRPC_VERSION,
 				"test-id",
 				AcpSchema.METHOD_FS_READ_TEXT_FILE,
-				Map.of("path", testPath)
+				Map.of("sessionId", "session-123", "path", testPath)
 		);
 		transport.simulateIncomingMessage(request);
 
@@ -109,7 +109,7 @@ class TypedHandlerTest {
 				AcpSchema.JSONRPC_VERSION,
 				"test-id",
 				AcpSchema.METHOD_FS_WRITE_TEXT_FILE,
-				Map.of("path", testPath, "content", testContent)
+				Map.of("sessionId", "session-123", "path", testPath, "content", testContent)
 		);
 		transport.simulateIncomingMessage(request);
 
@@ -153,6 +153,7 @@ class TypedHandlerTest {
 
 		// Simulate incoming request from agent - toolCall is a nested structure
 		Map<String, Object> toolCall = Map.of(
+				"toolCallId", "call-1",
 				"title", "Read File",
 				"description", "Reading test.txt"
 		);
@@ -160,7 +161,7 @@ class TypedHandlerTest {
 				AcpSchema.JSONRPC_VERSION,
 				"test-id",
 				AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
-				Map.of("sessionId", testSessionId, "toolCall", toolCall)
+				Map.of("sessionId", testSessionId, "toolCall", toolCall, "options", java.util.List.of())
 		);
 		transport.simulateIncomingMessage(request);
 
@@ -202,7 +203,7 @@ class TypedHandlerTest {
 				AcpSchema.JSONRPC_VERSION,
 				"test-id",
 				AcpSchema.METHOD_FS_READ_TEXT_FILE,
-				Map.of("path", testPath)
+				Map.of("sessionId", "session-123", "path", testPath)
 		);
 		transport.simulateIncomingMessage(request);
 
@@ -244,7 +245,7 @@ class TypedHandlerTest {
 				AcpSchema.JSONRPC_VERSION,
 				"test-id",
 				AcpSchema.METHOD_FS_READ_TEXT_FILE,
-				Map.of("path", "/nonexistent")
+				Map.of("sessionId", "session-123", "path", "/nonexistent")
 		);
 		transport.simulateIncomingMessage(request);
 

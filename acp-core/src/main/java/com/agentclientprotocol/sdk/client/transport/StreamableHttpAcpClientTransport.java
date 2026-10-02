@@ -141,7 +141,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		this.routes = new StreamableHttpRoutes(jsonMapper);
 		this.streams = new StreamableHttpStreams(requests, routes, jsonMapper, options.maxSseStreams(),
 				new StreamableHttpStreams.Owner(this::processInbound, closing::get, this::terminateAfterSseFailure,
-						error -> this.exceptionHandler.accept(error)));
+						error -> this.exceptionHandler.accept(error), this::answerUnreadable));
 		this.inbound = new StreamableHttpInbound(routes, streams, jsonMapper);
 	}
 
@@ -254,6 +254,20 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return Mono.error(new AcpConnectionException("Failed to serialize outbound message", e));
 		}
 		return requests.postAccepted(scope, json);
+	}
+
+	/**
+	 * Answers an SSE event that is no JSON-RPC message, as JSON-RPC 2.0 says (-32700 or
+	 * -32600, with the request's id when it can be read) and as the stdio and WebSocket
+	 * transports do, in the scope of the stream it came on. The answer names no routed
+	 * request, so it is posted directly.
+	 */
+	private void answerUnreadable(RouteScope scope, String data) {
+		if (closing.get()) {
+			return;
+		}
+		post(AcpSchema.unreadableMessageResponse(jsonMapper, data), scope).subscribe(ignored -> {
+		}, error -> logger.debug("Could not answer an unreadable SSE event: {}", error.getMessage()));
 	}
 
 	private Mono<Void> processInbound(RouteScope actualScope, JSONRPCMessage message) {

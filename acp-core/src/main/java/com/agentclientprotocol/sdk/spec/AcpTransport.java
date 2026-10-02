@@ -6,8 +6,11 @@ package com.agentclientprotocol.sdk.spec;
 
 import java.util.List;
 
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -78,6 +81,41 @@ public interface AcpTransport {
 	 * @return the unmarshalled object
 	 */
 	<T> T unmarshalFrom(Object data, TypeRef<T> typeRef);
+
+	/**
+	 * Reads the params of an inbound request or notification as the method's type. Params
+	 * the type cannot be read from (a value of the wrong JSON type, a required field
+	 * missing) are a JSON-RPC 2.0 -32602 Invalid params error (section 5.1), not an
+	 * internal error.
+	 * @param <T> the params type
+	 * @param params the params as received
+	 * @param typeRef the method's params type
+	 * @return the params as that type
+	 * @throws AcpProtocolException with code -32602 when they cannot be read as it
+	 */
+	default <T> T unmarshalParams(Object params, TypeRef<T> typeRef) {
+		T value;
+		try {
+			value = unmarshalFrom(params, typeRef);
+		}
+		catch (IllegalArgumentException e) {
+			throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "Invalid params", firstLine(e.getMessage()));
+		}
+		String missing = RequiredFields.firstMissing(value);
+		if (missing != null) {
+			throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "Invalid params",
+					"missing required field: " + missing);
+		}
+		return value;
+	}
+
+	private static @Nullable String firstLine(@Nullable String message) {
+		if (message == null) {
+			return null;
+		}
+		int end = message.indexOf('\n');
+		return end < 0 ? message : message.substring(0, end);
+	}
 
 	/**
 	 * Returns the list of protocol versions supported by this transport.

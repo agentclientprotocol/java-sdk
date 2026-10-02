@@ -843,6 +843,30 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 		}
 	}
 
+	/**
+	 * A POST whose body is a JSON object but no valid JSON-RPC request (JSON-RPC 2.0 section
+	 * 4: method a string, id a string, number or null, jsonrpc "2.0") is accepted and
+	 * answered -32600 on the connection stream, as the TypeScript server leaves an
+	 * object-shaped body to the connection to validate. Before, it got a bare HTTP 400.
+	 */
+	@Test
+	void anInvalidRequestIsAnsweredInvalidRequestOnTheConnectionStream() throws Exception {
+		try (FixtureServer server = FixtureServer.start()) {
+			HttpClient rawClient = HttpClient.newHttpClient();
+			String connectionId = initializeRaw(rawClient, server.endpoint());
+			try (SseReader connectionStream = SseReader.open(rawClient, server.endpoint(), connectionId, null)) {
+				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
+						"""
+								{"jsonrpc":"2.0","id":"bad-method","method":5}
+								""");
+				assertThat(accepted.statusCode()).isEqualTo(202);
+				AcpSchema.JSONRPCResponse response = connectionStream.nextResponse();
+				assertThat(response.id()).isEqualTo("bad-method");
+				assertThat(response.error().code()).isEqualTo(-32600);
+			}
+		}
+	}
+
 	private static HttpRequest sessionGet(URI endpoint, String connectionId, String sessionId) {
 		return HttpRequest.newBuilder(endpoint)
 			.header("Accept", "text/event-stream")

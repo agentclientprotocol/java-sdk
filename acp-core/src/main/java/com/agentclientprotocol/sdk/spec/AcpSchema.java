@@ -160,7 +160,49 @@ public final class AcpSchema {
 		}
 		JSONRPCError error = isJson ? new JSONRPCError(AcpErrorCodes.INVALID_REQUEST, "Invalid Request", null)
 				: new JSONRPCError(AcpErrorCodes.PARSE_ERROR, "Parse error", null);
-		return new JSONRPCResponse(JSONRPC_VERSION, null, null, error);
+		return new JSONRPCResponse(JSONRPC_VERSION, isJson ? readableRequestId(jsonMapper, jsonText) : null, null,
+				error);
+	}
+
+	/**
+	 * The id of an invalid request, when it can be read: JSON-RPC 2.0 section 5 answers with
+	 * null only when the id could not be detected. Only a message with a method is a request;
+	 * an unreadable response is never answered with its own id.
+	 */
+	private static @Nullable Object readableRequestId(AcpJsonMapper jsonMapper, String jsonText) {
+		try {
+			Map<String, Object> map = jsonMapper.readValue(jsonText, MAP_TYPE_REF);
+			if (map == null || !map.containsKey("method")) {
+				return null;
+			}
+			Object id = map.get("id");
+			return isValidId(id) ? id : null;
+		}
+		catch (IOException | RuntimeException e) {
+			return null;
+		}
+	}
+
+	/** JSON-RPC 2.0 section 4: an id is a string, a number or null. */
+	private static boolean isValidId(@Nullable Object id) {
+		return id == null || id instanceof String || id instanceof Number;
+	}
+
+	/**
+	 * Refuses a request or notification that JSON-RPC 2.0 section 4 does not allow:
+	 * {@code jsonrpc} other than "2.0", a method that is not a string, or an id that is not a
+	 * string, number or null. Its answer is -32600 Invalid Request.
+	 */
+	private static void validateRequest(Map<String, Object> message, String jsonText) {
+		if (!JSONRPC_VERSION.equals(message.get("jsonrpc"))) {
+			throw new IllegalArgumentException("Invalid Request: jsonrpc must be \"2.0\": " + jsonText);
+		}
+		if (!(message.get("method") instanceof String)) {
+			throw new IllegalArgumentException("Invalid Request: method must be a string: " + jsonText);
+		}
+		if (!isValidId(message.get("id"))) {
+			throw new IllegalArgumentException("Invalid Request: id must be a string, number or null: " + jsonText);
+		}
 	}
 
 	/**
@@ -171,7 +213,9 @@ public final class AcpSchema {
 	 * @return The deserialized JSON-RPC message
 	 * @throws IOException If deserialization fails
 	 * @throws IllegalArgumentException If the JSON structure doesn't match any known
-	 * message type
+	 * message type, or is a request JSON-RPC 2.0 does not allow (section 4: {@code jsonrpc}
+	 * other than "2.0", a method that is not a string, an id that is not a string, number or
+	 * null)
 	 */
 	public static JSONRPCMessage deserializeJsonRpcMessage(AcpJsonMapper jsonMapper, String jsonText)
 			throws IOException {
@@ -189,6 +233,9 @@ public final class AcpSchema {
 			// Not the text: a transport logs this exception, and the text is the peer's payload.
 			throw new IllegalArgumentException(
 					"Cannot deserialize JSONRPCMessage: a JSON object with no method, id, result or error");
+		}
+		if (messageType != JSONRPCResponse.class) {
+			validateRequest(map, jsonText);
 		}
 		return jsonMapper.convertValue(map, messageType);
 	}

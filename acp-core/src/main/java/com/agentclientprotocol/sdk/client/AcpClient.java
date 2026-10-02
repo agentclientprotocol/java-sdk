@@ -479,7 +479,7 @@ public interface AcpClient {
 		/** Reads the params as the request type, then calls the handler. */
 		private <Q, R> AsyncSpec request(String method, TypeRef<Q> requestType, Function<Q, Mono<R>> handler) {
 			AcpClientSession.RequestHandler<R> rawHandler = params -> handler
-				.apply(transport.unmarshalFrom(params, requestType));
+				.apply(transport.unmarshalParams(params, requestType));
 			this.requestHandlers.put(method, rawHandler);
 			return this;
 		}
@@ -493,7 +493,7 @@ public interface AcpClient {
 			// Set up session update notification handler
 			if (!sessionUpdateConsumers.isEmpty()) {
 				notificationHandlers.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
-					AcpSchema.SessionNotification notification = transport.unmarshalFrom(params,
+					AcpSchema.SessionNotification notification = transport.unmarshalParams(params,
 							new TypeRef<AcpSchema.SessionNotification>() {
 							});
 					logger.debug("Received session update for session: {}", notification.sessionId());

@@ -20,6 +20,7 @@ import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
@@ -221,7 +222,18 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		try {
-			JSONRPCMessage message = readMessage(request);
+			String body = readJsonBody(request);
+			JSONRPCMessage message;
+			try {
+				message = parseMessage(body);
+			}
+			catch (Rejection rejection) {
+				if (answerInvalidRequest(request, body)) {
+					response.setStatus(HttpServletResponse.SC_ACCEPTED);
+					return;
+				}
+				throw rejection;
+			}
 			if (StreamableHttpRouting.isInitialize(message)) {
 				handleInitialize(request, response, (AcpSchema.JSONRPCRequest) message);
 				return;
@@ -266,9 +278,26 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		}
 	}
 
-	/** Reads a POST body and parses it as one JSON-RPC message. */
-	private JSONRPCMessage readMessage(HttpServletRequest request) throws IOException, Rejection {
-		return parseMessage(readJsonBody(request));
+	/**
+	 * A JSON object posted on a connection that is no valid JSON-RPC request (JSON-RPC 2.0
+	 * section 4: a method that is not a string, an id that is not a string, number or null,
+	 * jsonrpc other than "2.0") is answered as JSON-RPC prescribes, -32600 Invalid Request,
+	 * on the connection stream, as the TypeScript server leaves an object-shaped body to the
+	 * connection to validate. A body that is not JSON, or not an object, or posted without a
+	 * connection, is still refused with 400.
+	 * @return whether the body was answered
+	 */
+	private boolean answerInvalidRequest(HttpServletRequest request, String body) throws Rejection {
+		if (!body.stripLeading().startsWith("{") || header(request, HEADER_CONNECTION_ID).isEmpty()) {
+			return false;
+		}
+		AcpSchema.JSONRPCResponse answer = AcpSchema.unreadableMessageResponse(jsonMapper, body);
+		AcpSchema.JSONRPCError error = answer.error();
+		if (error == null || error.code() != AcpErrorCodes.INVALID_REQUEST) {
+			return false;
+		}
+		requireConnection(request, connections::get).answerInvalid(answer);
+		return true;
 	}
 
 	/** The body of a JSON POST, rejecting a wrong content type and an oversized body, declared or actual. */

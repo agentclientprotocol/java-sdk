@@ -11,9 +11,13 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,11 +51,22 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	 * Consumers who want their own configuration on top of the SDK's defaults should start
 	 * from this method's result.
 	 * </p>
+	 * <p>
+	 * A scalar of the wrong JSON type is refused rather than coerced (a number or boolean for
+	 * a string, a string for a number or boolean): JSON-RPC answers such params -32602 Invalid
+	 * params, and a coerced value would hide a peer's bug.
+	 * </p>
+	 *
 	 * @return a new, independently configurable lenient mapper
 	 */
 	public static ObjectMapper defaultObjectMapper() {
 		return JsonMapper.builder()
 			.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
+			.withCoercionConfig(LogicalType.Textual,
+					config -> config.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+						.setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+						.setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
 			.addHandler(new UnknownPropertyLogger())
 			.build();
 	}

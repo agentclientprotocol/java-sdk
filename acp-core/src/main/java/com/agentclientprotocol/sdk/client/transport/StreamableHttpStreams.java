@@ -13,6 +13,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -69,9 +70,11 @@ final class StreamableHttpStreams {
 	 * @param closing whether the transport is closing
 	 * @param onFailure ends the transport after a stream failure it cannot recover from
 	 * @param onError reports an error the streams recover from, such as a skipped event
+	 * @param answerUnreadable answers a skipped event, posted in the scope of its stream
 	 */
 	record Owner(BiFunction<RouteScope, JSONRPCMessage, Mono<Void>> inbound, BooleanSupplier closing,
-			Consumer<Throwable> onFailure, Consumer<Throwable> onError) {
+			Consumer<Throwable> onFailure, Consumer<Throwable> onError,
+			BiConsumer<RouteScope, String> answerUnreadable) {
 	}
 
 	StreamableHttpStreams(StreamableHttpRequests requests, StreamableHttpRoutes routes, AcpJsonMapper jsonMapper,
@@ -92,8 +95,9 @@ final class StreamableHttpStreams {
 			}
 
 			@Override
-			public void onUnreadable(Throwable error) {
+			public void onUnreadable(RouteScope scope, Throwable error, String data) {
 				owner.onError().accept(error);
+				owner.answerUnreadable().accept(scope, data);
 			}
 
 			@Override

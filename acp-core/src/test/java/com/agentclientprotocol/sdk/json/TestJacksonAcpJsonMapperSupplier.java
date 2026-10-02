@@ -23,7 +23,19 @@ public final class TestJacksonAcpJsonMapperSupplier implements AcpJsonMapperSupp
 
 	@Override
 	public AcpJsonMapper get() {
-		return new Mapper(JsonMapper.builder().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build());
+		// The coercion rules of the shipped mappers (JacksonAcpJsonMapper.defaultObjectMapper).
+		return new Mapper(JsonMapper.builder()
+			.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+			.disable(com.fasterxml.jackson.databind.MapperFeature.ALLOW_COERCION_OF_SCALARS)
+			.withCoercionConfig(com.fasterxml.jackson.databind.type.LogicalType.Textual,
+					config -> config
+						.setCoercion(com.fasterxml.jackson.databind.cfg.CoercionInputShape.Integer,
+								com.fasterxml.jackson.databind.cfg.CoercionAction.Fail)
+						.setCoercion(com.fasterxml.jackson.databind.cfg.CoercionInputShape.Float,
+								com.fasterxml.jackson.databind.cfg.CoercionAction.Fail)
+						.setCoercion(com.fasterxml.jackson.databind.cfg.CoercionInputShape.Boolean,
+								com.fasterxml.jackson.databind.cfg.CoercionAction.Fail))
+			.build());
 	}
 
 	private record Mapper(ObjectMapper om) implements AcpJsonMapper {

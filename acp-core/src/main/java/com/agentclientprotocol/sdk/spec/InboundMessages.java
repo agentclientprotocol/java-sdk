@@ -32,8 +32,9 @@ final class InboundMessages {
 	}
 
 	/**
-	 * Passes a notification to the handler registered for its method. One without a handler
-	 * is ignored with a warning that names its method only: its params can carry personal
+	 * Passes a notification to the handler registered for its method; a handler that fails
+	 * (params it cannot read, say) is logged and skipped. One without a handler is ignored
+	 * with a warning that names its method only: its params can carry personal
 	 * data (agents send {@code _auth/status_update}, whose params carry the account's email
 	 * address).
 	 */
@@ -44,7 +45,13 @@ final class InboundMessages {
 			logger.warn("No handler registered for notification method: {}", notification.method());
 			return Mono.empty();
 		}
-		return handle.apply(handler, paramsOrEmpty(notification.params()));
+		// A notification has no answer to carry a failure: it is logged (method and error
+		// only) and the session reads on. A failure must not end the inbound stream.
+		return Mono.defer(() -> handle.apply(handler, paramsOrEmpty(notification.params())))
+			.onErrorResume(error -> {
+				logger.warn("Notification {} failed and was skipped: {}", notification.method(), error.toString());
+				return Mono.empty();
+			});
 	}
 
 	/** A request always gets a response: a handler that completes empty is answered with an error. */

@@ -228,6 +228,57 @@ class StreamableHttpAcpClientTransportTest {
 		}
 	}
 
+	/**
+	 * An SSE event that is no valid JSON-RPC request (here jsonrpc "1.0") is answered as
+	 * JSON-RPC 2.0 says, -32600 with the request's id, posted in the scope of the stream it
+	 * came on, as the stdio and WebSocket transports answer. Before, the HTTP client only
+	 * skipped it and the agent waited for an answer forever.
+	 */
+	@Test
+	void anInvalidRequestOnAStreamIsAnswered() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<String> posted = new LinkedBlockingQueue<>();
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			posted.add(bodyOf(request));
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try {
+			transport.setExceptionHandler(error -> {
+			});
+			transport.connect(message -> Mono.empty()).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+
+			connectionStreamWriter.write(("data: {\"jsonrpc\":\"1.0\",\"id\":\"agent-1\",\"method\":\"fs/read_text_file\"}\n\n")
+				.getBytes(StandardCharsets.UTF_8));
+			connectionStreamWriter.flush();
+
+			assertThat(posted.poll(5, TimeUnit.SECONDS)).isEqualTo(
+					"{\"jsonrpc\":\"2.0\",\"id\":\"agent-1\",\"error\":{\"code\":-32600,\"message\":\"Invalid Request\"}}");
+		}
+		finally {
+			transport.close();
+			connectionStreamWriter.close();
+		}
+	}
+
 	@Test
 	void defaultAcpPathIsCorrect() {
 		assertThat(StreamableHttpAcpClientTransport.DEFAULT_ACP_PATH).isEqualTo("/acp");
@@ -1187,6 +1238,45 @@ class StreamableHttpAcpClientTransportTest {
 			}
 		}
 		throw new AssertionError("Timed out waiting for " + expected + " notifications; received " + count);
+	}
+
+	/** The body a request publishes, read synchronously. */
+	private static String bodyOf(HttpRequest request) {
+		HttpRequest.BodyPublisher publisher = request.bodyPublisher().orElseThrow();
+		java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+		CountDownLatch done = new CountDownLatch(1);
+		publisher.subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+
+			@Override
+			public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) {
+				subscription.request(Long.MAX_VALUE);
+			}
+
+			@Override
+			public void onNext(java.nio.ByteBuffer item) {
+				byte[] chunk = new byte[item.remaining()];
+				item.get(chunk);
+				bytes.write(chunk, 0, chunk.length);
+			}
+
+			@Override
+			public void onError(Throwable throwable) {
+				done.countDown();
+			}
+
+			@Override
+			public void onComplete() {
+				done.countDown();
+			}
+
+		});
+		try {
+			done.await(5, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		return bytes.toString(StandardCharsets.UTF_8);
 	}
 
 	private InputStream emptyBody() {

@@ -89,7 +89,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	/** Reads the params as the registered request type, then calls the registered handler. */
 	private <T> AcpAgentSession.RequestHandler<Object> sessionHandler(AgentHandlers.Request<T> registration) {
 		return params -> {
-			T request = transport.unmarshalFrom(params, registration.requestType());
+			T request = transport.unmarshalParams(params, registration.requestType());
 			recordClientCapabilities(request);
 			return registration.handler().handle(request, this).cast(Object.class);
 		};
@@ -97,7 +97,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private <T> AcpAgentSession.NotificationHandler sessionHandler(AgentHandlers.Notification<T> registration) {
 		return params -> registration.handler()
-			.apply(transport.unmarshalFrom(params, registration.notificationType()));
+			.apply(transport.unmarshalParams(params, registration.notificationType()));
 	}
 
 	/**

@@ -63,4 +63,20 @@ class PendingResponsesLogTest {
 			.doesNotContain("bug");
 	}
 
+	/** A stray response with no id answers nothing this side sent: a WARN, not an ERROR about a bug. */
+	@Test
+	void aResponseWithoutAnIdIsLoggedAtWarn() {
+		PendingResponses pending = new PendingResponses(() -> null, RuntimeException::new, "agent");
+
+		pending.complete(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, null, java.util.Map.of(), null));
+
+		List<ILoggingEvent> events = this.appender.list.stream()
+			.filter(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+			.toList();
+		assertThat(events).singleElement().satisfies(event -> {
+			assertThat(event.getLevel()).isEqualTo(Level.WARN);
+			assertThat(event.getFormattedMessage()).contains("agent").doesNotContain("bug");
+		});
+	}
+
 }

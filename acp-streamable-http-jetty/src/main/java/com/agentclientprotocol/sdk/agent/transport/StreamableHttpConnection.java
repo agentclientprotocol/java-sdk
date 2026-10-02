@@ -133,6 +133,17 @@ final class StreamableHttpConnection {
 		connection.acceptInbound(message);
 	}
 
+	/** Answers a message the client posted that is no valid JSON-RPC request, on the connection stream. */
+	void answerInvalid(AcpSchema.JSONRPCResponse answer) {
+		logger.warn("Answered an invalid JSON-RPC request on connection {} with {}", id, answer.error());
+		try {
+			connectionStream.push(jsonMapper.writeValueAsString(answer));
+		}
+		catch (IOException e) {
+			connection.signalException(e);
+		}
+	}
+
 	void openStream(HttpServletRequest request, HttpServletResponse response, @Nullable String sessionId)
 			throws IOException {
 		RouteScope scope = sessionId == null ? RouteScope.connection() : RouteScope.session(sessionId);

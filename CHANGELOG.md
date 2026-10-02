@@ -268,6 +268,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor `StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream, Duration)`; a request
   still unanswered then is answered with `-32800` (request cancelled) and the transport terminates
   without it. `closeGracefully()` now also completes `awaitTermination()`.
+- **JSON-RPC request validation (JSON-RPC 2.0 sections 4 and 5.1), on both sides and every
+  transport.** A request whose `method` is not a string was answered `-32601` (method not found);
+  one whose `id` is not a string, number or null (an object, say), or whose `jsonrpc` is not exactly
+  `"2.0"`, was executed. All three are now answered `-32600` Invalid Request, with the request's id
+  when it can be read and `null` otherwise (section 5); `AcpSchema.deserializeJsonRpcMessage` refuses
+  them, and `unreadableMessageResponse` answers them. Over Streamable HTTP a JSON object posted on a
+  connection that is no valid request is answered on the connection stream with `202`, as the
+  TypeScript server does; a body that is not a JSON object is still refused with `400`. Params the
+  method cannot read are now `-32602` Invalid params, message `Invalid params`, with the reason as
+  `data`, instead of `-32603`, and the handler is not called: a value of the wrong JSON type, and a
+  required field (a schema record component without `@Nullable`, the schema's `required` list)
+  that is missing, such as `session/new` without `cwd`. The new `AcpTransport.unmarshalParams`
+  does this for both the agent's and the client's handlers. A notification whose handler fails
+  (such params, say) is now logged at WARN and skipped; on the agent the failure used to end the
+  session's inbound stream, so the connection stopped answering. The Streamable HTTP client now
+  answers an SSE event that is no JSON-RPC message, in the scope of its stream, as the stdio and
+  WebSocket transports do; it used to skip it, and the agent waited for an answer.
+- **Behaviour change: the default JSON mappers no longer coerce scalars.** `JacksonAcpJsonMapper`
+  and `Jackson3AcpJsonMapper` read `"cwd": 42` as the string `"42"`, and a string as a number or
+  boolean; they now refuse a scalar of the wrong JSON type (`ALLOW_COERCION_OF_SCALARS` off, and no
+  number or boolean to string), so such params are `-32602`.
+- **A stray response without an id was logged at ERROR as a bug in this SDK.** A response with no
+  id and no error answers no request this side sent; it is now logged at WARN.
 - **A JSON-RPC error's wire `message` carried the code.** An `AcpProtocolException` thrown by a
   handler was answered with the exception's log form as the message, for example
   `"message": "[-32602] unknown directive: #nope"`; JSON-RPC 2.0 (section 5.1) keeps the number in
