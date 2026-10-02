@@ -36,6 +36,51 @@
       "contains": "no name field",
       "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/SessionUpdate.kt:131",
       "reason": "Kotlin v1 SessionUpdate.ToolCall has no name field, so the client cannot read the tool call name"
+    },
+    {
+      "step": "enum.tool_call",
+      "when": {
+        "client": "kotlin"
+      },
+      "contains": "the update was dropped",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/ToolCall.kt:39",
+      "reason": "ToolCallStatus (and ToolKind, ToolCall.kt:18) is a closed Kotlin enum and ACPJson has no coerceInputValues, so a tool_call with an unknown status fails to decode and the SDK drops the whole update (the turn goes on)"
+    },
+    {
+      "step": "enum.plan",
+      "when": {
+        "client": "kotlin"
+      },
+      "contains": "the update was dropped",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Plan.kt:22",
+      "reason": "PlanEntryPriority and PlanEntryStatus (Plan.kt:36) are closed Kotlin enums, so a plan with unknown values fails to decode and the SDK drops the update"
+    },
+    {
+      "step": "enum.stop",
+      "when": {
+        "client": "kotlin"
+      },
+      "contains": "StopReason does not contain element with name 'interop_future_stop'",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Requests.kt:301",
+      "reason": "StopReason is a closed Kotlin enum: the PromptResponse with stopReason interop_future_stop fails to decode and the prompt call fails (-32700); the session still answers the next prompt"
+    },
+    {
+      "step": "enum.stop",
+      "when": {
+        "agent": "kotlin"
+      },
+      "contains": "cannot send stopReason interop_future_stop",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Requests.kt:301",
+      "reason": "A Kotlin agent answers a prompt only with a PromptResponse, whose StopReason is a closed enum, so it cannot send an unknown stop reason; the program answers -32603 instead"
+    },
+    {
+      "step": "enum.audience",
+      "when": {
+        "agent": "kotlin"
+      },
+      "contains": "Role does not contain element with name 'interop_future_role'",
+      "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Types.kt:157",
+      "reason": "Role is a closed Kotlin enum, so the SDK fails to decode a prompt whose annotations.audience holds an unknown Role and answers -32700 before the handler runs"
     }
   ]
 }
