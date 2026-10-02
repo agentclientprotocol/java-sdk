@@ -88,6 +88,23 @@ PERMISSION = {
     ],
 }
 UNKNOWN_UPDATE = {"sessionUpdate": "interop_future_update", "payload": {"x": 1}}
+# steps.json fixtures.unknownEnums and fixtures.groupedConfigOption.
+ENUM_TOOL_CALL = {"sessionUpdate": "tool_call", "toolCallId": "call-enum", "title": "interop enum tool",
+                  "kind": "interop_future_kind", "status": "interop_future_status"}
+ENUM_PLAN = {"sessionUpdate": "plan", "entries": [{"content": "future entry", "priority": "interop_future_priority",
+                                                  "status": "interop_future_status"}]}
+ENUM_STOP = "interop_future_stop"
+ENUM_AUDIENCE = ["user", "interop_future_role"]
+EFFORT_GROUPS = [
+    {"group": "fast", "name": "Fast", "options": [{"value": "effort-low", "name": "Low"}]},
+    {"group": "deep", "name": "Deep", "options": [{"value": "effort-medium", "name": "Medium"},
+                                                 {"value": "effort-high", "name": "High"}]},
+]
+
+
+def effort_option(value):
+    return {"id": "effort", "name": "Effort", "type": "select", "currentValue": value, "options": EFFORT_GROUPS}
+
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS = -32700, -32600, -32601, -32602
 
@@ -1290,6 +1307,11 @@ AGENT_ROLE_STEPS = [
     "session.load",               # session/load answered "result": null (all-optional response)
     "update.agent_message_chunk",  # the AGENT_CASES run during this prompt, then an unknown update
     "update.unknown",             # #emit unknown: the unknown update, then the chunk "after-unknown"
+    "enum.tool_call",             # #enum tool_call: kind and status the v1 schema does not define
+    "enum.plan",                  # #enum plan: an entry with unknown priority and status
+    "enum.stop",                  # #enum stop: stopReason interop_future_stop
+    "enum.audience",              # #enum audience: the client's unknown Role, read from the raw frame
+    "config.grouped",             # #config grouped: a grouped select; session/set_config_option effort
     "perm.selected",              # normal
     "fs.write",                   # normal; the client's answer is checked
     "error.method-not-found",     # answered -32601 without "message"
@@ -1503,6 +1525,16 @@ class AgentConn:
             return self.answer(m, None, session=scope)
         if method == "session/prompt":
             return self.prompt(m, sid, p)
+        if method == "session/set_config_option":
+            # Only effort exists, and only after #config grouped (the raw agent offers no options on new).
+            t0 = time.time()
+            value = p.get("value")
+            values = [o["value"] for g in EFFORT_GROUPS for o in g["options"]]
+            if p.get("configId") == "effort" and value in values:
+                self.step("config.grouped", value == "effort-high", t0, "effort set to %s" % value)
+                return self.answer(m, {"configOptions": [effort_option(value)]}, session=scope)
+            return self.answer(m, error={"code": INVALID_PARAMS, "message": "unknown config option %s=%s"
+                                         % (p.get("configId"), value)}, session=scope)
         # error.method-not-found: an error without "message" (schema Error.message is required),
         # so the client must fail the call with -32601 rather than hang or crash on it.
         return self.answer(m, raw='{"jsonrpc":"2.0","id":%s,"error":{"code":-32601}}' % dumps(m["id"]), session=scope)
@@ -1543,6 +1575,23 @@ class AgentConn:
             self.out({"jsonrpc": "2.0", "method": "session/update",
                       "params": {"sessionId": sid, "update": UNKNOWN_UPDATE}}, sid)
             self.chunk(sid, "after-unknown")
+        elif text in ("#enum tool_call", "#enum plan"):
+            self.out({"jsonrpc": "2.0", "method": "session/update", "params": {
+                "sessionId": sid, "update": ENUM_TOOL_CALL if text == "#enum tool_call" else ENUM_PLAN}}, sid)
+            self.chunk(sid, "after-enum")
+        elif text == "#enum stop":
+            self.chunk(sid, "stop")
+            return self.answer(m, {"stopReason": ENUM_STOP}, session=sid)
+        elif text == "#enum audience":
+            t0 = time.time()
+            first = blocks[0] if blocks and isinstance(blocks[0], dict) else {}
+            audience = (first.get("annotations") or {}).get("audience")
+            self.step("enum.audience", audience == ENUM_AUDIENCE, t0, "audience %s" % dumps(audience))
+            self.chunk(sid, "audience: " + (",".join(map(str, audience)) if isinstance(audience, list) else "none"))
+        elif text == "#config grouped":
+            self.out({"jsonrpc": "2.0", "method": "session/update", "params": {
+                "sessionId": sid, "update": {"sessionUpdate": "config_option_update",
+                                             "configOptions": [effort_option("effort-low")]}}}, sid)
         elif text.startswith("#raw "):
             # The Java client's --mode raw steps (programs/java Raw.java): raw.<case>.
             case = text[len("#raw "):].strip()

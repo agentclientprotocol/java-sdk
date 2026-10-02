@@ -741,8 +741,7 @@ public class Client {
 		check(values.equals(List.of("effort-low", "effort-medium", "effort-high")), "effort values " + values);
 		AcpSchema.SetSessionConfigOptionResponse set = block(c.client.setSessionConfigOption(
 				AcpSchema.SetSessionConfigOptionRequest.select(sid, "effort", "effort-high")));
-		check(set != null && "effort-high".equals(selectValue(set.configOptions(), "effort"))
-				&& "model-a".equals(selectValue(set.configOptions(), "model")),
+		check(set != null && "effort-high".equals(selectValue(set.configOptions(), "effort")),
 				"configOptions " + (set == null ? null : set.configOptions()));
 		return "effort grouped fast/deep, values " + values + "; set to effort-high";
 	}

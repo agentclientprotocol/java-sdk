@@ -1,7 +1,7 @@
 {
   "name": "conf-java-client-catalogue-ws",
-  "description": "java client -> raw agent over ws: 13 catalogue steps, 27 raw cases on the client (generated)",
-  "timeoutSec": 305,
+  "description": "java client -> raw agent over ws: 18 catalogue steps, 29 raw cases on the client (generated)",
+  "timeoutSec": 330,
   "peers": [],
   "processes": [
     {
@@ -25,9 +25,9 @@
       "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
       "run": "${ROOT}/programs/java/launch/client.sh --transport ws --url ws://127.0.0.1:${PORT}/acp",
       "env": {
-        "STEPS": "init.initialize,session.new,session.load,update.agent_message_chunk,update.unknown,perm.selected,fs.write,error.method-not-found,mode.set,auth.authenticate,auth.logout,session.delete,conn.close"
+        "STEPS": "init.initialize,session.new,session.load,update.agent_message_chunk,update.unknown,enum.tool_call,enum.plan,enum.stop,enum.audience,config.grouped,perm.selected,fs.write,error.method-not-found,mode.set,auth.authenticate,auth.logout,session.delete,conn.close"
       },
-      "timeoutSec": 185
+      "timeoutSec": 210
     }
   ],
   "assertions": {
@@ -56,6 +56,8 @@
         "STEP agent.raw.stray-response.null-id PASS",
         "STEP agent.raw.stray-response.null-id-error PASS",
         "STEP agent.raw.update.unknown PASS",
+        "STEP agent.enum.audience PASS",
+        "STEP agent.config.grouped PASS",
         "STEP agent.perm.selected PASS",
         "STEP agent.fs.write PASS",
         "STEP agent.mode.set PASS",
@@ -63,7 +65,7 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 13",
+      "client RESULT pass == 18",
       "client RESULT fail == 0"
     ],
     "expectedFailures": [],
