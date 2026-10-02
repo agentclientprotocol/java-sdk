@@ -3,6 +3,7 @@ package com.agentclientprotocol.autoconfigure.agent;
 import java.util.List;
 import java.util.Map;
 
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
@@ -15,14 +16,15 @@ import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @AutoConfiguration(after = AcpAgentTransportAutoConfiguration.class)
 @ConditionalOnClass(AcpAgentSupport.class)
-@ConditionalOnBean(AcpAgentTransport.class)
 @EnableConfigurationProperties(AcpAgentProperties.class)
 public class AcpAgentAutoConfiguration {
 
@@ -31,11 +33,36 @@ public class AcpAgentAutoConfiguration {
 	// Back off for client-only applications: only start an agent lifecycle when the
 	// application actually defines an @AcpAgent bean. The acp-spring-boot-starter serves
 	// both clients and agents, so a client app legitimately has no @AcpAgent bean.
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnBean(AcpAgentTransport.class)
+	static class SingleTransportAgentConfiguration {
+
+		@Bean
+		@ConditionalOnBean(annotation = AcpAgent.class)
+		AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
+				AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
+			Object agentBean = findAgentBean(applicationContext);
+			return new AcpAgentLifecycle(agentSupport(agentBean, transport, properties, interceptors));
+		}
+
+	}
+
+	// Listener-backed transports (Streamable HTTP) host one agent runtime per remote
+	// connection, each dispatching to the same @AcpAgent bean. A fresh AcpAgentSupport
+	// per
+	// connection: its builder adds its default resolvers on every build, so it is not
+	// reused.
 	@Bean
 	@ConditionalOnBean(annotation = AcpAgent.class)
-	AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
-			AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
+	@ConditionalOnMissingBean
+	AcpAgentFactory acpAgentFactory(ApplicationContext applicationContext, AcpAgentProperties properties,
+			List<AcpInterceptor> interceptors) {
+		Object agentBean = findAgentBean(applicationContext);
+		return AcpAgentFactory
+			.sync(transport -> agentSupport(agentBean, transport, properties, interceptors).getAgent());
+	}
 
+	private static Object findAgentBean(ApplicationContext applicationContext) {
 		Map<String, Object> agentBeans = applicationContext.getBeansWithAnnotation(AcpAgent.class);
 
 		if (agentBeans.size() > 1) {
@@ -45,7 +72,11 @@ public class AcpAgentAutoConfiguration {
 
 		Object agentBean = agentBeans.values().iterator().next();
 		logger.info("Discovered @AcpAgent bean: {}", agentBean.getClass().getName());
+		return agentBean;
+	}
 
+	private static AcpAgentSupport agentSupport(Object agentBean, AcpAgentTransport transport,
+			AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
 		var builder = AcpAgentSupport.create(agentBean)
 			.transport(transport)
 			.requestTimeout(properties.getRequestTimeout());
@@ -54,7 +85,7 @@ public class AcpAgentAutoConfiguration {
 			builder.interceptor(interceptor);
 		}
 
-		return new AcpAgentLifecycle(builder.build());
+		return builder.build();
 	}
 
 	static class AcpAgentLifecycle implements SmartLifecycle {
