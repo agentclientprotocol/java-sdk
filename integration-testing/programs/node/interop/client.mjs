@@ -843,10 +843,10 @@ const steps = {
     const during = await settle(c.prompt(sid, "during cancel"), STEP_TIMEOUT);
     const first = await settle(pending, 5000);
     check(first !== undefined && first.ok && first.value?.stopReason === "cancelled", () => `the first prompt: ${first ? (first.ok ? abbreviate(first.value) : describeError(first.error)) : "TIMEOUT"}`);
-    check(during !== undefined && !during.ok && during.error?.code === -32000, () => `"during cancel": ${during ? (during.ok ? `answered ${abbreviate(during.value)}` : describeError(during.error)) : "TIMEOUT"}`);
+    check(during !== undefined && !during.ok && during.error?.code === -32600, () => `"during cancel": ${during ? (during.ok ? `answered ${abbreviate(during.value)}` : describeError(during.error)) : "TIMEOUT"}`);
     const after = await c.prompt(sid, "after cancel");
     check(after?.stopReason === "end_turn", `"after cancel": stopReason ${after?.stopReason}`);
-    return 'cancelled; "during cancel" -32000; "after cancel" end_turn';
+    return 'cancelled; "during cancel" -32600; "after cancel" end_turn';
   },
   "cancel.grace": async () => {
     const c = mainConn();
