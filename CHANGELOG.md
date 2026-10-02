@@ -408,6 +408,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replace `AcpAgent.async(new WebSocketAcpAgentTransport(port, mapper))...build()` with
   `new StreamableHttpAcpAgentTransport(port, mapper, AcpAgentFactory.async(t -> AcpAgent.async(t)...build()))`.
   `WebSocketAcpClientTransport` (in `acp-core`) is unchanged and connects to it as before.
+- **Breaking: the `@SessionState` and `@AcpExceptionHandler` annotations are removed.** Both were
+  declared in `acp-annotations` but nothing implemented them: a `@SessionState` parameter failed
+  every call with "No resolver for parameter", and an `@AcpExceptionHandler` method was never
+  called. Migration: keep per-session state in the agent, in a thread-safe map keyed by the
+  session ID (an `@SessionId String` parameter or the request's `sessionId()`), and remove it in
+  the `@CloseSession`/`@DeleteSession` handler; handle exceptions in the handler method itself, or
+  in an `AcpInterceptor`'s `onError`, and throw `AcpProtocolException` to answer with a specific
+  JSON-RPC error.
 
 ### Fixed
 

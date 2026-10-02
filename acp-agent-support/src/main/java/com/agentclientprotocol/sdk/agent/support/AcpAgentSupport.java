@@ -128,8 +128,8 @@ import org.slf4j.LoggerFactory;
  * builder builds, every connection a factory serves included, invokes the same instance.
  * Its handler methods are therefore called concurrently, from different connections and
  * from different sessions of one connection, and must be thread-safe; keep per-connection
- * or per-session state keyed by session id (or in the agent's session state), not in plain
- * fields. The same holds for interceptors and custom resolvers and return value handlers.
+ * or per-session state keyed by session id, not in plain fields. The same holds for
+ * interceptors and custom resolvers and return value handlers.
  *
  * @author Mark Pollack
  * @since 1.0.0
