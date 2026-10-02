@@ -189,7 +189,9 @@ public class Client {
 		STEPS.put("update.tool_call", () -> emit("tool_call",
 				u -> u instanceof AcpSchema.ToolCall c && "call-1".equals(c.toolCallId())
 						&& "interop tool".equals(c.title()) && c.kind() == AcpSchema.ToolKind.READ
-						&& c.status() == AcpSchema.ToolCallStatus.PENDING));
+						// status is optional in the v1 schema (ToolCall requires only toolCallId and
+						// title); an absent status is the default, pending (the Rust SDK omits it).
+						&& (c.status() == null || c.status() == AcpSchema.ToolCallStatus.PENDING)));
 		STEPS.put("update.tool_call_update", Client::toolCallUpdate);
 		STEPS.put("update.tool_call-name", Client::toolCallName);
 		STEPS.put("update.plan", () -> emit("plan", u -> u instanceof AcpSchema.Plan p && p.entries() != null
