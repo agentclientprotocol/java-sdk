@@ -691,7 +691,7 @@ class AcpSchemaSerializationTest {
 		assertThat(deserialized).isInstanceOf(AcpSchema.SessionConfigSelect.class);
 		AcpSchema.SessionConfigSelect asSelect = (AcpSchema.SessionConfigSelect) deserialized;
 		assertThat(asSelect.currentValue()).isEqualTo("code");
-		assertThat(asSelect.options()).hasSize(2);
+		assertThat(asSelect.options().allOptions()).hasSize(2);
 	}
 
 	@Test

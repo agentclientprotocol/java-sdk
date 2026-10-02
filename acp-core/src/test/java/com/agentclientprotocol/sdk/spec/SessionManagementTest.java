@@ -140,7 +140,7 @@ class SessionManagementTest {
 
 		var expected = List.of(
 				new AcpSchema.SessionConfigSelect("select", "model", "Model", null, "model", "fast",
-						List.of(new AcpSchema.SessionConfigSelectOption("fast", "Fast")), null),
+						AcpSchema.SessionConfigSelectOptions.ungrouped(List.of(new AcpSchema.SessionConfigSelectOption("fast", "Fast"))), null),
 				new AcpSchema.SessionConfigBoolean("web", "Web search", false));
 		assertThat(newResponse.configOptions()).isEqualTo(expected);
 		assertThat(loadResponse.configOptions()).isEqualTo(expected);

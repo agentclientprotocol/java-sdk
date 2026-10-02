@@ -59,8 +59,6 @@ class MetaCoverageTest {
 					"presence marker typed Object: keeps _meta as a map entry"),
 			Map.entry("ElicitationFormCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
 			Map.entry("ElicitationUrlCapabilities", "presence marker typed Object: keeps _meta as a map entry"),
-			Map.entry("SessionConfigSelectGroup",
-					"grouped select options are not modelled: SessionConfigSelect.options is the flat list only"),
 			Map.entry("CancelRequestNotification", "$/cancel_request is not implemented yet (parity item P2)"),
 			// Elicitation records: parity item P4 owns them; it adds _meta and drops these entries
 			Map.entry("ElicitationSchema", "elicitation record without _meta, added with P4"),
