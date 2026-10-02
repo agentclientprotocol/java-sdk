@@ -125,7 +125,14 @@ impl Conn {
         if let Some(c) = self.close.take() {
             let _ = c.send(());
         }
-        match tokio::time::timeout(cfg().timeout, self.join).await {
+        let r = tokio::time::timeout(cfg().timeout, self.join).await;
+        if cfg().transport == "http" {
+            // The SDK sends the DELETE from a detached task (HttpConnection::spawn_close,
+            // agent-client-protocol-http client.rs:525) after connect_with has returned, so nothing
+            // can await it: give it a moment before the process may exit.
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        match r {
             Ok(Ok(Ok(()))) => Ok("closed".into()),
             Ok(Ok(Err(e))) => Err(format!("close failed: {}", describe(&e))),
             Ok(Err(e)) => Err(format!("connection task failed: {e}")),
