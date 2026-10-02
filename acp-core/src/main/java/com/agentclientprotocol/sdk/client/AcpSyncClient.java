@@ -374,6 +374,16 @@ public class AcpSyncClient implements AutoCloseable {
 	 * the prompt and may send streaming updates via session/update notifications before
 	 * returning the final response.
 	 * </p>
+	 * <p>
+	 * This method returns only once every session update consumer has finished with every
+	 * notification the agent sent before its prompt response, so what the consumers
+	 * collected for this turn is complete when the stop reason arrives. A consumer that is
+	 * slow delays the response, which still counts against the request timeout. The one
+	 * exception: a consumer that was already running when the prompt was sent, and is
+	 * still running when its response arrives, is not waited for, since it may be the one
+	 * waiting for the prompt. A consumer must therefore not wait for this prompt to
+	 * complete.
+	 * </p>
 	 * @param promptRequest the prompt request with session ID and content
 	 * @return the prompt response with stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT

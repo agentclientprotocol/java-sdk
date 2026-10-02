@@ -492,6 +492,14 @@ public interface AcpClient {
 		 * Adds a consumer to be notified when session update notifications are received
 		 * from the agent. Session updates include agent thoughts, message chunks, and
 		 * other streaming content during prompt processing.
+		 * <p>
+		 * Notifications are delivered one at a time, in the order the agent sent them: the
+		 * next is delivered once every consumer has finished with this one (its Mono completed). A response
+		 * from the agent, such as a prompt's, completes its caller only after the consumers
+		 * have finished with every notification sent before it, so updates collected here
+		 * are complete when {@code prompt} returns. A consumer must not wait for a prompt
+		 * in flight to complete: that prompt waits for the consumer.
+		 * </p>
 		 * @param sessionUpdateConsumer A consumer that receives session update
 		 * notifications. Must not be null.
 		 * @return This builder instance for method chaining
@@ -988,6 +996,15 @@ public interface AcpClient {
 		/**
 		 * Adds a synchronous consumer to be notified when session update notifications
 		 * are received from the agent. This is the preferred method for sync clients.
+		 *
+		 * <p>
+		 * Notifications are delivered one at a time, in the order the agent sent them: the
+		 * next is delivered once every consumer has finished with this one (it returned). A response
+		 * from the agent, such as a prompt's, completes its caller only after the consumers
+		 * have finished with every notification sent before it, so updates collected here
+		 * are complete when {@code prompt} returns. A consumer must not wait for a prompt
+		 * in flight to complete: that prompt waits for the consumer.
+		 * </p>
 		 *
 		 * <p>Example usage:
 		 * <pre>{@code

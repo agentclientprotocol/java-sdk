@@ -517,6 +517,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`prompt()` returns only after the session-update consumers have handled the turn's updates.**
+  On the client, notifications are delivered one at a time on their own drain, while a response
+  completed its caller as soon as it arrived. A prompt's response follows its turn's updates, so a
+  sync `prompt()` (or the async `Mono`) could return while the consumer was still handling the
+  last updates, and a caller that read what it had collected missed some, silently. Now every
+  response from the agent completes its caller only once every notification that arrived before it
+  on the session has been handled: the response takes its place in the notification queue
+  (`InboundOrder`, model checked with Lincheck in `InboundOrderLincheckTest`). Notification order,
+  `closeGracefully()` waiting for the drain, and `close()` not waiting are unchanged; a response
+  still held when the session closes is completed then. A slow consumer delays the response, which
+  still counts against the request timeout. So that a consumer which sends a request of its own and
+  waits for it cannot deadlock, a response is not held behind a handler that was already running
+  when its request was sent. A consumer must not wait for the prompt in flight to complete. The
+  agent side is unchanged: its notification handlers are not ordered, and `session/cancel` takes
+  effect on the inbound thread before any later message is handled.
+
 - **Closing the Streamable HTTP servlet is bounded, and an `initialize` in flight no longer
   outlives it.** `StreamableHttpAcpServlet.destroy()` waited up to 30 seconds (the initialize
   timeout) for its connections, and `closeGracefully()` had no bound at all, so an agent whose

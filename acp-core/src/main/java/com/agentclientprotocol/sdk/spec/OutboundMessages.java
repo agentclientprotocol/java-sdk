@@ -46,6 +46,9 @@ final class OutboundMessages {
 	/** Requests waiting for a response, keyed by request id. */
 	private final PendingResponses pendingResponses;
 
+	/** When a response that arrived may complete its caller. */
+	private final ResponseOrder responseOrder;
+
 	/** Session-specific prefix for request ids. */
 	private final String idPrefix = UUID.randomUUID().toString().substring(0, 8);
 
@@ -53,7 +56,13 @@ final class OutboundMessages {
 
 	OutboundMessages(AcpTransport transport, Duration requestTimeout, Supplier<@Nullable Throwable> transportFailure,
 			Function<Throwable, RuntimeException> unavailable, String peer) {
+		this(transport, requestTimeout, transportFailure, unavailable, peer, ResponseOrder.IMMEDIATE);
+	}
+
+	OutboundMessages(AcpTransport transport, Duration requestTimeout, Supplier<@Nullable Throwable> transportFailure,
+			Function<Throwable, RuntimeException> unavailable, String peer, ResponseOrder responseOrder) {
 		this.transport = transport;
+		this.responseOrder = responseOrder;
 		this.requestTimeout = requestTimeout;
 		this.transportFailure = transportFailure;
 		this.unavailable = unavailable;
@@ -62,12 +71,14 @@ final class OutboundMessages {
 
 	/**
 	 * Sends a request and waits, at most the request timeout, for its response. An error
-	 * response fails the returned Mono with {@link AcpError}.
+	 * response fails the returned Mono with {@link AcpError}. A response that arrived
+	 * completes the Mono when the {@link ResponseOrder} lets it, within the same timeout.
 	 */
 	<T> Mono<T> sendRequest(String method, Object params, TypeRef<T> typeRef) {
 		return Mono.deferContextual(ctx -> {
 			// One id per subscription: a resubscribed request (a retry) is a new request.
 			String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
+			long sentAt = this.responseOrder.position();
 			// Completes once the request is handed to the transport; a $/cancel_request
 			// waits for it, so it never overtakes its request on an ordered transport.
 			Sinks.Empty<Void> written = Sinks.empty();
@@ -103,7 +114,8 @@ final class OutboundMessages {
 						}
 					}));
 				}
-			}).doFinally(signal -> gracefulCancel.dispose());
+			}).doFinally(signal -> gracefulCancel.dispose())
+				.flatMap(response -> this.responseOrder.after(sentAt, response));
 		})
 			.transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout))
 			.handle((response, resultSink) -> deliver(method, response, typeRef, resultSink));

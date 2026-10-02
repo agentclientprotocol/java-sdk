@@ -74,10 +74,13 @@ public class AcpClientSession implements AcpSession {
 	/** Map of notification handlers keyed by method name */
 	private final ConcurrentHashMap<String, NotificationHandler> notificationHandlers = new ConcurrentHashMap<>();
 
-	/** Notifications waiting for in-order delivery; completed when the session closes */
-	private final NotificationQueue<AcpSchema.JSONRPCNotification> notifications = new NotificationQueue<>();
+	/**
+	 * Notifications waiting for in-order delivery, and responses waiting for the notifications
+	 * before them to be handled; completed when the session closes
+	 */
+	private final InboundOrder<AcpSchema.JSONRPCNotification> notifications = new InboundOrder<>();
 
-	/** Subscription draining the notification sink via concatMap */
+	/** Subscription draining the notifications in order */
 	private final Disposable notificationSubscription;
 
 	/** Completes when the notification drain terminates; awaited by {@link #closeGracefully()} */
@@ -150,8 +153,10 @@ public class AcpClientSession implements AcpSession {
 
 		this.requestTimeout = requestTimeout;
 		this.transport = transport;
+		// A response completes its caller only once the notifications that arrived before it
+		// have been handled: a prompt turn's updates come before its response.
 		this.outbound = new OutboundMessages(transport, requestTimeout, () -> this.connectFailure,
-				AcpClientSession::notConnected, "agent");
+				AcpClientSession::notConnected, "agent", this.notifications);
 		this.requestHandlers.putAll(requestHandlers);
 		this.notificationHandlers.putAll(notificationHandlers);
 
@@ -163,15 +168,18 @@ public class AcpClientSession implements AcpSession {
 		// One shared daemon timer for every session in the JVM (see AcpSchedulers).
 		this.timeoutScheduler = AcpSchedulers.timeouts();
 
-		// Serialize notification delivery: concatMap ensures each notification's Mono
-		// completes before the next one starts, preserving arrival order even when
-		// handlers do async work.
-		this.notificationSubscription = this.notifications.asFlux()
-			.concatMap(notification -> handleIncomingNotification(notification).onErrorComplete(t -> {
+		// Serialize notification delivery: each notification's Mono completes before the next
+		// one starts, preserving arrival order even when handlers do async work. A response
+		// is released in its place among them (InboundOrder).
+		this.notificationSubscription = this.notifications
+			.drain(notification -> handleIncomingNotification(notification).onErrorComplete(t -> {
 				logger.error("Error handling notification: {}", t.getMessage());
 				return true;
 			}))
-			.doFinally(signal -> this.notificationDrainTerminated.tryEmitEmpty())
+			.doFinally(signal -> {
+				this.notifications.releaseHeld();
+				this.notificationDrainTerminated.tryEmitEmpty();
+			})
 			.subscribe();
 
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty()))
@@ -416,6 +424,8 @@ public class AcpClientSession implements AcpSession {
 		dismissPendingResponses();
 		this.notifications.complete();
 		notificationSubscription.dispose();
+		// A response held behind a notification still being handled completes now.
+		this.notifications.releaseHeld();
 	}
 
 }
