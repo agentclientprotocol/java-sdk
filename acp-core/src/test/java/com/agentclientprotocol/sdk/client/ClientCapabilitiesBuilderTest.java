@@ -5,7 +5,9 @@
 package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -110,58 +112,92 @@ class ClientCapabilitiesBuilderTest {
 	}
 
 	/**
-	 * Test that initialize(request) still works and overrides builder capabilities.
-	 * This is the workaround currently used in tutorial Module 17.
+	 * The builder is the one place a client's capabilities and info are set: there is no
+	 * initialize overload that takes a request, so none can silently replace them.
 	 */
 	@Test
-	void initializeWithRequestOverridesBuilderCapabilities() throws Exception {
+	void clientsHaveNoInitializeThatTakesARequest() {
+		for (Class<?> client : List.of(AcpAsyncClient.class, AcpSyncClient.class)) {
+			assertThat(Arrays.stream(client.getMethods())
+				.filter(method -> method.getName().equals("initialize"))
+				.flatMap(method -> Arrays.stream(method.getParameterTypes())))
+				.as(client.getSimpleName() + ".initialize parameters")
+				.doesNotContain(AcpSchema.InitializeRequest.class, ClientCapabilities.class);
+		}
+	}
+
+	@Test
+	void initializeSendsTheBuilderCapabilitiesAndClientInfo() throws Exception {
 		transportPair = InMemoryTransportPair.create();
-
-		AtomicReference<ClientCapabilities> receivedCapabilities = new AtomicReference<>();
-		CountDownLatch capabilitiesLatch = new CountDownLatch(1);
-
-		// Build agent
-		AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport())
-			.requestTimeout(TIMEOUT)
-			.initializeHandler(request -> {
-				receivedCapabilities.set(request.clientCapabilities());
-				capabilitiesLatch.countDown();
-				return Mono.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()));
-			})
+		AtomicReference<AcpSchema.InitializeRequest> received = new AtomicReference<>();
+		AcpAsyncAgent agent = capturingAgent(received);
+		ClientCapabilities caps = ClientCapabilities.builder()
+			.session(AcpSchema.ClientSessionCapabilities.withBooleanConfigOptions())
 			.build();
+		AcpSchema.Implementation info = new AcpSchema.Implementation("my-client", "1.0");
 
-		// Create different capabilities for builder vs initialize request
-		FileSystemCapability builderFs = new FileSystemCapability(false, false);
-		ClientCapabilities builderCaps = new ClientCapabilities(builderFs, false);
-
-		FileSystemCapability requestFs = new FileSystemCapability(true, true);
-		ClientCapabilities requestCaps = new ClientCapabilities(requestFs, true);
-
-		// Build client with builder capabilities
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.clientCapabilities(builderCaps)
+			.clientCapabilities(caps)
+			.clientInfo(info)
 			.build();
-
-		// Start agent
 		agent.start().subscribe();
-		Thread.sleep(100);
 
-		// Initialize with explicit request (should override builder)
-		client.initialize(new AcpSchema.InitializeRequest(1, requestCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
-		// Verify agent received the request capabilities, not builder capabilities
-		assertThat(capabilitiesLatch.await(5, TimeUnit.SECONDS)).isTrue();
-		assertThat(receivedCapabilities.get().fs().readTextFile())
-			.as("Should receive request capabilities, not builder")
-			.isTrue();
-		assertThat(receivedCapabilities.get().terminal())
-			.as("Should receive request capabilities, not builder")
-			.isTrue();
-
-		// Cleanup
+		assertThat(received.get()).isEqualTo(new AcpSchema.InitializeRequest(1, caps, info, null));
 		client.closeGracefully().block(TIMEOUT);
 		agent.closeGracefully().block(TIMEOUT);
+	}
+
+	@Test
+	void initializeWithVersionAndMetaKeepsTheBuilderCapabilities() throws Exception {
+		transportPair = InMemoryTransportPair.create();
+		AtomicReference<AcpSchema.InitializeRequest> received = new AtomicReference<>();
+		AcpAsyncAgent agent = capturingAgent(received);
+		ClientCapabilities caps = new ClientCapabilities(new FileSystemCapability(true, true), true);
+
+		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(caps)
+			.build();
+		agent.start().subscribe();
+
+		client.initialize(1, Map.<String, Object>of("trace", "t")).block(TIMEOUT);
+
+		assertThat(received.get()).isEqualTo(new AcpSchema.InitializeRequest(1, caps, null, Map.of("trace", "t")));
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully().block(TIMEOUT);
+	}
+
+	@Test
+	void syncClientSendsTheBuilderCapabilitiesAndClientInfo() throws Exception {
+		transportPair = InMemoryTransportPair.create();
+		AtomicReference<AcpSchema.InitializeRequest> received = new AtomicReference<>();
+		AcpAsyncAgent agent = capturingAgent(received);
+		ClientCapabilities caps = ClientCapabilities.builder().terminal(true).build();
+		AcpSchema.Implementation info = new AcpSchema.Implementation("my-client", "1.0");
+
+		AcpSyncClient client = AcpClient.sync(transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(caps)
+			.clientInfo(info)
+			.build();
+		agent.start().subscribe();
+
+		client.initialize();
+		client.initialize(1, Map.<String, Object>of("trace", "t"));
+
+		assertThat(received.get()).isEqualTo(new AcpSchema.InitializeRequest(1, caps, info, Map.of("trace", "t")));
+		client.closeGracefully();
+		agent.closeGracefully().block(TIMEOUT);
+	}
+
+	private AcpAsyncAgent capturingAgent(AtomicReference<AcpSchema.InitializeRequest> received) {
+		return AcpAgent.async(transportPair.agentTransport()).requestTimeout(TIMEOUT).initializeHandler(request -> {
+			received.set(request);
+			return Mono.just(AcpSchema.InitializeResponse.ok());
+		}).build();
 	}
 
 }

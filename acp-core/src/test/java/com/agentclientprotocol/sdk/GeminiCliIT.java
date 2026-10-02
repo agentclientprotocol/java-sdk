@@ -76,7 +76,7 @@ class GeminiCliIT {
 
 			// Initialize
 			AcpSchema.InitializeResponse initResponse = client
-				.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
+				.initialize()
 				.block();
 
 			assertThat(initResponse).isNotNull();
@@ -135,6 +135,10 @@ class GeminiCliIT {
 
 		// Build client with handlers for session updates and permissions
 		AcpAsyncClient client = AcpClient.async(transport)
+			.clientCapabilities(new AcpSchema.ClientCapabilities(
+					new AcpSchema.FileSystemCapability(true, false), // read only
+					true // permissions
+			))
 			.requestTimeout(Duration.ofSeconds(60))
 			.sessionUpdateConsumer(notification -> {
 				AcpSchema.SessionUpdate update = notification.update();
@@ -192,10 +196,7 @@ class GeminiCliIT {
 		try {
 			// Initialize
 			AcpSchema.InitializeResponse initResponse = client
-				.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities(
-						new AcpSchema.FileSystemCapability(true, false), // read only
-						true // permissions
-				)))
+				.initialize()
 				.block();
 
 			assertThat(initResponse).isNotNull();
@@ -269,7 +270,7 @@ class GeminiCliIT {
 		try {
 			// Initialize
 			AcpSchema.InitializeResponse initResponse = client
-				.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
+				.initialize()
 				.block();
 			assertThat(initResponse).isNotNull();
 
@@ -348,7 +349,7 @@ class GeminiCliIT {
 
 		try {
 			// Initialize
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block();
+			client.initialize().block();
 
 			// Create session
 			AcpSchema.NewSessionResponse sessionResponse = client
@@ -419,6 +420,10 @@ class GeminiCliIT {
 		logger.info("Using temp directory: {}", tempDir);
 
 		AcpAsyncClient client = AcpClient.async(transport)
+			.clientCapabilities(new AcpSchema.ClientCapabilities(
+					new AcpSchema.FileSystemCapability(true, true), // read and write
+					true // permissions
+			))
 			.requestTimeout(Duration.ofSeconds(60))
 			.sessionUpdateConsumer(notification -> {
 				logger.info("Update: {}", notification.update().getClass().getSimpleName());
@@ -472,10 +477,7 @@ class GeminiCliIT {
 
 		try {
 			// Initialize with write capability
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities(
-					new AcpSchema.FileSystemCapability(true, true), // read and write
-					true // permissions
-			))).block();
+			client.initialize().block();
 
 			// Create session in temp directory
 			AcpSchema.NewSessionResponse sessionResponse = client

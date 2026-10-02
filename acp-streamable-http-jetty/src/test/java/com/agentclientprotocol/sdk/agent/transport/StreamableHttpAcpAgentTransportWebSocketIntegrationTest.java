@@ -118,8 +118,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 			try {
-				client.initialize(new AcpSchema.InitializeRequest(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+				client.initialize()
 					.block(TIMEOUT);
 				AcpSchema.NewSessionResponse session = client
 					.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
@@ -164,8 +163,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 			try {
-				client.initialize(new AcpSchema.InitializeRequest(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+				client.initialize()
 					.block(TIMEOUT);
 				client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 				AcpSchema.PromptResponse prompt = client
@@ -194,11 +192,9 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 			try {
-				firstClient.initialize(new AcpSchema.InitializeRequest(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+				firstClient.initialize()
 					.block(TIMEOUT);
-				secondClient.initialize(new AcpSchema.InitializeRequest(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+				secondClient.initialize()
 					.block(TIMEOUT);
 
 				AcpSchema.NewSessionResponse firstSession = firstClient
@@ -244,8 +240,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 			try {
-				client.initialize(new AcpSchema.InitializeRequest(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.ClientCapabilities()))
+				client.initialize()
 					.block(TIMEOUT);
 				AcpSchema.NewSessionResponse firstSession = client
 					.newSession(new AcpSchema.NewSessionRequest("/workspace/one", List.of()))

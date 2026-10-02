@@ -1314,6 +1314,7 @@ public class Client {
 			this.client = AcpClient.async(this.wire)
 				.requestTimeout(T)
 				.clientCapabilities(capabilities())
+				.clientInfo(new AcpSchema.Implementation("interop-java-client", "1"))
 				.sessionUpdateConsumer(n -> {
 					this.updates.computeIfAbsent(n.sessionId(), k -> new CopyOnWriteArrayList<>()).add(n.update());
 					updatesTotal.incrementAndGet();
@@ -1418,8 +1419,7 @@ public class Client {
 		}
 
 		AcpSchema.InitializeResponse initialize() {
-			return block(this.client.initialize(new AcpSchema.InitializeRequest(1, capabilities(),
-					new AcpSchema.Implementation("interop-java-client", "1"), null)));
+			return block(this.client.initialize());
 		}
 
 		String newSession() {

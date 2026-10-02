@@ -76,8 +76,8 @@ import reactor.core.scheduler.Schedulers;
  *     })
  *     .build();
  *
- * // Initialize and use
- * client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
+ * // Initialize (with the builder's capabilities and client info) and use
+ * client.initialize()
  *     .flatMap(initResponse -> client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())))
  *     .flatMap(sessionResponse -> client.prompt(new AcpSchema.PromptRequest(
  *         sessionResponse.sessionId(),
@@ -202,6 +202,8 @@ public interface AcpClient {
 
 		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
 
+		private AcpSchema.@Nullable Implementation clientInfo;
+
 		private final Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = new HashMap<>();
 
 		private final Map<String, AcpClientSession.NotificationHandler> notificationHandlers = new HashMap<>();
@@ -231,9 +233,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client capabilities that will be advertised to the agent during
-		 * initialization. Capabilities define what features the client supports, such as
-		 * file system operations, terminal access, and authentication methods.
+		 * Sets the client capabilities advertised to the agent by {@code initialize()}: what
+		 * the client supports, such as file system operations, terminal access, boolean
+		 * config options and elicitation. This is the only place they are set; every
+		 * initialize request carries them. Defaults to {@code new ClientCapabilities()} (no
+		 * file system access, no terminal). Build them with
+		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities The client capabilities configuration. Must not be
 		 * null.
 		 * @return This builder instance for method chaining
@@ -242,6 +247,19 @@ public interface AcpClient {
 		public AsyncSpec clientCapabilities(AcpSchema.ClientCapabilities clientCapabilities) {
 			Assert.notNull(clientCapabilities, "Client capabilities must not be null");
 			this.clientCapabilities = clientCapabilities;
+			return this;
+		}
+
+		/**
+		 * Sets the client's name and version, sent to the agent by {@code initialize()}.
+		 * Optional.
+		 * @param clientInfo the client's implementation info. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if clientInfo is null
+		 */
+		public AsyncSpec clientInfo(AcpSchema.Implementation clientInfo) {
+			Assert.notNull(clientInfo, "Client info must not be null");
+			this.clientInfo = clientInfo;
 			return this;
 		}
 
@@ -647,7 +665,7 @@ public interface AcpClient {
 			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers,
 					new HashMap<>(notificationHandlers), Function.identity());
 
-			return new AcpAsyncClient(session, transport, clientCapabilities, advertised);
+			return new AcpAsyncClient(session, transport, clientCapabilities, clientInfo, advertised);
 		}
 
 		/**
@@ -724,9 +742,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client capabilities that will be advertised to the agent during
-		 * initialization. Capabilities define what features the client supports, such as
-		 * file system operations, terminal access, and authentication methods.
+		 * Sets the client capabilities advertised to the agent by {@code initialize()}: what
+		 * the client supports, such as file system operations, terminal access, boolean
+		 * config options and elicitation. This is the only place they are set; every
+		 * initialize request carries them. Defaults to {@code new ClientCapabilities()} (no
+		 * file system access, no terminal). Build them with
+		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities The client capabilities configuration. Must not be
 		 * null.
 		 * @return This builder instance for method chaining
@@ -734,6 +755,18 @@ public interface AcpClient {
 		 */
 		public SyncSpec clientCapabilities(AcpSchema.ClientCapabilities clientCapabilities) {
 			asyncSpec.clientCapabilities(clientCapabilities);
+			return this;
+		}
+
+		/**
+		 * Sets the client's name and version, sent to the agent by {@code initialize()}.
+		 * Optional.
+		 * @param clientInfo the client's implementation info. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if clientInfo is null
+		 */
+		public SyncSpec clientInfo(AcpSchema.Implementation clientInfo) {
+			asyncSpec.clientInfo(clientInfo);
 			return this;
 		}
 

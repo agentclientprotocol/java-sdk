@@ -67,12 +67,12 @@ class AcpAsyncClientTest {
 		// Set up mock transport that responds to initialize
 		var transport = createMockTransportWithInitialize();
 
-		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		AcpAsyncClient client = AcpClient.async(transport)
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(new AcpSchema.ClientCapabilities(null, null))
+			.build();
 
-		AcpSchema.InitializeRequest request = new AcpSchema.InitializeRequest(1,
-				new AcpSchema.ClientCapabilities(null, null));
-
-		StepVerifier.create(client.initialize(request)).consumeNextWith(response -> {
+		StepVerifier.create(client.initialize()).consumeNextWith(response -> {
 			assertThat(response).isNotNull();
 			assertThat(response.protocolVersion()).isEqualTo(1);
 			assertThat(response.agentCapabilities()).isNotNull();
@@ -82,14 +82,11 @@ class AcpAsyncClientTest {
 	}
 
 	@Test
-	void testInitializeWithNullRequest() {
+	void testBuilderWithNullClientInfo() {
 		var transport = new MockAcpClientTransport();
-		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
-
-		assertThatThrownBy(() -> client.initialize(null)).isInstanceOf(IllegalArgumentException.class)
-			.hasMessage("Initialize request must not be null");
-
-		client.close();
+		assertThatThrownBy(() -> AcpClient.async(transport).clientInfo(null))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("Client info must not be null");
 	}
 
 	@Test

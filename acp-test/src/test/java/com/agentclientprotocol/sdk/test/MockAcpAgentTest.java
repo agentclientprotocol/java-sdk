@@ -33,7 +33,7 @@ class MockAcpAgentTest {
 			AcpAsyncClient client = AcpClient.async(pair.clientTransport()).build();
 
 			AcpSchema.InitializeResponse response = client
-				.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
+				.initialize()
 				.block(TIMEOUT);
 
 			assertThat(response).isNotNull();
@@ -60,7 +60,7 @@ class MockAcpAgentTest {
 			Thread.sleep(100);
 
 			AcpAsyncClient client = AcpClient.async(pair.clientTransport()).build();
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			mockAgent.expectPrompts(1);
@@ -93,7 +93,7 @@ class MockAcpAgentTest {
 			Thread.sleep(100);
 
 			AcpAsyncClient client = AcpClient.async(pair.clientTransport()).build();
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			client.cancel(new AcpSchema.CancelNotification("cancel-session")).block(TIMEOUT);

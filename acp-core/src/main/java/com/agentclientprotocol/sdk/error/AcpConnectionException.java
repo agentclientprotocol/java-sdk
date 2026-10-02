@@ -20,7 +20,7 @@ package com.agentclientprotocol.sdk.error;
  * Example usage:
  * <pre>{@code
  * try {
- *     client.initialize(request).block();
+ *     client.initialize().block();
  * } catch (AcpConnectionException e) {
  *     logger.error("Failed to connect to agent", e);
  *     // Handle reconnection or notify user

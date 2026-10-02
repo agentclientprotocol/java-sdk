@@ -20,7 +20,6 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateTerminalResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -107,7 +106,7 @@ class BuilderVsAnnotationComparisonTest {
 					.requestTimeout(TIMEOUT)
 					.build();
 
-			client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("session-1", List.of(new TextContent("Hello")))).block(TIMEOUT);
 
@@ -164,7 +163,7 @@ class BuilderVsAnnotationComparisonTest {
 					.requestTimeout(TIMEOUT)
 					.build();
 
-			client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("session-1", List.of(new TextContent("Hello")))).block(TIMEOUT);
 
@@ -219,13 +218,14 @@ class BuilderVsAnnotationComparisonTest {
 			ClientCapabilities fsCaps = new ClientCapabilities(
 					new FileSystemCapability(true, true), null);
 			AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+				.clientCapabilities(fsCaps)
 					.requestTimeout(TIMEOUT)
 					.clientCapabilities(fsCaps)
 					.readTextFileHandler(req -> Mono.just(new ReadTextFileResponse("file content")))
 					.writeTextFileHandler(req -> Mono.just(new WriteTextFileResponse()))
 					.build();
 
-			client.initialize(new InitializeRequest(1, fsCaps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("file-session", List.of(new TextContent("process")))).block(TIMEOUT);
 
@@ -284,13 +284,14 @@ class BuilderVsAnnotationComparisonTest {
 			ClientCapabilities fsCaps = new ClientCapabilities(
 					new FileSystemCapability(true, true), null);
 			AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+				.clientCapabilities(fsCaps)
 					.requestTimeout(TIMEOUT)
 					.clientCapabilities(fsCaps)
 					.readTextFileHandler(req -> Mono.just(new ReadTextFileResponse("file content")))
 					.writeTextFileHandler(req -> Mono.just(new WriteTextFileResponse()))
 					.build();
 
-			client.initialize(new InitializeRequest(1, fsCaps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("file-session", List.of(new TextContent("process")))).block(TIMEOUT);
 
@@ -341,6 +342,7 @@ class BuilderVsAnnotationComparisonTest {
 
 			ClientCapabilities termCaps = new ClientCapabilities(null, true);
 			AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+				.clientCapabilities(termCaps)
 					.requestTimeout(TIMEOUT)
 					.clientCapabilities(termCaps)
 					.createTerminalHandler(req -> {
@@ -353,7 +355,7 @@ class BuilderVsAnnotationComparisonTest {
 					.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
 					.build();
 
-			client.initialize(new InitializeRequest(1, termCaps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("term-session", List.of(new TextContent("run")))).block(TIMEOUT);
 
@@ -407,6 +409,7 @@ class BuilderVsAnnotationComparisonTest {
 
 			ClientCapabilities termCaps = new ClientCapabilities(null, true);
 			AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+				.clientCapabilities(termCaps)
 					.requestTimeout(TIMEOUT)
 					.clientCapabilities(termCaps)
 					.createTerminalHandler(req -> {
@@ -419,7 +422,7 @@ class BuilderVsAnnotationComparisonTest {
 					.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
 					.build();
 
-			client.initialize(new InitializeRequest(1, termCaps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new PromptRequest("term-session", List.of(new TextContent("run")))).block(TIMEOUT);
 
@@ -477,7 +480,7 @@ class BuilderVsAnnotationComparisonTest {
 					.requestTimeout(TIMEOUT)
 					.build();
 
-			client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			PromptResponse resp = client.prompt(new PromptRequest("s1", List.of(new TextContent("World"))))
 					.block(TIMEOUT);
@@ -528,7 +531,7 @@ class BuilderVsAnnotationComparisonTest {
 					.requestTimeout(TIMEOUT)
 					.build();
 
-			client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			PromptResponse resp = client.prompt(new PromptRequest("v1", List.of(new TextContent("test"))))
 					.block(TIMEOUT);

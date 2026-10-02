@@ -143,6 +143,7 @@ public final class SmokeClient {
 		AcpAsyncClient client = AcpClient.async(transport)
 			.requestTimeout(PROMPT_TIMEOUT)
 			.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
+			.clientInfo(new AcpSchema.Implementation("acp-java-smoke", "1"))
 			.sessionUpdateConsumer(n -> {
 				onUpdate(n);
 				return Mono.empty();
@@ -157,9 +158,7 @@ public final class SmokeClient {
 		AtomicReference<AcpSchema.InitializeResponse> init = new AtomicReference<>();
 		step("initialize", () -> {
 			AcpSchema.InitializeResponse r = client
-				.initialize(new AcpSchema.InitializeRequest(1,
-						new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false),
-						new AcpSchema.Implementation("acp-java-smoke", "1"), null))
+				.initialize()
 				.block(INIT_TIMEOUT);
 			if (r == null || r.protocolVersion() == null) {
 				throw new IllegalStateException("no protocolVersion in the initialize response");

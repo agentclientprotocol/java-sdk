@@ -81,7 +81,7 @@ class ErrorCodePropagationTest {
 		// Start agent and initialize client
 		agent.start().subscribe();
 		Thread.sleep(100);
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		// Send prompt - should receive INVALID_PARAMS error
@@ -125,7 +125,7 @@ class ErrorCodePropagationTest {
 		// Start agent and initialize client
 		agent.start().subscribe();
 		Thread.sleep(100);
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		// Send prompt - should receive METHOD_NOT_FOUND error
@@ -169,7 +169,7 @@ class ErrorCodePropagationTest {
 		// Start agent and initialize client
 		agent.start().subscribe();
 		Thread.sleep(100);
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		// Send prompt - should receive AUTHENTICATION_REQUIRED error
@@ -223,7 +223,10 @@ class ErrorCodePropagationTest {
 		agentRef.set(agent);
 
 		// Build client that throws INVALID_PARAMS for file reads
+		AcpSchema.FileSystemCapability fsCaps = new AcpSchema.FileSystemCapability(true, false);
+		AcpSchema.ClientCapabilities clientCaps = new AcpSchema.ClientCapabilities(fsCaps, false);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.readTextFileHandler((AcpSchema.ReadTextFileRequest request) -> {
 				// Throw INVALID_PARAMS to simulate validation error
@@ -235,9 +238,7 @@ class ErrorCodePropagationTest {
 		// Start agent and initialize
 		agent.start().subscribe();
 		Thread.sleep(100);
-		AcpSchema.FileSystemCapability fsCaps = new AcpSchema.FileSystemCapability(true, false);
-		AcpSchema.ClientCapabilities clientCaps = new AcpSchema.ClientCapabilities(fsCaps, false);
-		client.initialize(new AcpSchema.InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		// Send prompt which triggers file read
@@ -282,7 +283,7 @@ class ErrorCodePropagationTest {
 		// Start agent and initialize client
 		agent.start().subscribe();
 		Thread.sleep(100);
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		// Send prompt - should receive INTERNAL_ERROR (this is correct behavior)

@@ -25,7 +25,6 @@ import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
@@ -67,7 +66,7 @@ class AcpAgentSupportBuilderReuseTest {
 		agent.start();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
 		try {
-			client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			return client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT).sessionId();
 		}
 		finally {
@@ -171,7 +170,7 @@ class AcpAgentSupportBuilderReuseTest {
 	}
 
 	private static Mono<StopReason> turn(AcpAsyncClient client, String cwd) {
-		return client.initialize(new InitializeRequest(1, null))
+		return client.initialize()
 			.then(client.newSession(new NewSessionRequest(cwd, List.of())))
 			.flatMap(session -> client
 				.prompt(new PromptRequest(session.sessionId(), List.of(new TextContent("hi")))))

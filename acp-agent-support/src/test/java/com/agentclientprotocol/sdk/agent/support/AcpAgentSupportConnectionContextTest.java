@@ -32,7 +32,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CurrentModeUpdate;
 import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -102,9 +101,12 @@ class AcpAgentSupportConnectionContextTest {
 			.requestTimeout(TIMEOUT)
 			.build();
 		agentSupport.start();
-		client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client = AcpClient.async(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(readOnlyFiles(true))
+			.build();
 
-		client.initialize(new InitializeRequest(1, readOnlyFiles(true))).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		assertThat(atInitialize.get()).isNotNull();
@@ -148,7 +150,7 @@ class AcpAgentSupportConnectionContextTest {
 			return Mono.empty();
 		}).build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.setSessionMode(new SetSessionModeRequest("s1", "plan")).block(TIMEOUT);
 
@@ -181,9 +183,12 @@ class AcpAgentSupportConnectionContextTest {
 			.requestTimeout(TIMEOUT)
 			.build();
 		agentSupport.start();
-		client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
+		client = AcpClient.async(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(readOnlyFiles(true))
+			.build();
 
-		client.initialize(new InitializeRequest(1, readOnlyFiles(true))).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		Echo echo = client.sendExtRequest("_test/echo", new Echo("read:"), new TypeRef<Echo>() {
 		}).block(TIMEOUT);
 
@@ -225,11 +230,11 @@ class AcpAgentSupportConnectionContextTest {
 		server.start().block(TIMEOUT);
 		List<String> firstUpdates = new CopyOnWriteArrayList<>();
 		List<String> secondUpdates = new CopyOnWriteArrayList<>();
-		AcpAsyncClient first = client(transport(server), firstUpdates);
-		AcpAsyncClient second = client(transport(server), secondUpdates);
+		AcpAsyncClient first = client(transport(server), readOnlyFiles(true), firstUpdates);
+		AcpAsyncClient second = client(transport(server), readOnlyFiles(false), secondUpdates);
 		try {
-			first.initialize(new InitializeRequest(1, readOnlyFiles(true))).block(TIMEOUT);
-			second.initialize(new InitializeRequest(1, readOnlyFiles(false))).block(TIMEOUT);
+			first.initialize().block(TIMEOUT);
+			second.initialize().block(TIMEOUT);
 			first.newSession(new NewSessionRequest("/one", List.of())).block(TIMEOUT);
 			second.newSession(new NewSessionRequest("/two", List.of())).block(TIMEOUT);
 			first.setSessionMode(new SetSessionModeRequest("/one", "plan")).block(TIMEOUT);
@@ -257,8 +262,9 @@ class AcpAgentSupportConnectionContextTest {
 				AcpJsonMapper.createDefault());
 	}
 
-	private static AcpAsyncClient client(AcpClientTransport transport, List<String> updates) {
-		return AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
+	private static AcpAsyncClient client(AcpClientTransport transport, ClientCapabilities capabilities,
+			List<String> updates) {
+		return AcpClient.async(transport).requestTimeout(TIMEOUT).clientCapabilities(capabilities).sessionUpdateConsumer(notification -> {
 			if (notification.update() instanceof AgentMessageChunk chunk && chunk.content() instanceof TextContent text) {
 				updates.add(text.text());
 			}

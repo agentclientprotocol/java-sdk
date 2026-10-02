@@ -22,7 +22,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.AgentThoughtChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateTerminalResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -95,7 +94,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("test-session-123", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -136,7 +135,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("msg-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -177,7 +176,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("msgid-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -219,7 +218,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("thought-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -252,7 +251,10 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		FileSystemCapability fsCaps = new FileSystemCapability(true, false);
+		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.readTextFileHandler(req -> {
 				assertThat(req.path()).isEqualTo("/path/to/file.txt");
@@ -263,9 +265,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		FileSystemCapability fsCaps = new FileSystemCapability(true, false);
-		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("file-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -290,7 +290,10 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		FileSystemCapability fsCaps = new FileSystemCapability(false, true);
+		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.writeTextFileHandler(req -> {
 				writtenPath.set(req.path());
@@ -302,9 +305,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		FileSystemCapability fsCaps = new FileSystemCapability(false, true);
-		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("write-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -330,7 +331,10 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		FileSystemCapability fsCaps = new FileSystemCapability(true, false);
+		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.readTextFileHandler(req -> Mono.error(new RuntimeException("File not found")))
 			.build();
@@ -338,9 +342,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		FileSystemCapability fsCaps = new FileSystemCapability(true, false);
-		ClientCapabilities clientCaps = new ClientCapabilities(fsCaps, false);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("try-read-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -380,7 +382,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("perm-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -413,7 +415,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("deny-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -454,7 +456,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("choice-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -488,7 +490,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("cancel-choice-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -517,7 +519,9 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.createTerminalHandler(req -> {
 				assertThat(req.command()).isEqualTo("echo");
@@ -538,8 +542,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("exec-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -569,6 +572,7 @@ class ConvenienceApiTest {
 			.build();
 
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(new ClientCapabilities(null, true))
 			.requestTimeout(TIMEOUT)
 			.createTerminalHandler(req -> Mono.just(new CreateTerminalResponse("term-killed")))
 			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(null, "SIGKILL")))
@@ -579,7 +583,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		client.initialize(new InitializeRequest(1, new ClientCapabilities(null, true))).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("signal-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -608,7 +612,9 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.createTerminalHandler(req -> {
 				capturedCwd.set(req.cwd());
@@ -622,8 +628,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("cmd-session", List.of(new TextContent("test")))).block(TIMEOUT);
 
@@ -652,7 +657,9 @@ class ConvenienceApiTest {
 			})
 			.build();
 
+		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+			.clientCapabilities(clientCaps)
 			.requestTimeout(TIMEOUT)
 			.createTerminalHandler(req -> Mono.just(new CreateTerminalResponse("term-rel")))
 			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(0, null)))
@@ -669,8 +676,7 @@ class ConvenienceApiTest {
 		agent.start();
 		Thread.sleep(100);
 
-		ClientCapabilities clientCaps = new ClientCapabilities(null, true);
-		client.initialize(new InitializeRequest(1, clientCaps)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("release-test", List.of(new TextContent("test")))).block(TIMEOUT);
 

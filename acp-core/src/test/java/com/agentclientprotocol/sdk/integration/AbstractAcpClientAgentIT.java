@@ -92,7 +92,7 @@ public abstract class AbstractAcpClientAgentIT {
 
 			// Initialize client
 			AcpSchema.InitializeResponse response = client
-				.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
+				.initialize()
 				.block(TIMEOUT);
 
 			assertThat(response).isNotNull();
@@ -132,7 +132,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start and initialize
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 
 			// Create session
 			AcpSchema.NewSessionResponse sessionResponse = client
@@ -175,7 +175,7 @@ public abstract class AbstractAcpClientAgentIT {
 			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 
 			var created = client.newSession(new AcpSchema.NewSessionRequest("/w", List.of())).block(TIMEOUT);
 			var loaded = client.loadSession(new AcpSchema.LoadSessionRequest("s1", "/w", List.of())).block(TIMEOUT);
@@ -221,7 +221,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start, initialize, and create session
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send prompt
@@ -282,7 +282,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start, initialize, and create session
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send prompt and verify updates are received
@@ -351,7 +351,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start, initialize, and create session
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send prompt which triggers permission request
@@ -406,7 +406,10 @@ public abstract class AbstractAcpClientAgentIT {
 			agentRef.set(agent);
 
 			// Build client with file read handler - using typed handler
+			AcpSchema.FileSystemCapability fsCaps = new AcpSchema.FileSystemCapability(true, false);
+			AcpSchema.ClientCapabilities clientCaps = new AcpSchema.ClientCapabilities(fsCaps, false);
 			AcpAsyncClient client = AcpClient.async(clientTransport)
+				.clientCapabilities(clientCaps)
 				.requestTimeout(TIMEOUT)
 				.readTextFileHandler((AcpSchema.ReadTextFileRequest request) -> {
 					assertThat(request.path()).isEqualTo("/src/Main.java");
@@ -416,11 +419,9 @@ public abstract class AbstractAcpClientAgentIT {
 
 			// Start, initialize, and create session
 			// Client must advertise file reading capability for agent to use it
-			AcpSchema.FileSystemCapability fsCaps = new AcpSchema.FileSystemCapability(true, false);
-			AcpSchema.ClientCapabilities clientCaps = new AcpSchema.ClientCapabilities(fsCaps, false);
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, clientCaps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send prompt which triggers file read
@@ -459,7 +460,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start and initialize
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 
 			// Graceful shutdown should complete without error
 			client.closeGracefully().block(TIMEOUT);
@@ -499,7 +500,7 @@ public abstract class AbstractAcpClientAgentIT {
 			// Start, initialize, create session
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send cancel notification
@@ -541,7 +542,7 @@ public abstract class AbstractAcpClientAgentIT {
 
 			agent.start().subscribe();
 			Thread.sleep(100);
-			client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			AcpSchema.ForkSessionResponse forkResp = client
@@ -599,7 +600,11 @@ public abstract class AbstractAcpClientAgentIT {
 			agentRef.set(agent);
 
 			// Build client with elicitation handler that accepts with "fast"
+			var caps = new AcpSchema.ClientCapabilities(
+					new AcpSchema.FileSystemCapability(), false,
+					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
 			AcpAsyncClient client = AcpClient.async(clientTransport)
+				.clientCapabilities(caps)
 				.requestTimeout(TIMEOUT)
 				.createElicitationHandler(elicitRequest -> {
 					assertThat(elicitRequest.mode()).isEqualTo("form");
@@ -616,10 +621,7 @@ public abstract class AbstractAcpClientAgentIT {
 			Thread.sleep(100);
 
 			// Advertise elicitation capability
-			var caps = new AcpSchema.ClientCapabilities(
-					new AcpSchema.FileSystemCapability(), false,
-					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
-			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 			// Send prompt which triggers elicitation
@@ -672,7 +674,11 @@ public abstract class AbstractAcpClientAgentIT {
 			agentRef.set(agent);
 
 			// Client declines the form
+			var caps = new AcpSchema.ClientCapabilities(
+					new AcpSchema.FileSystemCapability(), false,
+					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
 			AcpAsyncClient client = AcpClient.async(clientTransport)
+				.clientCapabilities(caps)
 				.requestTimeout(TIMEOUT)
 				.createElicitationHandler(req ->
 					Mono.just(AcpSchema.CreateElicitationResponse.decline()))
@@ -680,10 +686,7 @@ public abstract class AbstractAcpClientAgentIT {
 
 			agent.start().subscribe();
 			Thread.sleep(100);
-			var caps = new AcpSchema.ClientCapabilities(
-					new AcpSchema.FileSystemCapability(), false,
-					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
-			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new AcpSchema.PromptRequest("session-decline",
 					List.of(new AcpSchema.TextContent("test")))).block(TIMEOUT);
@@ -732,7 +735,11 @@ public abstract class AbstractAcpClientAgentIT {
 			agentRef.set(agent);
 
 			// Client cancels the form
+			var caps = new AcpSchema.ClientCapabilities(
+					new AcpSchema.FileSystemCapability(), false,
+					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
 			AcpAsyncClient client = AcpClient.async(clientTransport)
+				.clientCapabilities(caps)
 				.requestTimeout(TIMEOUT)
 				.createElicitationHandler(req ->
 					Mono.just(AcpSchema.CreateElicitationResponse.cancel()))
@@ -740,10 +747,7 @@ public abstract class AbstractAcpClientAgentIT {
 
 			agent.start().subscribe();
 			Thread.sleep(100);
-			var caps = new AcpSchema.ClientCapabilities(
-					new AcpSchema.FileSystemCapability(), false,
-					null, null, AcpSchema.ElicitationCapabilities.formOnly(), null);
-			client.initialize(new AcpSchema.InitializeRequest(1, caps)).block(TIMEOUT);
+			client.initialize().block(TIMEOUT);
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 			client.prompt(new AcpSchema.PromptRequest("session-cancel",
 					List.of(new AcpSchema.TextContent("test")))).block(TIMEOUT);

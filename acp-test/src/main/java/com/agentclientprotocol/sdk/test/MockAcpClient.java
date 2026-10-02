@@ -77,6 +77,8 @@ public class MockAcpClient {
 		Function<AcpSchema.WriteTextFileRequest, AcpSchema.WriteTextFileResponse> writeFileHandler = builder.writeFileHandler;
 		// The handlers record into this mock's fields, which are initialized before this body runs
 		this.delegate = AcpClient.async(builder.transport)
+			// Mock client advertises all capabilities (file read, file write, terminal)
+			.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true))
 			.requestTimeout(builder.requestTimeout)
 			.sessionUpdateConsumer(notification -> {
 				receivedUpdates.add(notification);
@@ -123,10 +125,7 @@ public class MockAcpClient {
 	 * @return The initialize response
 	 */
 	public AcpSchema.InitializeResponse initialize() {
-		// Mock client advertises all capabilities by default
-		AcpSchema.FileSystemCapability fs = new AcpSchema.FileSystemCapability(true, true);
-		AcpSchema.ClientCapabilities caps = new AcpSchema.ClientCapabilities(fs, true);
-		return await(delegate.initialize(new AcpSchema.InitializeRequest(1, caps)));
+		return await(delegate.initialize());
 	}
 
 	/**

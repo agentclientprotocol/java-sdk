@@ -24,7 +24,6 @@ import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -87,7 +86,7 @@ class HandlerErrorTest {
 	private AcpAsyncClient connectAsyncClient() {
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport()).requestTimeout(REQUEST_TIMEOUT).build();
 		closers.add(0, () -> client.closeGracefully().block(TIMEOUT));
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		return client;
 	}
 
@@ -264,7 +263,7 @@ class HandlerErrorTest {
 			})
 			.build();
 		closers.add(0, client::closeGracefully);
-		client.initialize(new InitializeRequest(1, null));
+		client.initialize();
 		client.newSession(new NewSessionRequest("/workspace", List.of()));
 
 		promptAndAssertClientAnsweredInternalError(() -> client.prompt(prompt()), outcome, NoSuchMethodError.class);
@@ -284,7 +283,7 @@ class HandlerErrorTest {
 			})
 			.build();
 		closers.add(0, () -> client.closeGracefully().block(TIMEOUT));
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		promptAndAssertClientAnsweredInternalError(() -> client.prompt(prompt()).block(TIMEOUT), outcome,
@@ -305,7 +304,7 @@ class HandlerErrorTest {
 			})
 			.build();
 		closers.add(0, () -> client.closeGracefully().block(TIMEOUT));
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 
 		promptAndAssertClientAnsweredInternalError(() -> client.prompt(prompt()).block(TIMEOUT), outcome,

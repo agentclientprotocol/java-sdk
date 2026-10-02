@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.client;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
@@ -63,10 +64,8 @@ import reactor.core.publisher.Mono;
  *     .requestTimeout(Duration.ofSeconds(30))
  *     .build();
  *
- * // Initialize
- * AcpSchema.InitializeResponse initResponse = client
- *     .initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()))
- *     .block();
+ * // Initialize: sends the capabilities and client info set on the builder
+ * AcpSchema.InitializeResponse initResponse = client.initialize().block();
  *
  * // Create session and interact
  * String sessionId = client
@@ -152,9 +151,15 @@ public class AcpAsyncClient {
 	private final AcpClientTransport transport;
 
 	/**
-	 * Client capabilities configured via the builder. Used by no-arg initialize().
+	 * Client capabilities configured via the builder: the ones every initialize request
+	 * advertises.
 	 */
 	private final AcpSchema.ClientCapabilities clientCapabilities;
+
+	/**
+	 * Client info configured via the builder, sent with every initialize request.
+	 */
+	private final AcpSchema.@Nullable Implementation clientInfo;
 
 	/**
 	 * Capabilities negotiated with the agent during initialization.
@@ -186,7 +191,7 @@ public class AcpAsyncClient {
 	 */
 	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
 			AcpSchema.@Nullable ClientCapabilities clientCapabilities) {
-		this(session, transport, clientCapabilities, new AtomicReference<>());
+		this(session, transport, clientCapabilities, null, new AtomicReference<>());
 	}
 
 	/**
@@ -196,17 +201,19 @@ public class AcpAsyncClient {
 	 * @param transport the transport layer for this client
 	 * @param clientCapabilities the client capabilities to use during initialization (may
 	 * be null for defaults)
+	 * @param clientInfo the client info to send during initialization (may be null)
 	 * @param advertisedCapabilities set to the capabilities of each initialize request
 	 * the client sends
 	 */
 	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
-			AcpSchema.@Nullable ClientCapabilities clientCapabilities,
+			AcpSchema.@Nullable ClientCapabilities clientCapabilities, AcpSchema.@Nullable Implementation clientInfo,
 			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities) {
 		Assert.notNull(session, "Session must not be null");
 		Assert.notNull(transport, "Transport must not be null");
 		this.session = session;
 		this.transport = transport;
 		this.clientCapabilities = clientCapabilities != null ? clientCapabilities : new AcpSchema.ClientCapabilities();
+		this.clientInfo = clientInfo;
 		this.advertisedCapabilities = advertisedCapabilities;
 	}
 
@@ -215,31 +222,48 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Initializes the connection with the agent. This is the first step in the ACP
-	 * lifecycle and negotiates protocol version and capabilities.
+	 * Initializes the connection with the agent: the first step in the ACP lifecycle. The
+	 * client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
+	 * capabilities and client info set on the builder
+	 * ({@link AcpClient.AsyncSpec#clientCapabilities}, {@link AcpClient.AsyncSpec#clientInfo});
+	 * the agent answers with its protocol version, capabilities and authentication methods.
 	 *
 	 * <p>
-	 * The client sends its protocol version and capabilities, and the agent responds with
-	 * its supported protocol version, authentication methods, and capabilities.
+	 * The builder is the only place the client's capabilities are set, so what the client
+	 * advertises is also what its handlers honour (an elicitation mode it did not advertise
+	 * is refused). Without {@code clientCapabilities(...)} the client advertises
+	 * {@code new ClientCapabilities()}: no file system access and no terminal.
 	 * </p>
 	 *
 	 * <p>
 	 * After initialization, the agent's capabilities can be accessed via
 	 * {@link #getAgentCapabilities()}.
 	 * </p>
-	 * @param initializeRequest the initialization request containing protocol version and
-	 * client capabilities
 	 * @return a Mono emitting the initialization response with agent capabilities
 	 * @see AcpSchema#METHOD_INITIALIZE
+	 * @see #initialize(int, Map)
 	 * @see #getAgentCapabilities()
 	 */
-	public Mono<AcpSchema.InitializeResponse> initialize(AcpSchema.InitializeRequest initializeRequest) {
-		Assert.notNull(initializeRequest, "Initialize request must not be null");
-		logger.debug("Initializing ACP client with protocol version: {}", initializeRequest.protocolVersion());
-		AcpSchema.ClientCapabilities advertised = initializeRequest.clientCapabilities();
-		return Mono
-			.fromRunnable(() -> advertisedCapabilities
-				.set(advertised != null ? advertised : new AcpSchema.ClientCapabilities(null, null)))
+	public Mono<AcpSchema.InitializeResponse> initialize() {
+		return initialize(AcpSchema.LATEST_PROTOCOL_VERSION, null);
+	}
+
+	/**
+	 * Initializes the connection with the agent, like {@link #initialize()}, with a chosen
+	 * protocol version and {@code _meta}. The capabilities and client info still come
+	 * from the builder; this overload exists for {@code _meta} and for testing version
+	 * negotiation, not for advertising capabilities.
+	 * @param protocolVersion the protocol version to announce; this SDK speaks
+	 * {@value AcpSchema#LATEST_PROTOCOL_VERSION}
+	 * @param meta the request's {@code _meta}, or {@code null}
+	 * @return a Mono emitting the initialization response with agent capabilities
+	 * @see #initialize()
+	 */
+	public Mono<AcpSchema.InitializeResponse> initialize(int protocolVersion, @Nullable Map<String, Object> meta) {
+		AcpSchema.InitializeRequest initializeRequest = new AcpSchema.InitializeRequest(protocolVersion,
+				this.clientCapabilities, this.clientInfo, meta);
+		logger.debug("Initializing ACP client with protocol version: {}", protocolVersion);
+		return Mono.fromRunnable(() -> advertisedCapabilities.set(this.clientCapabilities))
 			.then(Mono.defer(
 					() -> session.sendRequest(AcpSchema.METHOD_INITIALIZE, initializeRequest, INITIALIZE_RESPONSE_TYPE_REF)))
 			.doOnNext(response -> {
@@ -248,20 +272,6 @@ public class AcpAsyncClient {
 				agentCapabilities.set(caps);
 				logger.debug("Negotiated agent capabilities: {}", caps);
 			});
-	}
-
-	/**
-	 * Initializes the ACP client with default settings.
-	 *
-	 * <p>
-	 * Uses protocol version 1 and default client capabilities. This is a convenience
-	 * method for the common case where no special capabilities need to be advertised.
-	 * </p>
-	 * @return a Mono emitting the initialization response with agent capabilities
-	 * @see #initialize(AcpSchema.InitializeRequest)
-	 */
-	public Mono<AcpSchema.InitializeResponse> initialize() {
-		return initialize(new AcpSchema.InitializeRequest(1, this.clientCapabilities));
 	}
 
 	/**

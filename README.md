@@ -335,8 +335,14 @@ AcpSyncClient client = AcpClient.sync(transport)
 Check what features the peer supports before using them ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-17-capability-negotiation)):
 
 ```java
-// Client: check agent capabilities after initialize
-client.initialize(new InitializeRequest(1, clientCaps));
+// Client: advertise capabilities on the builder, check the agent's after initialize
+AcpSyncClient client = AcpClient.sync(transport)
+    .clientCapabilities(ClientCapabilities.builder()
+        .fs(new FileSystemCapability(true, true))
+        .session(ClientSessionCapabilities.withBooleanConfigOptions())
+        .build())
+    .build();
+client.initialize();
 
 NegotiatedCapabilities agentCaps = client.getAgentCapabilities();
 if (agentCaps.supportsLoadSession()) {

@@ -118,7 +118,7 @@ class AcpAgentSupportTest {
 				.build();
 
 		// Initialize
-		InitializeResponse initResp = client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		InitializeResponse initResp = client.initialize().block(TIMEOUT);
 		assertThat(initResp.protocolVersion()).isEqualTo(1);
 
 		// New session
@@ -172,7 +172,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.prompt(new PromptRequest("capture-session", List.of(new TextContent("Test message")))).block(TIMEOUT);
 
@@ -214,7 +214,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		PromptResponse resp = client.prompt(new PromptRequest("string-session", List.of(new TextContent("test"))))
 				.block(TIMEOUT);
@@ -261,7 +261,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		PromptResponse resp = client.prompt(new PromptRequest("void-session", List.of(new TextContent("test"))))
 				.block(TIMEOUT);
@@ -302,7 +302,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		LoadSessionResponse resp = client.loadSession(new LoadSessionRequest("existing-session", "/workspace", List.of()))
 				.block(TIMEOUT);
 
@@ -336,7 +336,7 @@ class AcpAgentSupportTest {
 		Thread.sleep(100);
 
 		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
 			.hasMessageContaining("produced no response");
@@ -370,7 +370,7 @@ class AcpAgentSupportTest {
 		Thread.sleep(100);
 
 		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
 			.hasMessageContaining("session/set_mode handler produced a java.lang.String")
@@ -411,7 +411,7 @@ class AcpAgentSupportTest {
 		Thread.sleep(100);
 
 		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
 			.hasMessageContaining("produced no response");
@@ -488,7 +488,7 @@ class AcpAgentSupportTest {
 		Thread.sleep(100);
 
 		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		client.newSession(new NewSessionRequest("/", List.of())).block(TIMEOUT);
 		assertThatThrownBy(() -> client.loadSession(new LoadSessionRequest("s", "/", List.of())).block(TIMEOUT))
@@ -540,7 +540,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.setSessionMode(new SetSessionModeRequest("mode-session", "code-review")).block(TIMEOUT);
 
@@ -583,7 +583,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		client.cancel(new CancelNotification("cancel-session")).block(TIMEOUT);
 
@@ -626,7 +626,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		ListSessionsResponse resp = client.listSessions(new ListSessionsRequest("/workspace"))
 				.block(TIMEOUT);
 
@@ -668,7 +668,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		CloseSessionResponse resp = client.closeSession(new CloseSessionRequest("session-to-close"))
 				.block(TIMEOUT);
 
@@ -715,7 +715,7 @@ class AcpAgentSupportTest {
 				})
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
 		PromptResponse resp = client
 				.prompt(new PromptRequest("async-context-session", List.of(new TextContent("Hi"))))
@@ -753,7 +753,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		AuthenticateResponse resp = client.authenticate(new AuthenticateRequest("api-key")).block(TIMEOUT);
 
 		assertThat(methodId.get()).isEqualTo("api-key");
@@ -792,7 +792,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		LogoutResponse resp = client.logout(new LogoutRequest()).block(TIMEOUT);
 
 		assertThat(loggedOut.get()).isTrue();
@@ -831,7 +831,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		DeleteSessionResponse resp = client.deleteSession(new DeleteSessionRequest("session-to-delete"))
 				.block(TIMEOUT);
 
@@ -868,7 +868,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		ListProvidersResponse resp = client.listProviders(new ListProvidersRequest()).block(TIMEOUT);
 
 		assertThat(resp).isNotNull();
@@ -910,7 +910,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		SetProviderResponse resp = client
 				.setProvider(new SetProviderRequest("main", "anthropic", "https://api.anthropic.com"))
 				.block(TIMEOUT);
@@ -952,7 +952,7 @@ class AcpAgentSupportTest {
 				.requestTimeout(TIMEOUT)
 				.build();
 
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		ResumeSessionResponse resp = client
 				.resumeSession(new ResumeSessionRequest("existing-session", "/workspace", List.of()))
 				.block(TIMEOUT);

@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
+import java.util.Map;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -48,9 +49,8 @@ import reactor.core.publisher.Mono;
  * <p>
  * Example usage: <pre>{@code
  * try (AcpSyncClient client = AcpClient.sync(transport).build()) {
- *     // Initialize
- *     AcpSchema.InitializeResponse initResponse = client.initialize(
- *         new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities()));
+ *     // Initialize: sends the capabilities and client info set on the builder
+ *     AcpSchema.InitializeResponse initResponse = client.initialize();
  *
  *     // Create session
  *     AcpSchema.NewSessionResponse sessionResponse = client.newSession(
@@ -136,34 +136,39 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Initializes the connection with the agent. This is the first step in the ACP
-	 * lifecycle and negotiates protocol version and capabilities.
+	 * Initializes the connection with the agent: the first step in the ACP lifecycle. The
+	 * client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
+	 * capabilities and client info set on the builder
+	 * ({@link AcpClient.SyncSpec#clientCapabilities}, {@link AcpClient.SyncSpec#clientInfo});
+	 * the agent answers with its protocol version, capabilities and authentication methods.
 	 *
 	 * <p>
-	 * The client sends its protocol version and capabilities, and the agent responds with
-	 * its supported protocol version, authentication methods, and capabilities.
+	 * The builder is the only place the client's capabilities are set, so what the client
+	 * advertises is also what its handlers honour. Without {@code clientCapabilities(...)}
+	 * the client advertises {@code new ClientCapabilities()}: no file system access and no
+	 * terminal.
 	 * </p>
-	 * @param initializeRequest the initialization request containing protocol version and
-	 * client capabilities
 	 * @return the initialization response with agent capabilities
 	 * @see AcpSchema#METHOD_INITIALIZE
-	 */
-	public AcpSchema.InitializeResponse initialize(AcpSchema.InitializeRequest initializeRequest) {
-		return awaitResponse(this.delegate.initialize(initializeRequest));
-	}
-
-	/**
-	 * Initializes the ACP client with default settings.
-	 *
-	 * <p>
-	 * Uses protocol version 1 and default client capabilities. This is a convenience
-	 * method for the common case where no special capabilities need to be advertised.
-	 * </p>
-	 * @return the initialization response with agent capabilities
-	 * @see #initialize(AcpSchema.InitializeRequest)
+	 * @see #initialize(int, Map)
 	 */
 	public AcpSchema.InitializeResponse initialize() {
 		return awaitResponse(this.delegate.initialize());
+	}
+
+	/**
+	 * Initializes the connection with the agent, like {@link #initialize()}, with a chosen
+	 * protocol version and {@code _meta}. The capabilities and client info still come
+	 * from the builder; this overload exists for {@code _meta} and for testing version
+	 * negotiation, not for advertising capabilities.
+	 * @param protocolVersion the protocol version to announce; this SDK speaks
+	 * {@value AcpSchema#LATEST_PROTOCOL_VERSION}
+	 * @param meta the request's {@code _meta}, or {@code null}
+	 * @return the initialization response with agent capabilities
+	 * @see #initialize()
+	 */
+	public AcpSchema.InitializeResponse initialize(int protocolVersion, @Nullable Map<String, Object> meta) {
+		return awaitResponse(this.delegate.initialize(protocolVersion, meta));
 	}
 
 	/**

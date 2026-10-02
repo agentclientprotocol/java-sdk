@@ -86,11 +86,11 @@ class StreamableHttpWebSocketClientTest {
 		});
 
 		client = AcpClient.async(clientTransport())
+			.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, false), false))
 			.requestTimeout(TIMEOUT)
 			.readTextFileHandler(request -> Mono.just(new AcpSchema.ReadTextFileResponse("public class Main { }")))
 			.build();
-		client.initialize(new AcpSchema.InitializeRequest(1,
-				new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, false), false)))
+		client.initialize()
 			.block(TIMEOUT);
 		AcpSchema.NewSessionResponse session = newSession();
 
@@ -120,6 +120,7 @@ class StreamableHttpWebSocketClientTest {
 		});
 
 		client = AcpClient.async(clientTransport())
+			.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, true), false))
 			.requestTimeout(TIMEOUT)
 			.writeTextFileHandler(request -> {
 				writtenPath.set(request.path());
@@ -127,8 +128,7 @@ class StreamableHttpWebSocketClientTest {
 				return Mono.just(new AcpSchema.WriteTextFileResponse());
 			})
 			.build();
-		client.initialize(new AcpSchema.InitializeRequest(1,
-				new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, true), false)))
+		client.initialize()
 			.block(TIMEOUT);
 		AcpSchema.NewSessionResponse session = newSession();
 
@@ -159,7 +159,7 @@ class StreamableHttpWebSocketClientTest {
 			.build());
 
 		client = AcpClient.async(clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		AcpSchema.NewSessionResponse session = newSession();
 
 		client.prompt(new AcpSchema.PromptRequest(session.sessionId(), List.of(new AcpSchema.TextContent("slow work"))))
@@ -197,7 +197,7 @@ class StreamableHttpWebSocketClientTest {
 				return Mono.empty();
 			})
 			.build();
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		AcpSchema.NewSessionResponse session = newSession();
 
 		AcpSchema.PromptResponse response = client
@@ -219,7 +219,7 @@ class StreamableHttpWebSocketClientTest {
 			.build());
 
 		client = AcpClient.async(clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new AcpSchema.InitializeRequest(1, new AcpSchema.ClientCapabilities())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		AcpSchema.NewSessionResponse session = newSession();
 
 		for (int i = 1; i <= 5; i++) {

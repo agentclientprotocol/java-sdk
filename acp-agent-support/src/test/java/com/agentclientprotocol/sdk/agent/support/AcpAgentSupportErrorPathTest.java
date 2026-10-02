@@ -25,7 +25,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ForkSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ForkSessionResponse;
-import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
@@ -72,7 +71,7 @@ class AcpAgentSupportErrorPathTest {
 		agentSupport = builder.transport(transportPair.agentTransport()).requestTimeout(TIMEOUT).build();
 		agentSupport.start();
 		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 		return client;
 	}
 

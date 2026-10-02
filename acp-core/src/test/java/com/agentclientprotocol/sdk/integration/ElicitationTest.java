@@ -62,9 +62,8 @@ class ElicitationTest {
 		return agent;
 	}
 
-	private static AcpSchema.InitializeRequest initialize(ElicitationCapabilities elicitation) {
-		return new AcpSchema.InitializeRequest(1,
-				new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(), false, null, null, elicitation, null));
+	private static AcpSchema.ClientCapabilities capabilities(ElicitationCapabilities elicitation) {
+		return AcpSchema.ClientCapabilities.builder().elicitation(elicitation).build();
 	}
 
 	private static CreateElicitationRequest urlRequest(String elicitationId) {
@@ -77,6 +76,7 @@ class ElicitationTest {
 		AcpAsyncAgent agent = startAgent();
 		CompletableFuture<CompleteElicitationNotification> completed = new CompletableFuture<>();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.clientCapabilities(capabilities(ElicitationCapabilities.urlOnly()))
 			.requestTimeout(TIMEOUT)
 			.createElicitationHandler(request -> {
 				assertThat(request.mode()).isEqualTo(CreateElicitationRequest.MODE_URL);
@@ -84,7 +84,7 @@ class ElicitationTest {
 			})
 			.completeElicitationHandler(notification -> Mono.fromRunnable(() -> completed.complete(notification)))
 			.build();
-		client.initialize(initialize(ElicitationCapabilities.urlOnly())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		CreateElicitationResponse response = agent.createElicitation(urlRequest("github-oauth-001")).block(TIMEOUT);
 		assertThat(response).isNotNull();
@@ -103,11 +103,12 @@ class ElicitationTest {
 		Function<CreateElicitationRequest, CreateElicitationResponse> create = request -> CreateElicitationResponse
 			.accept();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
+			.clientCapabilities(capabilities(ElicitationCapabilities.formAndUrl()))
 			.requestTimeout(TIMEOUT)
 			.createElicitationHandler(create)
 			.completeElicitationHandler(completed::complete)
 			.build();
-		client.initialize(initialize(ElicitationCapabilities.formAndUrl()));
+		client.initialize();
 
 		AcpSyncAgent syncAgent = new AcpSyncAgent(agent, TIMEOUT);
 		assertThat(syncAgent.createElicitation(urlRequest("e-sync")).action())
@@ -126,13 +127,14 @@ class ElicitationTest {
 		AcpAsyncAgent agent = startAgent();
 		AtomicInteger asked = new AtomicInteger();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.clientCapabilities(capabilities(ElicitationCapabilities.formOnly()))
 			.requestTimeout(TIMEOUT)
 			.createElicitationHandler(request -> {
 				asked.incrementAndGet();
 				return Mono.just(CreateElicitationResponse.decline());
 			})
 			.build();
-		client.initialize(initialize(ElicitationCapabilities.formOnly())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		assertThatThrownBy(() -> agent.createElicitation(urlRequest("e1")).block(TIMEOUT))
 			.isInstanceOf(AcpCapabilityException.class)
@@ -152,8 +154,9 @@ class ElicitationTest {
 	@Test
 	void anEmptyElicitationCapabilityAdvertisesNoMode() {
 		AcpAsyncAgent agent = startAgent();
-		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize(initialize(new ElicitationCapabilities(null, null, null))).block(TIMEOUT);
+		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.clientCapabilities(capabilities(new ElicitationCapabilities(null, null, null))).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		assertThatThrownBy(() -> agent
 			.createElicitation(CreateElicitationRequest.form(SESSION, "Name?",
@@ -172,11 +175,12 @@ class ElicitationTest {
 			}
 		});
 		AtomicInteger asked = new AtomicInteger();
-		AcpAsyncClient client = AcpClient.async(transport).createElicitationHandler(request -> {
+		AcpAsyncClient client = AcpClient.async(transport)
+			.clientCapabilities(capabilities(ElicitationCapabilities.formOnly())).createElicitationHandler(request -> {
 			asked.incrementAndGet();
 			return Mono.just(CreateElicitationResponse.cancel());
 		}).build();
-		client.initialize(initialize(ElicitationCapabilities.formOnly())).subscribe(r -> {
+		client.initialize().subscribe(r -> {
 		}, e -> {
 		});
 
@@ -200,9 +204,10 @@ class ElicitationTest {
 			}
 		});
 		AcpAsyncClient client = AcpClient.async(transport)
+			.clientCapabilities(capabilities(ElicitationCapabilities.formOnly()))
 			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.accept(Map.of("name", "Ada"))))
 			.build();
-		client.initialize(initialize(ElicitationCapabilities.formOnly())).subscribe(r -> {
+		client.initialize().subscribe(r -> {
 		}, e -> {
 		});
 
@@ -220,11 +225,12 @@ class ElicitationTest {
 	void aModeTheSdkDoesNotKnowIsLeftToTheHandler() {
 		AcpAsyncAgent agent = startAgent();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.clientCapabilities(capabilities(ElicitationCapabilities.formOnly()))
 			.requestTimeout(TIMEOUT)
 			.createElicitationHandler(request -> Mono.just(request.mode().equals("x-future")
 					? CreateElicitationResponse.decline() : CreateElicitationResponse.cancel()))
 			.build();
-		client.initialize(initialize(ElicitationCapabilities.formOnly())).block(TIMEOUT);
+		client.initialize().block(TIMEOUT);
 
 		CreateElicitationResponse response = agent
 			.createElicitation(new CreateElicitationRequest(SESSION, null, null, "?", "x-future", null, null, null,
@@ -268,7 +274,7 @@ class ElicitationTest {
 			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw handler replaced"))
 			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline()))
 			.build();
-		client.initialize(new AcpSchema.InitializeRequest(1, null)).subscribe(r -> {
+		client.initialize().subscribe(r -> {
 		}, e -> {
 		});
 

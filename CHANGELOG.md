@@ -240,6 +240,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SessionInfoUpdate(title, updatedAt)` already had this shape. Migration: drop the first
   argument, for example `new AgentMessageChunk("agent_message_chunk", content)` becomes
   `new AgentMessageChunk(content)`.
+- **Breaking: a client's capabilities and info are set only on its builder;
+  `initialize(InitializeRequest)` is removed** from `AcpAsyncClient` and `AcpSyncClient`. The
+  builder's `clientCapabilities(...)` was used only by the no-argument `initialize()`, and the
+  request-taking overload silently replaced it, so a client that set capabilities on the builder
+  and then called `initialize(new InitializeRequest(1, new ClientCapabilities()))` advertised
+  nothing, while its handlers enforced what the builder said. Now:
+  - `AcpClient.async(...)` / `AcpClient.sync(...)`: `clientCapabilities(ClientCapabilities)` (as
+    before) and the new `clientInfo(Implementation)`.
+  - `initialize()` sends protocol version 1 with the builder's capabilities and client info.
+  - `initialize(int protocolVersion, Map<String, Object> meta)` (new) sends a chosen protocol
+    version and `_meta` with the same builder values; for `_meta` and version-negotiation tests,
+    not for capabilities.
+
+  Migration: move the request's capabilities to `.clientCapabilities(...)` and its `clientInfo`
+  to `.clientInfo(...)`, then call `initialize()`; pass `_meta` through `initialize(1, meta)`. A
+  client that passed `new InitializeRequest(1, null)` now advertises the default
+  `new ClientCapabilities()` (no file system, no terminal) instead of omitting
+  `clientCapabilities`.
 - **Breaking: error codes follow the ACP v1 schema (`$defs.ErrorCode`).** A prompt sent while the
   session already has an active prompt was rejected with `-32000`, which ACP defines as
   "Authentication required", so a client could ask its user to log in when the user had only sent a
