@@ -166,6 +166,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **0.80.0 is binary-incompatible with 0.18.0: recompile code built against 0.18.0.** Source
+  migrates as the Breaking entries below describe, but a jar compiled against 0.18.0 fails at run
+  time, typically with `NoSuchMethodError` or `NoClassDefFoundError` from a handler, because several
+  canonical constructors and types changed shape. The main ones:
+  - `NewSessionResponse`, `LoadSessionResponse`, `ResumeSessionResponse`: `models` is gone and
+    `configOptions` comes before `_meta`, so `new NewSessionResponse(id, modes, null)` compiled
+    against 0.18.0 calls a constructor that no longer exists.
+  - `ToolCall`, `ToolCallUpdate`, `ToolCallUpdateNotification` (`name` after `title`);
+    `ClientCapabilities` (`session`, `auth`); `AgentCapabilities` (`auth`); `StringPropertySchema`,
+    `MultiSelectPropertySchema` (canonical constructors only); `ElicitationCapabilities` (no-arg
+    constructor removed); union records (discriminator component checked).
+  - Types replaced or moved: `AuthMethod` (an interface; `AuthMethodAgent`), `ElicitationAction`
+    (a record, not an enum), `AcpError` (one `spec.AcpError` instead of the session-nested
+    classes), `AcpInvocationContext` and `AcpMethodParameter` (`agent.support.invocation`); the
+    `session/set_model` API and the `acp-websocket-jetty` module are removed; `AcpProtocolException`
+    no longer converts to or from `JSONRPCError`; `SyncPromptContext.askChoice` returns `Optional`.
+
+  Since this release such an `Error` in a handler is answered `-32603` instead of leaving the peer
+  waiting (see Fixed), but the handler still fails until it is recompiled.
 - **Breaking: error codes follow the ACP v1 schema (`$defs.ErrorCode`).** A prompt sent while the
   session already has an active prompt was rejected with `-32000`, which ACP defines as
   "Authentication required", so a client could ask its user to log in when the user had only sent a
