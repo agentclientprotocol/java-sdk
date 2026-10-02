@@ -125,11 +125,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the five property schemas, both multi-select item types and `EnumOption`, and `description` on
   `EnumOption`. The constructors without them remain, except for the two that would take seven or
   more arguments.
-  whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
-  presence markers typed `Object` (they keep `_meta` as a map entry) and `$/cancel_request`.
-  presence markers typed `Object` (they keep `_meta` as a map entry), `$/cancel_request`, and
-  grouped select options (`SessionConfigSelectGroup`), which the SDK does not model: a select
-  option list in grouped form still fails to read.
 - **Custom extension methods (`_`-prefixed), both directions, on all four APIs.** ACP v1
   (Extensibility) reserves method names that start with `_` for custom requests and notifications.
   - Agents can now serve them: `AcpAgent.async(..)` and `AcpAgent.sync(..)` builders take
