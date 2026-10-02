@@ -897,7 +897,7 @@ async def s_meta_prompt() -> str:
 async def s_meta_permission() -> str:
     c = main_conn()
     sid, _ = await c.new_session()
-    end_turn(await c.prompt(sid, "#permission allow"))
+    end_turn(await c.prompt(sid, "#permission allow meta"))
     asked = c.rec.permission_requests[sid]
     check(len(asked) == 1, f"{len(asked)} permission requests")
     meta = asked[0]["_meta"]

@@ -83,6 +83,7 @@
   "directives": [
     { "syntax": "<plain text>", "agent": "Send two agent_message_chunk updates, \"echo: \" then the prompt text, and answer end_turn. Record the turn in the session's history (for session.load-replay)." },
     { "syntax": "#permission allow", "agent": "session/request_permission with fixtures.permission. Then send the chunk \"permission: selected <optionId>\" (or \"permission: cancelled\") and answer end_turn. Print STEP agent.perm.selected PASS iff the outcome is selected/allow." },
+    { "syntax": "#permission allow meta", "agent": "As allow, with _meta {\"interop\": \"m1\"} (fixtures.meta) on the permission request. Print STEP agent.meta.permission PASS iff the response carried _meta interop == m1 (and no agent.perm.selected line)." },
     { "syntax": "#permission hold", "agent": "As allow, but the client cancels the turn while the request is pending. Print STEP agent.perm.cancelled PASS iff the outcome is cancelled, and answer stopReason cancelled." },
     { "syntax": "#fs write <path> <content...>", "agent": "Require client.fs.writeTextFile. fs/write_text_file {path, content}; accept {} or a null result. Send the chunk \"fs write ok\" (or \"fs write error <code>\") and answer end_turn." },
     { "syntax": "#fs read <path> [line=<n>] [limit=<n>]", "agent": "Require client.fs.readTextFile. fs/read_text_file; send the returned content as one chunk (or \"fs read error <code>\") and answer end_turn." },
@@ -459,9 +460,9 @@
       "pass": { "client": "The \"meta\" chunk's update _meta and the PromptResponse _meta both have interop == m1." }
     },
     {
-      "id": "meta.permission", "group": "meta", "prompt": "#permission allow", "phaseB": "P8",
+      "id": "meta.permission", "group": "meta", "prompt": "#permission allow meta", "phaseB": "P8",
       "client": "As perm.selected, and put the request's _meta into the RequestPermissionResponse's _meta.",
-      "agent": "Put _meta {\"interop\": \"m1\"} on the permission request.",
+      "agent": "#permission allow meta",
       "pass": { "client": "The request carried _meta interop == m1.", "agent": "STEP agent.meta.permission PASS when the response carried _meta interop == m1." }
     },
     {

@@ -259,7 +259,7 @@ async function prompt(ctx, clientCaps, lastExt, sessionState) {
   try {
     switch (name) {
       case "permission":
-        return await permission(ctx, sid, args[0], turn, chunk);
+        return await permission(ctx, sid, args.join(" "), turn, chunk);
       case "fs":
         return await fs(ctx, sid, clientCaps, args, rest, kw, chunk);
       case "emit":
@@ -303,23 +303,20 @@ async function prompt(ctx, clientCaps, lastExt, sessionState) {
   }
 }
 
+// #permission allow: perm.selected; #permission allow meta: meta.permission (_meta on the request);
+// #permission hold: perm.cancelled.
 async function permission(ctx, sid, mode, turn, chunk) {
-  if (mode !== "allow" && mode !== "hold") throw new RequestError(-32602, `unknown directive: #permission ${mode}`);
+  if (mode !== "allow" && mode !== "allow meta" && mode !== "hold") throw new RequestError(-32602, `unknown directive: #permission ${mode}`);
   const t0 = Date.now();
-  const r = await ctx.client.request(M.client.session.requestPermission, {
-    sessionId: sid,
-    toolCall: fixtures.permission.toolCall,
-    options: fixtures.permission.options,
-    _meta: fixtures.meta,
-  });
+  const request = { sessionId: sid, toolCall: fixtures.permission.toolCall, options: fixtures.permission.options };
+  if (mode === "allow meta") request._meta = fixtures.meta;
+  const r = await ctx.client.request(M.client.session.requestPermission, request);
   const outcome = r?.outcome;
   log("permission outcome", abbreviate(r));
   if (mode === "allow") {
     agentStep("perm.selected", outcome?.outcome === "selected" && outcome.optionId === "allow", `outcome ${abbreviate(outcome)}`, t0);
-    // meta.permission sends the same directive: only a response that carries _meta is that step.
-    if (r?._meta != null) {
-      agentStep("meta.permission", r._meta.interop === "m1", `response _meta ${abbreviate(r._meta)}`, t0);
-    }
+  } else if (mode === "allow meta") {
+    agentStep("meta.permission", r?._meta?.interop === "m1", `response _meta ${abbreviate(r?._meta)}`, t0);
   } else {
     agentStep("perm.cancelled", outcome?.outcome === "cancelled", `outcome ${abbreviate(outcome)}`, t0);
   }
