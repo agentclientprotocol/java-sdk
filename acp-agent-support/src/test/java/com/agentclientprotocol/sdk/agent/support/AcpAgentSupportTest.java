@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.annotation.Authenticate;
 import com.agentclientprotocol.sdk.annotation.Cancel;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
@@ -29,6 +30,8 @@ import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
+import com.agentclientprotocol.sdk.spec.AcpSchema.AuthenticateRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.AuthenticateResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
@@ -721,6 +724,40 @@ class AcpAgentSupportTest {
 		assertThat(resp.stopReason()).isEqualTo(PromptResponse.endTurn().stopReason());
 		assertThat(receivedSessionId.get()).isEqualTo("async-context-session");
 		assertThat(updates).anySatisfy(update -> assertThat(update).contains("from the async context"));
+	}
+
+	@Test
+	void authenticateHandlerInvoked() throws Exception {
+		AtomicReference<String> methodId = new AtomicReference<>();
+
+		@AcpAgent
+		class AuthenticateAgent {
+
+			@Authenticate
+			AuthenticateResponse authenticate(AuthenticateRequest req) {
+				methodId.set(req.methodId());
+				return new AuthenticateResponse();
+			}
+
+		}
+
+		agentSupport = AcpAgentSupport.create(new AuthenticateAgent())
+				.transport(transportPair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		agentSupport.start();
+		Thread.sleep(100);
+
+		client = AcpClient.async(transportPair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.build();
+
+		client.initialize(new InitializeRequest(1, null)).block(TIMEOUT);
+		AuthenticateResponse resp = client.authenticate(new AuthenticateRequest("api-key")).block(TIMEOUT);
+
+		assertThat(methodId.get()).isEqualTo("api-key");
+		assertThat(resp).isNotNull();
 	}
 
 	@Test

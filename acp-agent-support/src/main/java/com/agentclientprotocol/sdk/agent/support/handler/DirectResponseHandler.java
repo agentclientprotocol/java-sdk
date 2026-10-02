@@ -8,6 +8,7 @@ import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
+import com.agentclientprotocol.sdk.spec.AcpSchema.AuthenticateResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DeleteSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderResponse;
@@ -38,11 +39,12 @@ import org.jspecify.annotations.Nullable;
 public class DirectResponseHandler implements ReturnValueHandler {
 
 	/** The response types of the ACP methods an annotated handler can serve. */
-	private static final List<Class<?>> RESPONSE_TYPES = List.of(InitializeResponse.class, LogoutResponse.class,
-			NewSessionResponse.class, LoadSessionResponse.class, PromptResponse.class, SetSessionModeResponse.class,
-			ListSessionsResponse.class, CloseSessionResponse.class, DeleteSessionResponse.class,
-			ResumeSessionResponse.class, ForkSessionResponse.class, SetSessionConfigOptionResponse.class,
-			ListProvidersResponse.class, SetProviderResponse.class, DisableProviderResponse.class);
+	private static final List<Class<?>> RESPONSE_TYPES = List.of(InitializeResponse.class, AuthenticateResponse.class,
+			LogoutResponse.class, NewSessionResponse.class, LoadSessionResponse.class, PromptResponse.class,
+			SetSessionModeResponse.class, ListSessionsResponse.class, CloseSessionResponse.class,
+			DeleteSessionResponse.class, ResumeSessionResponse.class, ForkSessionResponse.class,
+			SetSessionConfigOptionResponse.class, ListProvidersResponse.class, SetProviderResponse.class,
+			DisableProviderResponse.class);
 
 	@Override
 	public boolean supportsReturnType(AcpMethodParameter returnType) {
