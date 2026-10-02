@@ -1,7 +1,7 @@
 {
   "name": "x-java-rust-ws",
-  "description": "java client -> rust agent over ws, stable profile, 64 steps (generated)",
-  "timeoutSec": 560,
+  "description": "java client -> rust agent over ws, stable profile, 69 steps (generated)",
+  "timeoutSec": 585,
   "peers": [
     "rust-sdk"
   ],
@@ -30,11 +30,11 @@
       "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
       "run": "${ROOT}/programs/java/launch/client.sh --transport ws --url ws://127.0.0.1:${PORT}/acp",
       "env": {
-        "STEPS": "init.initialize,init.agent-capabilities,init.client-capabilities,init.auth-methods,init.agent-info,init.config-boolean,auth.authenticate,auth.logout,auth.logout-capability,auth.terminal,session.new,session.load,session.load-replay,session.resume,session.list,session.close,session.delete,session.multi,update.agent_message_chunk,update.user_message_chunk,update.agent_thought_chunk,update.tool_call,update.tool_call_update,update.tool_call-name,update.plan,update.available_commands_update,update.current_mode_update,update.config_option_update,update.session_info_update,update.usage_update,update.unknown,stop.max_tokens,stop.refusal,stop.max_turn_requests,mode.set,config.on-new,config.select,config.boolean,perm.selected,perm.cancelled,fs.write,fs.read,fs.read-range,fs.read-missing,term.run,term.kill,elicit.form,elicit.complete,cancel.prompt,cancel-request.client,cancel-request.agent,cancel-request.unknown,ext.agent-request,ext.agent-notification,ext.client-request,ext.client-notification,meta.prompt,meta.permission,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,conn.close",
+        "STEPS": "init.initialize,init.agent-capabilities,init.client-capabilities,init.auth-methods,init.agent-info,init.config-boolean,auth.authenticate,auth.logout,auth.logout-capability,auth.terminal,session.new,session.load,session.load-replay,session.resume,session.list,session.close,session.delete,session.multi,update.agent_message_chunk,update.user_message_chunk,update.agent_thought_chunk,update.tool_call,update.tool_call_update,update.tool_call-name,update.plan,update.available_commands_update,update.current_mode_update,update.config_option_update,update.session_info_update,update.usage_update,update.unknown,stop.max_tokens,stop.refusal,stop.max_turn_requests,enum.tool_call,enum.plan,enum.stop,enum.audience,mode.set,config.on-new,config.select,config.boolean,config.grouped,perm.selected,perm.cancelled,fs.write,fs.read,fs.read-range,fs.read-missing,term.run,term.kill,elicit.form,elicit.complete,cancel.prompt,cancel-request.client,cancel-request.agent,cancel-request.unknown,ext.agent-request,ext.agent-notification,ext.client-request,ext.client-notification,meta.prompt,meta.permission,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,conn.close",
         "RUST_SDK": "${peer.rust-sdk}",
         "CARGO_TARGET_DIR": "${CACHE}/build/${peerKey.rust-sdk}"
       },
-      "timeoutSec": 440
+      "timeoutSec": 465
     }
   ],
   "assertions": {
@@ -43,7 +43,9 @@
         "STEP agent.init.client-capabilities PASS",
         "STEP agent.auth.authenticate PASS",
         "STEP agent.session.close PASS",
+        "STEP agent.enum.audience PASS",
         "STEP agent.mode.set PASS",
+        "STEP agent.config.grouped PASS",
         "STEP agent.perm.selected PASS",
         "STEP agent.perm.cancelled PASS",
         "STEP agent.fs.write PASS",
@@ -61,7 +63,7 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 64",
+      "client RESULT pass == 69",
       "client RESULT fail == 0"
     ],
     "expectedFailures": [],

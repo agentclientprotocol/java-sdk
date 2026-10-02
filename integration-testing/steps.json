@@ -74,6 +74,17 @@
     },
     "ext": { "method": "_interop/ping", "notification": "_interop/note", "params": { "n": 1 }, "result": { "pong": 1 } },
     "meta": { "key": "interop", "value": "m1" },
+    "unknownEnums": {
+      "toolCall": { "sessionUpdate": "tool_call", "toolCallId": "call-enum", "title": "interop enum tool", "kind": "interop_future_kind", "status": "interop_future_status" },
+      "plan": { "sessionUpdate": "plan", "entries": [ { "content": "future entry", "priority": "interop_future_priority", "status": "interop_future_status" } ] },
+      "stopReason": "interop_future_stop",
+      "audience": ["user", "interop_future_role"]
+    },
+    "groupedConfigOption": { "id": "effort", "name": "Effort", "type": "select", "currentValue": "effort-low",
+      "options": [
+        { "group": "fast", "name": "Fast", "options": [ { "value": "effort-low", "name": "Low" } ] },
+        { "group": "deep", "name": "Deep", "options": [ { "value": "effort-medium", "name": "Medium" }, { "value": "effort-high", "name": "High" } ] }
+      ] },
     "elicitation": {
       "form": { "message": "interop form", "requestedSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
       "formAnswer": { "action": "accept", "content": { "name": "interop" } },
@@ -93,7 +104,7 @@
     { "syntax": "#emit <kind> [name=<tool name>]", "agent": "Send one session/update of <kind> from fixtures.emit (tool_call_update is preceded by its tool_call; unknown is followed by the chunk \"after-unknown\"; name= sets the tool call name), then answer end_turn." },
     { "syntax": "#stop <reason>", "agent": "Send the chunk \"stop\" and answer with stopReason <reason>." },
     { "syntax": "#slow [grace=<ms>]", "agent": "Send the chunk \"tick\" every 100 ms. On session/cancel keep ticking for grace ms (default 0), then answer cancelled. Without a cancel, answer end_turn after 10 s." },
-    { "syntax": "#hang", "agent": "Never answer and ignore session/cancel (the SDK's own cancel grace must answer)." },
+    { "syntax": "#hang", "agent": "Never answer and ignore session/cancel (the SDK's own cancel grace, or its maxPromptDuration, must answer)." },
     { "syntax": "#terminal run <cmd> [args...]", "agent": "Require client.terminal. terminal/create, terminal/wait_for_exit, terminal/output, terminal/release. Chunk \"terminal: <output trimmed> exit=<code>\"." },
     { "syntax": "#terminal kill <cmd> [args...]", "agent": "terminal/create, wait 200 ms, terminal/kill, terminal/wait_for_exit, terminal/release. Chunk \"terminal killed\"." },
     { "syntax": "#elicit form", "agent": "elicitation/create with fixtures.elicitation.form. Chunk \"elicit: <action> <content as JSON>\"." },
@@ -105,6 +116,11 @@
     { "syntax": "#echo-caps", "agent": "Send the clientCapabilities received at initialize, as compact JSON, in one chunk." },
     { "syntax": "#len <payload>", "agent": "Chunk \"len=<payload length in characters>\" (the payload is ASCII: everything after \"#len \")." },
     { "syntax": "#big <bytes>", "agent": "Send one agent_message_chunk of <bytes> ASCII 'x' characters." },
+    { "syntax": "#enum tool_call", "agent": "Send fixtures.unknownEnums.toolCall, values the v1 schema does not define (through an untyped/raw send if the typed API cannot carry them), then the chunk \"after-enum\"; answer end_turn." },
+    { "syntax": "#enum plan", "agent": "Send fixtures.unknownEnums.plan (untyped if needed), then the chunk \"after-enum\"; answer end_turn." },
+    { "syntax": "#enum stop", "agent": "Send the chunk \"stop\" and answer with stopReason fixtures.unknownEnums.stopReason (untyped if needed)." },
+    { "syntax": "#enum audience", "agent": "Read annotations.audience of the prompt's first content block, as wire strings. Chunk \"audience: <values joined with ,>\" (\"audience: none\" when absent) and answer end_turn. Print STEP agent.enum.audience PASS iff they equal fixtures.unknownEnums.audience." },
+    { "syntax": "#config grouped", "agent": "Add fixtures.groupedConfigOption to the session's config options (it stays there for session/load, session/resume and set_config_option, which accepts effort with any value of its groups), send a config_option_update with the session's complete list, and answer end_turn." },
     { "syntax": "#<anything else>", "agent": "Answer the prompt with a JSON-RPC error, code -32602, message \"unknown directive: #<name>\"." }
   ],
   "steps": [
@@ -304,6 +320,30 @@
       "pass": { "client": "stopReason max_turn_requests." }
     },
     {
+      "id": "enum.tool_call", "group": "enum", "prompt": "#enum tool_call",
+      "client": "session/new; the prompt.",
+      "agent": "#enum tool_call",
+      "pass": { "client": "A tool_call call-enum arrives whose status is kept as the raw value interop_future_status (an open value: Java isKnown() false, value() \"interop_future_status\") and whose kind is interop_future_kind or other (ToolKind's catch-all, which Java reads as OTHER); then the chunk \"after-enum\" and end_turn: an unknown enum value never fails the message or the turn." }
+    },
+    {
+      "id": "enum.plan", "group": "enum", "prompt": "#enum plan",
+      "client": "session/new; the prompt.",
+      "agent": "#enum plan",
+      "pass": { "client": "A plan with one entry \"future entry\" whose priority and status are kept as the raw values interop_future_priority and interop_future_status (open values); then the chunk \"after-enum\" and end_turn." }
+    },
+    {
+      "id": "enum.stop", "group": "enum", "prompt": "#enum stop",
+      "client": "session/new; the prompt; then prompt \"after enum\" on the same session.",
+      "agent": "#enum stop",
+      "pass": { "client": "The prompt answers (no error) with stopReason kept as the raw value interop_future_stop, and \"after enum\" answers end_turn." }
+    },
+    {
+      "id": "enum.audience", "group": "enum", "prompt": "#enum audience",
+      "client": "session/new; the prompt, whose text block carries annotations {audience: fixtures.unknownEnums.audience} (one Role the v1 schema does not define; untyped if the typed API cannot carry it).",
+      "agent": "#enum audience",
+      "pass": { "client": "The chunk \"audience: user,interop_future_role\" and end_turn.", "agent": "STEP agent.enum.audience PASS when the audience it read is exactly user, interop_future_role: the unknown Role kept as its raw value, the request not rejected." }
+    },
+    {
       "id": "mode.set", "group": "config",
       "client": "session/new (the response carries fixtures.modes); session/set_mode {modeId: interop-mode-b}.",
       "agent": "Return fixtures.modes on session/new; accept set_mode for a known mode.",
@@ -325,6 +365,12 @@
       "requires": ["client.session.configOptions.boolean"],
       "client": "session/new; session/set_config_option {configId: verbose, type: boolean, value: true}.",
       "pass": { "client": "The response has verbose at currentValue true." }
+    },
+    {
+      "id": "config.grouped", "group": "config", "prompt": "#config grouped",
+      "client": "session/new; the prompt; read the effort option from the config_option_update; session/set_config_option {configId: effort, value: effort-high}.",
+      "agent": "#config grouped",
+      "pass": { "client": "The config_option_update has the select effort with options in the groups fast and deep, which flattened in order are effort-low, effort-medium, effort-high (Java: allOptions()); set_config_option answers the complete list with effort at currentValue effort-high.", "agent": "STEP agent.config.grouped PASS when set_config_option set effort to effort-high, a value of its group deep." }
     },
     {
       "id": "perm.selected", "group": "perm", "seed": true, "prompt": "#permission allow",
@@ -412,6 +458,12 @@
       "client": "session/new; the prompt; after 200 ms, session/cancel.",
       "agent": "#hang. The Java agent program configures its cancel grace to 1 s.",
       "pass": { "client": "stopReason cancelled within 6 s of the cancel: the SDK answered for the handler (G0f)." }
+    },
+    {
+      "id": "cancel.max-duration", "group": "cancel", "prompt": "#hang", "only": { "agent": ["java"] },
+      "client": "session/new; the prompt, never cancelled; once it ends, prompt \"after max-duration\" on the same session.",
+      "agent": "#hang. The Java agent program configures maxPromptDuration 8 s (env INTEROP_MAX_PROMPT_MS).",
+      "pass": { "client": "The prompt fails with JSON-RPC error -32800 no earlier than 7 s and within 11 s of being sent: the SDK answered for the handler at maxPromptDuration (G0f); \"after max-duration\" answers end_turn." }
     },
     {
       "id": "cancel-request.client", "group": "cancel-request", "prompt": "#slow",
