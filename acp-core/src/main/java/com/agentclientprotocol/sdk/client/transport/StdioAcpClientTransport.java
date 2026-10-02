@@ -57,6 +57,17 @@ import reactor.core.scheduler.Schedulers;
  * {@link #setStdErrorHandler}.
  * </p>
  *
+ * <p>
+ * {@link #closeGracefully()} ends the agent process in steps. It closes the agent's standard
+ * input and waits up to {@value #END_OF_INPUT_WAIT_MILLIS} ms for the agent to exit by itself,
+ * as an ACP stdio agent does at the end of its input (an agent built with this SDK answers what
+ * it received, then exits 0). An agent still running then is sent SIGTERM ({@link
+ * Process#destroy()}; on POSIX systems it exits 143 unless it handles the signal) and given
+ * five more seconds, and is then killed (exit 137). The end is logged once, at INFO, however
+ * often the transport is closed: {@code closeGracefully()} followed by {@code close()}, as
+ * try-with-resources does, does not stop the agent twice.
+ * </p>
+ *
  * @author Mark Pollack
  * @author Christian Tzolov (MCP Java SDK)
  * @author Dariusz Jędrzejczyk (MCP Java SDK)
@@ -113,6 +124,18 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * subscribe them again and start a second process, so it is refused up front.
 	 */
 	private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
+	/**
+	 * How long {@link #closeGracefully()} waits, after closing the agent's standard input, for
+	 * the agent to exit by itself before it sends SIGTERM: {@value} ms.
+	 */
+	public static final long END_OF_INPUT_WAIT_MILLIS = 2_000;
+
+	/** How long to wait for the agent process to exit after SIGTERM before killing it. */
+	private static final Duration TERM_WAIT = Duration.ofSeconds(5);
+
+	/** Set by the first {@link #closeGracefully}: the agent process is stopped once. */
+	private final AtomicBoolean stopping = new AtomicBoolean(false);
 
 	/** How long to wait for the agent process to exit after its standard output ends. */
 	private static final Duration EXIT_WAIT = Duration.ofSeconds(5);
@@ -495,14 +518,19 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Gracefully closes the transport by destroying the process and disposing of the
-	 * schedulers. This method sends a TERM signal to the process and waits for it to exit
-	 * before cleaning up resources.
+	 * Gracefully closes the transport: closes the agent's standard input, waits up to
+	 * {@value #END_OF_INPUT_WAIT_MILLIS} ms for the agent to exit by itself, then sends it
+	 * SIGTERM and, five seconds later, kills it; then disposes of the schedulers. Closing an
+	 * already closed transport does nothing more.
 	 * @return A Mono that completes when the transport is closed
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.fromRunnable(() -> {
+			if (!this.stopping.compareAndSet(false, true)) {
+				logger.debug("Already closed");
+				return;
+			}
 			closedLocally = true;
 			isClosing = true;
 			logger.debug("Initiating graceful shutdown");
@@ -512,7 +540,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			outboundSink.tryEmitComplete();
 			errorSink.tryEmitComplete();
 
-			// Destroy process FIRST - this closes streams and unblocks readLine()
+			// Stop the process FIRST - its end closes the streams and unblocks readLine()
 			Process process = this.process;
 			if (process != null) {
 				stop(process);
@@ -533,15 +561,29 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Sends TERM to the process and waits up to five seconds for it to exit, then kills it.
-	 * Waits with a blocking waitFor() rather than Mono.fromFuture(process.onExit()), which
-	 * would run on ForkJoinPool.commonPool.
+	 * Closes the process's standard input and waits for it to exit by itself; then sends TERM
+	 * and waits up to five seconds, then kills it. Waits with a blocking waitFor() rather than
+	 * Mono.fromFuture(process.onExit()), which would run on ForkJoinPool.commonPool.
 	 */
 	private static void stop(Process process) {
-		logger.debug("Sending TERM to process");
-		process.destroy();
 		try {
-			if (process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+			var stdin = process.getOutputStream();
+			synchronized (stdin) {
+				stdin.close();
+			}
+		}
+		catch (IOException e) {
+			logger.debug("Closing the agent's standard input failed: {}", e.getMessage());
+		}
+		try {
+			if (process.waitFor(END_OF_INPUT_WAIT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+				logExit(process.exitValue());
+				return;
+			}
+			logger.debug("Agent still running {} ms after the end of its input; sending TERM",
+					END_OF_INPUT_WAIT_MILLIS);
+			process.destroy();
+			if (process.waitFor(TERM_WAIT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
 				logExit(process.exitValue());
 			}
 			else {

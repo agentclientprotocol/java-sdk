@@ -522,6 +522,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The stdio client's graceful close lets the agent exit by itself, and logs the stop once.**
+  `StdioAcpClientTransport.closeGracefully()` sent SIGTERM straight away without closing the
+  agent's standard input, so an agent's end-of-input handling (an SDK stdio agent answers what it
+  received, flushes, and exits 0) never ran and every close ended in exit 143. It now closes the
+  agent's standard input first and waits up to `StdioAcpClientTransport.END_OF_INPUT_WAIT_MILLIS`
+  (2 seconds) for the agent to exit; only an agent still running then is sent SIGTERM, and killed
+  five seconds later as before. Closing again, as `closeGracefully()` followed by try-with-resources
+  `close()` does, no longer stops the process a second time or logs "ACP agent process stopped"
+  twice.
+
 - **`prompt()` returns only after the session-update consumers have handled the turn's updates.**
   On the client, notifications are delivered one at a time on their own drain, while a response
   completed its caller as soon as it arrived. A prompt's response follows its turn's updates, so a
