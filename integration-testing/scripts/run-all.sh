@@ -191,6 +191,10 @@ if ! timeout 3600 jbang RunScenario.java --prepare "${SCENARIOS[@]}" "${PASS_ARG
     grep -E 'FAIL|Exception' logs/run-all/prepare.console.log >&2 || true
     [ "$PREPARE_ONLY" -eq 1 ] && exit 1
 fi
+# A scenario whose preparation failed is not run: it would use whatever an earlier build left.
+declare -A UNPREPARED
+while read -r s; do UNPREPARED[$s]=1; done \
+    < <(sed -n 's/^  FAIL preparing \([^:]*\):.*/\1/p' logs/run-all/prepare.console.log)
 if [ "$PREPARE_ONLY" -eq 1 ]; then
     tail -1 logs/run-all/prepare.console.log
     exit 0
@@ -230,6 +234,11 @@ echo "Port block $PORT_BASE-$((PORT_BASE + 9999))"
 run_one() { # <scenario> <index> <tee: 0|1>
     local s="$1" idx="$2" from=$((PORT_BASE + ($2 % 100) * 100))
     rm -f "logs/$s/result.txt" "logs/run-all/$s.exit"
+    if [ -n "${UNPREPARED[$s]:-}" ]; then
+        echo "  FAIL $s (preparation failed; see logs/run-all/prepare.console.log)"
+        echo "prepare" > "logs/run-all/$s.exit"
+        return
+    fi
     local cmd=(env IT_PORT_RANGE="$from-$((from + 99))"
         timeout 1800 jbang RunScenario.java "$s" --prepared "${PASS_ARGS[@]}")
     if [ "$3" -eq 1 ]; then
@@ -276,6 +285,7 @@ for s in "${SCENARIOS[@]}"; do
         [ "$code" != "0" ] && [ "${STATUS[$s]}" != "FAIL" ] && STATUS[$s]="FAIL (exit $code)"
     else
         STATUS[$s]="FAIL (exit $code, no result)"
+        [ "$code" = "prepare" ] && STATUS[$s]="FAIL (prepare)"
         SECS[$s]="-"
         NOTES[$s]=""
     fi

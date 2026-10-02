@@ -253,10 +253,22 @@ public class RunScenario {
 			}
 			Path dir = Path.of(Scenario.subst(p.dir(), vars));
 			String cmd = Scenario.subst(p.build(), vars);
-			if (done.add(dir + "\0" + cmd)) {
+			String key = dir + "\0" + cmd;
+			// A build that failed fails every scenario that needs it, not only the first: the
+			// others would otherwise run whatever an earlier build left behind.
+			if (done.contains(key + "\0failed")) {
+				throw new IllegalStateException("build of " + p.name() + " (" + p.language() + ") failed earlier in this run");
+			}
+			if (done.add(key)) {
 				step("Building " + p.name() + " (" + p.language() + ")");
-				exec(buildLogs.resolve("build-" + (buildLogs.equals(logDir) ? "" : scenario + "-") + p.name() + ".log"), dir,
-						1200, "bash", "-c", cmd);
+				try {
+					exec(buildLogs.resolve("build-" + (buildLogs.equals(logDir) ? "" : scenario + "-") + p.name() + ".log"),
+							dir, 1200, "bash", "-c", cmd);
+				}
+				catch (Exception e) {
+					done.add(key + "\0failed");
+					throw e;
+				}
 			}
 		}
 	}
