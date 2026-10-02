@@ -157,6 +157,21 @@ class RemoteAcpConnectionTest {
 	}
 
 	@Test
+	void closeAfterAGracefulCloseThatDoesNotFinishClosesTheAgentAtOnce() {
+		AcpAsyncAgent agent = mock(AcpAsyncAgent.class);
+		when(agent.start()).thenReturn(Mono.empty());
+		when(agent.closeGracefully()).thenReturn(Mono.never());
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add);
+		connection.start(transport -> agent).block(TIMEOUT);
+
+		connection.closeGracefully().subscribe();
+		connection.close();
+		connection.close();
+
+		verify(agent).close();
+	}
+
+	@Test
 	void closeGracefullyBeforeStartClosesTheTransport() {
 		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add);
 

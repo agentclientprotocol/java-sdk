@@ -166,6 +166,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`StreamableHttpAcpAgentTransportOptions` gains `shutdownTimeout`** (builder
+  `shutdownTimeout(Duration)`, default 5 seconds, positive): how long closing the servlet or the
+  listener waits for its connections' agents before closing the rest at once. Breaking for code
+  calling the record's canonical constructor, which takes it as a new last component; the builder
+  is unaffected.
+
 - **0.80.0 is binary-incompatible with 0.18.0: recompile code built against 0.18.0.** Source
   migrates as the Breaking entries below describe, but a jar compiled against 0.18.0 fails at run
   time, typically with `NoSuchMethodError` or `NoClassDefFoundError` from a handler, because several
@@ -410,6 +416,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WebSocketAcpClientTransport` (in `acp-core`) is unchanged and connects to it as before.
 
 ### Fixed
+
+- **Closing the Streamable HTTP servlet is bounded, and an `initialize` in flight no longer
+  outlives it.** `StreamableHttpAcpServlet.destroy()` waited up to 30 seconds (the initialize
+  timeout) for its connections, and `closeGracefully()` had no bound at all, so an agent whose
+  close did not finish held the container's shutdown. Both now finish within the new
+  `StreamableHttpAcpAgentTransportOptions.shutdownTimeout` (default 5 seconds; see Changed): a
+  connection whose agent has not closed by then is closed at once (`RemoteAcpConnection.close()`
+  now also closes a connection whose graceful close has not finished). The listener
+  (`StreamableHttpAcpAgentTransport.closeGracefully()`) bounds its WebSocket connections the same
+  way. An `initialize` still being answered when the servlet closes is answered `503` at once,
+  instead of holding its request until the agent answered or 30 seconds passed, and an answer that
+  arrives after the close no longer registers a connection on the closed servlet (it used to stay
+  open, with its agent, until the JVM exited). Closing never waits for a client: SSE responses are
+  completed, not drained.
+  The 30-second stall reported from Spring Boot is not `destroy()`: Boot shuts its server down
+  gracefully by default, and every SSE stream a connected client holds is an in-flight request,
+  so Boot waits its `timeout-per-shutdown-phase` (30 seconds) before servlets are destroyed. The
+  servlet Javadoc now documents the remedy: call `closeGracefully()` before the server stops (a
+  `SmartLifecycle` in the default phase).
 
 - **A handler that threw an `Error` left the peer waiting.** Reactor rethrows what it treats as
   JVM-fatal (`LinkageError`, `VirtualMachineError`) instead of signalling it, so a handler that

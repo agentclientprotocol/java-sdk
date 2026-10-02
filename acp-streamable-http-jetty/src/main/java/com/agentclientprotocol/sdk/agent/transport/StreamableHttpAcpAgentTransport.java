@@ -10,12 +10,14 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
@@ -241,7 +243,12 @@ public class StreamableHttpAcpAgentTransport {
 	}
 
 	/**
-	 * Closes all active connections and stops the listener.
+	 * Closes all active connections and stops the listener. Connections are closed as the
+	 * servlet closes them ({@link StreamableHttpAcpServlet#closeGracefully()}): nothing
+	 * waits for a client, and a connection whose agent has not closed within the
+	 * {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown timeout}
+	 * is closed at once. The listener registers no JVM shutdown hook; an application stops
+	 * it by calling this method.
 	 * @return a mono that completes when shutdown finishes
 	 */
 	public Mono<Void> closeGracefully() {
@@ -249,12 +256,22 @@ public class StreamableHttpAcpAgentTransport {
 			if (!closing.compareAndSet(false, true)) {
 				return Mono.empty();
 			}
-			List<Mono<Void>> connectionClosures = new ArrayList<>();
-			connectionClosures.add(servlet.closeGracefully());
-			webSocketConnections.values().forEach(connection -> connectionClosures.add(connection.closeGracefully()));
+			List<StreamableHttpWebSocketConnection> closingWebSockets = List.copyOf(webSocketConnections.values());
 			webSocketConnections.clear();
+			List<Mono<Void>> webSocketClosures = new ArrayList<>();
+			closingWebSockets.forEach(connection -> webSocketClosures.add(connection.closeGracefully()));
+			Duration timeout = options.shutdownTimeout();
+			Mono<Void> webSockets = Mono.whenDelayError(webSocketClosures)
+				.timeout(timeout, AcpSchedulers.timeouts())
+				.onErrorResume(TimeoutException.class, timedOut -> {
+					logger.warn("Streamable ACP WebSocket connections did not close within {}; closing them now",
+							timeout);
+					closingWebSockets.forEach(StreamableHttpWebSocketConnection::closeNow);
+					return Mono.empty();
+				});
 
-			return Mono.whenDelayError(connectionClosures)
+			// The servlet's close is bounded by the same shutdown timeout.
+			return Mono.whenDelayError(servlet.closeGracefully(), webSockets)
 				.then(Mono.<Void>fromRunnable(this::stopServer))
 				.doOnSuccess(ignored -> {
 					terminationSink.tryEmitValue(null);
