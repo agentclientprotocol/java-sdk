@@ -268,6 +268,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor `StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream, Duration)`; a request
   still unanswered then is answered with `-32800` (request cancelled) and the transport terminates
   without it. `closeGracefully()` now also completes `awaitTermination()`.
+- **A JSON-RPC error's wire `message` carried the code.** An `AcpProtocolException` thrown by a
+  handler was answered with the exception's log form as the message, for example
+  `"message": "[-32602] unknown directive: #nope"`; JSON-RPC 2.0 (section 5.1) keeps the number in
+  `code` and a short description in `message`. The wire message is now the plain message
+  (`"unknown directive: #nope"`). `AcpProtocolException.getMessage()` still prefixes the code, for
+  logs; the new `getErrorMessage()` returns the plain message, and `JSONRPCError.from` uses it, so a
+  received error passed on is unchanged.
 - **Streamable HTTP routed `session/delete`, `session/close`, `session/list`,
   `session/set_config_option`, `session/fork` and `logout` by guesswork, and the server refused a
   session it did not know with 404.** The client had rules for only seven methods and inferred the

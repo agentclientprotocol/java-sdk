@@ -331,12 +331,13 @@ public final class AcpSchema {
 			@JsonProperty("data") @Nullable Object data) {
 
 		/**
-		 * The wire form of a protocol exception.
+		 * The wire form of a protocol exception: its message without the code prefix that
+		 * {@link AcpProtocolException#getMessage()} adds for logs.
 		 * @param exception the exception to send
 		 * @return a JSON-RPC error carrying its code, message and data
 		 */
 		public static JSONRPCError from(AcpProtocolException exception) {
-			return new JSONRPCError(exception.getCode(), exception.getMessage(), exception.getData());
+			return new JSONRPCError(exception.getCode(), exception.getErrorMessage(), exception.getData());
 		}
 
 		/**

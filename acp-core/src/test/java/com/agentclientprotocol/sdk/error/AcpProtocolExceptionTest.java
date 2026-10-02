@@ -59,6 +59,23 @@ class AcpProtocolExceptionTest {
 		assertThat(error.data()).isNull();
 	}
 
+	/**
+	 * The wire message is the plain message, the code travels in {@code code}; the Java
+	 * exception's own message keeps the code for logs. A received error passed on keeps its
+	 * message unchanged.
+	 */
+	@Test
+	void theWireMessageCarriesNoCode() {
+		AcpProtocolException exception = new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS,
+				"unknown directive: #nope");
+
+		assertThat(AcpSchema.JSONRPCError.from(exception).message()).isEqualTo("unknown directive: #nope");
+		assertThat(exception.getErrorMessage()).isEqualTo("unknown directive: #nope");
+		assertThat(exception.getMessage()).isEqualTo("[-32602] unknown directive: #nope");
+		AcpSchema.JSONRPCError received = new AcpSchema.JSONRPCError(-32601, "Method not found", null);
+		assertThat(AcpSchema.JSONRPCError.from(received.toException())).isEqualTo(received);
+	}
+
 	@Test
 	void isMethodNotFoundReturnsTrueForCorrectCode() {
 		AcpProtocolException methodNotFound = new AcpProtocolException(AcpErrorCodes.METHOD_NOT_FOUND, "Unknown method");
