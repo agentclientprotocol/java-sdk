@@ -151,6 +151,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     found), a notification is ignored. A handler that produces no result answers with `-32603`; return
     an empty map when there is nothing to return.
 - `TypeRef.of(Type)`: a type reference for a type known only at runtime.
+- **`StreamableHttpAcpAgentTransport` listens on an ephemeral port when given port 0.** Before, the
+  constructor rejected 0 (`Port must be positive`), so a test or an embedding application had to
+  reserve a port and race to rebind it. A port outside 0–65535 is rejected. `getPort()` returns
+  the configured port (0 for an ephemeral one) until `start()` completes, then the port actually
+  bound, which it keeps reporting after the listener closes (before, Jetty's negative "not open"
+  value).
 
 ### Changed
 

@@ -92,11 +92,13 @@ public class StreamableHttpAcpAgentTransport {
 
 	private volatile @Nullable Server server;
 
-	private volatile @Nullable ServerConnector connector;
+	/** The port the listener bound when it started; 0 until then. */
+	private volatile int boundPort;
 
 	/**
 	 * Creates a new Streamable HTTP listener on the default ACP path.
-	 * @param port port to listen on
+	 * @param port port to listen on, or 0 for an ephemeral port chosen when the listener
+	 * starts (see {@link #getPort()})
 	 * @param jsonMapper JSON mapper used for serialization
 	 * @param agentFactory factory used to create one agent runtime per connection
 	 */
@@ -106,7 +108,8 @@ public class StreamableHttpAcpAgentTransport {
 
 	/**
 	 * Creates a new Streamable HTTP listener.
-	 * @param port port to listen on
+	 * @param port port to listen on, or 0 for an ephemeral port chosen when the listener
+	 * starts (see {@link #getPort()})
 	 * @param path endpoint path
 	 * @param jsonMapper JSON mapper used for serialization
 	 * @param agentFactory factory used to create one agent runtime per connection
@@ -118,7 +121,8 @@ public class StreamableHttpAcpAgentTransport {
 
 	/**
 	 * Creates a new Streamable HTTP listener with explicit limits.
-	 * @param port port to listen on
+	 * @param port port to listen on, or 0 for an ephemeral port chosen when the listener
+	 * starts (see {@link #getPort()})
 	 * @param path endpoint path
 	 * @param jsonMapper JSON mapper used for serialization
 	 * @param agentFactory factory used to create one agent runtime per connection
@@ -126,7 +130,7 @@ public class StreamableHttpAcpAgentTransport {
 	 */
 	public StreamableHttpAcpAgentTransport(int port, String path, AcpJsonMapper jsonMapper,
 			AcpAgentFactory agentFactory, StreamableHttpAcpAgentTransportOptions options) {
-		Assert.isTrue(port > 0, "Port must be positive");
+		Assert.isTrue(port >= 0 && port <= 65535, "Port must be between 0 and 65535, 0 for an ephemeral port");
 		Assert.hasText(path, "Path must not be empty");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(agentFactory, "The agentFactory can not be null");
@@ -157,7 +161,7 @@ public class StreamableHttpAcpAgentTransport {
 
 			jettyServer.start();
 			this.server = jettyServer;
-			this.connector = jettyConnector;
+			this.boundPort = jettyConnector.getLocalPort();
 			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
 			return null;
 		}).then();
@@ -225,12 +229,15 @@ public class StreamableHttpAcpAgentTransport {
 	}
 
 	/**
-	 * Returns the bound port.
-	 * @return listener port
+	 * Returns the port the listener accepts connections on. Before {@link #start()} completes
+	 * this is the configured port, which is 0 for an ephemeral port; once started it is the
+	 * port actually bound (the OS-chosen one for 0), and it stays that after the listener
+	 * closes.
+	 * @return the bound port once started, otherwise the configured port
 	 */
 	public int getPort() {
-		ServerConnector currentConnector = this.connector;
-		return currentConnector != null ? currentConnector.getLocalPort() : configuredPort;
+		int bound = this.boundPort;
+		return bound > 0 ? bound : configuredPort;
 	}
 
 	/**
