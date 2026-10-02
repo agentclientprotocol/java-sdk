@@ -24,6 +24,7 @@ import com.agentclientprotocol.transport.WebSocketTransport
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.httpVersion
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
@@ -101,7 +102,7 @@ object AgentMain {
                 // What acp-ktor-server's acpProtocolOnServerWebSocket does, with the transport tapped
                 // and the handler returning when the socket closes.
                 webSocket("/acp") {
-                    System.err.println("[http] GET /acp HTTP/1.1 -> 101 upgrade=\"websocket\"")
+                    System.err.println("[http] GET /acp ${call.request.httpVersion} -> 101 upgrade=\"websocket\"")
                     val transport = TapTransport(WebSocketTransport(parentScope = this, wss = this))
                     val closed = CompletableDeferred<Unit>()
                     transport.onClose { closed.complete(Unit) }

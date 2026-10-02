@@ -940,11 +940,11 @@ object Steps {
                 }
                 val first = run.job.await()
                 check(first.stopReason == StopReason.CANCELLED) { "first prompt stopReason ${first.stopReason}" }
-                check(during != null && errorCode(during) == -32000) {
+                check(during != null && errorCode(during) == -32600) {
                     "\"during cancel\" ${if (during == null) "succeeded" else "failed with ${ClientMain.describe(during)}"}"
                 }
                 endTurn(conn.prompt(s, "after cancel"), "after cancel: stopReason")
-                "cancelled; \"during cancel\" -32000; \"after cancel\" end_turn"
+                "cancelled; \"during cancel\" -32600; \"after cancel\" end_turn"
             }
         },
         "cancel.grace" to {
