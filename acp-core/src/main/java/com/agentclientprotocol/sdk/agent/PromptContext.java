@@ -200,7 +200,7 @@ public interface PromptContext {
 	 */
 	default Mono<Void> sendMessage(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
-				new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent(text), messageId));
+				new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**
@@ -221,7 +221,7 @@ public interface PromptContext {
 	 */
 	default Mono<Void> sendThought(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
-				new AcpSchema.AgentThoughtChunk("agent_thought_chunk", new AcpSchema.TextContent(text), messageId));
+				new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**

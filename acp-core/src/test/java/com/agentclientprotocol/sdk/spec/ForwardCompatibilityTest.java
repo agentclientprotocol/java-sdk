@@ -172,7 +172,7 @@ class ForwardCompatibilityTest {
 
 	@Test
 	void aKnownVariantNamesItselfWhenGivenNoDiscriminator() throws Exception {
-		var chunk = new AcpSchema.AgentMessageChunk(null, new AcpSchema.TextContent(null, "hi", null, null));
+		var chunk = new AcpSchema.AgentMessageChunk(null, new AcpSchema.TextContent(null, "hi", null, null), null, null);
 
 		assertThat(chunk.sessionUpdate()).isEqualTo("agent_message_chunk");
 		assertThat(mapper.writeValueAsString(chunk))
@@ -181,7 +181,7 @@ class ForwardCompatibilityTest {
 
 	@Test
 	void aKnownVariantRejectsAnotherVariantsDiscriminator() {
-		assertThatThrownBy(() -> new AcpSchema.AgentMessageChunk("agentMessage", new AcpSchema.TextContent("hi")))
+		assertThatThrownBy(() -> new AcpSchema.AgentMessageChunk("agentMessage", new AcpSchema.TextContent("hi"), null, null))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("agentMessage")
 			.hasMessageContaining("agent_message_chunk");

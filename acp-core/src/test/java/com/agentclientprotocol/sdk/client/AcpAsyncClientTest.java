@@ -268,7 +268,7 @@ class AcpAsyncClientTest {
 
 		// Simulate incoming session update notification
 		AcpSchema.SessionNotification sessionUpdate = new AcpSchema.SessionNotification("session-123",
-				new AcpSchema.UserMessageChunk("user_message_chunk", new AcpSchema.TextContent("Hello")));
+				new AcpSchema.UserMessageChunk(new AcpSchema.TextContent("Hello")));
 		AcpSchema.JSONRPCNotification notification = new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,
 				AcpSchema.METHOD_SESSION_UPDATE, sessionUpdate);
 

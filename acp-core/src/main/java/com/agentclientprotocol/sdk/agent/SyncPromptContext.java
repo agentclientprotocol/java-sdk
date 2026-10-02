@@ -201,7 +201,7 @@ public interface SyncPromptContext {
 	 */
 	default void sendMessage(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
-				new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent(text), messageId));
+				new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**
@@ -220,7 +220,7 @@ public interface SyncPromptContext {
 	 */
 	default void sendThought(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
-				new AcpSchema.AgentThoughtChunk("agent_thought_chunk", new AcpSchema.TextContent(text), messageId));
+				new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**

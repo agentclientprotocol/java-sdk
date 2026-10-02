@@ -2264,7 +2264,8 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Config option update - pushed by agent via session/update notification.
+	 * Config option update - pushed by agent via session/update notification. It carries the
+	 * full list of config options, like {@link SetSessionConfigOptionResponse}.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ConfigOptionUpdate(
@@ -2275,8 +2276,13 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "config_option_update");
 		}
 
-		public ConfigOptionUpdate(String sessionUpdate, List<SessionConfigOption> configOptions) {
-			this(sessionUpdate, configOptions, null);
+		/**
+		 * The update an agent sends when its config options changed.
+		 * @param configOptions every config option with its current value, not only the
+		 * changed ones
+		 */
+		public ConfigOptionUpdate(List<SessionConfigOption> configOptions) {
+			this("config_option_update", configOptions, null);
 		}
 	}
 
@@ -2618,12 +2624,12 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "user_message_chunk");
 		}
 
-		public UserMessageChunk(String sessionUpdate, ContentBlock content) {
-			this(sessionUpdate, content, null, null);
+		public UserMessageChunk(ContentBlock content) {
+			this("user_message_chunk", content, null, null);
 		}
 
-		public UserMessageChunk(String sessionUpdate, ContentBlock content, @Nullable String messageId) {
-			this(sessionUpdate, content, messageId, null);
+		public UserMessageChunk(ContentBlock content, @Nullable String messageId) {
+			this("user_message_chunk", content, messageId, null);
 		}
 	}
 
@@ -2639,12 +2645,12 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "agent_message_chunk");
 		}
 
-		public AgentMessageChunk(String sessionUpdate, ContentBlock content) {
-			this(sessionUpdate, content, null, null);
+		public AgentMessageChunk(ContentBlock content) {
+			this("agent_message_chunk", content, null, null);
 		}
 
-		public AgentMessageChunk(String sessionUpdate, ContentBlock content, @Nullable String messageId) {
-			this(sessionUpdate, content, messageId, null);
+		public AgentMessageChunk(ContentBlock content, @Nullable String messageId) {
+			this("agent_message_chunk", content, messageId, null);
 		}
 	}
 
@@ -2660,12 +2666,12 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "agent_thought_chunk");
 		}
 
-		public AgentThoughtChunk(String sessionUpdate, ContentBlock content) {
-			this(sessionUpdate, content, null, null);
+		public AgentThoughtChunk(ContentBlock content) {
+			this("agent_thought_chunk", content, null, null);
 		}
 
-		public AgentThoughtChunk(String sessionUpdate, ContentBlock content, @Nullable String messageId) {
-			this(sessionUpdate, content, messageId, null);
+		public AgentThoughtChunk(ContentBlock content, @Nullable String messageId) {
+			this("agent_thought_chunk", content, messageId, null);
 		}
 	}
 
@@ -2741,8 +2747,8 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "plan");
 		}
 
-		public Plan(String sessionUpdate, List<PlanEntry> entries) {
-			this(sessionUpdate, entries, null);
+		public Plan(List<PlanEntry> entries) {
+			this("plan", entries, null);
 		}
 	}
 
@@ -2758,8 +2764,8 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "available_commands_update");
 		}
 
-		public AvailableCommandsUpdate(String sessionUpdate, List<AvailableCommand> availableCommands) {
-			this(sessionUpdate, availableCommands, null);
+		public AvailableCommandsUpdate(List<AvailableCommand> availableCommands) {
+			this("available_commands_update", availableCommands, null);
 		}
 	}
 
@@ -2775,8 +2781,8 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "current_mode_update");
 		}
 
-		public CurrentModeUpdate(String sessionUpdate, String currentModeId) {
-			this(sessionUpdate, currentModeId, null);
+		public CurrentModeUpdate(String currentModeId) {
+			this("current_mode_update", currentModeId, null);
 		}
 	}
 
@@ -2820,8 +2826,8 @@ public final class AcpSchema {
 			sessionUpdate = discriminator(sessionUpdate, "usage_update");
 		}
 
-		public UsageUpdate(String sessionUpdate, Long used, Long size) {
-			this(sessionUpdate, used, size, null, null);
+		public UsageUpdate(Long used, Long size) {
+			this("usage_update", used, size, null, null);
 		}
 	}
 

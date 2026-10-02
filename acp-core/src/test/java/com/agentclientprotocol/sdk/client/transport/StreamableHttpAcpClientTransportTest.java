@@ -1197,8 +1197,7 @@ class StreamableHttpAcpClientTransportTest {
 		for (int i = 0; i < count; i++) {
 			writeSse(writer, new AcpSchema.JSONRPCNotification(AcpSchema.METHOD_SESSION_UPDATE,
 					new AcpSchema.SessionNotification(sessionId,
-							new AcpSchema.AgentMessageChunk("agent_message_chunk",
-									new AcpSchema.TextContent(sessionId + "-" + i)))));
+							new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(sessionId + "-" + i)))));
 		}
 	}
 

@@ -130,7 +130,7 @@ class AcpAgentSupportConnectionContextTest {
 
 			@SetSessionMode
 			SetSessionModeResponse setMode(SetSessionModeRequest request, AcpAsyncAgent agent) {
-				agent.sendSessionUpdate(request.sessionId(), new CurrentModeUpdate("current_mode_update", request.modeId()))
+				agent.sendSessionUpdate(request.sessionId(), new CurrentModeUpdate(request.modeId()))
 					.block(TIMEOUT);
 				return new SetSessionModeResponse();
 			}
@@ -210,7 +210,7 @@ class AcpAgentSupportConnectionContextTest {
 		@SetSessionMode
 		SetSessionModeResponse setMode(SetSessionModeRequest request, AcpSyncAgent agent) {
 			agent.sendSessionUpdate(request.sessionId(),
-					new AgentMessageChunk("agent_message_chunk", new TextContent("to " + request.sessionId())));
+					new AgentMessageChunk(new TextContent("to " + request.sessionId())));
 			return new SetSessionModeResponse();
 		}
 

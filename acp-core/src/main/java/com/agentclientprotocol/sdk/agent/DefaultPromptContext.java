@@ -134,12 +134,12 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Void> sendMessage(String text) {
-		return sendUpdate(sessionId, new AgentMessageChunk("agent_message_chunk", new TextContent(text)));
+		return sendUpdate(sessionId, new AgentMessageChunk(new TextContent(text)));
 	}
 
 	@Override
 	public Mono<Void> sendThought(String text) {
-		return sendUpdate(sessionId, new AgentThoughtChunk("agent_thought_chunk", new TextContent(text)));
+		return sendUpdate(sessionId, new AgentThoughtChunk(new TextContent(text)));
 	}
 
 	@Override

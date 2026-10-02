@@ -275,7 +275,7 @@ class SessionManagementTest {
 
 	@Test
 	void currentModeUpdateRoundTrip() throws IOException {
-		AcpSchema.CurrentModeUpdate original = new AcpSchema.CurrentModeUpdate("current_mode_update", "code");
+		AcpSchema.CurrentModeUpdate original = new AcpSchema.CurrentModeUpdate("code");
 
 		String json = jsonMapper.writeValueAsString(original);
 		AcpSchema.SessionUpdate result = jsonMapper.readValue(json, new TypeRef<AcpSchema.SessionUpdate>() {

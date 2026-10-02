@@ -38,7 +38,7 @@ class WireFormatTest {
 	@Test
 	void sessionUpdateNotification() throws IOException {
 		var notification = new AcpSchema.SessionNotification("s1",
-				new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent("hi")));
+				new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("hi")));
 
 		assertThat(mapper.writeValueAsString(notification)).isEqualTo(
 				"{\"sessionId\":\"s1\",\"update\":{\"sessionUpdate\":\"agent_message_chunk\",\"content\":{\"type\":\"text\",\"text\":\"hi\"}}}");

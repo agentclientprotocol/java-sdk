@@ -62,7 +62,6 @@ import reactor.core.scheduler.Schedulers;
  *     })
  *     .promptHandler((request, updater) -> {
  *         updater.sendUpdate(new AcpSchema.AgentMessageChunk(
- *             "agent_message_chunk",
  *             new AcpSchema.TextContent("Working on it...")));
  *         return Mono.just(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
  *     })

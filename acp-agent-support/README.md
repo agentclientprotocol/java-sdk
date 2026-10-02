@@ -113,7 +113,7 @@ outside a prompt turn:
 @ExtNotification("_example.com/models_changed")
 void modelsChanged(ModelsChanged event, AcpSyncAgent agent) {
     agent.sendSessionUpdate(event.sessionId(),
-            new ConfigOptionUpdate("config_option_update", configOptions(event.models())));
+            new ConfigOptionUpdate(configOptions(event.models())));
 }
 ```
 

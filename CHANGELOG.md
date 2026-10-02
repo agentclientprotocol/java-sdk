@@ -216,6 +216,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Since this release such an `Error` in a handler is answered `-32603` instead of leaving the peer
   waiting (see Fixed), but the handler still fails until it is recompiled.
+- **Breaking: the short constructors of the session updates no longer take the discriminator.**
+  It can only be the variant's own name (or `null`), so writing it was noise:
+  `new ConfigOptionUpdate(null, options)` is now `new ConfigOptionUpdate(options)`. The new
+  constructors replace the old ones:
+  - `UserMessageChunk`, `AgentMessageChunk`, `AgentThoughtChunk`: `(content)` and
+    `(content, messageId)`.
+  - `Plan(entries)`, `AvailableCommandsUpdate(availableCommands)`, `CurrentModeUpdate(currentModeId)`,
+    `UsageUpdate(used, size)`, `ConfigOptionUpdate(configOptions)` (the full list of options, not
+    only the changed ones).
+
+  The canonical constructors (discriminator first, `null` or the variant's name) are unchanged;
+  `SessionInfoUpdate(title, updatedAt)` already had this shape. Migration: drop the first
+  argument, for example `new AgentMessageChunk("agent_message_chunk", content)` becomes
+  `new AgentMessageChunk(content)`.
 - **Breaking: error codes follow the ACP v1 schema (`$defs.ErrorCode`).** A prompt sent while the
   session already has an active prompt was rejected with `-32000`, which ACP defines as
   "Authentication required", so a client could ask its user to log in when the user had only sent a
