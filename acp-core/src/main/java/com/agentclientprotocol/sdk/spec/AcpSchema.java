@@ -83,7 +83,8 @@ import org.slf4j.LoggerFactory;
  * back unchanged ({@code isKnown()} is false), as the Kotlin SDK and the v2 schema do;
  * the Rust v1 SDK fails such a message. Compare with {@code equals}, not {@code ==}.</li>
  * <li>Open strings in the schema stay {@code String} (a config option's
- * {@code category}, a string property's {@code format}).</li>
+ * {@code category}, whose reserved values are the constants of
+ * {@link SessionConfigOptionCategory}; a string property's {@code format}).</li>
  * </ul>
  *
  * @author Mark Pollack
@@ -122,6 +123,17 @@ public final class AcpSchema {
 	static Map<String, Object> unknownFields(@Nullable Map<String, Object> fields) {
 		// Null when the variant had no fields besides its discriminator under some mappers
 		return fields == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(fields));
+	}
+
+	/**
+	 * A value a builder requires.
+	 * @throws IllegalStateException when it was not set
+	 */
+	static <T> T required(@Nullable T value, String name) {
+		if (value == null) {
+			throw new IllegalStateException(name + " is required");
+		}
+		return value;
 	}
 
 	/**
@@ -1787,7 +1799,42 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Select-type config option - a dropdown with named values.
+	 * The {@code category} values ACP v1 reserves for a config option (the schema's
+	 * {@code SessionConfigOptionCategory}). A category helps a client place and style an
+	 * option; it is never required for correctness. Any other string is allowed: names
+	 * starting with {@code _} are free for custom use, and a client treats an unknown
+	 * category as uncategorized. A holder of constants, not meant to be implemented.
+	 */
+	public interface SessionConfigOptionCategory {
+
+		/** Session mode selector. */
+		String MODE = "mode";
+
+		/** Model selector: the config option that replaces {@code session/set_model}. */
+		String MODEL = "model";
+
+		/** Model-related configuration parameter. */
+		String MODEL_CONFIG = "model_config";
+
+		/** Thought or reasoning level selector. */
+		String THOUGHT_LEVEL = "thought_level";
+
+	}
+
+	/**
+	 * Select-type config option - a dropdown with named values. The short constructors set
+	 * no description, category or {@code _meta}; {@link #model} builds the model picker
+	 * (category {@code "model"}) and {@link #builder()} reaches every field.
+	 *
+	 * <pre>{@code
+	 * SessionConfigSelect model = SessionConfigSelect.model("model", "Model", "fast",
+	 *         List.of(new SessionConfigSelectOption("fast", "Fast"), new SessionConfigSelectOption("smart", "Smart")));
+	 *
+	 * SessionConfigSelect effort = SessionConfigSelect.builder()
+	 *     .id("effort").name("Effort").category(SessionConfigOptionCategory.THOUGHT_LEVEL)
+	 *     .currentValue("low").options(List.of(low, high))
+	 *     .build();
+	 * }</pre>
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelect(
@@ -1809,11 +1856,175 @@ public final class AcpSchema {
 		public SessionConfigSelect(String id, String name, String currentValue, SessionConfigSelectOptions options) {
 			this("select", id, name, null, null, currentValue, options, null);
 		}
+
+		/**
+		 * A model picker: a select option with category
+		 * {@link SessionConfigOptionCategory#MODEL}, the way ACP v1 offers model choice.
+		 * @param id the option's id, for example {@code "model"}
+		 * @param name the human-readable name
+		 * @param currentValue the value of the selected model
+		 * @param options the models, ungrouped
+		 * @return the model option
+		 */
+		public static SessionConfigSelect model(String id, String name, String currentValue,
+				List<SessionConfigSelectOption> options) {
+			return model(id, name, currentValue, SessionConfigSelectOptions.ungrouped(options));
+		}
+
+		/**
+		 * A model picker whose models may be grouped.
+		 * @param id the option's id, for example {@code "model"}
+		 * @param name the human-readable name
+		 * @param currentValue the value of the selected model
+		 * @param options the models, grouped or ungrouped
+		 * @return the model option
+		 * @see #model(String, String, String, List)
+		 */
+		public static SessionConfigSelect model(String id, String name, String currentValue,
+				SessionConfigSelectOptions options) {
+			return new SessionConfigSelect("select", id, name, null, SessionConfigOptionCategory.MODEL, currentValue,
+					options, null);
+		}
+
+		/**
+		 * A builder that reaches every field. {@code id}, {@code name},
+		 * {@code currentValue} and the options are required.
+		 * @return a new builder
+		 */
+		public static Builder builder() {
+			return new Builder();
+		}
+
+		/**
+		 * Builds a {@link SessionConfigSelect}.
+		 */
+		public static final class Builder {
+
+			private @Nullable String id;
+
+			private @Nullable String name;
+
+			private @Nullable String description;
+
+			private @Nullable String category;
+
+			private @Nullable String currentValue;
+
+			private @Nullable SessionConfigSelectOptions options;
+
+			private @Nullable Map<String, Object> meta;
+
+			private Builder() {
+			}
+
+			/**
+			 * Sets {@code id}.
+			 * @param id the option's id, sent back in {@code session/set_config_option}
+			 * @return this builder
+			 */
+			public Builder id(String id) {
+				this.id = id;
+				return this;
+			}
+
+			/**
+			 * Sets {@code name}.
+			 * @param name the human-readable name
+			 * @return this builder
+			 */
+			public Builder name(String name) {
+				this.name = name;
+				return this;
+			}
+
+			/**
+			 * Sets {@code description}.
+			 * @param description an optional description
+			 * @return this builder
+			 */
+			public Builder description(@Nullable String description) {
+				this.description = description;
+				return this;
+			}
+
+			/**
+			 * Sets {@code category}.
+			 * @param category an optional category, one of
+			 * {@link SessionConfigOptionCategory} or a custom one starting with {@code _}
+			 * @return this builder
+			 */
+			public Builder category(@Nullable String category) {
+				this.category = category;
+				return this;
+			}
+
+			/**
+			 * Sets {@code currentValue}.
+			 * @param currentValue the value of the selected option
+			 * @return this builder
+			 */
+			public Builder currentValue(String currentValue) {
+				this.currentValue = currentValue;
+				return this;
+			}
+
+			/**
+			 * Sets {@code options}.
+			 * @param options the options, ungrouped
+			 * @return this builder
+			 */
+			public Builder options(List<SessionConfigSelectOption> options) {
+				return options(SessionConfigSelectOptions.ungrouped(options));
+			}
+
+			/**
+			 * Sets {@code groups}.
+			 * @param groups the options, in groups
+			 * @return this builder
+			 */
+			public Builder groups(List<SessionConfigSelectGroup> groups) {
+				return options(SessionConfigSelectOptions.grouped(groups));
+			}
+
+			/**
+			 * Sets {@code options}.
+			 * @param options the options, grouped or ungrouped
+			 * @return this builder
+			 */
+			public Builder options(SessionConfigSelectOptions options) {
+				this.options = options;
+				return this;
+			}
+
+			/**
+			 * Sets {@code meta}.
+			 * @param meta optional {@code _meta}
+			 * @return this builder
+			 */
+			public Builder meta(@Nullable Map<String, Object> meta) {
+				this.meta = meta;
+				return this;
+			}
+
+			/**
+			 * Builds the option.
+			 * @return the option
+			 * @throws IllegalStateException when {@code id}, {@code name},
+			 * {@code currentValue} or the options were not set
+			 */
+			public SessionConfigSelect build() {
+				return new SessionConfigSelect("select", required(this.id, "id"), required(this.name, "name"),
+						this.description, this.category, required(this.currentValue, "currentValue"),
+						required(this.options, "options"), this.meta);
+			}
+
+		}
 	}
 
 	/**
 	 * Boolean-type config option - a toggle (stable in ACP v1 since 2026-07-06). Set it with
-	 * {@link SetSessionConfigOptionRequest#bool}.
+	 * {@link SetSessionConfigOptionRequest#bool}. The short constructor sets no
+	 * description, category or {@code _meta}; {@link #builder()} reaches every field.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigBoolean(
@@ -1828,6 +2039,109 @@ public final class AcpSchema {
 
 		public SessionConfigBoolean(String id, String name, Boolean currentValue) {
 			this("boolean", id, name, null, null, currentValue, null);
+		}
+
+		/**
+		 * A builder that reaches every field. {@code id}, {@code name} and
+		 * {@code currentValue} are required.
+		 * @return a new builder
+		 */
+		public static Builder builder() {
+			return new Builder();
+		}
+
+		/**
+		 * Builds a {@link SessionConfigBoolean}.
+		 */
+		public static final class Builder {
+
+			private @Nullable String id;
+
+			private @Nullable String name;
+
+			private @Nullable String description;
+
+			private @Nullable String category;
+
+			private @Nullable Boolean currentValue;
+
+			private @Nullable Map<String, Object> meta;
+
+			private Builder() {
+			}
+
+			/**
+			 * Sets {@code id}.
+			 * @param id the option's id, sent back in {@code session/set_config_option}
+			 * @return this builder
+			 */
+			public Builder id(String id) {
+				this.id = id;
+				return this;
+			}
+
+			/**
+			 * Sets {@code name}.
+			 * @param name the human-readable name
+			 * @return this builder
+			 */
+			public Builder name(String name) {
+				this.name = name;
+				return this;
+			}
+
+			/**
+			 * Sets {@code description}.
+			 * @param description an optional description
+			 * @return this builder
+			 */
+			public Builder description(@Nullable String description) {
+				this.description = description;
+				return this;
+			}
+
+			/**
+			 * Sets {@code category}.
+			 * @param category an optional category, one of
+			 * {@link SessionConfigOptionCategory} or a custom one starting with {@code _}
+			 * @return this builder
+			 */
+			public Builder category(@Nullable String category) {
+				this.category = category;
+				return this;
+			}
+
+			/**
+			 * Sets {@code currentValue}.
+			 * @param currentValue whether the option is on
+			 * @return this builder
+			 */
+			public Builder currentValue(boolean currentValue) {
+				this.currentValue = currentValue;
+				return this;
+			}
+
+			/**
+			 * Sets {@code meta}.
+			 * @param meta optional {@code _meta}
+			 * @return this builder
+			 */
+			public Builder meta(@Nullable Map<String, Object> meta) {
+				this.meta = meta;
+				return this;
+			}
+
+			/**
+			 * Builds the option.
+			 * @return the option
+			 * @throws IllegalStateException when {@code id}, {@code name} or
+			 * {@code currentValue} was not set
+			 */
+			public SessionConfigBoolean build() {
+				return new SessionConfigBoolean("boolean", required(this.id, "id"), required(this.name, "name"),
+						this.description, this.category, required(this.currentValue, "currentValue"), this.meta);
+			}
+
 		}
 	}
 
