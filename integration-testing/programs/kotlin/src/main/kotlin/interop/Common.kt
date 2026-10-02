@@ -47,6 +47,31 @@ object Fixtures {
         ),
     )
 
+    /** fixtures.groupedConfigOption: the select effort, its options in the groups fast and deep. */
+    fun effortOption(current: String): SessionConfigOption = SessionConfigOption.select(
+        id = "effort",
+        name = "Effort",
+        currentValue = current,
+        options = SessionConfigSelectOptions.Grouped(
+            listOf(
+                SessionConfigSelectGroup(SessionConfigGroupId("fast"), "Fast",
+                    listOf(SessionConfigSelectOption(SessionConfigValueId("effort-low"), "Low"))),
+                SessionConfigSelectGroup(SessionConfigGroupId("deep"), "Deep",
+                    listOf(
+                        SessionConfigSelectOption(SessionConfigValueId("effort-medium"), "Medium"),
+                        SessionConfigSelectOption(SessionConfigValueId("effort-high"), "High"),
+                    )),
+            )
+        ),
+    )
+
+    val effortValues = listOf("effort-low", "effort-medium", "effort-high")
+
+    /** fixtures.unknownEnums: values the v1 schema does not define. */
+    const val FUTURE_STATUS = "interop_future_status"
+    const val FUTURE_STOP = "interop_future_stop"
+    val unknownAudience = listOf("user", "interop_future_role")
+
     fun verboseOption(current: Boolean): SessionConfigOption =
         SessionConfigOption.boolean(id = "verbose", name = "Verbose", currentValue = current)
 

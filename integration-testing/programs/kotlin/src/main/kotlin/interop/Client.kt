@@ -793,6 +793,69 @@ object Steps {
         "stop.max_tokens" to stop("max_tokens", StopReason.MAX_TOKENS),
         "stop.refusal" to stop("refusal", StopReason.REFUSAL),
         "stop.max_turn_requests" to stop("max_turn_requests", StopReason.MAX_TURN_REQUESTS),
+        // Unknown enum values. Every v1 enum is a closed Kotlin enum without a fallback, so a tool_call
+        // or plan carrying one fails to decode and is dropped, and so does a PromptResponse.
+        "enum.tool_call" to {
+            val (sid, r) = promptNew("#enum tool_call")
+            endTurn(r)
+            expectChunk(sid, "after-enum")
+            val call = main().updates(sid).filterIsInstance<SessionUpdate.ToolCall>().firstOrNull { it.toolCallId.value == "call-enum" }
+                ?: throw ClientMain.StepFailure("no tool_call call-enum: the update was dropped (after-enum and end_turn arrived); " +
+                    "ToolCallStatus and ToolKind are closed enums")
+            throw ClientMain.StepFailure("tool_call call-enum decoded with status ${call.status} kind ${call.kind}")
+        },
+        "enum.plan" to {
+            val (sid, r) = promptNew("#enum plan")
+            endTurn(r)
+            expectChunk(sid, "after-enum")
+            val plan = main().updates(sid).filterIsInstance<SessionUpdate.PlanUpdate>().firstOrNull()
+                ?: throw ClientMain.StepFailure("no plan: the update was dropped (after-enum and end_turn arrived); " +
+                    "PlanEntryPriority and PlanEntryStatus are closed enums")
+            throw ClientMain.StepFailure("plan decoded as ${plan.entries}")
+        },
+        "enum.stop" to {
+            val conn = main()
+            val s = conn.newSession()
+            val first = try {
+                "answered ${conn.prompt(s, "#enum stop").stopReason}"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "failed: ${ClientMain.describe(e)}"
+            }
+            val after = try {
+                conn.prompt(s, "after enum").stopReason.toString()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ClientMain.describe(e)
+            }
+            throw ClientMain.StepFailure("the #enum stop prompt $first (StopReason is a closed enum); \"after enum\": $after")
+        },
+        "enum.audience" to {
+            // A Kotlin Role cannot hold interop_future_role, so the prompt goes out untyped; its
+            // updates still reach the session's operations.
+            val conn = main()
+            val s = conn.newSession()
+            val sid = s.sessionId.value
+            val params = buildJsonObject {
+                put("sessionId", sid)
+                putJsonArray("prompt") {
+                    addJsonObject {
+                        put("type", "text")
+                        put("text", "#enum audience")
+                        putJsonObject("annotations") {
+                            putJsonArray("audience") { Fixtures.unknownAudience.forEach { add(it) } }
+                        }
+                    }
+                }
+            }
+            val r = conn.protocol.sendRequestRaw(MethodName("session/prompt"), params)
+            val stop = ((r as? JsonObject)?.get("stopReason") as? JsonPrimitive)?.contentOrNull
+            check(stop == "end_turn") { "stopReason $stop" }
+            expectChunk(sid, "audience: user,interop_future_role")
+            "audience: user,interop_future_role; end_turn (prompt sent untyped)"
+        },
         "mode.set" to {
             val conn = main()
             val s = conn.newSession()
@@ -820,6 +883,30 @@ object Steps {
             val verbose = r.configOptions.firstOrNull { it.id.value == "verbose" } as? SessionConfigOption.BooleanOption
             check(verbose?.currentValue == true) { "response configOptions ${r.configOptions}" }
             "verbose at true"
+        },
+        "config.grouped" to {
+            val conn = main()
+            val s = conn.newSession()
+            val sid = s.sessionId.value
+            endTurn(conn.prompt(s, "#config grouped"))
+            await(failure = { "no config_option_update in ${main().updates(sid)}" }) {
+                main().updates(sid).any { it is SessionUpdate.ConfigOptionUpdate }
+            }
+            val effort = main().updates(sid).filterIsInstance<SessionUpdate.ConfigOptionUpdate>().first()
+                .configOptions.firstOrNull { it.id.value == "effort" } as? SessionConfigOption.Select
+                ?: throw ClientMain.StepFailure("no select effort in the config_option_update")
+            val grouped = effort.options as? SessionConfigSelectOptions.Grouped
+                ?: throw ClientMain.StepFailure("effort options are not grouped: ${effort.options}")
+            check(grouped.groups.map { it.group.value } == listOf("fast", "deep")) { "groups ${grouped.groups}" }
+            val values = grouped.groups.flatMap { g -> g.options.map { it.value.value } }
+            check(values == Fixtures.effortValues) { "effort values $values" }
+            val r = s.setConfigOption(SessionConfigId("effort"), SessionConfigOptionValue.StringValue("effort-high"))
+            val set = r.configOptions.firstOrNull { it.id.value == "effort" } as? SessionConfigOption.Select
+            val model = r.configOptions.firstOrNull { it.id.value == "model" } as? SessionConfigOption.Select
+            check(set?.currentValue?.value == "effort-high" && model?.currentValue?.value == "model-a") {
+                "response configOptions ${r.configOptions}"
+            }
+            "effort grouped fast/deep, values $values; set to effort-high"
         },
         "perm.selected" to {
             val (sid, r) = promptNew("#permission allow")
@@ -960,6 +1047,27 @@ object Steps {
                 check(r.stopReason == StopReason.CANCELLED) { "stopReason ${r.stopReason}" }
                 "stopReason cancelled ${ms(at)} ms after session/cancel"
             }
+        },
+        "cancel.max-duration" to {
+            val conn = main()
+            val s = conn.newSession()
+            val t0 = System.nanoTime()
+            val outcome = withTimeoutOrNull(11_000) {
+                try {
+                    Result.success(conn.prompt(s, "#hang"))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            } ?: throw ClientMain.StepFailure("TIMEOUT: no answer within 11 s")
+            val elapsed = ms(t0)
+            val e = outcome.exceptionOrNull()
+                ?: throw ClientMain.StepFailure("the prompt answered ${outcome.getOrNull()?.stopReason}, expected error -32800")
+            check(errorCode(e) == -32800) { "the prompt failed with ${ClientMain.describe(e)}, expected -32800" }
+            check(elapsed >= 7_000) { "-32800 after $elapsed ms, before the 8 s maxPromptDuration" }
+            endTurn(conn.prompt(s, "after max-duration"), "\"after max-duration\" answered")
+            "-32800 after $elapsed ms; \"after max-duration\" end_turn"
         },
         "cancel-request.client" to {
             val conn = main()

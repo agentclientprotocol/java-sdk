@@ -127,6 +127,9 @@ class SessionState(val id: String, val cwd: String) {
     @Volatile var model = "model-a"
     @Volatile var verbose = false
     @Volatile var mode = Fixtures.MODE_A
+    /** Whether #config grouped added fixtures.groupedConfigOption, and its value. */
+    @Volatile var grouped = false
+    @Volatile var effort = "effort-low"
 }
 
 object Sessions {
@@ -279,6 +282,7 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
         get() = buildList {
             add(Fixtures.modelOption(state.model))
             if (conn.booleanConfig) add(Fixtures.verboseOption(state.verbose))
+            if (state.grouped) add(Fixtures.effortOption(state.effort))
         }
 
     override suspend fun setConfigOption(configId: SessionConfigId, value: SessionConfigOptionValue, _meta: JsonElement?): SetSessionConfigOptionResponse {
@@ -287,6 +291,12 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
                 state.model = value.value
             configId.value == "verbose" && conn.booleanConfig && value is SessionConfigOptionValue.BoolValue ->
                 state.verbose = value.value
+            configId.value == "effort" && state.grouped && value is SessionConfigOptionValue.StringValue &&
+                value.value in Fixtures.effortValues -> {
+                val t0 = System.nanoTime()
+                state.effort = value.value
+                agentStep("config.grouped", value.value == "effort-high", t0, "effort set to ${value.value}")
+            }
             else -> jsonRpcInvalidParams("unknown config option or value: ${configId.value} = $value")
         }
         return SetSessionConfigOptionResponse(configOptions)
@@ -357,6 +367,13 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
             }
             "slow" -> slow()
             "hang" -> awaitCancellation()
+            "enum" -> unknownEnum(args.firstOrNull() ?: "", text)
+            "config" -> {
+                if (args.firstOrNull() != "grouped") throw JsonRpcException(-32602, "unknown directive: #config ${args.firstOrNull()}")
+                state.grouped = true
+                update(SessionUpdate.ConfigOptionUpdate(configOptions))
+                done()
+            }
             "terminal" -> terminal(args)
             "elicit" -> elicit(args.firstOrNull() ?: "")
             "ext" -> ext(args)
@@ -382,6 +399,57 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
             }
             else -> throw JsonRpcException(-32602, "unknown directive: #$name")
         }
+    }
+
+    /**
+     * `#enum tool_call|plan|stop|audience`. Every v1 enum is a closed Kotlin enum, so the tool call
+     * and the plan go out as UnknownSessionUpdate (raw JSON, as for name=). A PromptResponse can
+     * only carry a StopReason constant, so `#enum stop` cannot be answered; and a prompt whose
+     * audience holds an unknown Role fails to decode in the SDK before it reaches this handler.
+     */
+    private suspend fun FlowCollector<Event>.unknownEnum(what: String, text: String) {
+        when (what) {
+            "tool_call" -> update(
+                SessionUpdate.UnknownSessionUpdate(
+                    sessionUpdateType = "tool_call",
+                    rawJson = buildJsonObject {
+                        put("toolCallId", "call-enum")
+                        put("title", "interop enum tool")
+                        put("kind", "interop_future_kind")
+                        put("status", Fixtures.FUTURE_STATUS)
+                    },
+                )
+            )
+            "plan" -> update(
+                SessionUpdate.UnknownSessionUpdate(
+                    sessionUpdateType = "plan",
+                    rawJson = buildJsonObject {
+                        putJsonArray("entries") {
+                            addJsonObject {
+                                put("content", "future entry")
+                                put("priority", "interop_future_priority")
+                                put("status", Fixtures.FUTURE_STATUS)
+                            }
+                        }
+                    },
+                )
+            )
+            "stop" -> {
+                chunk("stop")
+                throw JsonRpcException(-32603,
+                    "the Kotlin SDK cannot send stopReason ${Fixtures.FUTURE_STOP}: StopReason is a closed enum")
+            }
+            "audience" -> {
+                // Reached only if the SDK decoded the prompt (it cannot: Role is a closed enum).
+                val t0 = System.nanoTime()
+                agentStep("enum.audience", false, t0, "the prompt decoded, but a Kotlin Role cannot hold interop_future_role")
+                chunk("audience: unreadable")
+                return done()
+            }
+            else -> throw JsonRpcException(-32602, "unknown directive: #enum $what")
+        }
+        chunk("after-enum")
+        done()
     }
 
     private fun stopReason(s: String): StopReason = when (s) {
