@@ -90,6 +90,37 @@ class StdioAcpClientTransportProcessTest {
 	}
 
 	/**
+	 * Without a handler of its own, the agent's standard error goes to INFO on a dedicated
+	 * logger, with a short prefix, so it stays visible and can be turned down by name.
+	 */
+	@Test
+	void agentStandardErrorIsLoggedAtInfoOnItsOwnLogger() throws InterruptedException {
+		Logger logger = (Logger) LoggerFactory.getLogger(StdioAcpClientTransport.AGENT_STDERR_LOGGER);
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		logger.addAppender(logs);
+		try {
+			transport = new StdioAcpClientTransport(echoAgent());
+			transport.connect(message -> message.then(Mono.empty())).block(TIMEOUT);
+
+			long deadline = System.nanoTime() + TIMEOUT.toNanos();
+			while (logs.list.isEmpty() && System.nanoTime() < deadline) {
+				Thread.sleep(20);
+			}
+		}
+		finally {
+			logger.detachAppender(logs);
+			logs.stop();
+		}
+
+		assertThat(StdioAcpClientTransport.AGENT_STDERR_LOGGER)
+			.isEqualTo("com.agentclientprotocol.sdk.client.transport.agent-stderr");
+		assertThat(logs.list.get(0).getLevel()).isEqualTo(Level.INFO);
+		assertThat(logs.list.get(0).getLoggerName()).isEqualTo(StdioAcpClientTransport.AGENT_STDERR_LOGGER);
+		assertThat(logs.list.get(0).getFormattedMessage()).isEqualTo("agent: " + EchoAgent.READY);
+	}
+
+	/**
 	 * A malformed line from the agent is reported to the exception handler, answered with
 	 * -32700 and a null id (which the echo agent sends back), and skipped: the message after
 	 * it still arrives. Before, the first such line stopped the reader for good, silently.

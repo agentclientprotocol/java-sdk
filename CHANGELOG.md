@@ -258,6 +258,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   client that passed `new InitializeRequest(1, null)` now advertises the default
   `new ClientCapabilities()` (no file system, no terminal) instead of omitting
   `clientCapabilities`.
+- **Quieter logs for errors the caller already receives, and a named logger for agent stderr.**
+  - A peer's JSON-RPC error response (for example a handled `-32602`) was logged at ERROR
+    ("Error handling request") and then failed the caller's request with the same error. The
+    caller's `AcpError` is the report; the session now logs it at DEBUG only, as
+    `Request <method> failed with peer error <code>`, without the error's message or data (the
+    peer's payload). Applications that relied on the ERROR line should log the `AcpError` they
+    receive.
+  - `StdioAcpClientTransport` logs each line the agent writes to its standard error at INFO on its
+    own logger, `com.agentclientprotocol.sdk.client.transport.agent-stderr`
+    (`StdioAcpClientTransport.AGENT_STDERR_LOGGER`), as `agent: <line>`. Before, it used the
+    transport's logger with the prefix `STDERR Message received: `. Set that logger to WARN to
+    hide the agent's output, or replace it with `setStdErrorHandler(...)`.
 - **Breaking: error codes follow the ACP v1 schema (`$defs.ErrorCode`).** A prompt sent while the
   session already has an active prompt was rejected with `-32000`, which ACP defines as
   "Authentication required", so a client could ask its user to log in when the user had only sent a

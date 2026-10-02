@@ -200,7 +200,10 @@ class AcpClientSessionLogTest {
 		assertNoPersonalDataAboveDebug(listAppender.list);
 	}
 
-	/** An error response's data is the peer's payload: logged at DEBUG at most. */
+	/**
+	 * An error response fails the caller's request, which is the report: the session logs
+	 * it at DEBUG only, and never its data, which is the peer's payload.
+	 */
 	@Test
 	void errorResponseIsLoggedWithoutItsData() {
 		Logger outboundLogger = (Logger) LoggerFactory.getLogger(OutboundMessages.class);
@@ -218,9 +221,11 @@ class AcpClientSessionLogTest {
 					null, new AcpSchema.JSONRPCError(-32000, "Authentication required", Map.of("email", EMAIL))));
 
 			assertThat(response).failsWithin(TIMEOUT);
-			assertThat(outboundLogs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+			assertThat(outboundLogs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO)).isEmpty();
+			assertThat(outboundLogs.list).filteredOn(event -> event.getLevel() == Level.DEBUG)
 				.extracting(ILoggingEvent::getFormattedMessage)
-				.anySatisfy(message -> assertThat(message).contains("-32000"));
+				.anySatisfy(message -> assertThat(message).contains("-32000"))
+				.allSatisfy(message -> assertThat(message).doesNotContain(EMAIL));
 			assertNoPersonalDataAboveDebug(outboundLogs.list);
 			session.close();
 		}

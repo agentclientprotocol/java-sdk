@@ -50,6 +50,13 @@ import reactor.core.scheduler.Schedulers;
  * <li>Backpressure support via Reactor Sinks</li>
  * </ul>
  *
+ * <p>
+ * Each line the agent writes to its standard error is logged at INFO as
+ * {@code agent: <line>} on the logger {@value #AGENT_STDERR_LOGGER}, so it stays visible by
+ * default. Set that logger's level to WARN to hide it, or pass a handler of your own to
+ * {@link #setStdErrorHandler}.
+ * </p>
+ *
  * @author Mark Pollack
  * @author Christian Tzolov (MCP Java SDK)
  * @author Dariusz Jędrzejczyk (MCP Java SDK)
@@ -57,6 +64,14 @@ import reactor.core.scheduler.Schedulers;
 public class StdioAcpClientTransport implements AcpClientTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(StdioAcpClientTransport.class);
+
+	/**
+	 * The name of the logger that receives the agent's standard error, one INFO event per
+	 * line: {@value}. Configure its level to turn the agent's output down or off.
+	 */
+	public static final String AGENT_STDERR_LOGGER = "com.agentclientprotocol.sdk.client.transport.agent-stderr";
+
+	private static final Logger agentStderr = LoggerFactory.getLogger(AGENT_STDERR_LOGGER);
 
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
@@ -105,7 +120,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	private volatile Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	// visible for tests
-	private Consumer<String> stdErrorHandler = error -> logger.info("STDERR Message received: {}", error);
+	private Consumer<String> stdErrorHandler = line -> agentStderr.info("agent: {}", line);
 
 	/**
 	 * Creates a new StdioAcpClientTransport with the specified parameters using the default JsonMapper.
@@ -215,13 +230,9 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Sets the handler for processing transport-level errors.
-	 *
-	 * <p>
-	 * The provided handler will be called when errors occur during transport operations,
-	 * such as connection failures or protocol violations.
-	 * </p>
-	 * @param errorHandler a consumer that processes error messages
+	 * Sets the handler for the lines the agent process writes to its standard error,
+	 * replacing the default, which logs each line at INFO on {@value #AGENT_STDERR_LOGGER}.
+	 * @param errorHandler a consumer that receives each line, without its line terminator
 	 */
 	public void setStdErrorHandler(Consumer<String> errorHandler) {
 		this.stdErrorHandler = errorHandler;
