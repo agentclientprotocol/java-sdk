@@ -111,14 +111,18 @@ public class AcpAgentHttpAutoConfiguration {
 		if (http.getMaxConcurrentStreamsPerConnection() != null) {
 			options.maxConcurrentStreamsPerConnection(http.getMaxConcurrentStreamsPerConnection());
 		}
+		if (http.getShutdownTimeout() != null) {
+			options.shutdownTimeout(http.getShutdownTimeout());
+		}
 		return options.build();
 	}
 
 	/**
 	 * Closes the servlet's ACP connections before the web server shuts down. Each holds
-	 * an open SSE response; left to the servlet's {@code destroy()}, which runs after the
-	 * server has stopped, closing them waits out the servlet's 30 second timeout, and
-	 * graceful shutdown would wait on them as in-flight requests.
+	 * an open SSE response, which Boot's graceful shutdown counts as an active request
+	 * and waits for, up to {@code spring.lifecycle.timeout-per-shutdown-phase} (30
+	 * seconds by default). The servlet API gives the SDK no hook before that wait, so the
+	 * application closes them; the SDK's servlet Javadoc documents this pattern.
 	 */
 	static class AcpServletLifecycle implements SmartLifecycle {
 
@@ -152,8 +156,8 @@ public class AcpAgentHttpAutoConfiguration {
 
 		@Override
 		public int getPhase() {
-			// After the default phase stops nothing else; before graceful shutdown
-			// (DEFAULT_PHASE - 1024) and the web server stop (DEFAULT_PHASE - 2048).
+			// Stops before graceful shutdown (DEFAULT_PHASE - 1024) and the web server
+			// stop (DEFAULT_PHASE - 2048).
 			return SmartLifecycle.DEFAULT_PHASE;
 		}
 

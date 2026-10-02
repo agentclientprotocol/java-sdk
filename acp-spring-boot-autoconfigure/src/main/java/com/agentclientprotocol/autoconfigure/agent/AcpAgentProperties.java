@@ -118,6 +118,12 @@ public class AcpAgentProperties {
 		 */
 		private Integer maxConcurrentStreamsPerConnection;
 
+		/**
+		 * How long closing the endpoint waits for its connections to close gracefully
+		 * before closing the rest at once.
+		 */
+		private Duration shutdownTimeout;
+
 		public int getPort() {
 			return port;
 		}
@@ -188,6 +194,14 @@ public class AcpAgentProperties {
 
 		public void setMaxConcurrentStreamsPerConnection(Integer maxConcurrentStreamsPerConnection) {
 			this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
+		}
+
+		public Duration getShutdownTimeout() {
+			return shutdownTimeout;
+		}
+
+		public void setShutdownTimeout(Duration shutdownTimeout) {
+			this.shutdownTimeout = shutdownTimeout;
 		}
 
 	}

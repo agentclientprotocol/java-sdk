@@ -166,8 +166,18 @@ class AcpAgentHttpAutoConfigurationTests {
 		http.setMaxWebSocketPendingFrames(12);
 		http.setMaxProvisionalSessions(13);
 		http.setMaxConcurrentStreamsPerConnection(14);
+		http.setShutdownTimeout(Duration.ofSeconds(2));
 		assertThat(AcpAgentHttpAutoConfiguration.options(http))
-			.isEqualTo(new StreamableHttpAcpAgentTransportOptions(1024 * 1024, 10, 11, 12, 13, Duration.ZERO, 14));
+			.isEqualTo(StreamableHttpAcpAgentTransportOptions.builder()
+				.maxPostBodyBytes(1024 * 1024)
+				.mailboxCapacity(10)
+				.maxPendingSseEvents(11)
+				.maxWebSocketPendingFrames(12)
+				.maxProvisionalSessions(13)
+				.keepAliveInterval(Duration.ZERO)
+				.maxConcurrentStreamsPerConnection(14)
+				.shutdownTimeout(Duration.ofSeconds(2))
+				.build());
 	}
 
 	static void assertRoundTrip(AcpClientTransport transport) {
