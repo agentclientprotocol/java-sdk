@@ -140,6 +140,16 @@ final class StreamableHttpWebSocketConnection {
 		}, error -> logger.warn("Error closing Streamable ACP WebSocket connection {}", id, error));
 	}
 
+	/**
+	 * Closes the connection and its agent runtime at once, also after a graceful close that
+	 * has not finished: the shutdown timeout has passed.
+	 */
+	void closeNow() {
+		closeGracefully().subscribe(v -> {
+		}, error -> logger.debug("Error closing Streamable ACP WebSocket connection {}", id, error));
+		remoteConnection.close();
+	}
+
 	void close(int statusCode, String reason) {
 		closeGracefully(statusCode, reason).subscribe(v -> {
 		}, error -> logger.warn("Error closing Streamable ACP WebSocket connection {}", id, error));

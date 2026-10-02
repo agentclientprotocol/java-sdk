@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2025 the original author or authors.
+ * Copyright 2025-2026 the original author or authors.
  */
 
 package com.agentclientprotocol.sdk.agent.transport;
@@ -27,11 +27,15 @@ import com.agentclientprotocol.sdk.util.Assert;
  * {@link Duration#ZERO} disables them
  * @param maxConcurrentStreamsPerConnection HTTP/2 streams one client connection may hold open
  * at once; each attached SSE stream holds one for its lifetime
+ * @param shutdownTimeout how long closing the endpoint ({@code closeGracefully()} of the
+ * servlet or the listener, and the servlet's {@code destroy()}) waits for its connections
+ * to close gracefully before it closes the rest at once; positive, default 5 seconds.
+ * Closing never waits for a client: the SSE responses are completed, not drained
  * @author Mark Pollack
  */
 public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int mailboxCapacity,
 		int maxPendingSseEvents, int maxWebSocketPendingFrames, int maxProvisionalSessions,
-		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection) {
+		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection, Duration shutdownTimeout) {
 
 	private static final long DEFAULT_MAX_POST_BODY_BYTES = 16L * 1024 * 1024;
 
@@ -47,6 +51,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 
 	private static final int DEFAULT_MAX_CONCURRENT_STREAMS_PER_CONNECTION = 1024;
 
+	private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(5);
+
 	public StreamableHttpAcpAgentTransportOptions {
 		Assert.isTrue(maxPostBodyBytes > 0, "maxPostBodyBytes must be positive");
 		Assert.isTrue(mailboxCapacity > 0, "mailboxCapacity must be positive");
@@ -56,6 +62,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		Assert.notNull(keepAliveInterval, "keepAliveInterval must not be null");
 		Assert.isTrue(!keepAliveInterval.isNegative(), "keepAliveInterval must not be negative");
 		Assert.isTrue(maxConcurrentStreamsPerConnection > 0, "maxConcurrentStreamsPerConnection must be positive");
+		Assert.notNull(shutdownTimeout, "shutdownTimeout must not be null");
+		Assert.isTrue(!shutdownTimeout.isNegative() && !shutdownTimeout.isZero(), "shutdownTimeout must be positive");
 	}
 
 	public static StreamableHttpAcpAgentTransportOptions defaults() {
@@ -81,6 +89,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		private Duration keepAliveInterval = DEFAULT_KEEP_ALIVE_INTERVAL;
 
 		private int maxConcurrentStreamsPerConnection = DEFAULT_MAX_CONCURRENT_STREAMS_PER_CONNECTION;
+
+		private Duration shutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT;
 
 		private Builder() {
 		}
@@ -120,10 +130,15 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 			return this;
 		}
 
+		public Builder shutdownTimeout(Duration shutdownTimeout) {
+			this.shutdownTimeout = shutdownTimeout;
+			return this;
+		}
+
 		public StreamableHttpAcpAgentTransportOptions build() {
 			return new StreamableHttpAcpAgentTransportOptions(maxPostBodyBytes, mailboxCapacity, maxPendingSseEvents,
 					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval,
-					maxConcurrentStreamsPerConnection);
+					maxConcurrentStreamsPerConnection, shutdownTimeout);
 		}
 
 	}

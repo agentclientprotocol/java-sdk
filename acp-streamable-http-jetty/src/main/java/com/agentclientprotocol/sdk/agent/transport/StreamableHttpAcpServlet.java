@@ -14,6 +14,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -73,6 +74,34 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.
  * container's to configure.
  * </p>
  *
+ * <p>
+ * <b>Shutting down.</b> Closing ({@link #closeGracefully()}, or {@link #destroy()} when
+ * the container takes the servlet out of service) refuses new connections, answers an
+ * {@code initialize} still in flight with 503, cancels in-flight prompts and completes
+ * every open SSE response; it never waits for a client to read or answer anything. It
+ * finishes within the {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout()
+ * shutdown timeout} (5 seconds by default): a connection whose agent has not closed by
+ * then is closed at once.
+ * </p>
+ *
+ * <p>
+ * <b>Close before a graceful container shutdown.</b> Every SSE stream a client holds open
+ * is an in-flight asynchronous request, and a container shutting down gracefully waits
+ * for in-flight requests before it destroys servlets. Spring Boot shuts down gracefully by
+ * default ({@code server.shutdown=graceful}), so with a client connected it waits its
+ * whole {@code spring.lifecycle.timeout-per-shutdown-phase} (30 seconds) before
+ * {@code destroy()} is even called. Call {@link #closeGracefully()} before the server
+ * stops instead, for instance from a {@code SmartLifecycle} in the default phase, which
+ * Spring stops before the web server's graceful shutdown:
+ * </p>
+ *
+ * <pre>{@code
+ * @Override
+ * public void stop() {
+ *     servlet.closeGracefully().block();
+ * }
+ * }</pre>
+ *
  * @author Kaiser Dandangi
  */
 public class StreamableHttpAcpServlet extends HttpServlet {
@@ -92,6 +121,12 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	private final transient StreamableHttpRouting routing;
 
 	private final transient AtomicBoolean closing = new AtomicBoolean(false);
+
+	/**
+	 * Connections whose {@code initialize} is still being answered, each with the action
+	 * that refuses it; they join {@link #connections} once answered.
+	 */
+	private final transient ConcurrentMap<StreamableHttpConnection, Runnable> initializing = new ConcurrentHashMap<>();
 
 	private transient volatile @Nullable Scheduler keepAliveScheduler;
 
@@ -151,28 +186,40 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 			}));
 	}
 
-	/** Closes every connection and stops the keep-alive. Called by the container on shutdown. */
+	/**
+	 * Closes every connection and stops the keep-alive, as {@link #closeGracefully()} does,
+	 * within the shutdown timeout. Called by the container on shutdown.
+	 */
 	@Override
 	public void destroy() {
 		try {
-			closeGracefully().block(INITIALIZE_TIMEOUT);
+			// closeGracefully() is itself bounded by the shutdown timeout; the margin only
+			// guards against a close that does not even get to start.
+			closeGracefully().block(options.shutdownTimeout().plusSeconds(1));
 		}
 		catch (RuntimeException e) {
-			logger.warn("Streamable HTTP servlet did not close within {}: {}", INITIALIZE_TIMEOUT, e.getMessage());
+			logger.warn("Streamable HTTP servlet did not close within {}: {}", options.shutdownTimeout(),
+					e.getMessage());
 		}
 		super.destroy();
 	}
 
 	/**
-	 * Closes every connection this servlet holds, cancelling in-flight prompts, and stops
-	 * the keep-alive. New requests are refused afterwards.
-	 * @return a Mono that completes when every connection has closed
+	 * Closes every connection this servlet holds, cancelling in-flight prompts and
+	 * completing their SSE responses, refuses an {@code initialize} still in flight with
+	 * 503, and stops the keep-alive. New connections are refused afterwards. A connection
+	 * whose agent has not closed within the
+	 * {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown timeout}
+	 * is closed at once. Nothing here waits for a client.
+	 * @return a Mono that completes when every connection has closed, at the latest after
+	 * the shutdown timeout
 	 */
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
 			if (!closing.compareAndSet(false, true)) {
 				return Mono.empty();
 			}
+			List.copyOf(initializing.values()).forEach(Runnable::run);
 			Disposable task = this.keepAliveTask;
 			if (task != null) {
 				task.dispose();
@@ -181,10 +228,18 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 			if (scheduler != null) {
 				scheduler.dispose();
 			}
-			List<Mono<Void>> closures = new ArrayList<>();
-			connections.values().forEach(connection -> closures.add(connection.closeGracefully()));
+			List<StreamableHttpConnection> closingConnections = List.copyOf(connections.values());
 			connections.clear();
-			return Mono.whenDelayError(closures);
+			List<Mono<Void>> closures = new ArrayList<>();
+			closingConnections.forEach(connection -> closures.add(connection.closeGracefully()));
+			Duration timeout = options.shutdownTimeout();
+			return Mono.whenDelayError(closures)
+				.timeout(timeout, AcpSchedulers.timeouts())
+				.onErrorResume(TimeoutException.class, timedOut -> {
+					logger.warn("Streamable HTTP connections did not close within {}; closing them now", timeout);
+					closingConnections.forEach(StreamableHttpConnection::closeNow);
+					return Mono.empty();
+				});
 		});
 	}
 
@@ -402,6 +457,14 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 		});
 
+		initializing.put(connection, () -> completeInitializeFailure(asyncContext, response, connection, completed,
+				HttpServletResponse.SC_SERVICE_UNAVAILABLE, "ACP endpoint is shutting down"));
+		if (closing.get()) {
+			// closeGracefully() ran between the check above and the registration.
+			completeInitializeFailure(asyncContext, response, connection, completed,
+					HttpServletResponse.SC_SERVICE_UNAVAILABLE, "ACP endpoint is shutting down");
+			return;
+		}
 		connection.start()
 			.then(Mono.defer(() -> connection.initialize(initializeRequest)))
 			.timeout(INITIALIZE_TIMEOUT, AcpSchedulers.timeouts())
@@ -418,11 +481,20 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		if (!completed.compareAndSet(false, true)) {
 			return;
 		}
+		initializing.remove(connection);
 		try {
 			if (!(initializeResponse instanceof AcpSchema.JSONRPCResponse)) {
 				throw new AcpConnectionException("initialize did not produce a JSON-RPC response");
 			}
 			connections.put(connection.id(), connection);
+			if (closing.get()) {
+				// Closing began while the agent answered: closeGracefully() may already have
+				// gone through the connections, so this one is refused and closed here.
+				connections.remove(connection.id(), connection);
+				connection.close();
+				writeText(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "ACP endpoint is shutting down");
+				return;
+			}
 			response.setStatus(HttpServletResponse.SC_OK);
 			response.setContentType(CONTENT_TYPE_JSON);
 			response.setHeader(HEADER_CONNECTION_ID, connection.id());
@@ -445,13 +517,20 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	private void completeInitializeFailure(AsyncContext asyncContext, HttpServletResponse response,
 			StreamableHttpConnection connection, AtomicBoolean completed) {
+		completeInitializeFailure(asyncContext, response, connection, completed,
+				HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
+	}
+
+	private void completeInitializeFailure(AsyncContext asyncContext, HttpServletResponse response,
+			StreamableHttpConnection connection, AtomicBoolean completed, int status, String body) {
 		if (!completed.compareAndSet(false, true)) {
 			return;
 		}
+		initializing.remove(connection);
 		connections.remove(connection.id(), connection);
 		connection.close();
 		try {
-			writeText(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "initialize failed");
+			writeText(response, status, body);
 		}
 		catch (IOException writeError) {
 			logger.warn("Failed to write Streamable HTTP initialize failure", writeError);

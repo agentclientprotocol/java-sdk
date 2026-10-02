@@ -55,6 +55,9 @@ public final class RemoteAcpConnection {
 
 	private final AtomicBoolean closing = new AtomicBoolean(false);
 
+	/** Set by {@link #close()}, which may follow a graceful close that has not finished. */
+	private final AtomicBoolean closed = new AtomicBoolean(false);
+
 	/** The connection's agent runtime; null until {@link #start} creates it. */
 	private volatile @Nullable AcpAsyncAgent agent;
 
@@ -156,10 +159,13 @@ public final class RemoteAcpConnection {
 	}
 
 	/**
-	 * Closes the connection and its agent runtime immediately.
+	 * Closes the connection and its agent runtime immediately, also when a graceful close
+	 * has begun but not finished (an agent that does not finish closing gracefully is then
+	 * closed at once). Only the first call has an effect.
 	 */
 	public void close() {
-		if (!closing.compareAndSet(false, true)) {
+		closing.set(true);
+		if (!closed.compareAndSet(false, true)) {
 			return;
 		}
 		AcpAsyncAgent currentAgent = this.agent;
