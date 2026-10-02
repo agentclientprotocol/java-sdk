@@ -36,16 +36,6 @@
       "contains": "no name field",
       "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/SessionUpdate.kt:131",
       "reason": "Kotlin v1 SessionUpdate.ToolCall has no name field, so the client cannot read the tool call name"
-    },
-    {
-      "step": "config.select",
-      "when": {
-        "client": "kotlin",
-        "agent": "java"
-      },
-      "contains": "Config options are not provided by the agent",
-      "see": "P1b",
-      "reason": "the Java agent returns no configOptions on session/new, and Kotlin ClientSession.setConfigOption then throws after the response (acp/src/commonMain/kotlin/com/agentclientprotocol/client/ClientSessionImpl.kt:53)"
     }
   ]
 }
