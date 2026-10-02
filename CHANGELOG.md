@@ -71,9 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   common permission-request case (migration: use it, or add `null` for `_meta`). A test walks a copy of the v1.9.1 schema
   (`acp-core/src/test/resources/schema/v1/schema.json`) and fails on any object with `_meta`
   whose record lacks it. Not covered yet: the elicitation records (with the elicitation work), the
-  presence markers typed `Object` (they keep `_meta` as a map entry), `$/cancel_request`, and
-  grouped select options (`SessionConfigSelectGroup`), which the SDK does not model: a select
-  option list in grouped form still fails to read.
+  presence markers typed `Object` (they keep `_meta` as a map entry) and `$/cancel_request`.
 
 ### Changed
 
@@ -105,6 +103,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDKs drop such a notification; the Kotlin SDK and the v2 schema keep the raw payload, which this
   SDK follows. The rule is documented on `AcpSchema`. Unions with a default variant keep it
   (`McpServer` reads an unknown `type` as stdio).
+- **Breaking: a select config option's `options` is flat or grouped.** The schema's
+  `SessionConfigSelectOptions` is a list of options or a list of groups
+  (`SessionConfigSelectGroup`: `group`, `name`, `options`, `_meta`); a grouped list failed to read.
+  `SessionConfigSelect.options()` now returns `SessionConfigSelectOptions`, either
+  `UngroupedSelectOptions` or `GroupedSelectOptions`, both written as the JSON array they read from;
+  `allOptions()` lists every option across groups, and a list mixing options and groups is rejected.
+  Migration: `select.options()` used as a list becomes `select.options().allOptions()` (or match on
+  the two records); the canonical constructor takes `SessionConfigSelectOptions.ungrouped(list)` or
+  `grouped(groups)`; the `(id, name, currentValue, List<SessionConfigSelectOption>)` constructor is
+  unchanged.
 - **Breaking: unknown enum values no longer fail the message; most schema enums are open value
   types.** A newer peer's stop reason, tool call status, permission option kind, plan entry status
   or priority, or annotation role failed deserialization of the whole message (a prompt's

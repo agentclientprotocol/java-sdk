@@ -1556,7 +1556,7 @@ public final class AcpSchema {
 			@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description, @JsonProperty("category") @Nullable String category,
 			@JsonProperty("currentValue") String currentValue,
-			@JsonProperty("options") List<SessionConfigSelectOption> options,
+			@JsonProperty("options") SessionConfigSelectOptions options,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigOption {
 		public SessionConfigSelect {
 			type = discriminator(type, "select");
@@ -1564,6 +1564,10 @@ public final class AcpSchema {
 
 		public SessionConfigSelect(String id, String name, String currentValue,
 				List<SessionConfigSelectOption> options) {
+			this("select", id, name, null, null, currentValue, SessionConfigSelectOptions.ungrouped(options), null);
+		}
+
+		public SessionConfigSelect(String id, String name, String currentValue, SessionConfigSelectOptions options) {
 			this("select", id, name, null, null, currentValue, options, null);
 		}
 	}
@@ -1589,12 +1593,118 @@ public final class AcpSchema {
 	}
 
 	/**
+	 * The options of a select config option: a flat list ({@link UngroupedSelectOptions})
+	 * or a list of groups ({@link GroupedSelectOptions}), as the schema's
+	 * {@code SessionConfigSelectOptions}. Both are written as a JSON array; a list whose
+	 * items have a {@code group} reads as grouped, any other list as ungrouped.
+	 */
+	public interface SessionConfigSelectOptions {
+
+		/**
+		 * Reads the wire list: groups when its items are groups, options otherwise.
+		 * @param items the list's items
+		 * @return grouped or ungrouped options
+		 * @throws IllegalArgumentException when the list mixes options and groups, which
+		 * the schema does not allow
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		static SessionConfigSelectOptions of(List<SessionConfigSelectItem> items) {
+			long groups = items.stream().filter(SessionConfigSelectGroup.class::isInstance).count();
+			if (groups != 0 && groups != items.size()) {
+				throw new IllegalArgumentException(
+						"A select option list mixes options and groups; it must be one or the other");
+			}
+			return groups == 0 ? ungrouped(items.stream().map(SessionConfigSelectOption.class::cast).toList())
+					: grouped(items.stream().map(SessionConfigSelectGroup.class::cast).toList());
+		}
+
+		/**
+		 * A flat list of options.
+		 * @param options the options
+		 * @return ungrouped options
+		 */
+		static SessionConfigSelectOptions ungrouped(List<SessionConfigSelectOption> options) {
+			return new UngroupedSelectOptions(options);
+		}
+
+		/**
+		 * Options in groups.
+		 * @param groups the groups
+		 * @return grouped options
+		 */
+		static SessionConfigSelectOptions grouped(List<SessionConfigSelectGroup> groups) {
+			return new GroupedSelectOptions(groups);
+		}
+
+		/**
+		 * Every option, in order, across groups when grouped.
+		 * @return the options
+		 */
+		List<SessionConfigSelectOption> allOptions();
+
+	}
+
+	/**
+	 * A flat list of select options.
+	 *
+	 * @param options the options
+	 */
+	public record UngroupedSelectOptions(@JsonValue List<SessionConfigSelectOption> options)
+			implements SessionConfigSelectOptions {
+		@Override
+		public List<SessionConfigSelectOption> allOptions() {
+			return options;
+		}
+	}
+
+	/**
+	 * Select options organised in groups.
+	 *
+	 * @param groups the groups
+	 */
+	public record GroupedSelectOptions(@JsonValue List<SessionConfigSelectGroup> groups)
+			implements SessionConfigSelectOptions {
+		@Override
+		public List<SessionConfigSelectOption> allOptions() {
+			return groups.stream().flatMap(group -> group.options().stream()).toList();
+		}
+	}
+
+	/**
+	 * An item of a select option list on the wire: an option or a group, told apart by
+	 * their fields ({@code value} or {@code group}).
+	 */
+	@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
+	@JsonSubTypes({ @JsonSubTypes.Type(SessionConfigSelectOption.class),
+			@JsonSubTypes.Type(SessionConfigSelectGroup.class) })
+	public interface SessionConfigSelectItem {
+
+	}
+
+	/**
+	 * A named group of select options.
+	 *
+	 * @param group the group's id
+	 * @param name human-readable name of the group
+	 * @param options the options in the group
+	 * @param meta reserved metadata
+	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SessionConfigSelectGroup(@JsonProperty("group") String group, @JsonProperty("name") String name,
+			@JsonProperty("options") List<SessionConfigSelectOption> options,
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigSelectItem {
+		public SessionConfigSelectGroup(String group, String name, List<SessionConfigSelectOption> options) {
+			this(group, name, options, null);
+		}
+	}
+
+	/**
 	 * A selectable option within a select-type config option.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelectOption(@JsonProperty("value") String value,
 			@JsonProperty("name") String name, @JsonProperty("description") @Nullable String description,
-			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigSelectItem {
 		public SessionConfigSelectOption(String value, String name) {
 			this(value, name, null, null);
 		}
