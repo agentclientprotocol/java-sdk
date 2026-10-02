@@ -13,5 +13,7 @@ key="$( { git -C "$sdk" rev-parse HEAD 2>/dev/null || echo "$sdk"; echo "$sdk";
 if [[ -x "$here/build/install/kt-peer/bin/kt-peer" && -f "$stamp" && "$(cat "$stamp")" == "$key" ]]; then
     exit 0
 fi
-"$sdk/gradlew" -p "$here" --quiet --console=plain -PkotlinSdk="$sdk" installDist
+# The SDK's Gradle toolchain is JDK 21: let Gradle also find one that setup-java exported (CI).
+"$sdk/gradlew" -p "$here" --quiet --console=plain -PkotlinSdk="$sdk" \
+    -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_21_ARM64 installDist
 echo "$key" > "$stamp"
