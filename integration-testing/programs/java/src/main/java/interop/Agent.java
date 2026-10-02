@@ -49,7 +49,9 @@ import reactor.core.publisher.Mono;
  * can be loaded on another ({@code http.reconnect}). The prompt timeouts are the SDK's
  * {@link PromptTimeouts}: the cancel grace period is 1 s ({@code cancel.grace}; env
  * {@code INTEROP_CANCEL_GRACE_MS} overrides it, the SDK default is 60 s) and a prompt may run at
- * most 60 s, so a {@code #hang} nobody cancels still ends.
+ * most 8 s ({@code cancel.max-duration}; env {@code INTEROP_MAX_PROMPT_MS}), so a {@code #hang}
+ * nobody cancels is answered -32800 by the SDK. No other directive runs that long against a Java
+ * agent: an uncancelled {@code #slow} (10 s) is only sent by a client that also cancels it.
  * </p>
  *
  * <p>
@@ -68,7 +70,12 @@ public class Agent {
 
 	static final Duration CANCEL_GRACE = Duration.ofMillis(Long.parseLong(env("INTEROP_CANCEL_GRACE_MS", "1000")));
 
-	static final Duration MAX_PROMPT = Duration.ofSeconds(60);
+	static final Duration MAX_PROMPT = Duration.ofMillis(Long.parseLong(env("INTEROP_MAX_PROMPT_MS", "8000")));
+
+	/** The values the v1 schema does not define (fixtures.unknownEnums). */
+	static final String FUTURE_STATUS = "interop_future_status";
+
+	static final List<String> UNKNOWN_AUDIENCE = List.of("user", "interop_future_role");
 
 	static final String FS_READ_CONTENT = "line1\nline2\nline3\n";
 
@@ -160,7 +167,21 @@ public class Agent {
 	}
 
 	static List<AcpSchema.SessionConfigOption> configOptions(SessionState s, AcpSchema.InitializeRequest init) {
-		return configOptions(s.model, booleanOptions(init) ? s.verbose : null);
+		List<AcpSchema.SessionConfigOption> options = configOptions(s.model, booleanOptions(init) ? s.verbose : null);
+		if (s.grouped) {
+			options.add(groupedOption(s.effort));
+		}
+		return options;
+	}
+
+	/** fixtures.groupedConfigOption: the select effort, its options in the groups fast and deep. */
+	static AcpSchema.SessionConfigSelect groupedOption(String effort) {
+		return new AcpSchema.SessionConfigSelect("effort", "Effort", effort, AcpSchema.SessionConfigSelectOptions.grouped(
+				List.of(new AcpSchema.SessionConfigSelectGroup("fast", "Fast",
+						List.of(new AcpSchema.SessionConfigSelectOption("effort-low", "Low"))),
+						new AcpSchema.SessionConfigSelectGroup("deep", "Deep",
+								List.of(new AcpSchema.SessionConfigSelectOption("effort-medium", "Medium"),
+										new AcpSchema.SessionConfigSelectOption("effort-high", "High"))))));
 	}
 
 	/** The state of one session, shared by every connection of this process. */
@@ -180,6 +201,11 @@ public class Agent {
 		volatile String model = "model-a";
 
 		volatile boolean verbose;
+
+		/** Whether #config grouped added fixtures.groupedConfigOption, and its value. */
+		volatile boolean grouped;
+
+		volatile String effort = "effort-low";
 
 		/** The running turn, or null. */
 		final AtomicReference<Turn> turn = new AtomicReference<>();
@@ -313,6 +339,16 @@ public class Agent {
 					s.model = (String) r.value();
 					return Mono.just(new AcpSchema.SetSessionConfigOptionResponse(configOptions(s, init.get())));
 				}
+				if ("effort".equals(r.configId()) && s.grouped && r.value() instanceof String value && groupedOption(s.effort)
+					.options()
+					.allOptions()
+					.stream()
+					.anyMatch(o -> o.value().equals(value))) {
+					long t0 = System.nanoTime();
+					s.effort = value;
+					step("config.grouped", "effort-high".equals(value), t0, "effort set to " + value);
+					return Mono.just(new AcpSchema.SetSessionConfigOptionResponse(configOptions(s, init.get())));
+				}
 				if ("verbose".equals(r.configId()) && "boolean".equals(r.type()) && r.value() instanceof Boolean on
 						&& booleanOptions(init.get())) {
 					s.verbose = on;
@@ -439,6 +475,12 @@ public class Agent {
 			};
 			case "#meta" -> meta(context, request);
 			case "#echo-caps" -> echoCaps(context, init);
+			case "#enum" -> switch (sub) {
+				case "tool_call", "plan", "stop" -> unknownEnum(context, sub);
+				case "audience" -> audience(context, request);
+				default -> unknown(text);
+			};
+			case "#config" -> "grouped".equals(sub) ? configGrouped(s, context, init) : unknown(text);
 			case "#len" -> context.sendMessage("len=" + rest(text, 1).length()).thenReturn(endTurn());
 			case "#big" -> big(context, sub);
 			default -> unknown(text);
@@ -644,6 +686,49 @@ public class Agent {
 			return Mono.error(new AcpProtocolException(-32602, "unknown directive: #emit " + kind));
 		}
 		return Flux.fromIterable(updates).concatMap(u -> context.sendUpdate(sid, u)).then(Mono.just(endTurn()));
+	}
+
+	/**
+	 * {@code #enum tool_call|plan|stop}: values the v1 schema does not define. The tool call's
+	 * kind is a closed Java enum ({@code ToolKind}), so the tool call goes out as an
+	 * {@code UnknownSessionUpdate}, which writes the fields it is given; the plan's and the stop
+	 * reason's are open value types.
+	 */
+	static Mono<AcpSchema.PromptResponse> unknownEnum(PromptContext context, String what) {
+		String sid = context.getSessionId();
+		if (what.equals("stop")) {
+			return context.sendMessage("stop").thenReturn(new AcpSchema.PromptResponse(new AcpSchema.StopReason("interop_future_stop")));
+		}
+		AcpSchema.SessionUpdate update = what.equals("tool_call")
+				? new AcpSchema.UnknownSessionUpdate("tool_call", Map.of("toolCallId", "call-enum", "title", "interop enum tool",
+						"kind", "interop_future_kind", "status", FUTURE_STATUS))
+				: new AcpSchema.Plan("plan", List.of(new AcpSchema.PlanEntry("future entry",
+						new AcpSchema.PlanEntryPriority("interop_future_priority"), new AcpSchema.PlanEntryStatus(FUTURE_STATUS))));
+		return context.sendUpdate(sid, update).then(context.sendMessage("after-enum")).thenReturn(endTurn());
+	}
+
+	/** {@code #enum audience}: the first block's annotations.audience, one Role unknown to v1. */
+	static Mono<AcpSchema.PromptResponse> audience(PromptContext context, AcpSchema.PromptRequest request) {
+		long t0 = System.nanoTime();
+		AcpSchema.ContentBlock first = request.prompt().isEmpty() ? null : request.prompt().get(0);
+		List<String> audience = first instanceof AcpSchema.TextContent t && t.annotations() != null
+				&& t.annotations().audience() != null
+						? t.annotations().audience().stream().map(AcpSchema.Role::value).toList() : null;
+		boolean unknownKept = first instanceof AcpSchema.TextContent t && t.annotations() != null
+				&& t.annotations().audience() != null && t.annotations().audience().size() == 2
+				&& !t.annotations().audience().get(1).isKnown();
+		step("enum.audience", UNKNOWN_AUDIENCE.equals(audience) && unknownKept, t0, "audience " + audience
+				+ (unknownKept ? " (interop_future_role kept, isKnown() false)" : ""));
+		return context.sendMessage("audience: " + (audience == null ? "none" : String.join(",", audience)))
+			.thenReturn(endTurn());
+	}
+
+	/** {@code #config grouped}: adds the grouped select effort and sends the session's complete list. */
+	static Mono<AcpSchema.PromptResponse> configGrouped(SessionState s, PromptContext context,
+			AcpSchema.InitializeRequest init) {
+		s.grouped = true;
+		return context.sendUpdate(s.id, new AcpSchema.ConfigOptionUpdate("config_option_update", configOptions(s, init)))
+			.thenReturn(endTurn());
 	}
 
 	static Mono<AcpSchema.PromptResponse> stop(PromptContext context, String reason) {

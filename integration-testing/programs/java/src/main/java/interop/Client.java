@@ -30,6 +30,7 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransportOptions;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
@@ -216,10 +217,15 @@ public class Client {
 		STEPS.put("stop.max_tokens", () -> stop("max_tokens", AcpSchema.StopReason.MAX_TOKENS));
 		STEPS.put("stop.refusal", () -> stop("refusal", AcpSchema.StopReason.REFUSAL));
 		STEPS.put("stop.max_turn_requests", () -> stop("max_turn_requests", AcpSchema.StopReason.MAX_TURN_REQUESTS));
+		STEPS.put("enum.tool_call", Client::enumToolCall);
+		STEPS.put("enum.plan", Client::enumPlan);
+		STEPS.put("enum.stop", Client::enumStop);
+		STEPS.put("enum.audience", Client::enumAudience);
 		STEPS.put("mode.set", Client::modeSet);
 		STEPS.put("config.on-new", Client::configOnNew);
 		STEPS.put("config.select", Client::configSelect);
 		STEPS.put("config.boolean", Client::configBoolean);
+		STEPS.put("config.grouped", Client::configGrouped);
 		STEPS.put("perm.selected", Client::permSelected);
 		STEPS.put("perm.cancelled", Client::permCancelled);
 		STEPS.put("fs.write", Client::fsWrite);
@@ -235,6 +241,7 @@ public class Client {
 		STEPS.put("cancel.prompt", Client::cancelPrompt);
 		STEPS.put("cancel.prompt-while-cancelling", Client::cancelWhileCancelling);
 		STEPS.put("cancel.grace", Client::cancelGrace);
+		STEPS.put("cancel.max-duration", Client::cancelMaxDuration);
 		STEPS.put("cancel-request.client", Client::cancelRequestClient);
 		STEPS.put("cancel-request.agent", Client::cancelRequestAgent);
 		STEPS.put("cancel-request.unknown", Client::cancelRequestUnknown);
@@ -615,6 +622,74 @@ public class Client {
 		return "stopReason " + reason;
 	}
 
+	// ---------------------------------------------------------------- unknown enum values
+
+	/** {@code #enum tool_call}: the unknown status is kept as an open value; the unknown kind reads OTHER. */
+	static String enumToolCall() {
+		Conn c = main();
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "#enum tool_call");
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
+		await(() -> c.chunks(sid).contains("after-enum"), () -> "no chunk \"after-enum\" in " + c.chunks(sid));
+		AcpSchema.ToolCall call = c.updates(sid)
+			.stream()
+			.filter(u -> u instanceof AcpSchema.ToolCall t && "call-enum".equals(t.toolCallId()))
+			.map(AcpSchema.ToolCall.class::cast)
+			.findFirst()
+			.orElseThrow(() -> new StepFailure("no tool_call call-enum; updates " + kinds(c.updates(sid))));
+		check(call.status() != null && !call.status().isKnown() && "interop_future_status".equals(call.status().value()),
+				"status " + call.status());
+		check(call.kind() == AcpSchema.ToolKind.OTHER, "kind " + call.kind());
+		return "tool_call status interop_future_status (isKnown false), kind OTHER; after-enum; end_turn";
+	}
+
+	static String enumPlan() {
+		Conn c = main();
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "#enum plan");
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
+		await(() -> c.chunks(sid).contains("after-enum"), () -> "no chunk \"after-enum\" in " + c.chunks(sid));
+		AcpSchema.Plan plan = c.updates(sid)
+			.stream()
+			.filter(AcpSchema.Plan.class::isInstance)
+			.map(AcpSchema.Plan.class::cast)
+			.findFirst()
+			.orElseThrow(() -> new StepFailure("no plan; updates " + kinds(c.updates(sid))));
+		check(plan.entries() != null && plan.entries().size() == 1, "entries " + plan.entries());
+		AcpSchema.PlanEntry e = plan.entries().get(0);
+		check("future entry".equals(e.content()), "entry " + e);
+		check(e.priority() != null && !e.priority().isKnown() && "interop_future_priority".equals(e.priority().value()),
+				"priority " + e.priority());
+		check(e.status() != null && !e.status().isKnown() && "interop_future_status".equals(e.status().value()),
+				"status " + e.status());
+		return "plan entry priority interop_future_priority, status interop_future_status (isKnown false); end_turn";
+	}
+
+	static String enumStop() {
+		Conn c = main();
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "#enum stop");
+		check(r.stopReason() != null && !r.stopReason().isKnown() && "interop_future_stop".equals(r.stopReason().value()),
+				"stopReason " + r.stopReason());
+		AcpSchema.PromptResponse after = c.prompt(sid, "after enum");
+		check(AcpSchema.StopReason.END_TURN.equals(after.stopReason()), "\"after enum\" answered " + after.stopReason());
+		return "stopReason interop_future_stop (isKnown false); \"after enum\" end_turn";
+	}
+
+	/** {@code #enum audience}: the client sends a Role v1 does not define, as an open value. */
+	static String enumAudience() {
+		Conn c = main();
+		String sid = c.newSession();
+		AcpSchema.TextContent block = new AcpSchema.TextContent("text", "#enum audience",
+				new AcpSchema.Annotations(List.of(AcpSchema.Role.USER, new AcpSchema.Role("interop_future_role")), null, null),
+				null);
+		AcpSchema.PromptResponse r = block(c.client.prompt(new AcpSchema.PromptRequest(sid, List.of(block))));
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
+		await(() -> c.chunks(sid).contains("audience: user,interop_future_role"),
+				() -> "chunks " + quoteAll(c.chunks(sid)));
+		return "audience: user,interop_future_role; end_turn";
+	}
+
 	// ---------------------------------------------------------------- modes and config
 
 	static String modeSet() {
@@ -641,6 +716,43 @@ public class Client {
 				AcpSchema.SetSessionConfigOptionRequest.select(sid, "model", "model-b")));
 		check(r != null && "model-b".equals(selectValue(r.configOptions(), "model")), "configOptions " + (r == null ? null : r.configOptions()));
 		return "model at model-b in the full list of " + r.configOptions().size();
+	}
+
+	/** {@code #config grouped}: a select whose options come in groups; read them all, set one. */
+	static String configGrouped() {
+		Conn c = main();
+		String sid = c.newSession();
+		AcpSchema.PromptResponse r = c.prompt(sid, "#config grouped");
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
+		await(() -> c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.ConfigOptionUpdate),
+				() -> "no config_option_update; updates " + kinds(c.updates(sid)));
+		AcpSchema.ConfigOptionUpdate update = c.updates(sid)
+			.stream()
+			.filter(AcpSchema.ConfigOptionUpdate.class::isInstance)
+			.map(AcpSchema.ConfigOptionUpdate.class::cast)
+			.findFirst()
+			.orElseThrow();
+		AcpSchema.SessionConfigSelect effort = select(update.configOptions(), "effort");
+		check(effort != null, "no select effort in " + update.configOptions());
+		check(effort.options() instanceof AcpSchema.GroupedSelectOptions g
+				&& g.groups().stream().map(AcpSchema.SessionConfigSelectGroup::group).toList().equals(List.of("fast", "deep")),
+				"effort options " + effort.options());
+		List<String> values = effort.options().allOptions().stream().map(AcpSchema.SessionConfigSelectOption::value).toList();
+		check(values.equals(List.of("effort-low", "effort-medium", "effort-high")), "effort values " + values);
+		AcpSchema.SetSessionConfigOptionResponse set = block(c.client.setSessionConfigOption(
+				AcpSchema.SetSessionConfigOptionRequest.select(sid, "effort", "effort-high")));
+		check(set != null && "effort-high".equals(selectValue(set.configOptions(), "effort"))
+				&& "model-a".equals(selectValue(set.configOptions(), "model")),
+				"configOptions " + (set == null ? null : set.configOptions()));
+		return "effort grouped fast/deep, values " + values + "; set to effort-high";
+	}
+
+	static AcpSchema.SessionConfigSelect select(List<AcpSchema.SessionConfigOption> options, String id) {
+		return options == null ? null : options.stream()
+			.filter(o -> o instanceof AcpSchema.SessionConfigSelect s && id.equals(s.id()))
+			.map(AcpSchema.SessionConfigSelect.class::cast)
+			.findFirst()
+			.orElse(null);
 	}
 
 	static String configBoolean() {
@@ -808,6 +920,31 @@ public class Client {
 		long ms = (System.nanoTime() - t0) / 1_000_000;
 		check(AcpSchema.StopReason.CANCELLED.equals(r.stopReason()), "stopReason " + r.stopReason());
 		return "the SDK answered cancelled " + ms + " ms after the cancel";
+	}
+
+	/** {@code #hang}, never cancelled: the Java agent's SDK answers -32800 at its maxPromptDuration (8 s). */
+	static String cancelMaxDuration() {
+		Conn c = main();
+		String sid = c.newSession();
+		long t0 = System.nanoTime();
+		CompletableFuture<AcpSchema.PromptResponse> hang = c.promptAsync(sid, "#hang");
+		AcpSchema.PromptResponse r;
+		try {
+			r = get(hang, Duration.ofSeconds(11), "no answer within 11 s");
+		}
+		catch (StepFailure e) {
+			throw e;
+		}
+		catch (RuntimeException e) {
+			long ms = (System.nanoTime() - t0) / 1_000_000;
+			check(codeOf(e) == -32800, "the prompt failed with " + describe(e) + ", expected -32800");
+			check(ms >= 7_000, "-32800 after " + ms + " ms, before the 8 s maxPromptDuration");
+			AcpSchema.PromptResponse after = c.prompt(sid, "after max-duration");
+			check(AcpSchema.StopReason.END_TURN.equals(after.stopReason()),
+					"\"after max-duration\" answered " + after.stopReason());
+			return "-32800 after " + ms + " ms; \"after max-duration\" end_turn";
+		}
+		throw new StepFailure("the prompt answered " + r.stopReason() + ", expected error -32800");
 	}
 
 	/**
@@ -1162,7 +1299,10 @@ public class Client {
 
 		Conn() {
 			AcpClientTransport t = switch (transport) {
-				case "http" -> new StreamableHttpAcpClientTransport(URI.create(url), JSON);
+				// One session SSE stream per session, and the catalogue opens more than the
+				// default 64 sessions on the main connection without closing them.
+				case "http" -> new StreamableHttpAcpClientTransport(URI.create(url), JSON,
+						StreamableHttpAcpClientTransportOptions.builder().maxSseStreams(256).build());
 				case "ws" -> new WebSocketAcpClientTransport(URI.create(url), JSON);
 				default -> {
 					StdioAcpClientTransport stdio = new StdioAcpClientTransport(
