@@ -352,10 +352,6 @@ async def abandon(c: Conn, sid: str, turn: asyncio.Future) -> None:
     turn.cancel()
 
 
-def code_of(e: BaseException) -> str:
-    return str(getattr(e, "code", type(e).__name__))
-
-
 # ---------------------------------------------------------------- steps
 
 

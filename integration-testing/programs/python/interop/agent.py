@@ -26,6 +26,7 @@ import uuid
 from typing import Any
 
 from acp import RequestError, run_agent
+from acp.schema import ElicitationFormSessionMode, ElicitationUrlSessionMode
 from fixtures import (
     AGENT_CAPABILITIES,
     AGENT_INFO,
@@ -51,8 +52,6 @@ from fixtures import (
     log,
     step_line,
 )
-
-from acp.schema import ElicitationFormSessionMode, ElicitationUrlSessionMode
 
 
 def agent_step(step_id: str, ok: bool, started: float, detail: str) -> None:
