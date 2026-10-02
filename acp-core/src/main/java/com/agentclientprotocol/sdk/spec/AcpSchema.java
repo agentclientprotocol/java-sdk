@@ -1517,7 +1517,15 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Client capabilities
+	 * Client capabilities. Build them with {@link #builder()}, which reaches every field;
+	 * the no-argument constructor is the builder's starting point (no file system access,
+	 * no terminal).
+	 *
+	 * <pre>{@code
+	 * ClientCapabilities caps = ClientCapabilities.builder()
+	 *     .session(ClientSessionCapabilities.withBooleanConfigOptions())
+	 *     .build();
+	 * }</pre>
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") @Nullable FileSystemCapability fs,
@@ -1532,6 +1540,106 @@ public final class AcpSchema {
 
 		public ClientCapabilities(@Nullable FileSystemCapability fs, @Nullable Boolean terminal) {
 			this(fs, terminal, null, null, null, null);
+		}
+
+		/**
+		 * A builder starting from {@code new ClientCapabilities()}: no file system access,
+		 * no terminal, and no session, auth, elicitation or {@code _meta}.
+		 * @return a new builder
+		 */
+		public static Builder builder() {
+			return new Builder();
+		}
+
+		/**
+		 * Builds {@link ClientCapabilities}.
+		 */
+		public static final class Builder {
+
+			private @Nullable FileSystemCapability fs = new FileSystemCapability();
+
+			private @Nullable Boolean terminal = false;
+
+			private @Nullable ClientSessionCapabilities session;
+
+			private @Nullable AuthCapabilities auth;
+
+			private @Nullable ElicitationCapabilities elicitation;
+
+			private @Nullable Map<String, Object> meta;
+
+			private Builder() {
+			}
+
+			/**
+			 * Sets {@code fs}.
+			 * @param fs the {@code fs/*} methods the client serves
+			 * @return this builder
+			 */
+			public Builder fs(@Nullable FileSystemCapability fs) {
+				this.fs = fs;
+				return this;
+			}
+
+			/**
+			 * Sets {@code terminal}.
+			 * @param terminal whether the client serves the {@code terminal/*} methods
+			 * @return this builder
+			 */
+			public Builder terminal(@Nullable Boolean terminal) {
+				this.terminal = terminal;
+				return this;
+			}
+
+			/**
+			 * Sets {@code session}.
+			 * @param session session capabilities, such as boolean config options
+			 * @return this builder
+			 */
+			public Builder session(@Nullable ClientSessionCapabilities session) {
+				this.session = session;
+				return this;
+			}
+
+			/**
+			 * Sets {@code auth}.
+			 * @param auth authentication capabilities, such as terminal auth
+			 * @return this builder
+			 */
+			public Builder auth(@Nullable AuthCapabilities auth) {
+				this.auth = auth;
+				return this;
+			}
+
+			/**
+			 * Sets {@code elicitation}.
+			 * @param elicitation the elicitation modes the client supports
+			 * @return this builder
+			 */
+			public Builder elicitation(@Nullable ElicitationCapabilities elicitation) {
+				this.elicitation = elicitation;
+				return this;
+			}
+
+			/**
+			 * Sets {@code meta}.
+			 * @param meta optional {@code _meta}
+			 * @return this builder
+			 */
+			public Builder meta(@Nullable Map<String, Object> meta) {
+				this.meta = meta;
+				return this;
+			}
+
+			/**
+			 * Builds the capabilities.
+			 * @return the capabilities
+			 */
+			public ClientCapabilities build() {
+				return new ClientCapabilities(this.fs, this.terminal, this.session, this.auth, this.elicitation,
+						this.meta);
+			}
+
 		}
 	}
 
@@ -1548,6 +1656,14 @@ public final class AcpSchema {
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		public ClientSessionCapabilities(@Nullable SessionConfigOptionsCapabilities configOptions) {
 			this(configOptions, null);
+		}
+
+		/**
+		 * The session capabilities of a client that supports {@code boolean} config options.
+		 * @return {@code {"configOptions": {"boolean": {}}}}
+		 */
+		public static ClientSessionCapabilities withBooleanConfigOptions() {
+			return new ClientSessionCapabilities(SessionConfigOptionsCapabilities.withBoolean());
 		}
 	}
 
@@ -1604,7 +1720,15 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Agent capabilities
+	 * Agent capabilities. Build them with {@link #builder()}, which reaches every field;
+	 * the no-argument constructor is the builder's starting point.
+	 *
+	 * <pre>{@code
+	 * AgentCapabilities caps = AgentCapabilities.builder()
+	 *     .loadSession(true)
+	 *     .auth(AgentAuthCapabilities.withLogout())
+	 *     .build();
+	 * }</pre>
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentCapabilities(@JsonProperty("loadSession") @Nullable Boolean loadSession,
@@ -1626,6 +1750,120 @@ public final class AcpSchema {
 		public AgentCapabilities(@Nullable Boolean loadSession, @Nullable SessionCapabilities sessionCapabilities,
 				@Nullable McpCapabilities mcpCapabilities, @Nullable PromptCapabilities promptCapabilities, @Nullable Map<String, Object> meta) {
 			this(loadSession, sessionCapabilities, mcpCapabilities, promptCapabilities, null, null, meta);
+		}
+
+		/**
+		 * A builder starting from {@code new AgentCapabilities()}: no {@code session/load},
+		 * default MCP and prompt capabilities, and no session, auth or provider capabilities
+		 * or {@code _meta}.
+		 * @return a new builder
+		 */
+		public static Builder builder() {
+			return new Builder();
+		}
+
+		/**
+		 * Builds {@link AgentCapabilities}.
+		 */
+		public static final class Builder {
+
+			private @Nullable Boolean loadSession = false;
+
+			private @Nullable SessionCapabilities sessionCapabilities;
+
+			private @Nullable McpCapabilities mcpCapabilities = new McpCapabilities();
+
+			private @Nullable PromptCapabilities promptCapabilities = new PromptCapabilities();
+
+			private @Nullable AgentAuthCapabilities auth;
+
+			private @Nullable ProvidersCapabilities providers;
+
+			private @Nullable Map<String, Object> meta;
+
+			private Builder() {
+			}
+
+			/**
+			 * Sets {@code loadSession}.
+			 * @param loadSession whether the agent supports {@code session/load}
+			 * @return this builder
+			 */
+			public Builder loadSession(@Nullable Boolean loadSession) {
+				this.loadSession = loadSession;
+				return this;
+			}
+
+			/**
+			 * Sets {@code sessionCapabilities}.
+			 * @param sessionCapabilities the optional session methods the agent supports
+			 * @return this builder
+			 */
+			public Builder sessionCapabilities(@Nullable SessionCapabilities sessionCapabilities) {
+				this.sessionCapabilities = sessionCapabilities;
+				return this;
+			}
+
+			/**
+			 * Sets {@code mcpCapabilities}.
+			 * @param mcpCapabilities the MCP transports the agent supports
+			 * @return this builder
+			 */
+			public Builder mcpCapabilities(@Nullable McpCapabilities mcpCapabilities) {
+				this.mcpCapabilities = mcpCapabilities;
+				return this;
+			}
+
+			/**
+			 * Sets {@code promptCapabilities}.
+			 * @param promptCapabilities the prompt content the agent accepts
+			 * @return this builder
+			 */
+			public Builder promptCapabilities(@Nullable PromptCapabilities promptCapabilities) {
+				this.promptCapabilities = promptCapabilities;
+				return this;
+			}
+
+			/**
+			 * Sets {@code auth}.
+			 * @param auth authentication capabilities, such as logout
+			 * @return this builder
+			 */
+			public Builder auth(@Nullable AgentAuthCapabilities auth) {
+				this.auth = auth;
+				return this;
+			}
+
+			/**
+			 * Sets {@code providers}.
+			 * @param providers provider capabilities (unstable)
+			 * @return this builder
+			 */
+			@UnstableAcpApi
+			public Builder providers(@Nullable ProvidersCapabilities providers) {
+				this.providers = providers;
+				return this;
+			}
+
+			/**
+			 * Sets {@code meta}.
+			 * @param meta optional {@code _meta}
+			 * @return this builder
+			 */
+			public Builder meta(@Nullable Map<String, Object> meta) {
+				this.meta = meta;
+				return this;
+			}
+
+			/**
+			 * Builds the capabilities.
+			 * @return the capabilities
+			 */
+			public AgentCapabilities build() {
+				return new AgentCapabilities(this.loadSession, this.sessionCapabilities, this.mcpCapabilities,
+						this.promptCapabilities, this.auth, this.providers, this.meta);
+			}
+
 		}
 	}
 
