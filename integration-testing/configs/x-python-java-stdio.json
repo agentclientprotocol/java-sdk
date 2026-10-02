@@ -46,10 +46,31 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 70",
-      "client RESULT fail == 3"
+      "client RESULT pass == 67",
+      "client RESULT fail == 6"
     ],
     "expectedFailures": [
+      {
+        "process": "client",
+        "step": "enum.tool_call",
+        "contains": "status None",
+        "reason": "ToolCall's kind and status are closed Literals whose wrap validator (use_default_on_error) replaces an unknown value with None: the tool call surfaces with the raw status interop_future_status (and kind) dropped, so the value is lost rather than kept open",
+        "see": "peer:python-sdk schema.py:4983 [expectations/python.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.plan",
+        "contains": "entries []",
+        "reason": "PlanEntry.priority and status are closed Literals (schema.py:3542, :3547) and Plan.entries skips invalid items: the entry with interop_future_priority/interop_future_status is silently dropped and the plan surfaces empty",
+        "see": "peer:python-sdk schema.py:3578 [expectations/python.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.stop",
+        "contains": "ValidationError",
+        "reason": "PromptResponse.stopReason is a closed Literal with no lenient validator: a response with stopReason interop_future_stop fails the prompt call with a pydantic ValidationError (the connection survives)",
+        "see": "peer:python-sdk schema.py:3414 [expectations/python.json]"
+      },
       {
         "process": "client",
         "step": "cancel-request.client",

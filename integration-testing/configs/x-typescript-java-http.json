@@ -73,10 +73,25 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 73",
-      "client RESULT fail == 0"
+      "client RESULT pass == 71",
+      "client RESULT fail == 2"
     ],
-    "expectedFailures": [],
+    "expectedFailures": [
+      {
+        "process": "client",
+        "step": "enum.tool_call",
+        "contains": "status undefined",
+        "reason": "zToolCall reads status (and kind, :2359) with defaultOnError over the closed zToolCallStatus union (:117), so an unknown status becomes undefined: the turn goes on but the raw value interop_future_status is lost",
+        "see": "peer:typescript-sdk src/schema/zod.gen.ts:2360 [expectations/typescript.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.plan",
+        "contains": "entries []",
+        "reason": "zPlan reads entries with vecSkipError, and zPlanEntry's priority and status are closed unions (:2408-2409, :2381, :2393), so the entry with unknown values is dropped: the plan arrives empty",
+        "see": "peer:typescript-sdk src/schema/zod.gen.ts:2426 [expectations/typescript.json]"
+      }
+    ],
     "report": {
       "client": [
         "TIMEOUT"
