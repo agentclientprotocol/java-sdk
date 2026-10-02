@@ -3,7 +3,8 @@ name: Java interop cells
 # The generated Java client <-> Java agent cells of integration-testing/ over stdio, Streamable
 # HTTP and WebSocket, on every push to main and every pull request. They need only the JDK, so
 # they are cheap; the per-peer cells run nightly in cross-sdk.yml. Also checks that the generated
-# configs match steps.json, matrix.json and expectations/.
+# configs (GenConfigs.java and programs/raw/gen_conf.py) match steps.json, matrix.json, raw.py and
+# expectations/.
 on:
   push:
     branches: [main]
@@ -49,7 +50,9 @@ jobs:
 
       - name: Check the generated configs are up to date
         working-directory: integration-testing
-        run: jbang GenConfigs.java --check
+        run: |
+          jbang GenConfigs.java --check
+          python3 programs/raw/gen_conf.py --check
 
       - name: Run the Java <-> Java cells
         env:

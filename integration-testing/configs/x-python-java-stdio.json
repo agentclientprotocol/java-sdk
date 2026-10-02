@@ -1,19 +1,23 @@
 {
-  "name": "x-java-java-stdio",
-  "description": "java client -> java agent over stdio, stable profile, 67 steps (generated)",
+  "name": "x-python-java-stdio",
+  "description": "python client -> java agent over stdio, stable profile, 67 steps (generated)",
   "timeoutSec": 575,
-  "peers": [],
+  "peers": [
+    "python-sdk"
+  ],
   "processes": [
     {
       "name": "client",
-      "language": "java",
+      "language": "python",
       "role": "client",
-      "dir": "${ROOT}/programs/java",
-      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
-      "run": "${ROOT}/programs/java/launch/client.sh --transport stdio",
+      "dir": "${ROOT}/programs/python",
+      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" PY_SDK=\"${peer.python-sdk}\" PYTHONUNBUFFERED=\"1\" ${ROOT}/programs/python/launch/build.sh && IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
+      "run": "${ROOT}/programs/python/launch/client.sh --transport stdio",
       "env": {
         "STEPS": "init.initialize,init.agent-capabilities,init.client-capabilities,init.auth-methods,init.agent-info,init.config-boolean,auth.authenticate,auth.logout,auth.logout-capability,auth.terminal,session.new,session.load,session.load-replay,session.resume,session.list,session.close,session.delete,session.multi,update.agent_message_chunk,update.user_message_chunk,update.agent_thought_chunk,update.tool_call,update.tool_call_update,update.tool_call-name,update.plan,update.available_commands_update,update.current_mode_update,update.config_option_update,update.session_info_update,update.usage_update,update.unknown,stop.max_tokens,stop.refusal,stop.max_turn_requests,mode.set,config.on-new,config.select,config.boolean,perm.selected,perm.cancelled,fs.write,fs.read,fs.read-range,fs.read-missing,term.run,term.kill,elicit.form,elicit.complete,cancel.prompt,cancel.prompt-while-cancelling,cancel.grace,cancel-request.client,cancel-request.agent,cancel-request.unknown,ext.agent-request,ext.agent-notification,ext.client-request,ext.client-notification,meta.prompt,meta.permission,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,stdio.eof-exit,conn.close",
-        "AGENT_CMD": "${ROOT}/programs/java/launch/agent.sh --transport stdio"
+        "AGENT_CMD": "${ROOT}/programs/java/launch/agent.sh --transport stdio",
+        "PY_SDK": "${peer.python-sdk}",
+        "PYTHONUNBUFFERED": "1"
       },
       "timeoutSec": 455
     }
@@ -46,15 +50,15 @@
       {
         "process": "client",
         "step": "cancel-request.client",
-        "contains": "P2:",
-        "reason": "The Java client has no $/cancel_request send",
-        "see": "P2 [expectations/java.json]"
+        "contains": "no $/cancel_request API",
+        "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it",
+        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
       },
       {
         "process": "client",
         "step": "cancel-request.agent",
-        "contains": "P2:",
-        "reason": "The Java client does not honour $/cancel_request from the agent; its fs read is never cancelled",
+        "contains": "",
+        "reason": "The Java agent cannot send $/cancel_request; it answers #fs read-slow with the chunk \"cancel-request unsupported (P2)\"",
         "see": "P2 [expectations/java.json]"
       },
       {
@@ -67,9 +71,9 @@
       {
         "process": "client",
         "step": "cancel-request.unknown",
-        "contains": "P2:",
-        "reason": "The Java client has no $/cancel_request send",
-        "see": "P2 [expectations/java.json]"
+        "contains": "no $/cancel_request API",
+        "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it",
+        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
       },
       {
         "process": "client",
@@ -95,15 +99,15 @@
       {
         "process": "client",
         "step": "ext.client-request",
-        "contains": "P9:",
-        "reason": "AcpAsyncClient has no generic request send",
+        "contains": "",
+        "reason": "The Java agent cannot register an extension request handler; it answers -32601",
         "see": "P9 [expectations/java.json]"
       },
       {
         "process": "client",
         "step": "ext.client-notification",
-        "contains": "P9:",
-        "reason": "AcpAsyncClient has no generic notification send",
+        "contains": "",
+        "reason": "The Java agent cannot register an extension notification handler, so #ext last-notification answers \"ext last: none\"",
         "see": "P9 [expectations/java.json]"
       }
     ],
