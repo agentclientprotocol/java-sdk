@@ -409,6 +409,9 @@ Found by measuring coverage with JaCoCo; each has a test.
 
 ### Build
 
+- **The JaCoCo coverage gate skips with the tests** (`-DskipTests`). It read whatever execution data
+  an earlier run had left in `target/`, so `./mvnw -DskipTests install` after a `-Dtest` run (a
+  partial `jacoco.exec`) failed the gate; this broke the cross-SDK suite's SDK install.
 - Model checking with Lincheck (`org.jetbrains.lincheck:lincheck` 3.7, test scope) for the SDK's
   concurrent state: the single-turn prompt rule and its release before the response is published
   (#14), the requests waiting for a response, emission on a transport's outbound sink, the

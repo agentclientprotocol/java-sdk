@@ -107,6 +107,8 @@
         <!-- Error Prone and NullAway (errorprone profile, JDK 21+ only) -->
         <errorprone.version>2.50.0</errorprone.version>
         <nullaway.version>0.13.8</nullaway.version>
+        <!-- Surefire's own default, declared so the coverage gate can skip with the tests. -->
+        <skipTests>false</skipTests>
     </properties>
 
     <dependencyManagement>
@@ -500,6 +502,10 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
+                            <!-- No gate without tests: with -DskipTests the check would read
+                                 whatever execution data an earlier run left in target (a
+                                 -Dtest run's partial coverage, for one) and fail the build. -->
+                            <skip>${skipTests}</skip>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
