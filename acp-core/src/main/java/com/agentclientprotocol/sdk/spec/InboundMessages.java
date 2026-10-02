@@ -10,8 +10,10 @@ import java.util.concurrent.CancellationException;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.util.HandlerFailures;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
 
@@ -20,6 +22,8 @@ import reactor.core.publisher.Mono;
  * both session sides.
  */
 final class InboundMessages {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(InboundMessages.class);
 
 	private InboundMessages() {
 	}
@@ -48,10 +52,18 @@ final class InboundMessages {
 			return Mono.empty();
 		}
 		// A notification has no answer to carry a failure: it is logged (method and error
-		// only) and the session reads on. A failure must not end the inbound stream.
-		return Mono.defer(() -> handle.apply(handler, paramsOrEmpty(notification.params())))
+		// only) and the session reads on. A failure must not end the inbound stream. An Error
+		// (HandlerFailures) is logged at ERROR with its stack trace.
+		return HandlerFailures.invoke(() -> handle.apply(handler, paramsOrEmpty(notification.params())))
 			.onErrorResume(error -> {
-				logger.warn("Notification {} failed and was skipped: {}", notification.method(), error.toString());
+				Throwable failure = HandlerFailures.contain(error);
+				if (failure instanceof HandlerFailures.HandlerError) {
+					LOGGER.error("Notification {} handler failed with an error and was skipped",
+							notification.method(), failure.getCause());
+				}
+				else {
+					logger.warn("Notification {} failed and was skipped: {}", notification.method(), error.toString());
+				}
 				return Mono.empty();
 			});
 	}
@@ -76,9 +88,20 @@ final class InboundMessages {
 	 * The response to a request whose handling failed: an {@link AcpProtocolException} keeps
 	 * its code and data, a cancellation ({@link #isCancellation}) is the handler cancelling
 	 * its own work (ACP v1 internal cancellation: the same {@code -32800} as a cancel from the
-	 * caller), anything else is an internal error.
+	 * caller), anything else is an internal error. A handler that failed with an
+	 * {@link Error} ({@link HandlerFailures}) is answered with an internal error that names
+	 * the method and the error's type only, never its message or stack trace, and the error
+	 * is logged at ERROR with its stack trace.
 	 */
 	static AcpSchema.JSONRPCResponse error(AcpSchema.JSONRPCRequest request, Throwable error) {
+		if (HandlerFailures.contain(error) instanceof HandlerFailures.HandlerError handlerError) {
+			Throwable cause = (handlerError.getCause() != null) ? handlerError.getCause() : handlerError;
+			LOGGER.error("The {} handler failed with {}; answered {} (Internal error)", request.method(),
+					cause.getClass().getName(), AcpErrorCodes.INTERNAL_ERROR, cause);
+			return error(request, AcpErrorCodes.INTERNAL_ERROR,
+					"Internal error in the " + request.method() + " handler (" + cause.getClass().getName() + ")",
+					null);
+		}
 		if (error instanceof AcpProtocolException protocolException) {
 			return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
 					AcpSchema.JSONRPCError.from(protocolException));

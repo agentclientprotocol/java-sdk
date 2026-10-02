@@ -16,6 +16,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.HandlerFailures;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -1169,7 +1170,7 @@ public interface AcpAgent {
 		 * @return This builder for chaining
 		 */
 		public SyncAgentBuilder cancelHandler(SyncCancelHandler handler) {
-			asyncBuilder.cancelHandler(notification -> Mono.<Void>fromRunnable(() -> handler.handle(notification))
+			asyncBuilder.cancelHandler(notification -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(notification)))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER));
 			return this;
 		}
@@ -1220,7 +1221,7 @@ public interface AcpAgent {
 				SyncExtNotificationHandler<T> handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.extNotificationHandler(method, paramsType,
-					params -> Mono.<Void>fromRunnable(() -> handler.handle(params)).subscribeOn(SYNC_HANDLER_SCHEDULER));
+					params -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(params))).subscribeOn(SYNC_HANDLER_SCHEDULER));
 			return this;
 		}
 
@@ -1250,7 +1251,7 @@ public interface AcpAgent {
 		 * transport.
 		 */
 		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
-			return Mono.fromCallable(handler).subscribeOn(SYNC_HANDLER_SCHEDULER);
+			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 	}

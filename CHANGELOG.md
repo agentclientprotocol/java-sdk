@@ -392,6 +392,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A handler that threw an `Error` left the peer waiting.** Reactor rethrows what it treats as
+  JVM-fatal (`LinkageError`, `VirtualMachineError`) instead of signalling it, so a handler that
+  threw, say, the `NoSuchMethodError` of code compiled against 0.18.0 calling a removed constructor
+  unwound the handler thread, its request was never answered, and the peer waited out its request
+  timeout. Now any `Throwable` escaping a request handler, sync or async, on the agent and the
+  client, annotation-based handlers included, is answered with `-32603` (Internal error), message
+  `Internal error in the <method> handler (<error type>)` with no stack trace, error message or
+  payload; it is logged at ERROR (`InboundMessages`) with the throwable, and the connection keeps
+  serving. A notification handler's `Error` is logged at ERROR and skipped. A
+  `VirtualMachineError` (`OutOfMemoryError`, `StackOverflowError`) is not hidden: it is answered
+  the same way as far as the JVM still can, and also handed to the uncaught-exception handler of
+  the thread that ran the handler, where it would have gone had it escaped (JVM options such as
+  `-XX:+ExitOnOutOfMemoryError` act when it is thrown and are unaffected). Not reachable: an async
+  handler's `Mono` that throws a JVM-fatal error inside its own operators after the handler
+  returned, which Reactor rethrows on the emitting thread. `HandlerFailures` (`util`) holds the
+  guard.
+
 - **`AcpAgentSupport.Builder` could not be built twice.** `build()` appended the default argument
   resolvers and return value handlers to the builder's own lists, so a second build duplicated
   them, a custom resolver or handler added after the first build came after the defaults and never

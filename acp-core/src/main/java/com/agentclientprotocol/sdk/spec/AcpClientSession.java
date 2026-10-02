@@ -8,6 +8,7 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.HandlerFailures;
 import org.jspecify.annotations.Nullable;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -312,7 +313,7 @@ public class AcpClientSession implements AcpSession {
 
 			logger.debug("Invoking handler for method '{}'", request.method());
 			logger.trace("Handler params for '{}': {}", request.method(), request.params());
-			return InboundMessages.requireResult(handler.handle(InboundMessages.paramsOrEmpty(request.params())),
+			return InboundMessages.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 					request.method())
 				.doOnSuccess(result -> logger.debug("Handler for '{}' completed successfully", request.method()))
 				.doOnError(error -> logger.debug("Handler for '{}' threw error: {}", request.method(), error.getMessage()))

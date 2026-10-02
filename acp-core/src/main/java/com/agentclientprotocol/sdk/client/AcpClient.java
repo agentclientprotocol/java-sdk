@@ -24,6 +24,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.HandlerFailures;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -705,7 +706,7 @@ public interface AcpClient {
 
 		/** Runs a sync handler on the library-owned daemon scheduler, so it may block. */
 		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
-			return Mono.fromCallable(handler).subscribeOn(SYNC_HANDLER_SCHEDULER);
+			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(SYNC_HANDLER_SCHEDULER);
 		}
 
 		/**
@@ -945,7 +946,7 @@ public interface AcpClient {
 		public SyncSpec completeElicitationHandler(Consumer<AcpSchema.CompleteElicitationNotification> handler) {
 			Assert.notNull(handler, "Complete elicitation handler must not be null");
 			asyncSpec.completeElicitationHandler(notification -> Mono
-				.fromRunnable(() -> handler.accept(notification))
+				.fromRunnable(HandlerFailures.guard(() -> handler.accept(notification)))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER)
 				.then());
 			return this;
@@ -973,7 +974,7 @@ public interface AcpClient {
 			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
 			// Convert sync consumer to async Function
 			asyncSpec.sessionUpdateConsumer(notification -> Mono
-				.fromRunnable(() -> sessionUpdateConsumer.accept(notification))
+				.fromRunnable(HandlerFailures.guard(() -> sessionUpdateConsumer.accept(notification)))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER)
 				.then());
 			return this;
@@ -1058,7 +1059,7 @@ public interface AcpClient {
 		public <T> SyncSpec extNotificationHandler(String method, TypeRef<T> paramsType, Consumer<T> handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncSpec.extNotificationHandler(method, paramsType, params -> Mono
-				.<Void>fromRunnable(() -> handler.accept(params))
+				.<Void>fromRunnable(HandlerFailures.guard(() -> handler.accept(params)))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER));
 			return this;
 		}

@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.HandlerFailures;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -253,14 +254,14 @@ public class AcpAgentSession implements AcpSession {
 				// A handler whose work was aborted after session/cancel answers cancelled, not
 				// an error (ACP v1, prompt turn, Cancellation).
 				return activePrompts.endBeforePublishing(turn, promptDeadlines.answer(turn, request,
-						InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+						InboundMessages.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 								request.method())
 							.map(result -> InboundMessages.result(request, result))
 							.onErrorResume(error -> InboundMessages.isCancellation(error) && turn.answer().isCancelling(),
 									error -> Mono.just(cancelledPrompt(request)))));
 			}
 
-			return InboundMessages.requireResult(Mono.defer(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+			return InboundMessages.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 						request.method())
 				.map(result -> InboundMessages.result(request, result));
 		});

@@ -329,4 +329,43 @@ class AcpAgentSupportErrorPathTest {
 			.hasMessageContaining("Transport");
 	}
 
+	/** Fails its first prompt with an Error, as code compiled against another SDK version can. */
+	@AcpAgent
+	static class ErrorThrowingAgent {
+
+		private final AtomicInteger prompts = new AtomicInteger();
+
+		@Prompt
+		PromptResponse prompt(PromptRequest request) {
+			int prompt = prompts.getAndIncrement();
+			if (prompt == 0) {
+				throw new NoSuchMethodError("secret payload");
+			}
+			if (prompt == 1) {
+				throw new AssertionError("secret payload");
+			}
+			return PromptResponse.endTurn();
+		}
+
+	}
+
+	/**
+	 * A handler method that throws an Error is answered -32603 naming the method, and the
+	 * connection keeps serving. Before, Reactor rethrew the NoSuchMethodError on the handler
+	 * thread and the client waited out its request timeout.
+	 */
+	@Test
+	void aHandlerThrowingAnErrorIsAnsweredInternalErrorAndTheConnectionServesOn() {
+		AcpAsyncClient client = connect(AcpAgentSupport.create(new ErrorThrowingAgent()));
+
+		for (int i = 0; i < 2; i++) {
+			assertThatThrownBy(() -> client.prompt(prompt("s1")).block(TIMEOUT))
+				.isInstanceOfSatisfying(AcpError.class, error -> {
+					assertThat(error.getCode()).isEqualTo(AcpErrorCodes.INTERNAL_ERROR);
+					assertThat(error.getMessage()).contains("session/prompt").doesNotContain("secret");
+				});
+		}
+		assertThat(client.prompt(prompt("s1")).block(TIMEOUT).stopReason()).isEqualTo(StopReason.END_TURN);
+	}
+
 }
