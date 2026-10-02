@@ -53,22 +53,19 @@ jobs:
           # java runs as one leg: the Java <-> Java cells, the legacy Java pair, conformance, load.
           # kotlin has no Streamable HTTP; its Gradle toolchain is JDK 21 while the SDK and the
           # Java programs stay on 17 (the last version listed is the default).
-          # allow-empty: a peer's cells exist only once its language is enabled in matrix.json and
-          # the cells are generated; until then its stdio and ws legs select nothing. Drop it for a
-          # peer whose cells are committed.
           peers="$(jq -c . <<'JSON'
           [
             { "peer": "java", "java": "17", "only": "interop-java-java,x-java-java-*,conf-*,load-*" },
-            { "peer": "typescript", "sdk": "typescript-sdk", "java": "17", "allow-empty": true, "node": true,
+            { "peer": "typescript", "sdk": "typescript-sdk", "java": "17", "node": true,
               "transports": ["stdio", "http", "ws"], "legacy": "interop-ts-*",
               "cache-paths": "integration-testing/.cache/peers/typescript-sdk@*\n~/.npm" },
-            { "peer": "rust", "sdk": "rust-sdk", "java": "17", "allow-empty": true, "rust": true,
+            { "peer": "rust", "sdk": "rust-sdk", "java": "17", "rust": true,
               "transports": ["stdio", "http", "ws"], "legacy": "interop-rust-*",
               "cache-paths": "integration-testing/.cache/peers/rust-sdk@*\nintegration-testing/.cache/build\n~/.cargo/registry/index\n~/.cargo/registry/cache\n~/.cargo/git/db" },
-            { "peer": "python", "sdk": "python-sdk", "java": "17", "allow-empty": true, "python": true,
+            { "peer": "python", "sdk": "python-sdk", "java": "17", "python": true,
               "transports": ["stdio", "http", "ws"], "legacy": "interop-python-*",
               "cache-paths": "integration-testing/.cache/peers/python-sdk@*" },
-            { "peer": "kotlin", "sdk": "kotlin-sdk", "java": "21\n17", "gradle": true, "allow-empty": true,
+            { "peer": "kotlin", "sdk": "kotlin-sdk", "java": "21\n17", "gradle": true,
               "transports": ["stdio", "ws"],
               "cache-paths": "integration-testing/.cache/peers/kotlin-sdk@*\n~/.gradle/caches\n~/.gradle/wrapper" }
           ]
@@ -171,12 +168,10 @@ jobs:
           PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
-          ALLOW_EMPTY: ${{ matrix.allow-empty }}
         run: |
           args=(--only "$ONLY" --prepare-only)
           if [ -n "$PEERS_REF" ]; then args+=(--peers-ref "$PEERS_REF"); fi
           for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
-          if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
           integration-testing/scripts/run-all.sh "${args[@]}"
 
       - name: Upload preparation logs
@@ -279,13 +274,11 @@ jobs:
           PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
           PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
-          ALLOW_EMPTY: ${{ matrix.allow-empty }}
           RUN_LABEL: ${{ matrix.leg }}
         run: |
           args=(--only "$ONLY")
           if [ -n "$PEERS_REF" ]; then args+=(--peers-ref "$PEERS_REF"); fi
           for o in $PEER_OVERRIDES; do args+=(--peer "$o"); done
-          if [ "$ALLOW_EMPTY" = "true" ]; then args+=(--allow-empty); fi
           integration-testing/scripts/run-all.sh "${args[@]}"
 
       - name: Upload scenario logs
