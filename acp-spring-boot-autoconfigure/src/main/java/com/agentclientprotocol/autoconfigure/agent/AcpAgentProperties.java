@@ -43,46 +43,12 @@ public class AcpAgentProperties {
 
 		private TransportType type;
 
-		private AgentWebSocketProperties websocket = new AgentWebSocketProperties();
-
 		public TransportType getType() {
 			return type;
 		}
 
 		public void setType(TransportType type) {
 			this.type = type;
-		}
-
-		public AgentWebSocketProperties getWebsocket() {
-			return websocket;
-		}
-
-		public void setWebsocket(AgentWebSocketProperties websocket) {
-			this.websocket = websocket;
-		}
-
-	}
-
-	public static class AgentWebSocketProperties {
-
-		private int port = 8080;
-
-		private String path = "/acp";
-
-		public int getPort() {
-			return port;
-		}
-
-		public void setPort(int port) {
-			this.port = port;
-		}
-
-		public String getPath() {
-			return path;
-		}
-
-		public void setPath(String path) {
-			this.path = path;
 		}
 
 	}

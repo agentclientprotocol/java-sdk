@@ -24,8 +24,6 @@ class AcpAgentPropertiesTests {
 			assertThat(props.isEnabled()).isTrue();
 			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(60));
 			assertThat(props.getTransport().getType()).isNull();
-			assertThat(props.getTransport().getWebsocket().getPort()).isEqualTo(8080);
-			assertThat(props.getTransport().getWebsocket().getPath()).isEqualTo("/acp");
 		});
 	}
 
@@ -51,18 +49,6 @@ class AcpAgentPropertiesTests {
 			AcpAgentProperties props = context.getBean(AcpAgentProperties.class);
 			assertThat(props.getTransport().getType()).isEqualTo(TransportType.STDIO);
 		});
-	}
-
-	@Test
-	void websocketProperties() {
-		this.runner
-			.withPropertyValues("spring.acp.agent.transport.websocket.port=9090",
-					"spring.acp.agent.transport.websocket.path=/custom-acp")
-			.run(context -> {
-				AcpAgentProperties props = context.getBean(AcpAgentProperties.class);
-				assertThat(props.getTransport().getWebsocket().getPort()).isEqualTo(9090);
-				assertThat(props.getTransport().getWebsocket().getPath()).isEqualTo("/custom-acp");
-			});
 	}
 
 	@Configuration(proxyBeanMethods = false)

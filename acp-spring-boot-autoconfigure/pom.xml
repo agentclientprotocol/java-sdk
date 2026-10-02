@@ -34,11 +34,6 @@
             <artifactId>acp-agent-support</artifactId>
             <optional>true</optional>
         </dependency>
-        <dependency>
-            <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-websocket-jetty</artifactId>
-            <optional>true</optional>
-        </dependency>
 
         <!-- Spring Boot -->
         <dependency>
