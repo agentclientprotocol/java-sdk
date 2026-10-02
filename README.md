@@ -217,6 +217,11 @@ AcpAsyncAgent agent = AcpAgent.async(transport)
 agent.start().then(agent.awaitTermination()).block();
 ```
 
+`awaitTermination()` completes once the client has closed the agent's standard input and every
+request received before has been answered (at most `StdioAcpAgentTransport.DEFAULT_DRAIN_TIMEOUT`
+later; a request still unanswered then is answered with `-32800`), so a client that writes its
+requests and closes the pipe still reads every answer.
+
 ---
 
 ## Progressive Examples

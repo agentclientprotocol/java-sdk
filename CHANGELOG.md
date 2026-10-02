@@ -233,6 +233,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A stdio agent dropped the replies to requests that arrived just before its input ended.** When
+  the client closed the agent's standard input, `StdioAcpAgentTransport` completed
+  `awaitTermination()` at once and stopped writing, so an agent written as documented
+  (`agent.start().then(agent.awaitTermination()).block()`) exited with replies still to come: a
+  client that writes its requests and closes the pipe (a script, a test) got none, or some, of its
+  answers. The end of standard input is now a half-close, not a cancellation: every request already
+  received is handled and answered, the notifications its handler sends are written in order, then
+  standard output is closed and `awaitTermination()` completes. A request the agent sends to the
+  client, which can no longer answer, fails at once: one waiting when the input ends with a `-32603`
+  error response, one sent after it with an `AcpConnectionException`. The drain is bounded by a drain
+  timeout, `StdioAcpAgentTransport.DEFAULT_DRAIN_TIMEOUT` (60 seconds) or the one given to the new
+  constructor `StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream, Duration)`; a request
+  still unanswered then is answered with `-32800` (request cancelled) and the transport terminates
+  without it. `closeGracefully()` now also completes `awaitTermination()`.
 - **A stdio client did not notice its agent process exiting.** `StdioAcpClientTransport` did not
   implement `awaitTermination()`, so when the agent exited or crashed, pending requests waited out the
   request timeout. It now completes when the transport is closed, and errors with an

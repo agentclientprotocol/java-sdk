@@ -49,7 +49,7 @@ public interface AcpAgentTransport extends AcpTransport {
 	 * <p>Example usage:
 	 * <pre>{@code
 	 * transport.start(handler).block();
-	 * transport.awaitTermination().block(); // Block until stdin closes
+	 * transport.awaitTermination().block(); // Block until stdin closes and every reply is written
 	 * }</pre>
 	 *
 	 * @return a {@link Mono} that completes when the transport terminates

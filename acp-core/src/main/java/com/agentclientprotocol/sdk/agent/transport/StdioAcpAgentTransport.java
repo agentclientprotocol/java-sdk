@@ -11,21 +11,29 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.util.OutboundSinks;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.SynchronousSink;
@@ -51,11 +59,36 @@ import reactor.core.scheduler.Schedulers;
  * <li>Backpressure support via Reactor Sinks</li>
  * </ul>
  *
+ * <p>
+ * <b>The end of standard input.</b> A client that closes the agent's standard input will
+ * send nothing more, but may still read standard output until it ends (a script that writes
+ * its requests and closes the pipe does). So the end of standard input is not a
+ * cancellation: every request already received is still handled and answered, and the
+ * notifications its handler sends are written, in the order they are sent. Requests the
+ * agent sends to the client can no longer be answered: one waiting when the input ends fails
+ * at once with a JSON-RPC error ({@code -32603}), and one sent after it fails
+ * with an {@link AcpConnectionException}. Once every request received has been answered,
+ * standard output is closed and {@link #awaitTermination()} completes. The drain is bounded:
+ * a request still unanswered after the drain timeout ({@link #DEFAULT_DRAIN_TIMEOUT} unless
+ * given) is answered with {@code -32800} (request cancelled) and the transport terminates
+ * without waiting for it; its handler's late answer is dropped.
+ * </p>
+ *
  * @author Mark Pollack
  */
 public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(StdioAcpAgentTransport.class);
+
+	/**
+	 * How long, by default, the requests received before standard input ended may take to be
+	 * answered: 60 seconds, as long as {@code PromptTimeouts.DEFAULT_CANCEL_GRACE_PERIOD}
+	 * gives a cancelled prompt.
+	 */
+	public static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(60);
+
+	/** The message of the error that fails a request to the client once its input has ended. */
+	static final String CLIENT_INPUT_ENDED = "The ACP client closed its input; it can no longer answer requests";
 
 	private final AcpJsonMapper jsonMapper;
 
@@ -80,6 +113,22 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	private final AtomicBoolean isClosing = new AtomicBoolean(false);
 
 	private final AtomicBoolean isStarted = new AtomicBoolean(false);
+
+	private final AtomicBoolean terminated = new AtomicBoolean(false);
+
+	/** How long the requests received before standard input ended may take to be answered. */
+	private final Duration drainTimeout;
+
+	/** The ids of the client's requests not answered yet. */
+	private final Set<Object> awaitingAgent = ConcurrentHashMap.newKeySet();
+
+	/** The agent's requests the client has not answered yet. */
+	private final UnansweredRequests awaitingClient = new UnansweredRequests();
+
+	/** The session's handler, which also takes the errors failing requests to the client. */
+	private volatile @Nullable Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler;
+
+	private volatile @Nullable Disposable drainTimer;
 
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
@@ -109,13 +158,30 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * @param outputStream The output stream to write messages to (agent → client)
 	 */
 	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream) {
+		this(jsonMapper, inputStream, outputStream, DEFAULT_DRAIN_TIMEOUT);
+	}
+
+	/**
+	 * Creates a new StdioAcpAgentTransport with the specified JsonMapper, streams, and drain
+	 * timeout.
+	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
+	 * @param inputStream The input stream to read messages from (client → agent)
+	 * @param outputStream The output stream to write messages to (agent → client)
+	 * @param drainTimeout how long the requests received before the input ends may take to be
+	 * answered; positive
+	 */
+	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream,
+			Duration drainTimeout) {
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(inputStream, "The InputStream can not be null");
 		Assert.notNull(outputStream, "The OutputStream can not be null");
+		Assert.notNull(drainTimeout, "The drainTimeout can not be null");
+		Assert.isTrue(!drainTimeout.isNegative() && !drainTimeout.isZero(), "The drainTimeout must be positive");
 
 		this.jsonMapper = jsonMapper;
 		this.inputStream = inputStream;
 		this.outputStream = outputStream;
+		this.drainTimeout = drainTimeout;
 
 		this.inboundSink = Sinks.many().unicast().onBackpressureBuffer();
 		this.outboundSink = Sinks.many().unicast().onBackpressureBuffer();
@@ -143,6 +209,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 		return Mono.fromRunnable(() -> {
 			logger.info("ACP agent transport starting");
+			this.handler = handler;
 			handleIncomingMessages(handler);
 			startInboundProcessing();
 			startOutboundProcessing();
@@ -169,12 +236,116 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 				exceptionHandler.accept(e);
 			}
 			finally {
-				isClosing.set(true);
-				inboundSink.tryEmitComplete();
-				terminationSink.tryEmitValue(null);  // Signal termination for awaitTermination()
-				logger.debug("Agent transport terminated");
+				endInput();
 			}
 		});
+	}
+
+	/**
+	 * Standard input has ended (or failed): fails the requests to the client still waiting,
+	 * starts the drain timeout, and ends the inbound stream. The replies still to come are
+	 * written; the transport terminates once the last is (see {@link #terminate()}).
+	 */
+	private void endInput() {
+		logger.debug("Agent transport input ended");
+		for (Object id : this.awaitingClient.end()) {
+			failRequestToClient(id);
+		}
+		if (!this.isClosing.get()) {
+			this.drainTimer = AcpSchedulers.after(this.drainTimeout).subscribe(tick -> abandonDrain());
+		}
+		this.inboundSink.tryEmitComplete();
+	}
+
+	/**
+	 * Fails a request to the client that can no longer be answered, as the session fails any
+	 * request: with an error response, here one the client did not send.
+	 */
+	private void failRequestToClient(Object id) {
+		Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> sessionHandler = this.handler;
+		if (sessionHandler == null) {
+			return;
+		}
+		JSONRPCMessage failure = new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
+				new AcpSchema.JSONRPCError(AcpErrorCodes.INTERNAL_ERROR, CLIENT_INPUT_ENDED, null));
+		Mono.just(failure)
+			.transform(sessionHandler)
+			.subscribe(reply -> logger.debug("Unexpected reply to a failed request: {}", reply),
+					error -> logger.debug("Failing request {} to the client failed", id, error));
+	}
+
+	/**
+	 * The drain timeout has passed: on the writer's thread, so that no reply is written after
+	 * it, answers each request still unanswered with -32800 and terminates.
+	 */
+	private void abandonDrain() {
+		try {
+			this.outboundScheduler.schedule(this::cancelUnanswered);
+		}
+		catch (RejectedExecutionException e) {
+			logger.debug("Drain timeout after the transport terminated");
+		}
+	}
+
+	private void cancelUnanswered() {
+		if (this.terminated.get()) {
+			return;
+		}
+		this.isClosing.set(true);
+		logger.warn("{} request(s) received before the client closed its input are still unanswered after {};"
+				+ " answering them as cancelled", this.awaitingAgent.size(), this.drainTimeout);
+		for (Object id : List.copyOf(this.awaitingAgent)) {
+			if (this.awaitingAgent.remove(id)) {
+				writeQuietly(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, id, null,
+						new AcpSchema.JSONRPCError(AcpErrorCodes.REQUEST_CANCELLED,
+								"Request cancelled: not answered within " + this.drainTimeout
+										+ " after the client closed its input",
+								null)));
+			}
+		}
+		terminate();
+		try {
+			this.outboundSink.emitComplete(Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
+		}
+		catch (Sinks.EmissionException e) {
+			logger.debug("Outbound stream already ended", e);
+		}
+	}
+
+	private void writeQuietly(JSONRPCMessage message) {
+		try {
+			writeLine(message);
+		}
+		catch (IOException e) {
+			logger.debug("Stream closed while cancelling unanswered requests", e);
+		}
+	}
+
+	/**
+	 * Ends the transport, once: after an end of input, flushes and closes standard output,
+	 * so the client reading it sees the end; then completes {@link #awaitTermination()}.
+	 */
+	private void terminate() {
+		if (!this.terminated.compareAndSet(false, true)) {
+			return;
+		}
+		Disposable timer = this.drainTimer;
+		if (timer != null) {
+			timer.dispose();
+		}
+		if (this.awaitingClient.ended()) {
+			synchronized (this.outputStream) {
+				try {
+					this.outputStream.flush();
+					this.outputStream.close();
+				}
+				catch (IOException e) {
+					logger.debug("Closing the output stream failed", e);
+				}
+			}
+		}
+		this.terminationSink.tryEmitValue(null);
+		logger.debug("Agent transport terminated");
 	}
 
 	/**
@@ -220,6 +391,12 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 			rejectUnreadable(line, e);
 			return true;
 		}
+		if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null) {
+			this.awaitingAgent.add(request.id());
+		}
+		else if (message instanceof AcpSchema.JSONRPCResponse response && response.id() != null) {
+			this.awaitingClient.answered(response.id());
+		}
 		if (!this.inboundSink.tryEmitNext(message).isSuccess()) {
 			logIfNotClosing("Failed to enqueue inbound message");
 			return false;
@@ -254,12 +431,14 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 			.<JSONRPCMessage>handle(this::write)
 			.doOnComplete(() -> {
 				isClosing.set(true);
+				terminate();
 				outboundScheduler.dispose();
 			})
 			.doOnError(e -> {
 				if (!isClosing.get()) {
 					logger.error("Error in outbound processing", e);
 					isClosing.set(true);
+					terminate();
 					outboundScheduler.dispose();
 				}
 			})
@@ -276,17 +455,10 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 			return;
 		}
 		try {
-			// Messages are delimited by newlines, and MUST NOT contain embedded newlines.
-			String jsonMessage = jsonMapper.writeValueAsString(message)
-				.replace("\r\n", "\\n")
-				.replace("\n", "\\n")
-				.replace("\r", "\\n");
-			synchronized (outputStream) {
-				outputStream.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
-				outputStream.write("\n".getBytes(StandardCharsets.UTF_8));
-				outputStream.flush();
+			writeLine(message);
+			if (message instanceof AcpSchema.JSONRPCResponse response && response.id() != null) {
+				this.awaitingAgent.remove(response.id());
 			}
-			logger.debug("Sent JSON message ({} characters)", jsonMessage.length());
 			sink.next(message);
 		}
 		catch (IOException e) {
@@ -300,9 +472,31 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		}
 	}
 
+	private void writeLine(JSONRPCMessage message) throws IOException {
+		// Messages are delimited by newlines, and MUST NOT contain embedded newlines.
+		String jsonMessage = jsonMapper.writeValueAsString(message)
+			.replace("\r\n", "\\n")
+			.replace("\n", "\\n")
+			.replace("\r", "\\n");
+		synchronized (outputStream) {
+			outputStream.write(jsonMessage.getBytes(StandardCharsets.UTF_8));
+			outputStream.write("\n".getBytes(StandardCharsets.UTF_8));
+			outputStream.flush();
+		}
+		logger.debug("Sent JSON message ({} characters)", jsonMessage.length());
+	}
+
+	/**
+	 * Sends a message to the client. A request sent once the client's input has ended fails
+	 * with an {@link AcpConnectionException}: no answer can come.
+	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return Mono.zip(inboundReady.asMono(), outboundReady.asMono()).then(Mono.defer(() -> {
+			if (message instanceof AcpSchema.JSONRPCRequest request && request.id() != null
+					&& !this.awaitingClient.sent(request.id())) {
+				return Mono.error(new AcpConnectionException(CLIENT_INPUT_ENDED));
+			}
 			OutboundSinks.emit(outboundSink, message);
 			return Mono.empty();
 		}));
@@ -319,6 +513,7 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 			try {
 				inboundScheduler.dispose();
 				outboundScheduler.dispose();
+				terminate();
 				logger.debug("Agent transport closed");
 			}
 			catch (Exception e) {
@@ -332,6 +527,12 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		this.exceptionHandler = handler;
 	}
 
+	/**
+	 * Completes when the transport terminates: after it is closed, or after standard input
+	 * has ended and every request received before has been answered and written (or the
+	 * drain timeout has passed), with standard output closed.
+	 * @return a Mono that completes when the transport terminates
+	 */
 	@Override
 	public Mono<Void> awaitTermination() {
 		return terminationSink.asMono();
