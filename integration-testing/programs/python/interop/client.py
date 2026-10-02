@@ -36,8 +36,11 @@ from fixtures import (
     EXT_PARAMS,
     EXT_RESULT,
     FS_READ_CONTENT,
+    GROUPED_VALUES,
     META_KEY,
     META_VALUE,
+    UNKNOWN_AUDIENCE,
+    UNKNOWN_STOP_REASON,
     compact,
     dump,
     step_line,
@@ -629,6 +632,69 @@ def stop_step(reason: str):
     return run
 
 
+async def enum_update(directive: str, kind: str, match_id) -> tuple[Conn, str, dict]:
+    """#enum tool_call|plan: end_turn, the chunk after-enum, and the update as the SDK surfaced it."""
+    c, sid, r = await emit(directive)
+    end_turn(r)
+    await wait_for(lambda: "after-enum" in c.rec.chunks(sid), lambda: f"no chunk \"after-enum\" in {c.rec.chunks(sid)}")
+    found = [u for u in c.rec.of_kind(sid, kind) if match_id(u)]
+    check(bool(found), f"no {kind} surfaced (after-enum and end_turn arrived): updates "
+          f"{compact([u.get('sessionUpdate') for u, _ in c.rec.updates[sid]])}")
+    return c, sid, found[0]
+
+
+async def s_enum_tool_call() -> str:
+    _, _, u = await enum_update("#enum tool_call", "tool_call", lambda u: u.get("toolCallId") == "call-enum")
+    check(u.get("status") == "interop_future_status", f"tool_call call-enum surfaced with status "
+          f"{u.get('status')!r}, not the raw interop_future_status: {compact(u)}")
+    check(u.get("kind") in ("interop_future_kind", "other"), f"kind {u.get('kind')!r}")
+    return f"tool_call status {u.get('status')} kind {u.get('kind')}; after-enum; end_turn"
+
+
+async def s_enum_plan() -> str:
+    _, _, u = await enum_update("#enum plan", "plan", lambda u: True)
+    entries = [(e.get("content"), e.get("priority"), e.get("status")) for e in u.get("entries") or []]
+    check(entries == [("future entry", "interop_future_priority", "interop_future_status")],
+          f"plan surfaced with entries {entries}, not the raw values")
+    return "plan entry priority interop_future_priority, status interop_future_status; end_turn"
+
+
+async def s_enum_stop() -> str:
+    c, sid, r = await emit("#enum stop")
+    check(r.get("stopReason") == UNKNOWN_STOP_REASON, f"stopReason {r.get('stopReason')}")
+    end_turn(await c.prompt(sid, "after enum"))
+    return f"stopReason {UNKNOWN_STOP_REASON}; \"after enum\" end_turn"
+
+
+async def s_enum_audience() -> str:
+    c = main_conn()
+    sid, _ = await c.new_session()
+    # The typed prompt validates annotations.audience against Literal["assistant", "user"]
+    # (acp/schema.py:2622): send the raw request.
+    block = {"type": "text", "text": "#enum audience", "annotations": {"audience": UNKNOWN_AUDIENCE}}
+    r = await c.conn._conn.send_request("session/prompt", {"sessionId": sid, "prompt": [block]})
+    end_turn(r or {})
+    await wait_for(lambda: "audience: user,interop_future_role" in c.rec.chunks(sid),
+                   lambda: f"chunks {c.rec.chunks(sid)}")
+    return "audience: user,interop_future_role; end_turn"
+
+
+async def s_config_grouped() -> str:
+    c, sid, r = await emit("#config grouped")
+    end_turn(r)
+    await wait_for(lambda: c.rec.of_kind(sid, "config_option_update"), "no config_option_update")
+    effort = option(c.rec.of_kind(sid, "config_option_update")[0].get("configOptions"), "effort")
+    groups = effort.get("options") or []
+    check([g.get("group") for g in groups] == ["fast", "deep"], f"effort options {compact(effort)}")
+    values = [o.get("value") for g in groups for o in g.get("options") or []]
+    check(values == GROUPED_VALUES, f"effort values {values}")
+    resp = dump(await c.conn.set_config_option(config_id="effort", session_id=sid, value="effort-high"))
+    opts = resp.get("configOptions")
+    check(option(opts, "effort").get("currentValue") == "effort-high"
+          and option(opts, "model").get("currentValue") == "model-a", f"response {compact(resp)}")
+    return f"effort grouped fast/deep, values {values}; set to effort-high"
+
+
 async def s_mode_set() -> str:
     c = main_conn()
     sid, resp = await c.new_session()
@@ -823,6 +889,23 @@ async def s_cancel_grace() -> str:
         return f"SDK answered cancelled {int((time.monotonic() - sent) * 1000)} ms after the cancel"
     finally:
         await abandon(c, sid, hang)
+
+
+async def s_cancel_max_duration() -> str:
+    c = main_conn()
+    sid, _ = await c.new_session()
+    started = time.monotonic()
+    try:
+        r = await asyncio.wait_for(c.prompt(sid, "#hang"), 11)
+    except asyncio.TimeoutError:
+        raise StepFailed("TIMEOUT: no answer within 11 s") from None
+    except RequestError as e:
+        took = time.monotonic() - started
+        check(e.code == -32800, f"the prompt failed with {e.code} {e}, expected -32800")
+        check(took >= 7, f"-32800 after {int(took * 1000)} ms, before the 8 s maxPromptDuration")
+        end_turn(await c.prompt(sid, "after max-duration"))
+        return f"-32800 after {int(took * 1000)} ms; \"after max-duration\" end_turn"
+    raise StepFailed(f"the prompt answered {r.get('stopReason')}, expected error -32800")
 
 
 async def s_cancel_request_unsupported() -> str:
@@ -1084,10 +1167,15 @@ STEPS = {
     "stop.max_tokens": stop_step("max_tokens"),
     "stop.refusal": stop_step("refusal"),
     "stop.max_turn_requests": stop_step("max_turn_requests"),
+    "enum.tool_call": s_enum_tool_call,
+    "enum.plan": s_enum_plan,
+    "enum.stop": s_enum_stop,
+    "enum.audience": s_enum_audience,
     "mode.set": s_mode_set,
     "config.on-new": s_config_on_new,
     "config.select": s_config_select,
     "config.boolean": s_config_boolean,
+    "config.grouped": s_config_grouped,
     "perm.selected": s_perm_selected,
     "perm.cancelled": s_perm_cancelled,
     "fs.write": s_fs_write,
@@ -1101,6 +1189,7 @@ STEPS = {
     "cancel.prompt": s_cancel_prompt,
     "cancel.prompt-while-cancelling": s_cancel_prompt_while_cancelling,
     "cancel.grace": s_cancel_grace,
+    "cancel.max-duration": s_cancel_max_duration,
     "cancel-request.client": s_cancel_request_unsupported,
     "cancel-request.agent": s_cancel_request_agent,
     "cancel-request.unknown": s_cancel_request_unsupported,

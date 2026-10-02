@@ -37,9 +37,37 @@ MODES = {
 MODE_IDS = {m["id"] for m in MODES["availableModes"]}
 
 
-def config_options(model="model-a", verbose=False, with_boolean=False):
+GROUPED_VALUES = ["effort-low", "effort-medium", "effort-high"]
+
+
+def grouped_option(effort="effort-low"):
+    """fixtures.groupedConfigOption: the select effort, its options in the groups fast and deep."""
+    return {
+        "id": "effort",
+        "name": "Effort",
+        "type": "select",
+        "currentValue": effort,
+        "options": [
+            {"group": "fast", "name": "Fast", "options": [{"value": "effort-low", "name": "Low"}]},
+            {"group": "deep", "name": "Deep", "options": [{"value": "effort-medium", "name": "Medium"},
+                                                          {"value": "effort-high", "name": "High"}]},
+        ],
+    }
+
+
+# fixtures.unknownEnums: values the v1 schema does not define.
+UNKNOWN_ENUM_TOOL_CALL = {"sessionUpdate": "tool_call", "toolCallId": "call-enum", "title": "interop enum tool",
+                          "kind": "interop_future_kind", "status": "interop_future_status"}
+UNKNOWN_ENUM_PLAN = {"sessionUpdate": "plan", "entries": [
+    {"content": "future entry", "priority": "interop_future_priority", "status": "interop_future_status"}]}
+UNKNOWN_STOP_REASON = "interop_future_stop"
+UNKNOWN_AUDIENCE = ["user", "interop_future_role"]
+
+
+def config_options(model="model-a", verbose=False, with_boolean=False, effort=None):
     """fixtures.configOptions with the given current values; verbose only when the client
-    advertised session.configOptions.boolean."""
+    advertised session.configOptions.boolean; effort (fixtures.groupedConfigOption) only after
+    #config grouped."""
     opts = [
         {
             "id": "model",
@@ -51,6 +79,8 @@ def config_options(model="model-a", verbose=False, with_boolean=False):
     ]
     if with_boolean:
         opts.append({"id": "verbose", "name": "Verbose", "type": "boolean", "currentValue": verbose})
+    if effort is not None:
+        opts.append(grouped_option(effort))
     return opts
 
 
