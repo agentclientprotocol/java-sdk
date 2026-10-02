@@ -361,6 +361,7 @@ public class AcpAgentSupport {
 				.request(request)
 				.sessionId(sessionId)
 				.syncPromptContext(syncContext)
+				.promptContext(syncContext != null ? syncContext.async() : null)
 				.capabilities(capabilities)
 				.build();
 

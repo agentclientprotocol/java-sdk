@@ -167,6 +167,13 @@ public interface SyncPromptContext {
 	 */
 	@Nullable NegotiatedCapabilities getClientCapabilities();
 
+	/**
+	 * Returns the async context this context blocks on: the same session, prompt turn and
+	 * client. Use it to compose non-blocking calls from a sync handler.
+	 * @return the async prompt context
+	 */
+	PromptContext async();
+
 	// ========================================================================
 	// Convenience API
 	// ========================================================================
