@@ -87,6 +87,22 @@ Handler methods support flexible signatures. The runtime automatically resolves 
 | `SyncPromptContext` | Synchronous context for sending messages, file I/O, permissions, etc. |
 | `NegotiatedCapabilities` | The capabilities negotiated with the client. |
 | `@SessionId String` | The current session ID. |
+| `AcpSyncAgent` / `AcpAsyncAgent` | The agent serving the request's connection (any handler). |
+
+Every handler, extension handlers included, can take `NegotiatedCapabilities`, `AcpSyncAgent` or
+`AcpAsyncAgent`, resolved for the connection the request arrived on. The capabilities are what the
+client offered in its `initialize` request, so they are available from the `@Initialize` handler
+on. Under `buildFactory()`, one handler bean serves every connection, so a bean cannot keep "its"
+agent in a field; take it as a parameter instead, for example to push changed config options
+outside a prompt turn:
+
+```java
+@ExtNotification("_example.com/models_changed")
+void modelsChanged(ModelsChanged event, AcpSyncAgent agent) {
+    agent.sendSessionUpdate(event.sessionId(),
+            new ConfigOptionUpdate("config_option_update", configOptions(event.models())));
+}
+```
 
 ### Example Handler Signatures
 

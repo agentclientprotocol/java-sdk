@@ -163,6 +163,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AuthenticateRequest` (`AuthenticateRequestResolver`) and returns an `AuthenticateResponse` or a
   `Mono` of one; throw `AcpProtocolException` with `AcpErrorCodes.AUTHENTICATION_REQUIRED` to reject
   the attempt.
+- **Any annotated handler can take its connection's agent**: an `AcpSyncAgent` or `AcpAsyncAgent`
+  parameter (`AgentResolver`, `AcpInvocationContext.getAgent()`), the agent serving the connection
+  the request arrived on, so a handler can send session updates (a `ConfigOptionUpdate`, say) and
+  requests to the client outside a prompt turn. Under `buildFactory()` one handler bean serves
+  every connection and so cannot keep "its" agent in a field; each call now gets its own
+  connection's. Extension handlers (`@ExtRequest`, `@ExtNotification`) may take these and
+  `NegotiatedCapabilities` besides their one params parameter
+  (`ExtensionParamsResolver.isConnectionType`).
 
 ### Changed
 
@@ -475,6 +483,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was answered with `-32603` "PromptContext is only available for @Prompt handlers". The parameter
   now receives the context the sync one wraps (`SyncPromptContext.async()`), so a `@Prompt` method
   can take either and return a `Mono<PromptResponse>` composed from the async calls.
+
+- **Annotated handlers other than `@Prompt` could not take `NegotiatedCapabilities`.** Only the
+  prompt handler was given them, so a `@NewSession` (or any other) method taking them failed with
+  `-32603` "NegotiatedCapabilities not available in current context". Every handler, `@Initialize`
+  and extension handlers included, now receives the capabilities negotiated on its own connection
+  (the agent records them from the client's `initialize` request before the handler runs).
 
 - **A handler that threw an `Error` left the peer waiting.** Reactor rethrows what it treats as
   JVM-fatal (`LinkageError`, `VirtualMachineError`) instead of signalling it, so a handler that

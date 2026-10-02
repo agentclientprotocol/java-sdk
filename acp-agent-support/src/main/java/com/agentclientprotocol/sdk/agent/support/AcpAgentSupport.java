@@ -6,8 +6,10 @@ package com.agentclientprotocol.sdk.agent.support;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,6 +34,7 @@ import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.interceptor.InterceptorChain;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
+import com.agentclientprotocol.sdk.agent.support.resolver.AgentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite;
 import com.agentclientprotocol.sdk.agent.support.resolver.AuthenticateRequestResolver;
@@ -74,7 +77,6 @@ import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetProvider;
 import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
-import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -131,7 +133,11 @@ import org.slf4j.LoggerFactory;
  * Its handler methods are therefore called concurrently, from different connections and
  * from different sessions of one connection, and must be thread-safe; keep per-connection
  * or per-session state keyed by session id, not in plain fields. The same holds for
- * interceptors and custom resolvers and return value handlers.
+ * interceptors and custom resolvers and return value handlers. For the same reason a bean
+ * cannot hold "its" agent: a handler that needs the connection's agent (to push a session
+ * update outside a prompt) or its negotiated capabilities takes an {@code AcpSyncAgent},
+ * {@code AcpAsyncAgent} or {@code NegotiatedCapabilities} parameter, resolved per call for the
+ * connection the request arrived on.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -248,8 +254,8 @@ public class AcpAgentSupport {
 				handler -> agent.logoutHandler(req -> respond(handler, AcpSchema.LogoutResponse.class, req, null)));
 		bind(AcpSchema.METHOD_SESSION_LOAD, handler -> agent.loadSessionHandler(
 				req -> respond(handler, AcpSchema.LoadSessionResponse.class, req, req.sessionId())));
-		bind(AcpSchema.METHOD_SESSION_PROMPT, handler -> agent.promptHandler((req, context) -> respond(handler,
-				AcpSchema.PromptResponse.class, req, req.sessionId(), context, context.getClientCapabilities())));
+		bind(AcpSchema.METHOD_SESSION_PROMPT, handler -> agent.promptHandler(
+				(req, context) -> respond(handler, AcpSchema.PromptResponse.class, req, req.sessionId(), context)));
 		bind(AcpSchema.METHOD_SESSION_SET_MODE, handler -> agent.setSessionModeHandler(
 				req -> respond(handler, AcpSchema.SetSessionModeResponse.class, req, req.sessionId())));
 		bind(AcpSchema.METHOD_SESSION_LIST, handler -> agent
@@ -271,7 +277,7 @@ public class AcpAgentSupport {
 		bind(AcpSchema.METHOD_PROVIDERS_DISABLE, handler -> agent
 			.disableProviderHandler(req -> respond(handler, AcpSchema.DisableProviderResponse.class, req, null)));
 		bind(AcpSchema.METHOD_SESSION_CANCEL, handler -> agent.cancelHandler(
-				notification -> invoke(handler, notification, notification.sessionId(), null, null)));
+				notification -> invoke(handler, notification, notification.sessionId(), null)));
 		handlers.values()
 			.stream()
 			.filter(handler -> ExtensionMethods.isExtension(handler.getAcpMethod()))
@@ -280,12 +286,17 @@ public class AcpAgentSupport {
 
 	/**
 	 * Binds an {@link ExtRequest} or {@link ExtNotification} method, its params read as its
-	 * parameter's type ({@code Object}, the raw JSON value, when it takes none).
+	 * params parameter's type ({@code Object}, the raw JSON value, when it takes none).
 	 */
 	private void bindExtension(AcpAgent.SyncAgentBuilder agent, AcpHandlerMethod handler) {
 		Method method = handler.getMethod();
-		TypeRef<?> paramsType = TypeRef
-			.of(method.getParameterCount() == 1 ? method.getGenericParameterTypes()[0] : Object.class);
+		Type params = Object.class;
+		for (int i = 0; i < method.getParameterCount(); i++) {
+			if (!ExtensionParamsResolver.isConnectionType(method.getParameterTypes()[i])) {
+				params = method.getGenericParameterTypes()[i];
+			}
+		}
+		TypeRef<?> paramsType = TypeRef.of(params);
 		if (method.isAnnotationPresent(ExtNotification.class)) {
 			bindExtNotification(agent, handler, paramsType);
 		}
@@ -303,7 +314,7 @@ public class AcpAgentSupport {
 	private <T> void bindExtNotification(AcpAgent.SyncAgentBuilder agent, AcpHandlerMethod handler,
 			TypeRef<T> paramsType) {
 		agent.extNotificationHandler(handler.getAcpMethod(), paramsType,
-				params -> invoke(handler, params, null, null, null));
+				params -> invoke(handler, params, null, null));
 	}
 
 	/** Binds the handler method discovered for an ACP method, if there is one. */
@@ -323,10 +334,10 @@ public class AcpAgentSupport {
 		}
 	}
 
-	/** {@link #respond(AcpHandlerMethod, Class, Object, String, SyncPromptContext, NegotiatedCapabilities)} for a method other than session/prompt. */
+	/** {@link #respond(AcpHandlerMethod, Class, Object, String, SyncPromptContext)} for a method other than session/prompt. */
 	private <T> T respond(AcpHandlerMethod handler, Class<T> responseType, Object request,
 			@Nullable String sessionId) {
-		return respond(handler, responseType, request, sessionId, null, null);
+		return respond(handler, responseType, request, sessionId, null);
 	}
 
 	/**
@@ -337,9 +348,8 @@ public class AcpAgentSupport {
 	 * that is not the method's response type is answered with an error naming both types.
 	 */
 	private <T> T respond(AcpHandlerMethod handler, Class<T> responseType, Object request,
-			@Nullable String sessionId, @Nullable SyncPromptContext syncContext,
-			@Nullable NegotiatedCapabilities capabilities) {
-		Object result = invoke(handler, request, sessionId, syncContext, capabilities);
+			@Nullable String sessionId, @Nullable SyncPromptContext syncContext) {
+		Object result = invoke(handler, request, sessionId, syncContext);
 		if (result == null) {
 			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR, "The " + handler.getAcpMethod()
 					+ " handler produced no response (it returned nothing, or an interceptor vetoed the call)");
@@ -353,12 +363,13 @@ public class AcpAgentSupport {
 
 	/**
 	 * Runs the interceptor chain, argument resolution, the handler and its return value
-	 * handling.
+	 * handling. The invocation sees this connection's agent and, once the client has sent
+	 * initialize, the capabilities negotiated on it.
 	 * @return the handler's result, or null when it produced none or an interceptor vetoed
 	 * the call
 	 */
 	private @Nullable Object invoke(AcpHandlerMethod handler, Object request, @Nullable String sessionId,
-			@Nullable SyncPromptContext syncContext, @Nullable NegotiatedCapabilities capabilities) {
+			@Nullable SyncPromptContext syncContext) {
 
 		AcpInvocationContext context = AcpInvocationContext.builder()
 				.acpMethod(handler.getAcpMethod())
@@ -366,7 +377,8 @@ public class AcpAgentSupport {
 				.sessionId(sessionId)
 				.syncPromptContext(syncContext)
 				.promptContext(syncContext != null ? syncContext.async() : null)
-				.capabilities(capabilities)
+				.capabilities(agent.getClientCapabilities())
+				.agent(agent)
 				.build();
 
 		InterceptorChain chain = new InterceptorChain(interceptors);
@@ -663,7 +675,8 @@ public class AcpAgentSupport {
 		 * The extension method an {@link ExtRequest} or {@link ExtNotification} method
 		 * handles, or null when it has neither annotation.
 		 * @throws IllegalArgumentException if the name does not start with {@code _}, or the
-		 * method takes more than one parameter
+		 * method takes more than one parameter for the params (its other parameters may only
+		 * take its connection's capabilities or agent)
 		 */
 		private static @Nullable String extensionMethod(Method method) {
 			ExtRequest request = method.getAnnotation(ExtRequest.class);
@@ -673,9 +686,13 @@ public class AcpAgentSupport {
 				return null;
 			}
 			ExtensionMethods.requireExtension(name);
-			if (method.getParameterCount() > 1) {
+			long paramsParameters = Arrays.stream(method.getParameterTypes())
+				.filter(type -> !ExtensionParamsResolver.isConnectionType(type))
+				.count();
+			if (paramsParameters > 1) {
 				throw new IllegalArgumentException("Extension handler " + method.getName()
-						+ " must take at most one parameter, which receives the params of " + name);
+						+ " must take at most one parameter, which receives the params of " + name
+						+ ", besides NegotiatedCapabilities, AcpSyncAgent or AcpAsyncAgent");
 			}
 			return name;
 		}
@@ -702,6 +719,7 @@ public class AcpAgentSupport {
 					new DisableProviderRequestResolver(),
 					new CancelNotificationResolver(),
 					new PromptContextResolver(),
+					new AgentResolver(),
 					new SessionIdResolver(),
 					new CapabilitiesResolver());
 		}
