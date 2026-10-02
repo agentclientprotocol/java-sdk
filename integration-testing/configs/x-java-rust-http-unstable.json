@@ -38,6 +38,22 @@
     }
   ],
   "assertions": {
+    "requiredOutput": {
+      "client": [
+        "negotiated HTTP_1_1"
+      ]
+    },
+    "forbiddenOutput": {
+      "client": [
+        "negotiated HTTP_2"
+      ]
+    },
+    "requiredPatterns": {
+      "agent": [
+        "\\[http\\] POST /acp HTTP/1\\.1 .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202"
+      ]
+    },
     "checks": [
       "client RESULT pass == 3",
       "client RESULT fail == 0"

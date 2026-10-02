@@ -59,11 +59,31 @@
   "self": ["typescript", "rust", "python", "kotlin"],
   "facts": [
     {
-      "comment": "Java client -> Java agent on HTTP negotiates h2c on every request (carried over from interop-java-java).",
+      "comment": "Java client -> Java agent on HTTP negotiates h2c on every request (carried over from the retired interop-java-java).",
       "when": { "client": "java", "agent": "java", "transport": "http" },
       "requiredOutput": { "client": ["negotiated HTTP_2"] },
       "forbiddenOutput": { "client": ["negotiated HTTP_1_1"], "agent": [" /acp HTTP/1.1 "] },
       "requiredPatterns": { "agent": ["\\[http\\] POST /acp HTTP/2\\.0 .*-> 200", "\\[http\\] DELETE /acp HTTP/2\\.0 .*-> 202"] }
+    },
+    {
+      "comment": "The Java client -> TypeScript or Rust agent on HTTP: neither server speaks h2c, so the Java client's probe falls back to HTTP/1.1 and every request is HTTP/1.1; DELETE is answered 202 (carried over from interop-ts-server and interop-rust-server).",
+      "when": { "client": "java", "agent": ["typescript", "rust"], "transport": "http" },
+      "requiredOutput": { "client": ["negotiated HTTP_1_1"] },
+      "forbiddenOutput": { "client": ["negotiated HTTP_2"] },
+      "requiredPatterns": { "agent": ["\\[http\\] POST /acp HTTP/1\\.1 .*-> 200", "\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202"] }
+    },
+    {
+      "comment": "The Java client -> Python agent on HTTP negotiates h2c; DELETE is answered 202 (carried over from interop-python-server).",
+      "when": { "client": "java", "agent": "python", "transport": "http" },
+      "requiredOutput": { "client": ["negotiated HTTP_2"] },
+      "forbiddenOutput": { "client": ["negotiated HTTP_1_1"] },
+      "requiredPatterns": { "agent": ["\\[http\\] POST /acp HTTP/2(\\.0)? .*-> 200", "\\[http\\] DELETE /acp HTTP/2(\\.0)? .*-> 202"] }
+    },
+    {
+      "comment": "TypeScript, Rust and Python clients -> Java agent on HTTP stay on HTTP/1.1 (no h2c upgrade) (carried over from interop-{ts,rust,python}-client).",
+      "when": { "client": ["typescript", "rust", "python"], "agent": "java", "transport": "http" },
+      "forbiddenOutput": { "agent": [" /acp HTTP/2.0 "] },
+      "requiredPatterns": { "agent": ["\\[http\\] POST /acp HTTP/1\\.1 .*-> 200", "\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202"] }
     },
     {
       "comment": "Any client closing an HTTP connection to the Java agent sends DELETE, answered 202.",

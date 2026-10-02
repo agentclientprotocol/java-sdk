@@ -55,6 +55,20 @@
         "STEP agent.cancel.prompt PASS",
         "STEP agent.ext.agent-request PASS",
         "STEP agent.meta.permission PASS"
+      ],
+      "client": [
+        "negotiated HTTP_2"
+      ]
+    },
+    "forbiddenOutput": {
+      "client": [
+        "negotiated HTTP_1_1"
+      ]
+    },
+    "requiredPatterns": {
+      "agent": [
+        "\\[http\\] POST /acp HTTP/2(\\.0)? .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/2(\\.0)? .*-> 202"
       ]
     },
     "checks": [

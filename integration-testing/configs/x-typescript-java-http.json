@@ -58,8 +58,15 @@
         "STEP agent.meta.permission PASS"
       ]
     },
+    "forbiddenOutput": {
+      "agent": [
+        " /acp HTTP/2.0 "
+      ]
+    },
     "requiredPatterns": {
       "agent": [
+        "\\[http\\] POST /acp HTTP/1\\.1 .*-> 200",
+        "\\[http\\] DELETE /acp HTTP/1\\.1 .*-> 202",
         "\\[http\\] DELETE /acp HTTP/\\S+ .*-> 202"
       ]
     },

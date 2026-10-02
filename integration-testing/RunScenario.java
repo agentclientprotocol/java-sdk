@@ -34,8 +34,8 @@ import java.util.stream.Stream;
  *
  * <pre>
  *   cd integration-testing
- *   jbang RunScenario.java interop-ts-server
- *   jbang RunScenario.java interop-ts-server --peer typescript-sdk=v0.5.0
+ *   jbang RunScenario.java x-java-typescript-http
+ *   jbang RunScenario.java x-java-typescript-http --peer typescript-sdk=v0.5.0
  *   jbang RunScenario.java load-300 --skip-sdk-install
  *   jbang RunScenario.java --list
  *   jbang RunScenario.java --prepare x-java-java-http x-java-rust-ws   (peers and builds only)

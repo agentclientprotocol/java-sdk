@@ -49,21 +49,21 @@ jobs:
           PEER: ${{ github.event.inputs.peer || 'all' }}
         run: |
           # Per peer: its toolchain, its transports (cells x-java-<peer>-<t> and x-<peer>-java-<t>),
-          # the legacy scenarios that run with its http leg, and the cache paths of its build.
-          # java runs as one leg: the Java <-> Java cells, the legacy Java pair, conformance, load.
+          # and the cache paths of its build.
+          # java runs as one leg: the Java <-> Java cells, conformance, load.
           # kotlin has no Streamable HTTP; its Gradle toolchain is JDK 21 while the SDK and the
           # Java programs stay on 17 (the last version listed is the default).
           peers="$(jq -c . <<'JSON'
           [
-            { "peer": "java", "java": "17", "only": "interop-java-java,x-java-java-*,conf-*,load-*" },
+            { "peer": "java", "java": "17", "only": "x-java-java-*,conf-*,load-*" },
             { "peer": "typescript", "sdk": "typescript-sdk", "java": "17", "node": true,
-              "transports": ["stdio", "http", "ws"], "legacy": "interop-ts-*",
+              "transports": ["stdio", "http", "ws"],
               "cache-paths": "integration-testing/.cache/peers/typescript-sdk@*\n~/.npm" },
             { "peer": "rust", "sdk": "rust-sdk", "java": "17", "rust": true,
-              "transports": ["stdio", "http", "ws"], "legacy": "interop-rust-*",
+              "transports": ["stdio", "http", "ws"],
               "cache-paths": "integration-testing/.cache/peers/rust-sdk@*\nintegration-testing/.cache/build\n~/.cargo/registry/index\n~/.cargo/registry/cache\n~/.cargo/git/db" },
             { "peer": "python", "sdk": "python-sdk", "java": "17", "python": true,
-              "transports": ["stdio", "http", "ws"], "legacy": "interop-python-*",
+              "transports": ["stdio", "http", "ws"],
               "cache-paths": "integration-testing/.cache/peers/python-sdk@*" },
             { "peer": "kotlin", "sdk": "kotlin-sdk", "java": "21\n17", "gradle": true,
               "transports": ["stdio", "ws"],
@@ -73,13 +73,12 @@ jobs:
           )"
           picked="$(jq -c --arg p "$PEER" '[.[] | select($p == "all" or .peer == $p)]' <<< "$peers")"
           prepare="$(jq -c '{include: [.[] | select(.sdk)
-            | . + {only: ((["x-*-\(.peer)-*", "x-\(.peer)-*"] + (if .legacy then [.legacy] else [] end)) | join(","))}
-            | del(.transports, .legacy)]}' <<< "$picked")"
+            | . + {only: (["x-*-\(.peer)-*", "x-\(.peer)-*"] | join(","))}
+            | del(.transports)]}' <<< "$picked")"
           cells="$(jq -c '{include: [.[] as $x | ($x.transports // ["all"])[] as $t
             | $x + (if $t == "all" then {leg: $x.peer} else {leg: "\($x.peer)-\($t)", transport: $t,
-                only: ((["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*"]
-                        + (if $t == "http" and $x.legacy then [$x.legacy] else [] end)) | join(","))} end)
-            | del(.transports, .legacy)]}' <<< "$picked")"
+                only: (["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*"] | join(","))} end)
+            | del(.transports)]}' <<< "$picked")"
           jq . <<< "$cells"
           {
             echo "prepare=$prepare"

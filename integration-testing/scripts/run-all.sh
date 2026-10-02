@@ -5,7 +5,7 @@
 #   integration-testing/scripts/run-all.sh                               # the default set, peers at main
 #   integration-testing/scripts/run-all.sh --peers-ref v1.0.0            # every peer at a tag
 #   integration-testing/scripts/run-all.sh --peer typescript-sdk=v0.5.0  # one peer at a tag
-#   integration-testing/scripts/run-all.sh --only interop-ts-server,load-50   # names
+#   integration-testing/scripts/run-all.sh --only x-java-typescript-http,load-50   # names
 #   integration-testing/scripts/run-all.sh --only 'x-*-python-*,x-python-*'   # globs
 #   integration-testing/scripts/run-all.sh --tag python,stdio            # dash-separated name tokens
 #   integration-testing/scripts/run-all.sh --exclude 'load-*' --list     # print the selection only
@@ -68,14 +68,11 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Order: legacy interop first (fast, and a broken transport shows there first), then the
-# generated cells and conformance scenarios, then load, then anything else. Names in the fixed
-# lists keep their historical order; the rest of each group is alphabetical.
+# Order: the generated cells and conformance scenarios, then load, then anything else. Load
+# scenarios keep their historical order; the rest of each group is alphabetical.
 ORDERED=()
 add() { [ -e "configs/$1.json" ] && [[ " ${ORDERED[*]} " != *" $1 "* ]] && ORDERED+=("$1"); return 0; }
-for s in interop-java-java interop-ts-server interop-rust-server interop-python-server \
-    interop-ts-client interop-rust-client interop-python-client; do add "$s"; done
-for group in 'interop-*' 'x-*' 'conf-*' load-50 load-300 load-1000 load-shared-300 'load-*' '*'; do
+for group in 'x-*' 'conf-*' load-50 load-300 load-1000 load-shared-300 'load-*' '*'; do
     for f in configs/$group.json; do add "$(basename "$f" .json)"; done
 done
 
