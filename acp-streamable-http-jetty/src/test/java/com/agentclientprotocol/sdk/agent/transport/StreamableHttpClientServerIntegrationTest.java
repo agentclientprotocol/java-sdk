@@ -206,6 +206,46 @@ class StreamableHttpClientServerIntegrationTest {
 	}
 
 	/**
+	 * Port 0 asks the OS for an ephemeral port. Before start, {@code getPort()} reports the
+	 * configured 0; once started it reports the bound port, which a real client connects to,
+	 * and keeps reporting it after the listener closes.
+	 */
+	@Test
+	void portZeroBindsAnEphemeralPortThatGetPortReports() throws Exception {
+		StreamableHttpAcpAgentTransport server = new StreamableHttpAcpAgentTransport(0, AcpJsonMapper.createDefault(),
+				agentFactory());
+		assertThat(server.getPort()).isZero();
+		server.start().block(TIMEOUT);
+		int boundPort = server.getPort();
+		assertThat(boundPort).isPositive();
+		AcpAsyncClient client = client(server).build();
+		try {
+			client.initialize().block(TIMEOUT);
+			AcpSchema.NewSessionResponse session = client
+				.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
+				.block(TIMEOUT);
+			assertThat(client
+				.prompt(new AcpSchema.PromptRequest(session.sessionId(), List.of(new AcpSchema.TextContent("hi"))))
+				.block(TIMEOUT)
+				.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			server.closeGracefully().block(TIMEOUT);
+		}
+		assertThat(server.getPort()).isEqualTo(boundPort);
+	}
+
+	@Test
+	void portOutsideTheValidRangeIsRejected() {
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(-1, AcpJsonMapper.createDefault(), agentFactory()))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(
+				() -> new StreamableHttpAcpAgentTransport(65536, AcpJsonMapper.createDefault(), agentFactory()))
+			.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	/**
 	 * The RFD requires HTTP/2 and the listener serves h2c. Over cleartext the JDK client only
 	 * offers the h2c upgrade on a request without a body, so a bodiless request goes first;
 	 * the POST then reuses the upgraded connection. (Over https, ALPN negotiates HTTP/2 from

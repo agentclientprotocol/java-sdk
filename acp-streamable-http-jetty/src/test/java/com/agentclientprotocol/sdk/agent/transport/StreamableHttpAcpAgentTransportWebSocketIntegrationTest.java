@@ -63,7 +63,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		AcpJsonMapper jsonMapper = AcpJsonMapper.createDefault();
 		AcpAgentFactory agentFactory = simpleAgentFactory();
 
-		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(0, jsonMapper, agentFactory))
+		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(-1, jsonMapper, agentFactory))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("Port");
 		assertThatThrownBy(() -> new StreamableHttpAcpAgentTransport(8080, "", jsonMapper, agentFactory))
