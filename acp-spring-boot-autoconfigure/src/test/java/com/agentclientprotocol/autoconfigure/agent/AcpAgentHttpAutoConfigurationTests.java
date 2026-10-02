@@ -1,7 +1,5 @@
 package com.agentclientprotocol.autoconfigure.agent;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -55,12 +53,12 @@ class AcpAgentHttpAutoConfigurationTests {
 		.withConfiguration(AGENT_AUTO_CONFIGURATIONS);
 
 	@Test
-	void listenerServesAgentOverStreamableHttpAndWebSocket() throws IOException {
-		int port = freePort();
+	void listenerServesAgentOverStreamableHttpAndWebSocket() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=" + port)
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0")
 			.run(context -> {
 				assertThat(context).hasSingleBean(StreamableHttpAcpAgentTransport.class);
+				int port = context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
 				assertThat(context).doesNotHaveBean(AcpAgentTransport.class);
 				assertThat(context).doesNotHaveBean("acpAgentLifecycle");
 
@@ -72,21 +70,22 @@ class AcpAgentHttpAutoConfigurationTests {
 	}
 
 	@Test
-	void listenerUsesConfiguredPath() throws IOException {
-		int port = freePort();
+	void listenerUsesConfiguredPath() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=" + port,
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0",
 					"spring.acp.agent.transport.http.path=/agents/echo")
-			.run(context -> assertRoundTrip(new StreamableHttpAcpClientTransport(
-					URI.create("http://localhost:" + port + "/agents/echo"), AcpJsonMapper.createDefault())));
+			.run(context -> {
+				int port = context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
+				assertRoundTrip(new StreamableHttpAcpClientTransport(
+						URI.create("http://localhost:" + port + "/agents/echo"), AcpJsonMapper.createDefault()));
+			});
 	}
 
 	@Test
-	void userDefinedListenerOverridesAutoConfigured() throws IOException {
-		int port = freePort();
+	void userDefinedListenerOverridesAutoConfigured() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
 			.withBean("customListener", StreamableHttpAcpAgentTransport.class,
-					() -> new StreamableHttpAcpAgentTransport(port, AcpJsonMapper.createDefault(),
+					() -> new StreamableHttpAcpAgentTransport(0, AcpJsonMapper.createDefault(),
 							AcpAgentFactory.sync(transport -> {
 								throw new IllegalStateException("not used");
 							})))
@@ -94,7 +93,8 @@ class AcpAgentHttpAutoConfigurationTests {
 			.run(context -> {
 				assertThat(context).hasSingleBean(StreamableHttpAcpAgentTransport.class);
 				assertThat(context).hasBean("customListener");
-				assertThat(context.getBean(StreamableHttpAcpAgentTransport.class).getPort()).isEqualTo(port);
+				// Started by the autoconfigured lifecycle: the ephemeral port is bound
+				assertThat(context.getBean(StreamableHttpAcpAgentTransport.class).getPort()).isPositive();
 			});
 	}
 
@@ -188,12 +188,6 @@ class AcpAgentHttpAutoConfigurationTests {
 		}
 		finally {
 			client.closeGracefully();
-		}
-	}
-
-	private static int freePort() throws IOException {
-		try (ServerSocket socket = new ServerSocket(0)) {
-			return socket.getLocalPort();
 		}
 	}
 

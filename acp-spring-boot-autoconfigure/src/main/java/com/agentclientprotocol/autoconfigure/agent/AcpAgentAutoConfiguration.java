@@ -42,24 +42,21 @@ public class AcpAgentAutoConfiguration {
 		AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
 				AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
 			Object agentBean = findAgentBean(applicationContext);
-			return new AcpAgentLifecycle(agentSupport(agentBean, transport, properties, interceptors));
+			return new AcpAgentLifecycle(
+					agentSupportBuilder(agentBean, properties, interceptors).transport(transport).build());
 		}
 
 	}
 
 	// Listener-backed transports (Streamable HTTP) host one agent runtime per remote
-	// connection, each dispatching to the same @AcpAgent bean. A fresh AcpAgentSupport
-	// per
-	// connection: its builder adds its default resolvers on every build, so it is not
-	// reused.
+	// connection, each dispatching to the same @AcpAgent bean, so its handlers must be
+	// thread-safe.
 	@Bean
 	@ConditionalOnBean(annotation = AcpAgent.class)
 	@ConditionalOnMissingBean
 	AcpAgentFactory acpAgentFactory(ApplicationContext applicationContext, AcpAgentProperties properties,
 			List<AcpInterceptor> interceptors) {
-		Object agentBean = findAgentBean(applicationContext);
-		return AcpAgentFactory
-			.sync(transport -> agentSupport(agentBean, transport, properties, interceptors).getAgent());
+		return agentSupportBuilder(findAgentBean(applicationContext), properties, interceptors).buildFactory();
 	}
 
 	private static Object findAgentBean(ApplicationContext applicationContext) {
@@ -75,17 +72,15 @@ public class AcpAgentAutoConfiguration {
 		return agentBean;
 	}
 
-	private static AcpAgentSupport agentSupport(Object agentBean, AcpAgentTransport transport,
-			AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
-		var builder = AcpAgentSupport.create(agentBean)
-			.transport(transport)
-			.requestTimeout(properties.getRequestTimeout());
+	private static AcpAgentSupport.Builder agentSupportBuilder(Object agentBean, AcpAgentProperties properties,
+			List<AcpInterceptor> interceptors) {
+		var builder = AcpAgentSupport.create(agentBean).requestTimeout(properties.getRequestTimeout());
 
 		for (AcpInterceptor interceptor : interceptors) {
 			builder.interceptor(interceptor);
 		}
 
-		return builder.build();
+		return builder;
 	}
 
 	static class AcpAgentLifecycle implements SmartLifecycle {
