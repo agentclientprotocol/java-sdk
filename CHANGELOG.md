@@ -201,6 +201,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`AcpError.getMessage()` no longer ends with `[code=N]`.** It is the peer's message, followed
+  by the detail its data carries, so `e.getCode() + " " + e.getMessage()` names the code once.
+  `toString()` (what stack traces show) still includes `[code=N]`. Code that parsed the code out of
+  the message should call `getCode()`.
+
 - **`StreamableHttpAcpAgentTransportOptions` gains `shutdownTimeout`** (builder
   `shutdownTimeout(Duration)`, default 5 seconds, positive): how long closing the servlet or the
   listener waits for its connections' agents before closing the rest at once. Breaking for code
