@@ -9,6 +9,7 @@ import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTranspo
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -59,6 +60,12 @@ public class AcpAgentHttpAutoConfiguration {
 			return registration;
 		}
 
+		@Bean
+		AcpServletLifecycle acpServletLifecycle(
+				@Qualifier("acpServletRegistration") ServletRegistrationBean<?> acpServletRegistration) {
+			return new AcpServletLifecycle(acpServletRegistration);
+		}
+
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -105,6 +112,51 @@ public class AcpAgentHttpAutoConfiguration {
 			options.maxConcurrentStreamsPerConnection(http.getMaxConcurrentStreamsPerConnection());
 		}
 		return options.build();
+	}
+
+	/**
+	 * Closes the servlet's ACP connections before the web server shuts down. Each holds
+	 * an open SSE response; left to the servlet's {@code destroy()}, which runs after the
+	 * server has stopped, closing them waits out the servlet's 30 second timeout, and
+	 * graceful shutdown would wait on them as in-flight requests.
+	 */
+	static class AcpServletLifecycle implements SmartLifecycle {
+
+		private static final Duration TIMEOUT = Duration.ofSeconds(30);
+
+		private final ServletRegistrationBean<?> registration;
+
+		private volatile boolean running = false;
+
+		AcpServletLifecycle(ServletRegistrationBean<?> registration) {
+			this.registration = registration;
+		}
+
+		@Override
+		public void start() {
+			running = true;
+		}
+
+		@Override
+		public void stop() {
+			if (registration.getServlet() instanceof StreamableHttpAcpServlet servlet) {
+				servlet.closeGracefully().block(TIMEOUT);
+			}
+			running = false;
+		}
+
+		@Override
+		public boolean isRunning() {
+			return running;
+		}
+
+		@Override
+		public int getPhase() {
+			// After the default phase stops nothing else; before graceful shutdown
+			// (DEFAULT_PHASE - 1024) and the web server stop (DEFAULT_PHASE - 2048).
+			return SmartLifecycle.DEFAULT_PHASE;
+		}
+
 	}
 
 	static class AcpAgentHttpListenerLifecycle implements SmartLifecycle {
