@@ -39,6 +39,10 @@ public interface AcpAsyncAgent {
 	 * This is useful for blocking until the transport closes, particularly
 	 * when using daemon threads.
 	 *
+	 * <p>On stdio, the agent terminates once the client has closed its input and every
+	 * request received before has been answered, bounded by the transport's drain timeout
+	 * (see {@code StdioAcpAgentTransport}): exiting then loses no reply.
+	 *
 	 * <p>Example usage:
 	 * <pre>{@code
 	 * agent.start().block();
