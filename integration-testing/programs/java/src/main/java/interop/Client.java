@@ -189,7 +189,7 @@ public class Client {
 		STEPS.put("update.tool_call", () -> emit("tool_call",
 				u -> u instanceof AcpSchema.ToolCall c && "call-1".equals(c.toolCallId())
 						&& "interop tool".equals(c.title()) && c.kind() == AcpSchema.ToolKind.READ
-						&& c.status() == AcpSchema.ToolCallStatus.PENDING));
+						&& AcpSchema.ToolCallStatus.PENDING.equals(c.status())));
 		STEPS.put("update.tool_call_update", Client::toolCallUpdate);
 		STEPS.put("update.tool_call-name", Client::toolCallName);
 		STEPS.put("update.plan", () -> emit("plan", u -> u instanceof AcpSchema.Plan p && p.entries() != null
@@ -303,7 +303,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#echo-caps");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> !c.chunks(sid).isEmpty(), "no chunk with the echoed capabilities");
 		String json = String.join("", c.chunks(sid));
 		Map<String, Object> caps = JSON.readValue(json, new TypeRef<Map<String, Object>>() {
@@ -399,7 +399,7 @@ public class Client {
 		block(c.client.loadSession(new AcpSchema.LoadSessionRequest(sid, dir.toString(), List.of())));
 		int before = c.chunks(sid).size();
 		AcpSchema.PromptResponse r = c.prompt(sid, "after load");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).size() > before, "no agent_message_chunk after the load");
 		return "loaded " + sid + "; prompt after load end_turn";
 	}
@@ -431,7 +431,7 @@ public class Client {
 		List<AcpSchema.SessionUpdate> during = c.updatesFrom(sid, from);
 		check(during.isEmpty(), "resume replayed " + kinds(during));
 		AcpSchema.PromptResponse r = c.prompt(sid, "after resume");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "after resume: stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "after resume: stopReason " + r.stopReason());
 		return "resumed without replay; prompt after resume end_turn";
 	}
 
@@ -468,7 +468,7 @@ public class Client {
 		String ended;
 		try {
 			AcpSchema.PromptResponse r = slow.get(5, TimeUnit.SECONDS);
-			check(r.stopReason() == AcpSchema.StopReason.CANCELLED, "the #slow prompt answered " + r.stopReason());
+			check(AcpSchema.StopReason.CANCELLED.equals(r.stopReason()), "the #slow prompt answered " + r.stopReason());
 			ended = "cancelled";
 		}
 		catch (java.util.concurrent.TimeoutException e) {
@@ -510,7 +510,7 @@ public class Client {
 		CompletableFuture<AcpSchema.PromptResponse> fb = c.promptAsync(b, "multi B");
 		AcpSchema.PromptResponse ra = join(fa);
 		AcpSchema.PromptResponse rb = join(fb);
-		check(ra.stopReason() == AcpSchema.StopReason.END_TURN && rb.stopReason() == AcpSchema.StopReason.END_TURN,
+		check(AcpSchema.StopReason.END_TURN.equals(ra.stopReason()) && AcpSchema.StopReason.END_TURN.equals(rb.stopReason()),
 				"stopReasons " + ra.stopReason() + ", " + rb.stopReason());
 		await(() -> String.join("", c.chunks(a)).equals("echo: multi A") && String.join("", c.chunks(b)).equals("echo: multi B"),
 				() -> "chunks A " + c.chunks(a) + ", B " + c.chunks(b));
@@ -525,7 +525,7 @@ public class Client {
 				c.client.forkSession(new AcpSchema.ForkSessionRequest(sid, dir.toString(), List.of())));
 		check(f.sessionId() != null && !f.sessionId().equals(sid), "fork returned sessionId " + f.sessionId());
 		AcpSchema.PromptResponse r = c.prompt(f.sessionId(), "in fork");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "in fork: stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "in fork: stopReason " + r.stopReason());
 		return "forked " + sid + " into " + f.sessionId();
 	}
 
@@ -535,7 +535,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "hello");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> String.join("", c.chunks(sid)).equals("echo: hello"),
 				() -> "chunks " + c.chunks(sid) + " do not spell \"echo: hello\"");
 		return "end_turn; chunks spell \"echo: hello\"";
@@ -546,7 +546,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit " + kind);
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.updates(sid).stream().anyMatch(match), () -> "no matching " + kind + " in " + c.updates(sid));
 		return kind + " received; end_turn";
 	}
@@ -555,12 +555,12 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit tool_call_update");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> {
 			List<AcpSchema.SessionUpdate> us = c.updates(sid);
 			int call = indexOf(us, u -> u instanceof AcpSchema.ToolCall t && "call-1".equals(t.toolCallId()));
 			int update = indexOf(us, u -> u instanceof AcpSchema.ToolCallUpdateNotification t && "call-1".equals(t.toolCallId())
-					&& t.status() == AcpSchema.ToolCallStatus.COMPLETED && t.content() != null
+					&& AcpSchema.ToolCallStatus.COMPLETED.equals(t.status()) && t.content() != null
 					&& t.content().stream().anyMatch(x -> x instanceof AcpSchema.ToolCallContentBlock b
 							&& text(b.content()).equals("tool output")));
 			return call >= 0 && update > call;
@@ -586,7 +586,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit session_info_update");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.SessionInfoUpdate i
 				&& "interop title".equals(i.title())), () -> "no session_info_update titled \"interop title\"; updates "
 						+ kinds(c.updates(sid)));
@@ -597,7 +597,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#emit unknown");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains("after-unknown"), () -> "no chunk \"after-unknown\" in " + c.chunks(sid));
 		boolean surfaced = c.updates(sid).stream().anyMatch(u -> u instanceof AcpSchema.UnknownSessionUpdate);
 		return "after-unknown arrived; end_turn (unknown update " + (surfaced ? "surfaced as UnknownSessionUpdate"
@@ -663,7 +663,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#permission allow");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains("permission: selected allow"),
 				() -> "no chunk \"permission: selected allow\" in " + c.chunks(sid));
 		int asked = c.permissionRequests(sid);
@@ -679,7 +679,7 @@ public class Client {
 		long at = c.cancelSentAt.getOrDefault(sid, 0L);
 		check(at != 0, "no permission request arrived, so no cancel was sent");
 		long ms = (System.nanoTime() - at) / 1_000_000;
-		check(r.stopReason() == AcpSchema.StopReason.CANCELLED, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.CANCELLED.equals(r.stopReason()), "stopReason " + r.stopReason());
 		check(ms <= 5000, "cancelled " + ms + " ms after the cancel");
 		return "cancel sent on the permission request; stopReason cancelled " + ms + " ms later";
 	}
@@ -689,7 +689,7 @@ public class Client {
 		String sid = c.newSession();
 		Path file = dir.resolve("fs-write.txt");
 		AcpSchema.PromptResponse r = c.prompt(sid, "#fs write " + file + " interop write");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains("fs write ok"), () -> "no chunk \"fs write ok\" in " + c.chunks(sid));
 		check(Files.exists(file), file + " was not written");
 		String content = Files.readString(file);
@@ -707,7 +707,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, prompt);
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).stream().anyMatch(chunk), () -> "chunks " + quoteAll(c.chunks(sid)));
 		return "chunk " + quoteAll(c.chunks(sid));
 	}
@@ -718,7 +718,7 @@ public class Client {
 		String sid = c.newSession();
 		long t0 = System.nanoTime();
 		AcpSchema.PromptResponse r = c.prompt(sid, prompt);
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains(expected), () -> "no chunk \"" + expected + "\" in " + quoteAll(c.chunks(sid)));
 		long ms = (System.nanoTime() - t0) / 1_000_000;
 		check(ms <= within.toMillis(), "\"" + expected + "\" after " + ms + " ms, more than " + within.toMillis());
@@ -729,7 +729,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#elicit form");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).stream().anyMatch(s -> s.startsWith("elicit: ")), () -> "chunks " + c.chunks(sid));
 		String chunk = c.chunks(sid).stream().filter(s -> s.startsWith("elicit: ")).findFirst().orElseThrow();
 		check(chunk.startsWith("elicit: accept "), "chunk " + chunk);
@@ -742,7 +742,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#elicit url");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.completedElicitations.contains("elic-1"),
 				() -> "no elicitation/complete for elic-1 (received " + c.completedElicitations + "); chunks " + c.chunks(sid));
 		return "elicitation/complete elic-1 arrived";
@@ -759,7 +759,7 @@ public class Client {
 		long t0 = System.nanoTime();
 		AcpSchema.PromptResponse r = get(slow, Duration.ofSeconds(5), "the prompt did not answer within 5 s of the cancel");
 		long ms = (System.nanoTime() - t0) / 1_000_000;
-		check(r.stopReason() == AcpSchema.StopReason.CANCELLED, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.CANCELLED.equals(r.stopReason()), "stopReason " + r.stopReason());
 		return "stopReason cancelled " + ms + " ms after the cancel";
 	}
 
@@ -788,9 +788,9 @@ public class Client {
 			during = describe(e);
 		}
 		AcpSchema.PromptResponse first = get(slow, Duration.ofSeconds(5), "the cancelled prompt did not answer within 5 s");
-		check(first.stopReason() == AcpSchema.StopReason.CANCELLED, "the cancelled prompt answered " + first.stopReason());
+		check(AcpSchema.StopReason.CANCELLED.equals(first.stopReason()), "the cancelled prompt answered " + first.stopReason());
 		AcpSchema.PromptResponse after = c.prompt(sid, "after cancel");
-		check(after.stopReason() == AcpSchema.StopReason.END_TURN, "\"after cancel\" answered " + after.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(after.stopReason()), "\"after cancel\" answered " + after.stopReason());
 		return "first cancelled; \"during cancel\" rejected (" + during + "); \"after cancel\" end_turn";
 	}
 
@@ -803,7 +803,7 @@ public class Client {
 		long t0 = System.nanoTime();
 		AcpSchema.PromptResponse r = get(hang, Duration.ofSeconds(6), "no answer within 6 s of the cancel");
 		long ms = (System.nanoTime() - t0) / 1_000_000;
-		check(r.stopReason() == AcpSchema.StopReason.CANCELLED, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.CANCELLED.equals(r.stopReason()), "stopReason " + r.stopReason());
 		return "the SDK answered cancelled " + ms + " ms after the cancel";
 	}
 
@@ -834,7 +834,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#ext request _interop/ping");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).stream().anyMatch(s -> s.startsWith("ext: ")), () -> "chunks " + quoteAll(c.chunks(sid)));
 		String chunk = c.chunks(sid).stream().filter(s -> s.startsWith("ext: ")).findFirst().orElseThrow();
 		Object result;
@@ -852,7 +852,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#ext notify _interop/note");
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.extNotes.stream().anyMatch(p -> p instanceof Map<?, ?> m && Objects.equals(number(m.get("n")), 1L)),
 				() -> "_interop/note notifications " + c.extNotes + "; chunks " + quoteAll(c.chunks(sid)));
 		return "_interop/note arrived with {n: 1}";
@@ -899,7 +899,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#len " + "x".repeat(n));
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).contains("len=" + n), () -> "chunks " + quoteAll(c.chunks(sid)));
 		return "len=" + n;
 	}
@@ -908,7 +908,7 @@ public class Client {
 		Conn c = main();
 		String sid = c.newSession();
 		AcpSchema.PromptResponse r = c.prompt(sid, "#big " + n);
-		check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+		check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 		await(() -> c.chunks(sid).stream().anyMatch(s -> s.length() == n),
 				() -> "chunk lengths " + c.chunks(sid).stream().map(String::length).toList());
 		return "one agent_message_chunk of " + n + " characters";
@@ -924,7 +924,7 @@ public class Client {
 			first.initialize();
 			sid = first.newSession();
 			AcpSchema.PromptResponse r = first.prompt(sid, "before reconnect");
-			check(r.stopReason() == AcpSchema.StopReason.END_TURN, "before reconnect: stopReason " + r.stopReason());
+			check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "before reconnect: stopReason " + r.stopReason());
 		}
 		finally {
 			first.close();
@@ -934,7 +934,7 @@ public class Client {
 			second.initialize();
 			block(second.client.loadSession(new AcpSchema.LoadSessionRequest(sid, dir.toString(), List.of())));
 			AcpSchema.PromptResponse r = second.prompt(sid, "after reconnect");
-			check(r.stopReason() == AcpSchema.StopReason.END_TURN, "after reconnect: stopReason " + r.stopReason());
+			check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "after reconnect: stopReason " + r.stopReason());
 		}
 		finally {
 			second.close();
@@ -1108,7 +1108,7 @@ public class Client {
 			}
 			AcpSchema.PermissionOption chosen = req.options()
 				.stream()
-				.filter(o -> o.kind() == AcpSchema.PermissionOptionKind.ALLOW_ONCE)
+				.filter(o -> AcpSchema.PermissionOptionKind.ALLOW_ONCE.equals(o.kind()))
 				.findFirst()
 				.orElse(req.options().get(0));
 			return Mono.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected(chosen.optionId()),
@@ -1350,8 +1350,8 @@ public class Client {
 	}
 
 	static boolean planEntry(AcpSchema.PlanEntry e, String content, String priority, String status) {
-		return content.equals(e.content()) && e.priority() != null && priority.equals(e.priority().name())
-				&& e.status() != null && status.equals(e.status().name());
+		return content.equals(e.content()) && e.priority() != null && priority.equalsIgnoreCase(e.priority().value())
+				&& e.status() != null && status.equalsIgnoreCase(e.status().value());
 	}
 
 	static String selectValue(List<AcpSchema.SessionConfigOption> options, String id) {

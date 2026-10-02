@@ -10,16 +10,20 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
@@ -62,6 +66,23 @@ import org.slf4j.LoggerFactory;
  * property, and the canonical constructors of the known records accept {@code null} for it
  * (it becomes the record's own name) and reject any other value.
  * </p>
+ <p>
+ * The schema's closed string enums follow the same rule. A value this SDK does not know
+ * never fails the message:
+ * </p>
+ * <ul>
+ * <li>{@link ToolKind}, whose schema has a catch-all value ({@code other}, "Other tool
+ * types (default)"), reads an unknown kind as {@link ToolKind#OTHER}, as the Rust SDK
+ * does ({@code serde(other)}). It stays a Java enum.</li>
+ * <li>Every other enum ({@link StopReason}, {@link ToolCallStatus},
+ * {@link PermissionOptionKind}, {@link PlanEntryStatus}, {@link PlanEntryPriority},
+ * {@link Role}) has no such value, so it is an open value type: a record over the wire
+ * string, with a constant per value ACP v1 defines. An unknown value is kept and written
+ * back unchanged ({@code isKnown()} is false), as the Kotlin SDK and the v2 schema do;
+ * the Rust v1 SDK fails such a message. Compare with {@code equals}, not {@code ==}.</li>
+ * <li>Open strings in the schema stay {@code String} (a config option's
+ * {@code category}, a string property's {@code format}).</li>
+ * </ul>
  *
  * @author Mark Pollack
  * @author Christian Tzolov
@@ -99,6 +120,20 @@ public final class AcpSchema {
 	static Map<String, Object> unknownFields(@Nullable Map<String, Object> fields) {
 		// Null when the variant had no fields besides its discriminator under some mappers
 		return fields == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(fields));
+	}
+
+	/**
+	 * The known value whose wire value is {@code value}, or a new one: the factory of the
+	 * open enum-like values.
+	 */
+	static <T> T knownOrNew(List<T> known, Function<T, String> wire, String value, Function<String, T> create) {
+		Objects.requireNonNull(value, "value");
+		for (T candidate : known) {
+			if (wire.apply(candidate).equals(value)) {
+				return candidate;
+			}
+		}
+		return create.apply(value);
 	}
 
 	public static final String JSONRPC_VERSION = "2.0";
@@ -2235,76 +2270,402 @@ public final class AcpSchema {
 	// Enums
 	// ---------------------------
 
-	public enum StopReason {
+	/**
+	 * Why the agent ended a prompt turn ({@code PromptResponse.stopReason}). An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record StopReason(@JsonValue String value) {
 
-		@JsonProperty("end_turn")
-		END_TURN, @JsonProperty("max_tokens")
-		MAX_TOKENS, @JsonProperty("max_turn_requests")
-		MAX_TURN_REQUESTS, @JsonProperty("refusal")
-		REFUSAL, @JsonProperty("cancelled")
-		CANCELLED
+		/** {@code "end_turn"}. */
+		public static final StopReason END_TURN = new StopReason("end_turn");
+
+		/** {@code "max_tokens"}. */
+		public static final StopReason MAX_TOKENS = new StopReason("max_tokens");
+
+		/** {@code "max_turn_requests"}. */
+		public static final StopReason MAX_TURN_REQUESTS = new StopReason("max_turn_requests");
+
+		/** {@code "refusal"}. */
+		public static final StopReason REFUSAL = new StopReason("refusal");
+
+		/** {@code "cancelled"}. */
+		public static final StopReason CANCELLED = new StopReason("cancelled");
+
+		private static final List<StopReason> KNOWN = List.of(END_TURN, MAX_TOKENS, MAX_TURN_REQUESTS, REFUSAL, CANCELLED);
+
+		public StopReason {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static StopReason of(String value) {
+			return knownOrNew(KNOWN, StopReason::value, value, StopReason::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<StopReason> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 
-	public enum ToolCallStatus {
+	/**
+	 * The execution status of a tool call. An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record ToolCallStatus(@JsonValue String value) {
 
-		@JsonProperty("pending")
-		PENDING, @JsonProperty("in_progress")
-		IN_PROGRESS, @JsonProperty("completed")
-		COMPLETED, @JsonProperty("failed")
-		FAILED
+		/** {@code "pending"}. */
+		public static final ToolCallStatus PENDING = new ToolCallStatus("pending");
+
+		/** {@code "in_progress"}. */
+		public static final ToolCallStatus IN_PROGRESS = new ToolCallStatus("in_progress");
+
+		/** {@code "completed"}. */
+		public static final ToolCallStatus COMPLETED = new ToolCallStatus("completed");
+
+		/** {@code "failed"}. */
+		public static final ToolCallStatus FAILED = new ToolCallStatus("failed");
+
+		private static final List<ToolCallStatus> KNOWN = List.of(PENDING, IN_PROGRESS, COMPLETED, FAILED);
+
+		public ToolCallStatus {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static ToolCallStatus of(String value) {
+			return knownOrNew(KNOWN, ToolCallStatus::value, value, ToolCallStatus::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<ToolCallStatus> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 
+	/**
+	 * The kind of tool a tool call invokes. The schema's {@code other} is the catch-all: a
+	 * kind this SDK does not know reads as {@link #OTHER}, as in the Rust SDK (see
+	 * {@link AcpSchema} on forward compatibility).
+	 */
 	public enum ToolKind {
 
-		@JsonProperty("read")
-		READ, @JsonProperty("edit")
-		EDIT, @JsonProperty("delete")
-		DELETE, @JsonProperty("move")
-		MOVE, @JsonProperty("search")
-		SEARCH, @JsonProperty("execute")
-		EXECUTE, @JsonProperty("think")
-		THINK, @JsonProperty("fetch")
-		FETCH, @JsonProperty("switch_mode")
-		SWITCH_MODE, @JsonProperty("other")
-		OTHER
+		READ("read"), EDIT("edit"), DELETE("delete"), MOVE("move"), SEARCH("search"), EXECUTE("execute"),
+		THINK("think"), FETCH("fetch"), SWITCH_MODE("switch_mode"), OTHER("other");
+
+		private final String value;
+
+		ToolKind(String value) {
+			this.value = value;
+		}
+
+		/**
+		 * The wire value.
+		 * @return the kind's name in ACP
+		 */
+		@JsonValue
+		public String value() {
+			return value;
+		}
+
+		/**
+		 * The kind for a wire value; {@link #OTHER} for one this SDK does not know.
+		 * @param value the wire value
+		 * @return the kind
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static ToolKind of(String value) {
+			for (ToolKind kind : values()) {
+				if (kind.value.equals(value)) {
+					return kind;
+				}
+			}
+			return OTHER;
+		}
 
 	}
 
-	public enum Role {
+	/**
+	 * A conversation role, as named in content annotations. An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record Role(@JsonValue String value) {
 
-		@JsonProperty("assistant")
-		ASSISTANT, @JsonProperty("user")
-		USER
+		/** {@code "assistant"}. */
+		public static final Role ASSISTANT = new Role("assistant");
+
+		/** {@code "user"}. */
+		public static final Role USER = new Role("user");
+
+		private static final List<Role> KNOWN = List.of(ASSISTANT, USER);
+
+		public Role {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static Role of(String value) {
+			return knownOrNew(KNOWN, Role::value, value, Role::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<Role> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 
-	public enum PermissionOptionKind {
+	/**
+	 * The kind of a permission option, which a client may use to choose an icon or a default. An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record PermissionOptionKind(@JsonValue String value) {
 
-		@JsonProperty("allow_once")
-		ALLOW_ONCE, @JsonProperty("allow_always")
-		ALLOW_ALWAYS, @JsonProperty("reject_once")
-		REJECT_ONCE, @JsonProperty("reject_always")
-		REJECT_ALWAYS
+		/** {@code "allow_once"}. */
+		public static final PermissionOptionKind ALLOW_ONCE = new PermissionOptionKind("allow_once");
+
+		/** {@code "allow_always"}. */
+		public static final PermissionOptionKind ALLOW_ALWAYS = new PermissionOptionKind("allow_always");
+
+		/** {@code "reject_once"}. */
+		public static final PermissionOptionKind REJECT_ONCE = new PermissionOptionKind("reject_once");
+
+		/** {@code "reject_always"}. */
+		public static final PermissionOptionKind REJECT_ALWAYS = new PermissionOptionKind("reject_always");
+
+		private static final List<PermissionOptionKind> KNOWN = List.of(ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS);
+
+		public PermissionOptionKind {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static PermissionOptionKind of(String value) {
+			return knownOrNew(KNOWN, PermissionOptionKind::value, value, PermissionOptionKind::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<PermissionOptionKind> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 
-	public enum PlanEntryStatus {
+	/**
+	 * The status of a plan entry. An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record PlanEntryStatus(@JsonValue String value) {
 
-		@JsonProperty("pending")
-		PENDING, @JsonProperty("in_progress")
-		IN_PROGRESS, @JsonProperty("completed")
-		COMPLETED
+		/** {@code "pending"}. */
+		public static final PlanEntryStatus PENDING = new PlanEntryStatus("pending");
+
+		/** {@code "in_progress"}. */
+		public static final PlanEntryStatus IN_PROGRESS = new PlanEntryStatus("in_progress");
+
+		/** {@code "completed"}. */
+		public static final PlanEntryStatus COMPLETED = new PlanEntryStatus("completed");
+
+		private static final List<PlanEntryStatus> KNOWN = List.of(PENDING, IN_PROGRESS, COMPLETED);
+
+		public PlanEntryStatus {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static PlanEntryStatus of(String value) {
+			return knownOrNew(KNOWN, PlanEntryStatus::value, value, PlanEntryStatus::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<PlanEntryStatus> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 
-	public enum PlanEntryPriority {
+	/**
+	 * The priority of a plan entry. An open value: a value this SDK does not know (a newer peer) is kept and
+	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
+	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
+	 * for their wire values, so a known value read from the wire is one of them.
+	 *
+	 * @param value the wire value
+	 */
+	public record PlanEntryPriority(@JsonValue String value) {
 
-		@JsonProperty("high")
-		HIGH, @JsonProperty("medium")
-		MEDIUM, @JsonProperty("low")
-		LOW
+		/** {@code "high"}. */
+		public static final PlanEntryPriority HIGH = new PlanEntryPriority("high");
+
+		/** {@code "medium"}. */
+		public static final PlanEntryPriority MEDIUM = new PlanEntryPriority("medium");
+
+		/** {@code "low"}. */
+		public static final PlanEntryPriority LOW = new PlanEntryPriority("low");
+
+		private static final List<PlanEntryPriority> KNOWN = List.of(HIGH, MEDIUM, LOW);
+
+		public PlanEntryPriority {
+			Objects.requireNonNull(value, "value");
+		}
+
+		/**
+		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * @param value the wire value
+		 * @return the constant, or a new value for an unknown string
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		public static PlanEntryPriority of(String value) {
+			return knownOrNew(KNOWN, PlanEntryPriority::value, value, PlanEntryPriority::new);
+		}
+
+		/**
+		 * The values ACP v1 defines, in schema order.
+		 * @return the known values
+		 */
+		public static List<PlanEntryPriority> known() {
+			return KNOWN;
+		}
+
+		/**
+		 * Whether ACP v1 defines this value.
+		 * @return true for a known value
+		 */
+		public boolean isKnown() {
+			return KNOWN.contains(this);
+		}
+
+		@Override
+		public String toString() {
+			return value;
+		}
 
 	}
 

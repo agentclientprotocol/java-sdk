@@ -58,14 +58,14 @@ final class Raw {
 			Client.Conn c = Client.main();
 			String sid = c.newSession();
 			AcpSchema.PromptResponse r = c.prompt(sid, "#raw null-id-response");
-			Client.check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+			Client.check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 			return "end_turn; " + survived(c);
 		});
 		STEPS.put("raw.unknown-update", () -> {
 			Client.Conn c = Client.main();
 			String sid = c.newSession();
 			AcpSchema.PromptResponse r = c.prompt(sid, "#raw unknown-update");
-			Client.check(r.stopReason() == AcpSchema.StopReason.END_TURN, "stopReason " + r.stopReason());
+			Client.check(AcpSchema.StopReason.END_TURN.equals(r.stopReason()), "stopReason " + r.stopReason());
 			Client.await(() -> c.chunks(sid).contains("after-unknown"),
 					() -> "no chunk \"after-unknown\" in " + c.chunks(sid));
 			return "after-unknown arrived; end_turn";

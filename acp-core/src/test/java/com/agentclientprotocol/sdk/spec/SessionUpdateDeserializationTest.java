@@ -306,10 +306,10 @@ class SessionUpdateDeserializationTest {
 	@Test
 	void toolCallStatusAllValues() throws IOException {
 		// Test all ToolCallStatus enum values can be deserialized
-		for (AcpSchema.ToolCallStatus status : AcpSchema.ToolCallStatus.values()) {
+		for (AcpSchema.ToolCallStatus status : AcpSchema.ToolCallStatus.known()) {
 			String json = String.format(
 					"{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"call_test\",\"title\":\"Test\",\"kind\":\"read\",\"status\":\"%s\"}",
-					status.name().toLowerCase());
+					status.value());
 
 			AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
 			assertThat(update).isInstanceOf(AcpSchema.ToolCall.class);
@@ -324,7 +324,7 @@ class SessionUpdateDeserializationTest {
 		for (AcpSchema.ToolKind kind : AcpSchema.ToolKind.values()) {
 			String json = String.format(
 					"{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"call_test\",\"title\":\"Test\",\"kind\":\"%s\",\"status\":\"pending\"}",
-					kind.name().toLowerCase());
+					kind.value());
 
 			AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
 			assertThat(update).isInstanceOf(AcpSchema.ToolCall.class);
@@ -336,10 +336,10 @@ class SessionUpdateDeserializationTest {
 	@Test
 	void planEntryPriorityAllValues() throws IOException {
 		// Test all PlanEntryPriority enum values can be deserialized
-		for (AcpSchema.PlanEntryPriority priority : AcpSchema.PlanEntryPriority.values()) {
+		for (AcpSchema.PlanEntryPriority priority : AcpSchema.PlanEntryPriority.known()) {
 			String json = String.format(
 					"{\"sessionUpdate\":\"plan\",\"entries\":[{\"content\":\"Test\",\"priority\":\"%s\",\"status\":\"pending\"}]}",
-					priority.name().toLowerCase());
+					priority.value());
 
 			AcpSchema.SessionUpdate update = deserializeSessionUpdate(json);
 			assertThat(update).isInstanceOf(AcpSchema.Plan.class);
