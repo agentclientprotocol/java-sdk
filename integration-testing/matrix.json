@@ -1,7 +1,7 @@
 {
   "comment": "Input of GenConfigs.java: languages, pairs, transports, profiles and transport facts. Generated cells are configs/x-<client>-<agent>-<transport>[-unstable].json (and self-<lang>-<transport>[-unstable].json with --self). A language's cells are generated only while it is enabled; a language package enables its row when its programs land. See README.md, Contracts.",
   "version": 1,
-  "stepSelection": "seed",
+  "stepSelection": "all",
   "transports": ["stdio", "http", "ws"],
   "profiles": {
     "stable": { "suffix": "" },
@@ -17,7 +17,7 @@
       "readyTimeoutSec": 60
     },
     "typescript": {
-      "enabled": false,
+      "enabled": true,
       "dir": "programs/node",
       "peers": ["typescript-sdk"],
       "env": { "TS_SDK": "${peer.typescript-sdk}" },
@@ -25,7 +25,7 @@
       "readyTimeoutSec": 60
     },
     "rust": {
-      "enabled": false,
+      "enabled": true,
       "dir": "programs/rust",
       "peers": ["rust-sdk"],
       "env": { "RUST_SDK": "${peer.rust-sdk}", "CARGO_TARGET_DIR": "${CACHE}/build/${peerKey.rust-sdk}" },
@@ -33,7 +33,7 @@
       "readyTimeoutSec": 60
     },
     "python": {
-      "enabled": false,
+      "enabled": true,
       "dir": "programs/python",
       "peers": ["python-sdk"],
       "env": { "PY_SDK": "${peer.python-sdk}", "PYTHONUNBUFFERED": "1" },
@@ -41,7 +41,7 @@
       "readyTimeoutSec": 60
     },
     "kotlin": {
-      "enabled": false,
+      "enabled": true,
       "dir": "programs/kotlin",
       "peers": ["kotlin-sdk"],
       "env": { "KOTLIN_SDK": "${peer.kotlin-sdk}" },

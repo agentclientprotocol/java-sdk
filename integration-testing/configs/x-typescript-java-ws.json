@@ -1,8 +1,10 @@
 {
-  "name": "x-java-java-ws",
-  "description": "java client -> java agent over ws, stable profile, 66 steps (generated)",
+  "name": "x-typescript-java-ws",
+  "description": "typescript client -> java agent over ws, stable profile, 66 steps (generated)",
   "timeoutSec": 570,
-  "peers": [],
+  "peers": [
+    "typescript-sdk"
+  ],
   "processes": [
     {
       "name": "agent",
@@ -11,7 +13,9 @@
       "dir": "${ROOT}/programs/java",
       "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
       "run": "${ROOT}/programs/java/launch/agent.sh --transport ws --port ${PORT}",
-      "env": {},
+      "env": {
+        "TS_SDK": "${peer.typescript-sdk}"
+      },
       "ready": {
         "line": "READY",
         "timeoutSec": 60
@@ -19,13 +23,14 @@
     },
     {
       "name": "client",
-      "language": "java",
+      "language": "typescript",
       "role": "client",
-      "dir": "${ROOT}/programs/java",
-      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/java/launch/build.sh",
-      "run": "${ROOT}/programs/java/launch/client.sh --transport ws --url ws://127.0.0.1:${PORT}/acp",
+      "dir": "${ROOT}/programs/node",
+      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" TS_SDK=\"${peer.typescript-sdk}\" ${ROOT}/programs/node/launch/build.sh",
+      "run": "${ROOT}/programs/node/launch/client.sh --transport ws --url ws://127.0.0.1:${PORT}/acp",
       "env": {
-        "STEPS": "init.initialize,init.agent-capabilities,init.client-capabilities,init.auth-methods,init.agent-info,init.config-boolean,auth.authenticate,auth.logout,auth.logout-capability,auth.terminal,session.new,session.load,session.load-replay,session.resume,session.list,session.close,session.delete,session.multi,update.agent_message_chunk,update.user_message_chunk,update.agent_thought_chunk,update.tool_call,update.tool_call_update,update.tool_call-name,update.plan,update.available_commands_update,update.current_mode_update,update.config_option_update,update.session_info_update,update.usage_update,update.unknown,stop.max_tokens,stop.refusal,stop.max_turn_requests,mode.set,config.on-new,config.select,config.boolean,perm.selected,perm.cancelled,fs.write,fs.read,fs.read-range,fs.read-missing,term.run,term.kill,elicit.form,elicit.complete,cancel.prompt,cancel.prompt-while-cancelling,cancel.grace,cancel-request.client,cancel-request.agent,cancel-request.unknown,ext.agent-request,ext.agent-notification,ext.client-request,ext.client-notification,meta.prompt,meta.permission,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,conn.close"
+        "STEPS": "init.initialize,init.agent-capabilities,init.client-capabilities,init.auth-methods,init.agent-info,init.config-boolean,auth.authenticate,auth.logout,auth.logout-capability,auth.terminal,session.new,session.load,session.load-replay,session.resume,session.list,session.close,session.delete,session.multi,update.agent_message_chunk,update.user_message_chunk,update.agent_thought_chunk,update.tool_call,update.tool_call_update,update.tool_call-name,update.plan,update.available_commands_update,update.current_mode_update,update.config_option_update,update.session_info_update,update.usage_update,update.unknown,stop.max_tokens,stop.refusal,stop.max_turn_requests,mode.set,config.on-new,config.select,config.boolean,perm.selected,perm.cancelled,fs.write,fs.read,fs.read-range,fs.read-missing,term.run,term.kill,elicit.form,elicit.complete,cancel.prompt,cancel.prompt-while-cancelling,cancel.grace,cancel-request.client,cancel-request.agent,cancel-request.unknown,ext.agent-request,ext.agent-notification,ext.client-request,ext.client-notification,meta.prompt,meta.permission,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,conn.close",
+        "TS_SDK": "${peer.typescript-sdk}"
       },
       "timeoutSec": 450
     }

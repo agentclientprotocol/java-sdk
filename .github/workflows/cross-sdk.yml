@@ -251,7 +251,9 @@ jobs:
       - name: Check the generated configs are up to date
         if: matrix.peer == 'java'
         working-directory: integration-testing
-        run: jbang GenConfigs.java --check
+        run: |
+          jbang GenConfigs.java --check
+          python3 programs/raw/gen_conf.py --check
 
       - name: Resolve the peer SDK commit
         if: matrix.sdk
