@@ -107,6 +107,25 @@ export const fixtures = {
     usage_update: { used: 100, size: 1000, cost: { amount: 0.01, currency: "USD" } },
     unknown: { sessionUpdate: "interop_future_update", payload: { x: 1 } },
   },
+  unknownEnums: {
+    toolCall: { sessionUpdate: "tool_call", toolCallId: "call-enum", title: "interop enum tool", kind: "interop_future_kind", status: "interop_future_status" },
+    plan: { sessionUpdate: "plan", entries: [{ content: "future entry", priority: "interop_future_priority", status: "interop_future_status" }] },
+    stopReason: "interop_future_stop",
+    audience: ["user", "interop_future_role"],
+  },
+  /** fixtures.groupedConfigOption, at the given currentValue. */
+  groupedConfigOption(effort = "effort-low") {
+    return {
+      id: "effort",
+      name: "Effort",
+      type: "select",
+      currentValue: effort,
+      options: [
+        { group: "fast", name: "Fast", options: [{ value: "effort-low", name: "Low" }] },
+        { group: "deep", name: "Deep", options: [{ value: "effort-medium", name: "Medium" }, { value: "effort-high", name: "High" }] },
+      ],
+    };
+  },
   ext: {
     method: "_interop/ping",
     notification: "_interop/note",

@@ -1,4 +1,41 @@
 {
   "comment": "Expected failures of cells with a TypeScript client or agent (programs/node). See README.md in this directory.",
-  "expectations": []
+  "expectations": [
+    {
+      "step": "enum.tool_call",
+      "when": {
+        "client": "typescript"
+      },
+      "contains": "status undefined",
+      "see": "peer:typescript-sdk src/schema/zod.gen.ts:2360",
+      "reason": "zToolCall reads status (and kind, :2359) with defaultOnError over the closed zToolCallStatus union (:117), so an unknown status becomes undefined: the turn goes on but the raw value interop_future_status is lost"
+    },
+    {
+      "step": "enum.plan",
+      "when": {
+        "client": "typescript"
+      },
+      "contains": "entries []",
+      "see": "peer:typescript-sdk src/schema/zod.gen.ts:2426",
+      "reason": "zPlan reads entries with vecSkipError, and zPlanEntry's priority and status are closed unions (:2408-2409, :2381, :2393), so the entry with unknown values is dropped: the plan arrives empty"
+    },
+    {
+      "step": "enum.audience",
+      "when": {
+        "agent": "typescript"
+      },
+      "contains": "chunks [\"audience: user\"]",
+      "see": "peer:typescript-sdk src/schema/zod.gen.ts:133",
+      "reason": "zAnnotations reads audience with vecSkipError over the closed zRole union (:127), so the TypeScript agent's handler sees [\"user\"]: the unknown Role interop_future_role is dropped, not kept"
+    },
+    {
+      "step": "agent.enum.audience",
+      "when": {
+        "agent": "typescript"
+      },
+      "contains": "audience [\"user\"]",
+      "see": "peer:typescript-sdk src/schema/zod.gen.ts:133",
+      "reason": "zAnnotations reads audience with vecSkipError over the closed zRole union (:127): the unknown Role is dropped before the handler sees the prompt"
+    }
+  ]
 }

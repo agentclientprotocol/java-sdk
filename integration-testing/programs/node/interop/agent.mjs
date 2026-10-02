@@ -56,7 +56,7 @@ function agentStep(id, ok, detail, t0 = Date.now()) {
 const sessions = new Map();
 
 function newSessionState(cwd) {
-  return { cwd, history: [], closed: false, turn: null, mode: fixtures.modes.currentModeId, model: "model-a", verbose: false };
+  return { cwd, history: [], closed: false, turn: null, mode: fixtures.modes.currentModeId, model: "model-a", verbose: false, grouped: false, effort: "effort-low" };
 }
 
 function knownSession(sessionId) {
@@ -97,7 +97,10 @@ function createAgentApp() {
 
   const sessionState = (s) => ({
     modes: { ...fixtures.modes, currentModeId: s.mode },
-    configOptions: fixtures.configOptions(s.model, s.verbose, booleanConfig()),
+    configOptions: [
+      ...fixtures.configOptions(s.model, s.verbose, booleanConfig()),
+      ...(s.grouped ? [fixtures.groupedConfigOption(s.effort)] : []),
+    ],
   });
   const booleanConfig = () => clientCaps?.session?.configOptions?.boolean != null;
 
@@ -196,6 +199,10 @@ function createAgentApp() {
       const { configId, value } = ctx.params;
       if (configId === "model" && ["model-a", "model-b"].includes(value)) s.model = value;
       else if (configId === "verbose" && typeof value === "boolean" && booleanConfig()) s.verbose = value;
+      else if (configId === "effort" && s.grouped && fixtures.groupedConfigOption().options.some((g) => g.options.some((o) => o.value === value))) {
+        s.effort = value;
+        agentStep("config.grouped", value === "effort-high", `effort set to ${value}`);
+      }
       else throw new RequestError(-32602, `invalid config option ${configId}=${JSON.stringify(value)}`);
       return { configOptions: sessionState(s).configOptions };
     })
@@ -289,6 +296,13 @@ async function prompt(ctx, clientCaps, lastExt, sessionState) {
         await chunk(JSON.stringify(caps ?? null));
         return { stopReason: "end_turn" };
       }
+      case "enum":
+        return await unknownEnum(ctx, sid, args[0], first, chunk);
+      case "config":
+        if (args[0] !== "grouped") throw new RequestError(-32602, `unknown directive: #config ${args[0]}`);
+        s.grouped = true;
+        await update(ctx.client, sid, { sessionUpdate: "config_option_update", configOptions: sessionState(s).configOptions });
+        return { stopReason: "end_turn" };
       case "len":
         await chunk(`len=${rest.length}`);
         return { stopReason: "end_turn" };
@@ -400,6 +414,32 @@ async function fs(ctx, sid, clientCaps, args, rest, kw, chunk) {
     return { stopReason: "end_turn" };
   }
   throw new RequestError(-32602, `unknown directive: #fs ${op}`);
+}
+
+/**
+ * #enum tool_call|plan|stop|audience: values the v1 schema does not define. notify() and the
+ * prompt response are sent as given (no outgoing validation).
+ */
+async function unknownEnum(ctx, sid, what, first, chunk) {
+  switch (what) {
+    case "tool_call":
+    case "plan":
+      await update(ctx.client, sid, { ...fixtures.unknownEnums[what === "plan" ? "plan" : "toolCall"] });
+      await chunk("after-enum");
+      return { stopReason: "end_turn" };
+    case "stop":
+      await chunk("stop");
+      return { stopReason: fixtures.unknownEnums.stopReason };
+    case "audience": {
+      const audience = first?.annotations?.audience;
+      const ok = JSON.stringify(audience) === JSON.stringify(fixtures.unknownEnums.audience);
+      agentStep("enum.audience", ok, `audience ${JSON.stringify(audience ?? null)}`);
+      await chunk(`audience: ${Array.isArray(audience) ? audience.join(",") : "none"}`);
+      return { stopReason: "end_turn" };
+    }
+    default:
+      throw new RequestError(-32602, `unknown directive: #enum ${what}`);
+  }
 }
 
 async function emit(ctx, sid, kind, toolName, clientCaps, chunk) {
