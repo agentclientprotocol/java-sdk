@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
 
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
+import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderRequest;
 
 /**
@@ -14,6 +15,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.DisableProviderRequest;
  * @author Mark Pollack
  * @since 0.13.0
  */
+@UnstableAcpApi
 public class DisableProviderRequestResolver implements ArgumentResolver {
 
 	@Override

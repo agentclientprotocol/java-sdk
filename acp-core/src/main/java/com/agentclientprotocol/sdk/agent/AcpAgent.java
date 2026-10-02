@@ -269,6 +269,7 @@ public interface AcpAgent {
 	/**
 	 * Functional interface for handling fork session requests.
 	 */
+	@UnstableAcpApi
 	@FunctionalInterface
 	interface ForkSessionHandler {
 
@@ -529,6 +530,7 @@ public interface AcpAgent {
 	/**
 	 * Synchronous functional interface for handling fork session requests.
 	 */
+	@UnstableAcpApi
 	@FunctionalInterface
 	interface SyncForkSessionHandler {
 
@@ -799,6 +801,7 @@ public interface AcpAgent {
 		 * @param handler The fork session handler
 		 * @return This builder for chaining
 		 */
+		@UnstableAcpApi
 		public AsyncAgentBuilder forkSessionHandler(ForkSessionHandler handler) {
 			return request(AcpSchema.METHOD_SESSION_FORK, new TypeRef<AcpSchema.ForkSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
@@ -1121,6 +1124,7 @@ public interface AcpAgent {
 			return this;
 		}
 
+		@UnstableAcpApi
 		public SyncAgentBuilder forkSessionHandler(SyncForkSessionHandler handler) {
 			asyncBuilder.forkSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;

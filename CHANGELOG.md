@@ -397,6 +397,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sink that retries while another thread emits (#14), and the reply pump from inbound messages
   through the session handler to that sink, which the stdio and WebSocket transports shared as
   copies.
+- **`@UnstableAcpApi` marks all of the unstable `session/fork` and `providers/*` API.** Those methods
+  are not in the stable schema, and their records, annotations and provider handlers were marked,
+  but `METHOD_SESSION_FORK` and `METHOD_PROVIDERS_*`, `AcpAgent.ForkSessionHandler` and
+  `SyncForkSessionHandler`, both builders' `forkSessionHandler`, `AcpAsyncClient` and
+  `AcpSyncClient` `forkSession`, `listProviders`, `setProvider` and `disableProvider`,
+  `NegotiatedCapabilities` `supportsForkSession`, `supportsProviders`, `requireForkSession`,
+  `requireProviders` and the builder's `forkSession` and `providers`, and the four request
+  resolvers were not. They are now; nothing else changes. Tests derive the unstable methods from
+  the stable schema copy and fail when a public member serving one lacks the marker, or a stable
+  method's member carries it.
 
 ### Removed
 

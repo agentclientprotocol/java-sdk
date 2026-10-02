@@ -287,6 +287,7 @@ public final class AcpSchema {
 
 	public static final String METHOD_SESSION_RESUME = "session/resume";
 
+	@UnstableAcpApi
 	public static final String METHOD_SESSION_FORK = "session/fork";
 
 	public static final String METHOD_SESSION_SET_CONFIG_OPTION = "session/set_config_option";
@@ -325,10 +326,13 @@ public final class AcpSchema {
 	public static final String METHOD_CANCEL_REQUEST = "$/cancel_request";
 
 	// Provider configuration (UNSTABLE)
+	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_LIST = "providers/list";
 
+	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_SET = "providers/set";
 
+	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_DISABLE = "providers/disable";
 
 	// ---------------------------

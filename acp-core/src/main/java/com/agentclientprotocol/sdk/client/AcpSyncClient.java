@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
 
+import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
@@ -303,6 +304,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @return the fork response with the new session ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
+	@UnstableAcpApi
 	public AcpSchema.ForkSessionResponse forkSession(AcpSchema.ForkSessionRequest forkSessionRequest) {
 		return awaitResponse(this.delegate.forkSession(forkSessionRequest));
 	}
@@ -328,6 +330,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @return the list of configurable providers
 	 * @see AcpSchema#METHOD_PROVIDERS_LIST
 	 */
+	@UnstableAcpApi
 	public AcpSchema.ListProvidersResponse listProviders(AcpSchema.ListProvidersRequest request) {
 		return awaitResponse(this.delegate.listProviders(request));
 	}
@@ -338,6 +341,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @return the response
 	 * @see AcpSchema#METHOD_PROVIDERS_SET
 	 */
+	@UnstableAcpApi
 	public AcpSchema.SetProviderResponse setProvider(AcpSchema.SetProviderRequest request) {
 		return awaitResponse(this.delegate.setProvider(request));
 	}
@@ -348,6 +352,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @return the response
 	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
 	 */
+	@UnstableAcpApi
 	public AcpSchema.DisableProviderResponse disableProvider(AcpSchema.DisableProviderRequest request) {
 		return awaitResponse(this.delegate.disableProvider(request));
 	}
