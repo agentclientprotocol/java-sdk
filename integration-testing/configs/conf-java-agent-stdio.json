@@ -1,7 +1,7 @@
 {
   "name": "conf-java-agent-stdio",
-  "description": "raw client -> java agent over stdio: 32 raw JSON-RPC cases (generated)",
-  "timeoutSec": 400,
+  "description": "raw client -> java agent over stdio: 33 raw JSON-RPC cases (generated)",
+  "timeoutSec": 405,
   "peers": [],
   "processes": [
     {
@@ -14,12 +14,12 @@
       "env": {
         "AGENT_CMD": "${ROOT}/programs/java/launch/agent.sh --transport stdio"
       },
-      "timeoutSec": 280
+      "timeoutSec": 285
     }
   ],
   "assertions": {
     "checks": [
-      "client RESULT pass == 32",
+      "client RESULT pass == 33",
       "client RESULT fail == 0"
     ],
     "expectedFailures": [],

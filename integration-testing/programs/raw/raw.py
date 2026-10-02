@@ -1059,8 +1059,9 @@ def c_parse_error_large(p):
 def c_eof_answers(p):
     """Requests written just before stdin closes are still answered before the agent exits.
     No spec text requires it; an agent that exits at EOF with answers unwritten loses replies a
-    client that pipes requests and closes stdin (`printf ... | agent`) waits for. Racy by
-    nature, so evidence only (EVIDENCE_ONLY), never a gate."""
+    client that pipes requests and closes stdin (`printf ... | agent`) waits for. The Java agent
+    answers them since its stdio transport treats EOF as a half-close, so this gates
+    conf-java-agent-stdio; against a peer (--target) it stays evidence."""
     proc = subprocess.Popen(["bash", "-c", "exec " + os.environ["AGENT_CMD"]], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     frames = [dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": CLIENT_INIT})]
@@ -1191,7 +1192,7 @@ CLIENT_CASES = [
 ]
 # Cases whose outcome is timing-dependent: run with --target (evidence) or --cases, never in the
 # generated scenarios.
-EVIDENCE_ONLY = {"raw.stdio.eof-answers"}
+EVIDENCE_ONLY = set()
 
 
 def client_case_ids(transport, evidence=False):
