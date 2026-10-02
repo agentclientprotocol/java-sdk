@@ -937,7 +937,7 @@ const steps = {
     return "_meta round trip on the update and the response";
   },
   "meta.permission": async () => {
-    const { c, sid } = await promptNew("#permission allow");
+    const { c, sid } = await promptNew("#permission allow meta");
     const asked = c.permissions.get(sid) ?? [];
     check(asked.length === 1, `${asked.length} permission requests`);
     check(asked[0]._meta?.interop === "m1", `the request _meta ${abbreviate(asked[0]._meta)}`);

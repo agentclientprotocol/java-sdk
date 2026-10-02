@@ -382,8 +382,10 @@ public class Agent {
 		AcpSchema.ClientCapabilities caps = init == null ? null : init.clientCapabilities();
 		return switch (name) {
 			case "#permission" -> switch (sub) {
-				case "allow" -> permission(s.id, context, false);
-				case "hold" -> permission(s.id, context, true);
+				case "allow" -> words.length == 2 ? permission(s.id, context, false, false)
+						: words.length == 3 && words[2].equals("meta") ? permission(s.id, context, false, true)
+								: unknown(text);
+				case "hold" -> permission(s.id, context, true, false);
 				default -> unknown(text);
 			};
 			case "#fs" -> switch (sub) {
@@ -461,26 +463,33 @@ public class Agent {
 
 	// ---------------------------------------------------------------- directives
 
-	static Mono<AcpSchema.PromptResponse> permission(String sessionId, PromptContext context, boolean hold) {
+	/**
+	 * {@code #permission allow}: perm.selected; {@code #permission allow meta}: meta.permission, with
+	 * {@code _meta} on the request; {@code #permission hold}: perm.cancelled.
+	 */
+	static Mono<AcpSchema.PromptResponse> permission(String sessionId, PromptContext context, boolean hold,
+			boolean meta) {
 		long t0 = System.nanoTime();
 		String id = hold ? "perm.cancelled" : "perm.selected";
 		AcpSchema.RequestPermissionRequest req = new AcpSchema.RequestPermissionRequest(sessionId,
 				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING),
 				List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE),
 						new AcpSchema.PermissionOption("reject", "Reject", AcpSchema.PermissionOptionKind.REJECT_ONCE)),
-				Map.of("interop", "m1"));
+				meta ? Map.of("interop", "m1") : null);
 		return context.requestPermission(req).flatMap(r -> {
-			if (r.meta() != null && "m1".equals(r.meta().get("interop"))) {
-				// meta.permission: printed only when the client echoed the request's _meta
-				step("meta.permission", true, t0, "the response carried _meta interop == m1");
-			}
 			String said = r.outcome() instanceof AcpSchema.PermissionSelected sel ? "selected " + sel.optionId()
 					: "cancelled";
-			step(id, said.equals(hold ? "cancelled" : "selected allow"), t0, "outcome " + said);
+			if (meta) {
+				step("meta.permission", r.meta() != null && "m1".equals(r.meta().get("interop")), t0,
+						"response _meta " + r.meta());
+			}
+			else {
+				step(id, said.equals(hold ? "cancelled" : "selected allow"), t0, "outcome " + said);
+			}
 			return context.sendMessage("permission: " + said)
 				.thenReturn(said.equals("cancelled") ? cancelled() : endTurn());
 		}).onErrorResume(e -> {
-			step(id, false, t0, "session/request_permission failed: " + e);
+			step(meta ? "meta.permission" : id, false, t0, "session/request_permission failed: " + e);
 			return Mono.error(e);
 		});
 	}

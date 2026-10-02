@@ -348,7 +348,7 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
         val rest = text.substringAfter(' ', "")
         val args = if (rest.isEmpty()) emptyList() else rest.split(' ')
         when (name) {
-            "permission" -> permission(args.firstOrNull() ?: "allow")
+            "permission" -> permission(args.joinToString(" "))
             "fs" -> fs(args, rest)
             "emit" -> emitKind(args)
             "stop" -> {
@@ -393,25 +393,27 @@ class InteropSession(private val conn: AgentConnection, private val state: Sessi
         else -> throw JsonRpcException(-32602, "unknown stop reason: $s")
     }
 
+    /** `allow`: perm.selected; `allow meta`: meta.permission (_meta on the request); `hold`: perm.cancelled. */
     private suspend fun FlowCollector<Event>.permission(mode: String) {
+        if (mode !in setOf("allow", "allow meta", "hold")) throw JsonRpcException(-32602, "unknown directive: #permission $mode")
         val t0 = System.nanoTime()
         val client = currentCoroutineContext().client
-        val step = if (mode == "hold") "perm.cancelled" else "perm.selected"
+        val step = when (mode) {
+            "hold" -> "perm.cancelled"
+            "allow meta" -> "meta.permission"
+            else -> "perm.selected"
+        }
         try {
-            val r = client.requestPermissions(Fixtures.permissionToolCall, Fixtures.permissionOptions, Fixtures.meta)
+            val r = client.requestPermissions(Fixtures.permissionToolCall, Fixtures.permissionOptions,
+                if (mode == "allow meta") Fixtures.meta else null)
             val said = when (val o = r.outcome) {
                 is RequestPermissionOutcome.Selected -> "selected ${o.optionId.value}"
                 RequestPermissionOutcome.Cancelled -> "cancelled"
             }
-            if (mode == "hold") {
-                agentStep(step, said == "cancelled", t0, "outcome $said")
-            } else {
-                agentStep(step, said == "selected allow", t0, "outcome $said")
-            }
-            // meta.permission shares "#permission allow" with perm.selected, so its line is only printed
-            // when the response carries _meta at all (a client that echoes the request's _meta).
-            if (r._meta != null) {
-                agentStep("meta.permission", Fixtures.hasMeta(r._meta), t0, "response _meta ${r._meta}")
+            when (mode) {
+                "hold" -> agentStep(step, said == "cancelled", t0, "outcome $said")
+                "allow meta" -> agentStep(step, Fixtures.hasMeta(r._meta), t0, "response _meta ${r._meta}")
+                else -> agentStep(step, said == "selected allow", t0, "outcome $said")
             }
             chunk("permission: $said")
             done(if (said == "cancelled") StopReason.CANCELLED else StopReason.END_TURN)

@@ -270,11 +270,15 @@ class InteropAgent:
 
     async def _d_permission(self, s: Session, turn: Turn, rest: str, meta: dict):
         started = time.monotonic()
-        hold = rest.strip() == "hold"
-        if rest.strip() not in ("allow", "hold"):
+        # "allow": perm.selected; "allow meta": meta.permission (_meta on the request); "hold":
+        # perm.cancelled.
+        mode = rest.strip()
+        hold = mode == "hold"
+        if mode not in ("allow", "allow meta", "hold"):
             raise RequestError(-32602, f"unknown directive: #permission {rest}")
+        extra = {META_KEY: META_VALUE} if mode == "allow meta" else {}
         resp = await self.conn.request_permission(
-            session_id=s.id, tool_call=PERMISSION_TOOL_CALL, options=PERMISSION_OPTIONS, **{META_KEY: META_VALUE}
+            session_id=s.id, tool_call=PERMISSION_TOOL_CALL, options=PERMISSION_OPTIONS, **extra
         )
         outcome = dump(resp.outcome) or {}
         selected = outcome.get("outcome") == "selected"
@@ -285,18 +289,13 @@ class InteropAgent:
         if hold:
             agent_step("perm.cancelled", outcome.get("outcome") == "cancelled", started, f"outcome {compact(outcome)}")
             return {"stopReason": "cancelled" if not selected else "end_turn"}
-        agent_step("perm.selected", selected and outcome.get("optionId") == "allow", started,
-                   f"outcome {compact(outcome)}")
-        # perm.selected and meta.permission share this directive, so the agent cannot tell which
-        # step it serves: it asserts meta.permission only when the response carries a _meta
-        # (absent, the client is not echoing it: perm.selected, or a client without _meta support,
-        # whose meta.permission client step then fails on its own).
-        rmeta = resp.field_meta or {}
-        if rmeta:
+        if mode == "allow meta":
+            rmeta = resp.field_meta or {}
             agent_step("meta.permission", rmeta.get(META_KEY) == META_VALUE, started,
-                       f"RequestPermissionResponse _meta {compact(rmeta)}")
+                       f"RequestPermissionResponse _meta {compact(rmeta) if rmeta else 'absent'}")
         else:
-            log("[agent] RequestPermissionResponse carried no _meta")
+            agent_step("perm.selected", selected and outcome.get("optionId") == "allow", started,
+                       f"outcome {compact(outcome)}")
         return {"stopReason": "end_turn"}
 
     async def _d_fs(self, s: Session, turn: Turn, rest: str, meta: dict):

@@ -528,11 +528,16 @@ async fn prompt(
     let all_args = text.split_once(' ').map(|x| x.1).unwrap_or("");
     let t0 = Instant::now();
     Some(match (name, arg1) {
-        ("#permission", "allow") | ("#permission", "hold") => {
+        // #permission allow: perm.selected; #permission allow meta: meta.permission (_meta on the
+        // request); #permission hold: perm.cancelled.
+        ("#permission", "allow") | ("#permission", "hold") if rest.is_empty() || (arg1 == "allow" && rest == "meta") => {
             let hold = arg1 == "hold";
-            let perm: RequestPermissionRequest = typed(json!({
-                "sessionId": sid, "toolCall": permission_tool_call(), "options": permission_options(),
-                "_meta": meta() }));
+            let with_meta = rest == "meta";
+            let mut perm = json!({ "sessionId": sid, "toolCall": permission_tool_call(), "options": permission_options() });
+            if with_meta {
+                perm["_meta"] = meta();
+            }
+            let perm: RequestPermissionRequest = typed(perm);
             match cx.send_request(perm).block_task().await {
                 Ok(r) => {
                     let r = to_json(&r);
@@ -544,20 +549,17 @@ async fn prompt(
                     };
                     if hold {
                         step("perm.cancelled", said == "cancelled", t0, &format!("outcome {said}"));
+                    } else if with_meta {
+                        step("meta.permission", has_meta(&r), t0,
+                            &format!("response _meta {}", r.get("_meta").unwrap_or(&Value::Null)));
                     } else {
                         step("perm.selected", said == "selected allow", t0, &format!("outcome {said}"));
-                        // Only a response that carries _meta is judged: #permission allow also serves
-                        // perm.selected, against clients that cannot echo _meta at all (meta.permission
-                        // itself checks the request side; a missing PASS line still fails the cell).
-                        if let Some(m) = r.get("_meta").filter(|m| !m.is_null()) {
-                            step("meta.permission", has_meta(&r), t0, &format!("response _meta {m}"));
-                        }
                     }
                     send(&format!("permission: {said}"));
                     Ok(end(if hold { "cancelled" } else { "end_turn" }))
                 }
                 Err(e) => {
-                    step(if hold { "perm.cancelled" } else { "perm.selected" }, false, t0, &describe(&e));
+                    step(if hold { "perm.cancelled" } else if with_meta { "meta.permission" } else { "perm.selected" }, false, t0, &describe(&e));
                     send(&format!("permission error {}", code_of(&e)));
                     Ok(end(if hold { "cancelled" } else { "end_turn" }))
                 }

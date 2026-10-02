@@ -1143,7 +1143,7 @@ async fn meta_prompt() -> Result<String, String> {
 async fn meta_permission() -> Result<String, String> {
     let cx = main_cx()?;
     let sid = new_session(&cx).await?;
-    prompt(&cx, &sid, "#permission allow").await?;
+    prompt(&cx, &sid, "#permission allow meta").await?;
     let req = S.perms.lock().unwrap().iter().find(|(s, _)| *s == sid).map(|(_, r)| r.clone()).ok_or("no permission request")?;
     ensure(has_meta(&req), format!("request _meta {}", req.get("_meta").unwrap_or(&Value::Null)))?;
     Ok("request carried _meta interop=m1".into())

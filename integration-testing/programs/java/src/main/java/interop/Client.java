@@ -875,7 +875,7 @@ public class Client {
 	static String metaPermission() {
 		Conn c = main();
 		String sid = c.newSession();
-		c.prompt(sid, "#permission allow");
+		c.prompt(sid, "#permission allow meta");
 		Map<String, Object> meta = c.permissionMeta.get(sid);
 		check(meta != null && "m1".equals(meta.get("interop")), "permission request _meta " + meta);
 		return "the permission request carried _meta interop == m1";

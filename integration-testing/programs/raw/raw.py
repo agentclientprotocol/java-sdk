@@ -1514,7 +1514,7 @@ class AgentConn:
     def prompt(self, m, sid, p):
         blocks = p.get("prompt") if isinstance(p.get("prompt"), list) else []
         text = next((b.get("text") for b in blocks if isinstance(b, dict) and b.get("type") == "text"), "")
-        if text.startswith("#permission allow"):
+        if text == "#permission allow":
             t0 = time.time()
             try:
                 r = self.request("session/request_permission", dict(PERMISSION, sessionId=sid), session=sid)

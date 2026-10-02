@@ -1046,7 +1046,7 @@ object Steps {
             "update and PromptResponse _meta interop == m1"
         },
         "meta.permission" to {
-            val (sid, r) = promptNew("#permission allow")
+            val (sid, r) = promptNew("#permission allow meta")
             endTurn(r)
             val meta = main().permissionMeta[sid]
             check(Fixtures.hasMeta(meta)) { "the permission request carried _meta $meta" }
