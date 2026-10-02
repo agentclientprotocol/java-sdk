@@ -535,7 +535,7 @@ async fn prompt(
             let with_meta = rest == "meta";
             let mut perm = json!({ "sessionId": sid, "toolCall": permission_tool_call(), "options": permission_options() });
             if with_meta {
-                perm["_meta"] = meta();
+                perm["_meta"] = Value::Object(meta());
             }
             let perm: RequestPermissionRequest = typed(perm);
             match cx.send_request(perm).block_task().await {
@@ -586,20 +586,18 @@ async fn prompt(
             }
             Ok(end("end_turn"))
         }
-        ("#fs", "read") => {
+        ("#fs", "read") | ("#fs", "read-range") | ("#fs", "read-missing") => {
             let mut parts = rest.split(' ');
             let path = parts.next().unwrap_or("");
             let mut params = json!({ "sessionId": sid, "path": path });
-            let mut ranged = false;
             for p in parts {
                 if let Some((k, v)) = p.split_once('=')
                     && let Ok(n) = v.parse::<u64>()
                 {
                     params[k] = json!(n);
-                    ranged = true;
                 }
             }
-            let id = if path.ends_with("no-such-file.txt") { "fs.read-missing" } else if ranged { "fs.read-range" } else { "fs.read" };
+            let id = match arg1 { "read-range" => "fs.read-range", "read-missing" => "fs.read-missing", _ => "fs.read" };
             if !conn.cap(&["fs", "readTextFile"]) {
                 step(id, false, t0, "the client did not advertise fs.readTextFile");
                 send("fs read error capability");
