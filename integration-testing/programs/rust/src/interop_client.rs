@@ -1038,10 +1038,10 @@ async fn cancel_prompt_while_cancelling() -> Result<String, String> {
     ensure(stop_reason(&to_json(&first)) == "cancelled", format!("first prompt answered {}", stop_reason(&to_json(&first))))?;
     match during {
         Ok(r) => return Err(format!("\"during cancel\" answered {}", stop_reason(&r))),
-        Err(e) => ensure(e.contains("error -32000"), format!("\"during cancel\" failed with {e}"))?,
+        Err(e) => ensure(e.contains("error -32600"), format!("\"during cancel\" failed with {e}"))?,
     }
     prompt_end_turn(&cx, &sid, "after cancel").await?;
-    Ok("cancelled; during cancel -32000; after cancel end_turn".into())
+    Ok("cancelled; during cancel -32600; after cancel end_turn".into())
 }
 
 async fn cancel_grace() -> Result<String, String> {
