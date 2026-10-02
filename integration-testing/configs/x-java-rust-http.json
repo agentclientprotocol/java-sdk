@@ -43,7 +43,6 @@
         "STEP agent.init.client-capabilities PASS",
         "STEP agent.auth.authenticate PASS",
         "STEP agent.session.close PASS",
-        "STEP agent.enum.audience PASS",
         "STEP agent.mode.set PASS",
         "STEP agent.config.grouped PASS",
         "STEP agent.perm.selected PASS",
@@ -77,10 +76,32 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 70",
-      "client RESULT fail == 0"
+      "client RESULT pass == 68",
+      "client RESULT fail == 2"
     ],
-    "expectedFailures": [],
+    "expectedFailures": [
+      {
+        "process": "client",
+        "step": "enum.stop",
+        "contains": "-32700",
+        "reason": "The Rust agent cannot answer an unknown stopReason: a typed prompt Responder re-parses even an erase_to_json() answer into PromptResponse (closed StopReason, schema src/v1/agent.rs:3182), so the SDK answers -32700 instead",
+        "see": "peer:rust-sdk src/agent-client-protocol/src/jsonrpc.rs:4777 [expectations/rust.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.audience",
+        "contains": "audience: user",
+        "reason": "Annotations.audience is read with VecSkipError over the closed Role enum, so the agent silently drops interop_future_role and echoes \"audience: user\"",
+        "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/content.rs:568 [expectations/rust.json]"
+      },
+      {
+        "process": "agent",
+        "step": "agent.enum.audience",
+        "contains": "[\"user\"]",
+        "reason": "Annotations.audience is read with VecSkipError over the closed Role enum: the unknown Role is silently dropped, so the agent reads [\"user\"]",
+        "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/content.rs:568 [expectations/rust.json]"
+      }
+    ],
     "report": {
       "client": [
         "TIMEOUT"

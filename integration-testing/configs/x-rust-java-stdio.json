@@ -48,10 +48,32 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 73",
-      "client RESULT fail == 0"
+      "client RESULT pass == 70",
+      "client RESULT fail == 3"
     ],
-    "expectedFailures": [],
+    "expectedFailures": [
+      {
+        "process": "client",
+        "step": "enum.tool_call",
+        "contains": "surfaced without the raw values",
+        "reason": "ToolCall.status is a closed enum read with DefaultOnError, so the unknown status interop_future_status silently becomes the default (pending) instead of being kept; the turn continues",
+        "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/tool_call.rs:49 [expectations/rust.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.plan",
+        "contains": "surfaced without the raw values",
+        "reason": "Plan.entries is read with VecSkipError and PlanEntryPriority/PlanEntryStatus are closed enums, so the entry with unknown values is silently dropped (entries []); the turn continues",
+        "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/plan.rs:38 [expectations/rust.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.stop",
+        "contains": "-32700",
+        "reason": "StopReason is a closed enum: the PromptResponse with stopReason interop_future_stop fails to parse and the prompt fails with -32700 (the session stays usable)",
+        "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/agent.rs:3182 [expectations/rust.json]"
+      }
+    ],
     "report": {
       "client": [
         "TIMEOUT"

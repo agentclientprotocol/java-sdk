@@ -66,8 +66,8 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 68",
-      "client RESULT fail == 4"
+      "client RESULT pass == 65",
+      "client RESULT fail == 7"
     ],
     "expectedFailures": [
       {
@@ -90,6 +90,27 @@
         "contains": "no name field",
         "reason": "Kotlin v1 SessionUpdate.ToolCall has no name field, so the client cannot read the tool call name",
         "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/SessionUpdate.kt:131 [expectations/kotlin.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.tool_call",
+        "contains": "the update was dropped",
+        "reason": "ToolCallStatus (and ToolKind, ToolCall.kt:18) is a closed Kotlin enum and ACPJson has no coerceInputValues, so a tool_call with an unknown status fails to decode and the SDK drops the whole update (the turn goes on)",
+        "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/ToolCall.kt:39 [expectations/kotlin.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.plan",
+        "contains": "the update was dropped",
+        "reason": "PlanEntryPriority and PlanEntryStatus (Plan.kt:36) are closed Kotlin enums, so a plan with unknown values fails to decode and the SDK drops the update",
+        "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Plan.kt:22 [expectations/kotlin.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.stop",
+        "contains": "StopReason does not contain element with name 'interop_future_stop'",
+        "reason": "StopReason is a closed Kotlin enum: the PromptResponse with stopReason interop_future_stop fails to decode and the prompt call fails (-32700); the session still answers the next prompt",
+        "see": "peer:kotlin-sdk acp-model/src/commonMain/kotlin/com/agentclientprotocol/model/Requests.kt:301 [expectations/kotlin.json]"
       },
       {
         "process": "client",

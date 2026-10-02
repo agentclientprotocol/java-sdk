@@ -42,7 +42,6 @@
       "agent": [
         "STEP agent.init.client-capabilities PASS",
         "STEP agent.auth.authenticate PASS",
-        "STEP agent.enum.audience PASS",
         "STEP agent.mode.set PASS",
         "STEP agent.config.grouped PASS",
         "STEP agent.perm.selected PASS",
@@ -74,8 +73,8 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 66",
-      "client RESULT fail == 4"
+      "client RESULT pass == 65",
+      "client RESULT fail == 5"
     ],
     "expectedFailures": [
       {
@@ -91,6 +90,20 @@
         "contains": "-32601",
         "reason": "The SDK's HTTP server never enables the unstable router: session/close is answered method-not-found",
         "see": "peer:python-sdk http/server.py:270 [expectations/python.json]"
+      },
+      {
+        "process": "client",
+        "step": "enum.audience",
+        "contains": "audience: user\"",
+        "reason": "Annotations.audience is List[Literal[\"assistant\", \"user\"]] with skip_invalid_items: the agent receives the prompt but the unknown Role interop_future_role is silently dropped, so it reads [user] and chunks \"audience: user\"",
+        "see": "peer:python-sdk schema.py:2648 [expectations/python.json]"
+      },
+      {
+        "process": "agent",
+        "step": "agent.enum.audience",
+        "contains": "['user']",
+        "reason": "Annotations.audience skips invalid items: the Python agent's handler sees audience ['user'], interop_future_role dropped before it",
+        "see": "peer:python-sdk schema.py:2648 [expectations/python.json]"
       },
       {
         "process": "client",
