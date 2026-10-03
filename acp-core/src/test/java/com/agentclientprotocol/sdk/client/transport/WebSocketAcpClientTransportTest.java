@@ -91,4 +91,30 @@ class WebSocketAcpClientTransportTest {
 		}
 	}
 
+	/**
+	 * The transport's own HTTP client runs on an executor the transport created; closing the
+	 * transport shuts it down, so its threads do not linger (about 60 seconds) after close.
+	 */
+	@Test
+	void closeShutsDownTheExecutorOfItsOwnHttpClient() throws Exception {
+		WebSocketAcpClientTransport transport = new WebSocketAcpClientTransport(URI.create("ws://127.0.0.1:1/acp"),
+				jsonMapper);
+		try {
+			transport.connect(msg -> Mono.empty()).block(Duration.ofSeconds(10));
+		}
+		catch (RuntimeException expected) {
+			// nothing listens on port 1
+		}
+		java.lang.reflect.Field field = WebSocketAcpClientTransport.class.getDeclaredField("httpClient");
+		field.setAccessible(true);
+		java.net.http.HttpClient httpClient = (java.net.http.HttpClient) field.get(transport);
+		java.util.concurrent.ExecutorService executor = (java.util.concurrent.ExecutorService) httpClient.executor()
+			.orElseThrow();
+		assertThat(executor.isShutdown()).isFalse();
+
+		transport.closeGracefully().block(Duration.ofSeconds(10));
+
+		assertThat(executor.isShutdown()).isTrue();
+	}
+
 }

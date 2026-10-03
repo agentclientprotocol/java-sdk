@@ -726,6 +726,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`WebSocketAcpClientTransport` shuts down its own HTTP client's threads on close.** A transport
+  built without an `HttpClient` creates one with a cached thread pool, which was never shut down,
+  so its threads lingered for about a minute after close. Closing the transport now shuts that
+  executor down; an `HttpClient` you pass in is left alone.
+
 - **A `WebSocketAcpClientTransport` whose connect failed can connect again.** The failed `connect`
   had already subscribed the transport's single-subscriber inbound sink, so a retry on the same
   transport "succeeded" but no message from the agent ever reached the handler (Reactor logged

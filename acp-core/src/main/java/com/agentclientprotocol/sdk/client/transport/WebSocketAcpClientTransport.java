@@ -10,6 +10,7 @@ import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -76,6 +77,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final HttpClient httpClient;
 
+	/** The executor of the HTTP client this transport created itself; shut down on close. */
+	private final @Nullable ExecutorService ownExecutor;
+
 	private final Sinks.Many<JSONRPCMessage> inboundSink;
 
 	private final Sinks.Many<JSONRPCMessage> outboundSink;
@@ -112,13 +116,15 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper) {
-		this(serverUri, jsonMapper, HttpClient.newBuilder()
-			.executor(Executors.newCachedThreadPool(r -> {
-				Thread t = new Thread(r, "acp-ws-client");
-				t.setDaemon(true);
-				return t;
-			}))
-			.build());
+		this(serverUri, jsonMapper, Executors.newCachedThreadPool(r -> {
+			Thread t = new Thread(r, "acp-ws-client");
+			t.setDaemon(true);
+			return t;
+		}));
+	}
+
+	private WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, ExecutorService executor) {
+		this(serverUri, jsonMapper, HttpClient.newBuilder().executor(executor).build(), executor);
 	}
 
 	/**
@@ -132,6 +138,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
+		this(serverUri, jsonMapper, httpClient, null);
+	}
+
+	private WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient,
+			@Nullable ExecutorService ownExecutor) {
 		Assert.notNull(serverUri, "The serverUri can not be null");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(httpClient, "The HttpClient can not be null");
@@ -139,6 +150,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		this.serverUri = serverUri;
 		this.jsonMapper = jsonMapper;
 		this.httpClient = httpClient;
+		this.ownExecutor = ownExecutor;
 
 		this.inboundSink = Sinks.many().unicast().onBackpressureBuffer();
 		this.outboundSink = Sinks.many().unicast().onBackpressureBuffer();
@@ -245,8 +257,8 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	/**
 	 * {@inheritDoc}
 	 * <p>Stops delivering and sending messages, completes {@link #awaitTermination()}, sends a
-	 * normal close frame (1000) when the connection is open, and stops the writer thread. It
-	 * does not wait for the agent's close frame. Only the first call closes; a later call
+	 * normal close frame (1000) when the connection is open, and stops the writer thread and,
+	 * if the transport created its own HTTP client, that client's threads. It does not wait for the agent's close frame. Only the first call closes; a later call
 	 * completes when that close has finished.
 	 */
 	@Override
@@ -263,6 +275,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		closing.doFinally(signal -> {
 			try {
 				outboundScheduler.dispose();
+				if (this.ownExecutor != null) {
+					// The HTTP client this transport created: its idle threads would otherwise
+					// linger for a minute after close.
+					this.ownExecutor.shutdown();
+				}
 				logger.debug("WebSocket transport closed");
 			}
 			catch (Exception e) {
