@@ -278,6 +278,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: an annotated agent with `@SetSessionMode` or `@SetSessionConfigOption` needs a
+  `@NewSession` method.** The default `session/new` answers with a random session id and no modes
+  or config options, so a client never saw any to set and never called those methods. Modes and
+  config options are values the agent chooses per session (their ids, names, current values,
+  often per client capability), which annotations cannot declare, so the SDK cannot fill them into
+  the default answer; building such an agent now fails with an `IllegalStateException` naming the
+  setter method and saying "Add a @NewSession method that returns them". **Migration:** add a
+  `@NewSession` method returning `new NewSessionResponse(sessionId, modes, configOptions)`.
+
 - **A builder agent answers `initialize` without an initialize handler, and needs a prompt
   handler.** `AcpAgent.sync(..)`/`async(..)` agents with no `initializeHandler` answered
   `initialize` with `-32601` (Method not found), so a prompt-only agent could not even connect.
@@ -308,9 +317,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `PromptContext`/`SyncPromptContext` outside `@Prompt`, `@ConfigId`/`@ConfigValue` outside
     `@SetSessionConfigOption`, a request handler declared `void` (other than `@Prompt`), a return
     type no return value handler accepts, a return type that cannot give the method's response
-    (including a `Mono` of another type), a `void` `@ExtRequest`, and a `@SetSessionMode` or
-    `@SetSessionConfigOption` method without a `@NewSession` method (the default `session/new`
-    offers no modes or config options, so a client never saw any to set).
+    (including a `Mono` of another type), and a `void` `@ExtRequest`.
   Each of these used to fail every call with `-32603` or `-32602`. Parameters and return types a
   custom `ArgumentResolver` or `ReturnValueHandler` supports are not checked. Private and static
   handler methods remain supported.
