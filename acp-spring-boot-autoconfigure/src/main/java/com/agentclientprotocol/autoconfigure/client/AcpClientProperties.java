@@ -138,10 +138,24 @@ public class AcpClientProperties {
 
 	public static class CapabilitiesProperties {
 
-		private boolean readTextFile = true;
+		/**
+		 * Advertise the fs/read_text_file capability. Off by default: the
+		 * autoconfiguration registers no file handler, so enable it with one registered
+		 * through an AcpClientCustomizer.
+		 */
+		private boolean readTextFile = false;
 
-		private boolean writeTextFile = true;
+		/**
+		 * Advertise the fs/write_text_file capability. Off by default: the
+		 * autoconfiguration registers no file handler, so enable it with one registered
+		 * through an AcpClientCustomizer.
+		 */
+		private boolean writeTextFile = false;
 
+		/**
+		 * Advertise the terminal capability. Enable it with terminal handlers registered
+		 * through an AcpClientCustomizer.
+		 */
 		private boolean terminal = false;
 
 		public boolean isReadTextFile() {

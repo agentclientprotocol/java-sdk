@@ -29,8 +29,8 @@ class AcpClientPropertiesTests {
 			assertThat(props.getTransport().getStdio().getCommand()).isNull();
 			assertThat(props.getTransport().getStdio().getArgs()).isEmpty();
 			assertThat(props.getTransport().getStdio().getEnv()).isEmpty();
-			assertThat(props.getCapabilities().isReadTextFile()).isTrue();
-			assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
+			assertThat(props.getCapabilities().isReadTextFile()).isFalse();
+			assertThat(props.getCapabilities().isWriteTextFile()).isFalse();
 			assertThat(props.getCapabilities().isTerminal()).isFalse();
 		});
 	}
@@ -88,12 +88,12 @@ class AcpClientPropertiesTests {
 
 	@Test
 	void capabilitiesProperties() {
-		this.runner.withPropertyValues("spring.acp.client.capabilities.read-text-file=false",
-				"spring.acp.client.capabilities.write-text-file=false", "spring.acp.client.capabilities.terminal=true")
+		this.runner.withPropertyValues("spring.acp.client.capabilities.read-text-file=true",
+				"spring.acp.client.capabilities.write-text-file=true", "spring.acp.client.capabilities.terminal=true")
 			.run(context -> {
 				AcpClientProperties props = context.getBean(AcpClientProperties.class);
-				assertThat(props.getCapabilities().isReadTextFile()).isFalse();
-				assertThat(props.getCapabilities().isWriteTextFile()).isFalse();
+				assertThat(props.getCapabilities().isReadTextFile()).isTrue();
+				assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
 				assertThat(props.getCapabilities().isTerminal()).isTrue();
 			});
 	}

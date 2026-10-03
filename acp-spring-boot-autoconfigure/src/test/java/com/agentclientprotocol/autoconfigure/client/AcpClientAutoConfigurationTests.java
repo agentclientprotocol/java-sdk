@@ -78,11 +78,11 @@ class AcpClientAutoConfigurationTests {
 	void defaultCapabilities() {
 		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class).run(context -> {
 			assertThat(context).hasSingleBean(AcpSyncClient.class);
-			// Verify defaults are used (readTextFile=true, writeTextFile=true,
-			// terminal=false)
+			// No capability is advertised by default: the autoconfiguration registers no
+			// file system or terminal handler
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
-			assertThat(props.getCapabilities().isReadTextFile()).isTrue();
-			assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
+			assertThat(props.getCapabilities().isReadTextFile()).isFalse();
+			assertThat(props.getCapabilities().isWriteTextFile()).isFalse();
 			assertThat(props.getCapabilities().isTerminal()).isFalse();
 		});
 	}
@@ -90,15 +90,38 @@ class AcpClientAutoConfigurationTests {
 	@Test
 	void customCapabilities() {
 		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class)
-			.withPropertyValues("spring.acp.client.capabilities.read-text-file=false",
-					"spring.acp.client.capabilities.write-text-file=false",
+			.withPropertyValues("spring.acp.client.capabilities.read-text-file=true",
+					"spring.acp.client.capabilities.write-text-file=true",
 					"spring.acp.client.capabilities.terminal=true")
 			.run(context -> {
 				AcpClientProperties props = context.getBean(AcpClientProperties.class);
-				assertThat(props.getCapabilities().isReadTextFile()).isFalse();
-				assertThat(props.getCapabilities().isWriteTextFile()).isFalse();
+				assertThat(props.getCapabilities().isReadTextFile()).isTrue();
+				assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
 				assertThat(props.getCapabilities().isTerminal()).isTrue();
 			});
+	}
+
+	@Test
+	void advertisesNoFileSystemCapabilityByDefault() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		List<AcpSchema.InitializeRequest> initializeRequests = new CopyOnWriteArrayList<>();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport()).initializeHandler(request -> {
+			initializeRequests.add(request);
+			return AcpSchema.InitializeResponse.ok();
+		}).build();
+		agent.start();
+		try {
+			this.runner.withBean(AcpClientTransport.class, pair::clientTransport).run(context -> {
+				context.getBean(AcpSyncClient.class).initialize();
+				AcpSchema.ClientCapabilities capabilities = initializeRequests.get(0).clientCapabilities();
+				assertThat(capabilities.fs().readTextFile()).isFalse();
+				assertThat(capabilities.fs().writeTextFile()).isFalse();
+				assertThat(capabilities.terminal()).isFalse();
+			});
+		}
+		finally {
+			agent.closeGracefully();
+		}
 	}
 
 	@Test
