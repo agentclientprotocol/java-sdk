@@ -33,7 +33,9 @@ import java.lang.annotation.Target;
  * {@code IllegalArgumentException} naming them. With no {@link Initialize} method the agent
  * answers {@code initialize} with the response derived from its annotations (see Capabilities
  * below); with no {@link NewSession} method it answers {@code session/new} with a random UUID as
- * the session id. Any other request without a handler method is answered
+ * the session id and no modes or config options, so an agent with a {@link SetSessionMode} or
+ * {@link SetSessionConfigOption} method must also have a {@link NewSession} method that offers
+ * them (building the agent fails otherwise). Any other request without a handler method is answered
  * "Method not found" ({@code -32601}).
  *
  * <p><b>Capabilities.</b> ACP lets a client call an optional method, such as {@code session/load}

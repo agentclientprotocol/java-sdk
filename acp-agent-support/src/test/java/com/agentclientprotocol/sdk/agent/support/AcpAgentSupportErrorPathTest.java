@@ -82,6 +82,11 @@ class AcpAgentSupportErrorPathTest {
 	@AcpAgent
 	static class UnstableHandlersAgent {
 
+		@com.agentclientprotocol.sdk.annotation.NewSession
+		com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse newSession() {
+			return new com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse("s1", null, null);
+		}
+
 		@ForkSession
 		ForkSessionResponse fork(ForkSessionRequest request) {
 			return new ForkSessionResponse(request.sessionId() + "-fork", null, null, null);

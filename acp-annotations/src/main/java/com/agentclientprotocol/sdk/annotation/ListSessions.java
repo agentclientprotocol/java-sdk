@@ -19,9 +19,9 @@ import java.lang.annotation.Target;
  * ({@code -32601}).
  *
  * <p>ACP lets a client call {@code session/list} only when the agent advertised
- * {@code sessionCapabilities.list} in its {@code initialize} response; the agent advertises it for you when it has this method. Pages are linked by a cursor
- * the agent chooses: return it as {@code nextCursor} while more sessions remain, and the client
- * sends it back as {@code cursor}.
+ * {@code sessionCapabilities.list} in its {@code initialize} response; the agent advertises it for
+ * you when it has this method. Pages are linked by a cursor the agent chooses: return it as {@code
+ * nextCursor} while more sessions remain, and the client sends it back as {@code cursor}.
  *
  * <p>The method can take a {@code ListSessionsRequest} (the {@code cwd} filter and the
  * {@code cursor}, each of which may be null) and the connection parameters (see

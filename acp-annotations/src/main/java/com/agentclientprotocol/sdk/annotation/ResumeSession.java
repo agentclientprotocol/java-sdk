@@ -18,8 +18,9 @@ import java.lang.annotation.Target;
  * {@code session/resume} with "Method not found" ({@code -32601}).
  *
  * <p>ACP lets a client call {@code session/resume} only when the agent advertised
- * {@code sessionCapabilities.resume} in its {@code initialize} response; the agent advertises it for you when it has this method, and does not allow the
- * agent to send the earlier conversation as session updates before the method returns.
+ * {@code sessionCapabilities.resume} in its {@code initialize} response; the agent advertises it
+ * for you when it has this method, and does not allow the agent to send the earlier conversation as
+ * session updates before the method returns.
  *
  * <p>The method can take a {@code ResumeSessionRequest} (session id, {@code cwd} and
  * {@code mcpServers}), a {@link SessionId @SessionId} {@code String} and the connection parameters

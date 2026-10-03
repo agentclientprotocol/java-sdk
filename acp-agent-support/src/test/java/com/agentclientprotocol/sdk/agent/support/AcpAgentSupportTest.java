@@ -387,6 +387,11 @@ class AcpAgentSupportTest {
 				return InitializeResponse.ok();
 			}
 
+			@NewSession
+			NewSessionResponse newSession() {
+				return new NewSessionResponse("s", null, null);
+			}
+
 			@SetSessionMode
 			SetSessionModeResponse setMode(SetSessionModeRequest req) {
 				return new SetSessionModeResponse();
