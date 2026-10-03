@@ -17,9 +17,8 @@ import java.lang.annotation.Target;
  * {@code @Logout} method the agent answers {@code logout} with "Method not found"
  * ({@code -32601}).
  *
- * <p>ACP lets a client call {@code logout} only when the agent advertised it: return
- * {@code AgentCapabilities} whose {@code auth} is {@code AgentAuthCapabilities.withLogout()} from
- * your {@link Initialize} method.
+ * <p>ACP lets a client call {@code logout} only when the agent advertised {@code auth.logout} in
+ * its {@code initialize} response; the agent advertises it for you when it has this method.
  *
  * <p>The method can take a {@code LogoutRequest} and the connection parameters (see
  * {@link AcpAgent}). It must return a {@code LogoutResponse} (not {@code void}), or a

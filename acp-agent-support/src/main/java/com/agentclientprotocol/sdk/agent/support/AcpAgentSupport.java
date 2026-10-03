@@ -12,9 +12,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -100,11 +102,11 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Example usage:
  * <pre>{@code
- * @AcpAgent
+ * @AcpAgent(name = "my-agent", version = "1.0")
  * class MyAgent {
- *     @Initialize
- *     InitializeResponse init(InitializeRequest req) {
- *         return InitializeResponse.ok();
+ *     @LoadSession
+ *     LoadSessionResponse load(LoadSessionRequest req) {
+ *         return new LoadSessionResponse(null);
  *     }
  *
  *     @Prompt
@@ -119,6 +121,13 @@ import org.slf4j.LoggerFactory;
  *     .transport(new StdioAcpAgentTransport())
  *     .run();
  * }</pre>
+ *
+ * <p><b>Advertising.</b> The agent answers {@code initialize} with what its annotations
+ * declare, with no {@code @Initialize} method needed: each handler annotation advertises the
+ * capability its ACP method needs (above, {@code loadSession}), the {@code @AcpAgent}
+ * attributes give {@code agentInfo}, {@code authMethods} and the MCP transports, and the
+ * {@code @Prompt} attributes the prompt content accepted. An {@code @Initialize} method's
+ * response is laid over the derived one; see {@code Initialize} for the merge rule.
  *
  * <p>A listener transport accepts many connections and needs one agent per connection:
  * {@link Builder#buildFactory()} gives it an {@link AcpAgentFactory} instead.
@@ -157,10 +166,13 @@ public class AcpAgentSupport {
 
 	private final List<AcpInterceptor> interceptors;
 
+	private final AgentAdvertisement advertisement;
+
 	private final AcpSyncAgent agent;
 
 	private AcpAgentSupport(Definition definition, AcpAgentTransport transport) {
 		this.handlers = definition.handlers();
+		this.advertisement = definition.advertisement();
 		this.argumentResolvers = definition.argumentResolvers();
 		this.returnValueHandlers = definition.returnValueHandlers();
 		this.interceptors = definition.interceptors();
@@ -239,12 +251,15 @@ public class AcpAgentSupport {
 	/**
 	 * Binds each discovered handler method to the agent builder, one ACP method per line.
 	 * Initialize and session/new have defaults, so an agent with only a prompt handler can
-	 * still be initialized and open sessions.
+	 * still be initialized and open sessions. Initialize answers with the response derived
+	 * from the annotations ({@link AgentAdvertisement}), with an {@code @Initialize} method's
+	 * response laid over it when there is one.
 	 */
 	private void wireHandlers(AcpAgent.SyncAgentBuilder agent) {
 		bind(AcpSchema.METHOD_INITIALIZE,
-				handler -> agent.initializeHandler(req -> respond(handler, InitializeResponse.class, req, null)),
-				() -> agent.initializeHandler(req -> InitializeResponse.ok()));
+				handler -> agent.initializeHandler(req -> AgentAdvertisement.merge(advertisement.derive(req),
+						respond(handler, InitializeResponse.class, req, null))),
+				() -> agent.initializeHandler(advertisement::derive));
 		bind(AcpSchema.METHOD_SESSION_NEW,
 				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
 				() -> agent.newSessionHandler(req -> new NewSessionResponse(UUID.randomUUID().toString(), null, null)));
@@ -458,7 +473,8 @@ public class AcpAgentSupport {
 	 * to the builder does not reach them. The composites are complete (custom entries first,
 	 * then the defaults) and never change after construction, so connections share them.
 	 */
-	private record Definition(Map<String, AcpHandlerMethod> handlers, ArgumentResolverComposite argumentResolvers,
+	private record Definition(Map<String, AcpHandlerMethod> handlers, AgentAdvertisement advertisement,
+			ArgumentResolverComposite argumentResolvers,
 			ReturnValueHandlerComposite returnValueHandlers, List<AcpInterceptor> interceptors,
 			Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration) {
 	}
@@ -475,6 +491,8 @@ public class AcpAgentSupport {
 	public static class Builder {
 
 		private final Map<String, AcpHandlerMethod> handlers = new HashMap<>();
+
+		private final List<Class<?>> agentClasses = new ArrayList<>();
 
 		private final List<ArgumentResolver> customArgumentResolvers = new ArrayList<>();
 
@@ -638,7 +656,11 @@ public class AcpAgentSupport {
 			return AcpAgentFactory.sync(connection -> new AcpAgentSupport(definition, connection).getAgent());
 		}
 
-		/** The builder's configuration now, with the defaults after the custom entries. */
+		/**
+		 * The builder's configuration now, with the defaults after the custom entries.
+		 * @throws IllegalStateException if an agent auth method has no {@code @Authenticate}
+		 * handler to serve it
+		 */
 		private Definition definition() {
 			ArgumentResolverComposite argumentResolvers = new ArgumentResolverComposite()
 				.addResolvers(customArgumentResolvers)
@@ -646,29 +668,95 @@ public class AcpAgentSupport {
 			ReturnValueHandlerComposite returnValueHandlers = new ReturnValueHandlerComposite()
 				.addHandlers(customReturnValueHandlers)
 				.addHandlers(defaultReturnValueHandlers());
-			return new Definition(Map.copyOf(handlers), argumentResolvers, returnValueHandlers,
+			Map<String, AcpHandlerMethod> handlers = Map.copyOf(this.handlers);
+			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
+					HANDLER_ANNOTATIONS);
+			return new Definition(handlers, advertisement, argumentResolvers, returnValueHandlers,
 					List.copyOf(interceptors), requestTimeout, cancelGracePeriod, maxPromptDuration);
 		}
 
+		/**
+		 * Discovers the handler methods of {@code agentClass} and its superclasses, and binds
+		 * them to the one instance the factory gives. The {@code @AcpAgent} annotation may be on
+		 * a superclass, as it is for a proxy a framework generates (Spring CGLIB, Quarkus ArC,
+		 * Micronaut AOP), whose subclass carries no annotations: handlers are then found on the
+		 * user's class and invoked on the proxy, so its interceptors run. A method overridden in
+		 * a subclass is one handler, invoked virtually, and bridge and synthetic methods are not
+		 * handlers.
+		 */
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> instanceFactory) {
-			if (!agentClass.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
-				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName());
+			Class<?> annotatedClass = annotatedAgentClass(agentClass);
+			if (annotatedClass == null) {
+				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName()
+						+ " (neither it nor a superclass is)");
 			}
+			AgentAdvertisement.validate(annotatedClass);
+			agentClasses.add(annotatedClass);
 			// One instance for every handler and request: handlers share the agent's state
 			Object agentInstance = instanceFactory.get();
-			for (Method method : agentClass.getDeclaredMethods()) {
-				HANDLER_ANNOTATIONS.forEach((annotation, acpMethod) -> {
-					if (method.isAnnotationPresent(annotation)) {
-						handlers.put(acpMethod, new AcpHandlerMethod(agentInstance, method, acpMethod));
-						log.debug("Discovered @{} handler: {}", annotation.getSimpleName(), method.getName());
-					}
-				});
-				String extensionMethod = extensionMethod(method);
-				if (extensionMethod != null) {
-					handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
-					log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
+			Set<String> seen = new HashSet<>();
+			for (Class<?> type = agentClass; type != null && type != Object.class; type = type.getSuperclass()) {
+				discoverDeclaredHandlers(type, agentInstance, seen);
+			}
+		}
+
+		/**
+		 * Registers the handlers {@code type} declares, other than those an annotated override
+		 * below it already registered ({@code seen}, the signatures registered so far). An
+		 * unannotated override, such as a proxy's, leaves the annotations to the method it
+		 * overrides. A generic override's bridge stands for the erased method it overrides.
+		 */
+		private void discoverDeclaredHandlers(Class<?> type, Object agentInstance, Set<String> seen) {
+			Set<String> registeredHere = new HashSet<>();
+			for (Method method : type.getDeclaredMethods()) {
+				if (!method.isBridge() && !method.isSynthetic() && !seen.contains(signature(method))
+						&& discoverHandler(method, agentInstance)) {
+					registeredHere.add(method.getName());
+					seen.add(signature(method));
 				}
 			}
+			for (Method method : type.getDeclaredMethods()) {
+				if (method.isBridge() && registeredHere.contains(method.getName())) {
+					seen.add(signature(method));
+				}
+			}
+		}
+
+		/**
+		 * Registers {@code method} for each handler annotation it carries.
+		 * @return whether it carries any
+		 */
+		private boolean discoverHandler(Method method, Object agentInstance) {
+			boolean handler = false;
+			for (Map.Entry<Class<? extends Annotation>, String> entry : HANDLER_ANNOTATIONS.entrySet()) {
+				if (method.isAnnotationPresent(entry.getKey())) {
+					handlers.put(entry.getValue(), new AcpHandlerMethod(agentInstance, method, entry.getValue()));
+					log.debug("Discovered @{} handler: {}", entry.getKey().getSimpleName(), method.getName());
+					handler = true;
+				}
+			}
+			String extensionMethod = extensionMethod(method);
+			if (extensionMethod != null) {
+				handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
+				log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
+				handler = true;
+			}
+			return handler;
+		}
+
+		/** A method's name and parameter types, which an override shares. */
+		private static String signature(Method method) {
+			return method.getName() + Arrays.toString(method.getParameterTypes());
+		}
+
+		/** The first class from {@code type} up that is annotated {@code @AcpAgent}, or null. */
+		private static @Nullable Class<?> annotatedAgentClass(Class<?> type) {
+			for (Class<?> candidate = type; candidate != null; candidate = candidate.getSuperclass()) {
+				if (candidate.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
+					return candidate;
+				}
+			}
+			return null;
 		}
 
 		/**

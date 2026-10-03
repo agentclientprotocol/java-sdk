@@ -13,11 +13,24 @@ import java.lang.annotation.Target;
 /**
  * Marks the {@link AcpAgent} method that answers {@code initialize}: the first request on a
  * connection, in which the client sends its protocol version, capabilities and name, and the
- * method answers with the agent's. Declare one to advertise capabilities, such as
- * {@code loadSession} for a {@link LoadSession} method, to list the authentication methods
- * {@link Authenticate} accepts, or to name the agent ({@code agentInfo}). Without an
- * {@code @Initialize} method the agent answers {@code InitializeResponse.ok()}: protocol version 1
- * and default capabilities, which advertise no optional method.
+ * method answers with the agent's. It is optional: without one, the agent answers with the
+ * response derived from its class (see {@link AcpAgent}): the capabilities its handler
+ * annotations imply, the {@link AcpAgent#authMethods()}, and {@code agentInfo} from
+ * {@link AcpAgent#name()} and {@link AcpAgent#version()}, in the protocol version negotiated with
+ * the client. Declare one to look at the client's request, or to advertise what the annotations
+ * cannot express, such as {@code sessionCapabilities.additionalDirectories}.
+ *
+ * <p><b>Merge rule.</b> The derived response is the base, and the response this method returns
+ * is laid over it:
+ * <ul>
+ *   <li>a capability is advertised when either side advertises it, so returning
+ *   {@code InitializeResponse.ok()} keeps every derived capability, and a capability a handler
+ *   implies cannot be withdrawn here (remove the handler instead)</li>
+ *   <li>{@code authMethods} are the derived methods followed by the returned ones, a returned
+ *   method replacing a derived method with the same id</li>
+ *   <li>{@code protocolVersion}, and {@code agentInfo} and {@code _meta} when not null, are the
+ *   returned ones</li>
+ * </ul>
  *
  * <p>The client's capabilities are recorded before this method runs, so a
  * {@code NegotiatedCapabilities} parameter already holds them here, and every later handler method
@@ -26,11 +39,13 @@ import java.lang.annotation.Target;
  * <p>The method can take an {@code InitializeRequest} and the connection parameters (see
  * {@link AcpAgent}). It returns an {@code InitializeResponse}, or a {@code Mono} of one.
  *
- * <p>Example usage, for an agent that also has a {@link LoadSession} method:
+ * <p>Example usage, adding a capability no annotation implies to the derived ones:
  * <pre>{@code
  * @Initialize
  * public InitializeResponse initialize(InitializeRequest request) {
- *     return InitializeResponse.ok(AgentCapabilities.builder().loadSession(true).build());
+ *     return InitializeResponse.ok(AgentCapabilities.builder()
+ *         .sessionCapabilities(new SessionCapabilities(null, null, null, null, Map.of(), null))
+ *         .build());
  * }
  * }</pre>
  *

@@ -33,8 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Every handler an agent builder takes has a handler annotation that {@link AcpAgentSupport}
- * wires, and every handler annotation in acp-annotations is wired: an ACP method added to the
- * builders without an annotation, or an annotation without wiring, fails here.
+ * wires, every handler annotation in acp-annotations is wired, and every one declares what it
+ * advertises in the initialize response: an ACP method added to the builders without an
+ * annotation, or an annotation without wiring or a protocol mapping, fails here.
  */
 class HandlerAnnotationCoverageTest {
 
@@ -59,6 +60,24 @@ class HandlerAnnotationCoverageTest {
 			.map(Class::getName)
 			.collect(Collectors.toCollection(TreeSet::new));
 		assertThat(wired).isEqualTo(methodAnnotationsInAcpAnnotations());
+	}
+
+	/**
+	 * Every handler annotation, the extension ones included, declares what it advertises in
+	 * the initialize response: a capability, or explicitly none. A new annotation without a
+	 * mapping would silently advertise nothing.
+	 */
+	@Test
+	void everyHandlerAnnotationHasAProtocolMapping() throws Exception {
+		Set<String> mapped = AgentAdvertisement.mappings()
+			.keySet()
+			.stream()
+			.map(Class::getName)
+			.collect(Collectors.toCollection(TreeSet::new));
+		Set<String> expected = new TreeSet<>(methodAnnotationsInAcpAnnotations());
+		expected.add(ExtRequest.class.getName());
+		expected.add(ExtNotification.class.getName());
+		assertThat(mapped).isEqualTo(expected);
 	}
 
 	/** A handler annotated for a request may return the request's response type as it is. */
