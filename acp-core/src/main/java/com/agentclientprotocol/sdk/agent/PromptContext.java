@@ -10,42 +10,44 @@ import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 /**
- * Context provided to prompt handlers for accessing agent capabilities.
+ * A prompt handler's way back to the client during one prompt turn: the session ID, session
+ * updates, and the requests an agent sends the client (files, terminals, permission and
+ * elicitation). Every {@link AcpAgent.PromptHandler} receives one with each {@code session/prompt},
+ * and every call returns a Reactor {@code Mono}. Handlers on the synchronous builder receive a
+ * {@link SyncPromptContext} instead, whose calls block.
  *
- * <p>
- * This interface provides prompt handlers with everything they need to:
- * <ul>
- * <li>Send session updates back to the client</li>
- * <li>Request file operations from the client</li>
- * <li>Request permissions from the client</li>
- * <li>Create and manage terminals</li>
- * <li>Query client capabilities</li>
- * </ul>
+ * <p>It has two levels. The protocol calls ({@link #sendUpdate}, {@link #readTextFile},
+ * {@link #createTerminal}, {@link #requestPermission} and the rest) take ACP request records and
+ * return the client's answers. The convenience calls fill in the session ID for you:
+ * {@link #sendMessage(String)} and {@link #sendThought(String)} send text chunks,
+ * {@link #readFile(String)} and {@link #writeFile(String, String)} wrap the file requests,
+ * {@link #askPermission(String)} and {@link #askChoice(String, String...)} wrap a permission
+ * request, and {@link #execute(Command)} runs a command in a client terminal from creation to
+ * release.
  *
- * <p>
- * This follows the MCP SDK's "Exchange" pattern where handlers receive
- * a context object with all necessary capabilities, eliminating the need
- * for external references to the agent instance.
- *
- * <p>
- * Example usage:
  * <pre>{@code
- * agent.promptHandler((request, context) -> {
- *     // Send an update
- *     context.sendUpdate(sessionId, update);
- *
- *     // Read a file (if client supports it; capabilities are null before initialize)
- *     NegotiatedCapabilities caps = context.getClientCapabilities();
- *     if (caps != null && caps.supportsReadTextFile()) {
- *         var content = context.readTextFile(new ReadTextFileRequest(...)).block();
- *     }
- *
- *     // Request permission
- *     var permission = context.requestPermission(new RequestPermissionRequest(...));
- *
- *     return Mono.just(new PromptResponse(StopReason.END_TURN));
- * });
+ * AcpAgent.async(transport)
+ *     .promptHandler((request, context) -> context.sendThought("Reading the build file")
+ *         .then(context.readFile("/workspace/pom.xml"))
+ *         .flatMap(pom -> context.sendMessage("The build file has " + pom.length() + " chars"))
+ *         .thenReturn(AcpSchema.PromptResponse.endTurn()))
+ *     .build();
  * }</pre>
+ *
+ * <p>Calls go through the agent ({@link AcpAsyncAgent}) and behave as its calls do. Nothing is sent
+ * until the {@code Mono} is subscribed. Once the client has initialized, a call that needs a
+ * capability the client did not advertise (reading or writing files, creating a terminal, an
+ * elicitation mode) fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
+ * without being sent; check {@link #getClientCapabilities()} first. An error answer fails the
+ * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, and no answer within the
+ * agent's request timeout fails it with a {@link java.util.concurrent.TimeoutException}. When the
+ * SDK cancels the handler (after the cancel grace period, or for a {@code $/cancel_request}), it
+ * disposes the handler's {@code Mono}: requests still waiting inside it are cancelled, and the
+ * client is sent a {@code $/cancel_request} for each. The context does not check that its turn is
+ * still active. Its methods may be called from several threads at once.
+ *
+ * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
+ * for test doubles.
  *
  * @author Mark Pollack
  * @since 0.9.1
@@ -59,11 +61,13 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Sends a session update notification to the client.
-	 * Used for streaming updates during prompt processing.
-	 * @param sessionId The session ID
-	 * @param update The session update to send
-	 * @return A Mono that completes when the notification is sent
+	 * Sends a {@code session/update} notification to the client, carrying one
+	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
+	 * plan, and so on. The Java client hands a turn's updates to its consumers in order, before the
+	 * prompt's answer.
+	 * @param sessionId the ACP session the update belongs to, normally {@link #getSessionId()}
+	 * @param update the update
+	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 */
 	Mono<Void> sendUpdate(String sessionId, AcpSchema.SessionUpdate update);
 
@@ -72,18 +76,24 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests the client to read a text file.
-	 * @param request The read file request
-	 * @return A Mono containing the file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Asks the client for the content of a text file ({@code fs/read_text_file}), including unsaved
+	 * changes in its editor. The client must have advertised {@code fs.readTextFile}.
+	 * @param request the session, an absolute path, and optionally a 1-based first line and a line
+	 * limit
+	 * @return a {@code Mono} emitting the file content; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise the capability
 	 */
 	Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest request);
 
 	/**
-	 * Requests the client to write a text file.
-	 * @param request The write file request
-	 * @return A Mono that completes when the file is written
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file writing
+	 * Asks the client to write a text file ({@code fs/write_text_file}); ACP requires the client to
+	 * create the file if it does not exist. The client must have advertised
+	 * {@code fs.writeTextFile}.
+	 * @param request the session, an absolute path and the new content
+	 * @return a {@code Mono} emitting the client's empty answer once the file is written; it fails
+	 * with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise the capability
 	 */
 	Mono<AcpSchema.WriteTextFileResponse> writeTextFile(AcpSchema.WriteTextFileRequest request);
 
@@ -92,9 +102,12 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests permission from the client for a sensitive operation.
-	 * @param request The permission request
-	 * @return A Mono containing the permission response
+	 * Asks the client to let the user approve a tool call ({@code session/request_permission}). The
+	 * request describes the tool call and the options to choose from; every client handles this
+	 * request, so no capability is checked.
+	 * @param request the session, the tool call and the permission options
+	 * @return a {@code Mono} emitting the user's choice: the selected option, or a cancelled
+	 * outcome when the client cancelled the prompt turn
 	 */
 	Mono<AcpSchema.RequestPermissionResponse> requestPermission(AcpSchema.RequestPermissionRequest request);
 
@@ -103,38 +116,49 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests the client to create a terminal.
-	 * @param request The create terminal request
-	 * @return A Mono containing the terminal ID
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Asks the client to start a command in a new terminal ({@code terminal/create}). The client
+	 * must have advertised {@code terminal}. ACP requires the agent to release every terminal it
+	 * creates with {@link #releaseTerminal}; {@link #execute(Command)} does the whole sequence for
+	 * you.
+	 * @param request the session, the command, its arguments and optionally a working directory,
+	 * environment variables and an output limit
+	 * @return a {@code Mono} emitting the new terminal's ID; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise the capability
 	 */
 	Mono<AcpSchema.CreateTerminalResponse> createTerminal(AcpSchema.CreateTerminalRequest request);
 
 	/**
-	 * Requests terminal output from the client.
-	 * @param request The terminal output request
-	 * @return A Mono containing the terminal output
+	 * Asks the client for a terminal's output so far ({@code terminal/output}), without waiting for
+	 * the command to end.
+	 * @param request the session and the terminal ID
+	 * @return a {@code Mono} emitting the output, whether it was truncated, and the exit status if
+	 * the command has ended
 	 */
 	Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request);
 
 	/**
-	 * Requests the client to release a terminal.
-	 * @param request The release terminal request
-	 * @return A Mono that completes when the terminal is released
+	 * Asks the client to release a terminal ({@code terminal/release}), which kills its command if
+	 * it is still running. The terminal ID is invalid afterwards.
+	 * @param request the session and the terminal ID
+	 * @return a {@code Mono} emitting the client's empty answer once the terminal is released
 	 */
 	Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request);
 
 	/**
-	 * Waits for a terminal to exit.
-	 * @param request The wait for exit request
-	 * @return A Mono containing the exit status
+	 * Asks the client to answer when a terminal's command has ended
+	 * ({@code terminal/wait_for_exit}). The wait counts against the agent's request timeout, so a
+	 * long command can fail it with a {@link java.util.concurrent.TimeoutException}.
+	 * @param request the session and the terminal ID
+	 * @return a {@code Mono} emitting the exit code or the signal that ended the command
 	 */
 	Mono<AcpSchema.WaitForTerminalExitResponse> waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request);
 
 	/**
-	 * Requests the client to kill a terminal.
-	 * @param request The kill terminal request
-	 * @return A Mono that completes when the terminal is killed
+	 * Asks the client to kill a terminal's command ({@code terminal/kill}) without releasing the
+	 * terminal: its output and exit status can still be read, and it must still be released.
+	 * @param request the session and the terminal ID
+	 * @return a {@code Mono} emitting the client's empty answer once the command is killed
 	 */
 	Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request);
 
@@ -143,16 +167,22 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests structured user input from the client via a form or URL.
-	 * @param request The elicitation request
-	 * @return A Mono containing the user's response
+	 * Asks the client to collect structured input from the user ({@code elicitation/create}),
+	 * either with a form built from a schema or by sending the user to a URL. The client must have
+	 * advertised the request's mode in its elicitation capabilities.
+	 * @param request the elicitation, made with {@link AcpSchema.CreateElicitationRequest#form} or
+	 * {@link AcpSchema.CreateElicitationRequest#url}
+	 * @return a {@code Mono} emitting the user's answer: accept (with the form content), decline or
+	 * cancel; it fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the
+	 * client did not advertise the mode
 	 */
 	Mono<AcpSchema.CreateElicitationResponse> createElicitation(AcpSchema.CreateElicitationRequest request);
 
 	/**
-	 * Notifies the client that a URL-mode elicitation has completed.
-	 * @param notification The completion notification
-	 * @return A Mono that completes when the notification is sent
+	 * Tells the client that the outside interaction of a URL-mode elicitation has finished
+	 * ({@code elicitation/complete}).
+	 * @param notification the ID of the elicitation that finished
+	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 */
 	Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification);
 
@@ -161,13 +191,10 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Returns the capabilities negotiated with the client during initialization.
-	 *
-	 * <p>
-	 * Use this to check what features the client supports before calling
-	 * methods like {@link #readTextFile} or {@link #createTerminal}.
-	 *
-	 * @return the negotiated client capabilities, or null if not yet initialized
+	 * Returns what the client advertised in its {@code initialize} request. Check it before a call
+	 * that needs a capability, for example {@code supportsReadTextFile()} before
+	 * {@link #readTextFile}.
+	 * @return the client's capabilities, or {@code null} if the client has not initialized
 	 */
 	@Nullable NegotiatedCapabilities getClientCapabilities();
 
@@ -176,27 +203,29 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Returns the session ID for this prompt invocation.
-	 * @return the session ID
+	 * Returns the ID of the ACP session this prompt belongs to.
+	 * @return the session ID from the prompt request
 	 */
 	String getSessionId();
 
 	/**
-	 * Sends a message to the client as an agent message chunk.
-	 * This is a convenience method that wraps the text in the appropriate
-	 * session update structure.
-	 * @param text The message text to send
-	 * @return A Mono that completes when the message is sent
+	 * Sends text to the client as an agent message chunk, the visible reply of this prompt's
+	 * session. Call it as often as needed: the client shows the chunks as one growing message.
+	 * @param text the text
+	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	Mono<Void> sendMessage(String text);
 
 	/**
-	 * Sends a message to the client as an agent message chunk, tagged with a message ID.
-	 * Chunks sharing the same {@code messageId} belong to the same logical message; a change
-	 * in {@code messageId} signals a new message.
-	 * @param text The message text to send
-	 * @param messageId The message identifier, or {@code null} for none
-	 * @return A Mono that completes when the message is sent
+	 * Sends text to the client as an agent message chunk that belongs to the given message. Chunks
+	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
+	 * message.
+	 *
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
+	 * and an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * @param text the text
+	 * @param messageId the message ID, or {@code null} for none
+	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendMessage(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
@@ -204,20 +233,22 @@ public interface PromptContext {
 	}
 
 	/**
-	 * Sends a thought to the client as an agent thought chunk.
-	 * Thoughts are typically displayed differently than messages,
-	 * showing the agent's reasoning process.
-	 * @param text The thought text to send
-	 * @return A Mono that completes when the thought is sent
+	 * Sends text to the client as an agent thought chunk: the agent's reasoning, which clients
+	 * usually show apart from the reply.
+	 * @param text the text
+	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	Mono<Void> sendThought(String text);
 
 	/**
-	 * Sends a thought to the client as an agent thought chunk, tagged with a message ID.
-	 * Chunks sharing the same {@code messageId} belong to the same logical message.
-	 * @param text The thought text to send
-	 * @param messageId The message identifier, or {@code null} for none
-	 * @return A Mono that completes when the thought is sent
+	 * Sends text to the client as an agent thought chunk that belongs to the given message. Chunks
+	 * with the same {@code messageId} make up one message.
+	 *
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
+	 * and an {@link AcpSchema.AgentThoughtChunk} holding the text.
+	 * @param text the text
+	 * @param messageId the message ID, or {@code null} for none
+	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendThought(String text, @Nullable String messageId) {
 		return sendUpdate(getSessionId(),
@@ -225,64 +256,77 @@ public interface PromptContext {
 	}
 
 	/**
-	 * Reads a text file from the client's file system.
-	 * @param path The path to the file
-	 * @return A Mono containing the file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Reads a whole text file through the client, as {@link #readTextFile} does for this session.
+	 * @param path the absolute path of the file
+	 * @return a {@code Mono} emitting the file content; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise {@code fs.readTextFile}
 	 */
 	Mono<String> readFile(String path);
 
 	/**
-	 * Reads a portion of a text file from the client's file system.
-	 * @param path The path to the file
-	 * @param startLine The line number to start reading from (0-indexed, null for beginning)
-	 * @param lineCount The number of lines to read (null for all remaining)
-	 * @return A Mono containing the file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Reads part of a text file through the client, as {@link #readTextFile} does for this session.
+	 * The line numbers go to the client unchanged; ACP counts lines from 1.
+	 * @param path the absolute path of the file
+	 * @param startLine the first line to read, counting from 1, or {@code null} for the first line
+	 * @param lineCount the most lines to read, or {@code null} for the rest of the file
+	 * @return a {@code Mono} emitting the content read; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise {@code fs.readTextFile}
 	 */
 	Mono<String> readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount);
 
 	/**
-	 * Writes content to a text file on the client's file system.
-	 * @param path The path to the file
-	 * @param content The content to write
-	 * @return A Mono that completes when the file is written
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file writing
+	 * Writes a text file through the client, as {@link #writeTextFile} does for this session.
+	 * @param path the absolute path of the file
+	 * @param content the new content of the whole file
+	 * @return a {@code Mono} that completes once the client has written the file; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise {@code fs.writeTextFile}
 	 */
 	Mono<Void> writeFile(String path, String content);
 
 	/**
-	 * Asks the client for permission to perform an action.
-	 * Presents a simple Allow/Deny choice.
-	 * @param action A description of the action to request permission for
-	 * @return A Mono containing true if allowed, false otherwise
+	 * Asks the user to allow or deny an action, with a permission request of two options: "Allow"
+	 * (allow once) and "Deny" (reject once). The request describes a pending tool call with a new
+	 * random ID, the action as its title and the kind {@code edit}.
+	 * @param action what the agent wants to do, shown to the user as the tool call's title
+	 * @return a {@code Mono} emitting {@code true} only if the user chose "Allow"; {@code false} if
+	 * the user denied or the client cancelled the request
 	 */
 	Mono<Boolean> askPermission(String action);
 
 	/**
-	 * Asks the client to choose from multiple options.
-	 * @param question The question to ask
-	 * @param options The available options (at least 2)
-	 * @return A Mono emitting the selected option text, or completing empty if the
-	 * client cancelled the choice
+	 * Asks the user to pick one of several options, with a permission request whose options are the
+	 * given texts. The request describes a pending tool call with a new random ID, the question as
+	 * its title and the kind {@code other}; every option has the kind "allow once", and its ID is
+	 * its position in {@code options}.
+	 * @param question the question, shown to the user as the tool call's title
+	 * @param options the texts to choose from, at least two
+	 * @return a {@code Mono} emitting the text of the chosen option, or completing empty if the
+	 * client cancelled the request; it fails with {@link IllegalArgumentException} if fewer than
+	 * two options are given
 	 */
 	Mono<String> askChoice(String question, String... options);
 
 	/**
-	 * Executes a command in a terminal and waits for completion.
-	 * The terminal is automatically released after execution.
-	 * @param commandAndArgs The command and arguments to execute
-	 * @return A Mono containing the command result
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Runs a command in a client terminal and returns its output and exit status, as
+	 * {@link #execute(Command)} does with {@code Command.of(commandAndArgs)}.
+	 * @param commandAndArgs the executable, then its arguments
+	 * @return a {@code Mono} emitting the result; see {@link #execute(Command)}
 	 */
 	Mono<CommandResult> execute(String... commandAndArgs);
 
 	/**
-	 * Executes a command with options and waits for completion.
-	 * The terminal is automatically released after execution.
-	 * @param command The command configuration
-	 * @return A Mono containing the command result
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Runs a command in a client terminal and returns its output and exit status. It creates a
+	 * terminal, waits for the command to end, reads the output, then releases the terminal, also
+	 * when a step fails. Waiting counts against the agent's request timeout, so a command that runs
+	 * longer fails with a {@link java.util.concurrent.TimeoutException}, and the terminal is still
+	 * released; raise the builder's {@code requestTimeout} for long commands.
+	 * @param command the command and its options
+	 * @return a {@code Mono} emitting the result; it fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} if the client did not
+	 * advertise {@code terminal}, and with the error of the first step that failed
 	 */
 	Mono<CommandResult> execute(Command command);
 

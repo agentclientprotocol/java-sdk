@@ -11,31 +11,30 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Builder for terminal command execution via the convenience API.
+ * A command for a prompt handler to run in a terminal on the client, with the options
+ * {@code execute(String...)} cannot express: a working directory, environment variables and an
+ * output limit. Pass it to {@link SyncPromptContext#execute(Command)} or
+ * {@link PromptContext#execute(Command)}, which run it and return a {@link CommandResult}.
  *
- * <p>
- * This record allows configuring command execution with options like
- * working directory, environment variables, and output limits.
+ * <p>Start with {@link #of(String...)} and add options with {@link #cwd(String)}, {@link #env(Map)}
+ * and {@link #outputByteLimit(long)}; each returns a new command. The values go to the client as
+ * they are, in a {@code terminal/create} request, so the client decides what they mean: ACP asks
+ * for an absolute working directory, and a client that reaches the output limit drops output from
+ * the start. The client must have advertised the {@code terminal} capability.
  *
- * <p>
- * Example usage:
  * <pre>{@code
- * // Simple command
- * CommandResult result = context.execute("echo", "hello");
- *
- * // Command with options
- * CommandResult result = context.execute(
- *     Command.of("make", "build")
- *         .cwd("/workspace")
- *         .env(Map.of("DEBUG", "true"))
- *         .outputLimit(10000));
+ * CommandResult result = context.execute(Command.of("mvn", "-q", "test")
+ *     .cwd("/workspace/project")
+ *     .env(Map.of("CI", "true"))
+ *     .outputByteLimit(100_000));
  * }</pre>
  *
- * @param executable The command to execute
- * @param args The arguments to pass to the command
- * @param cwd The working directory (null for default)
- * @param env Environment variables to set (empty for none)
- * @param outputByteLimit Maximum bytes of output to capture (null for default)
+ * @param executable the program to run
+ * @param args the arguments after the executable; empty for none
+ * @param cwd the working directory, an absolute path, or {@code null} for the client's default
+ * @param env the environment variables to set; empty for none
+ * @param outputByteLimit the most bytes of output the client keeps, or {@code null} for the
+ * client's default
  * @author Mark Pollack
  * @since 0.9.2
  * @see SyncPromptContext#execute(Command)
@@ -50,10 +49,12 @@ public record Command(
 ) {
 
 	/**
-	 * Creates a Command from command-line arguments.
-	 * The first argument is the executable, remaining arguments are passed as args.
-	 * @param commandAndArgs The command and its arguments
-	 * @return A new Command instance
+	 * Creates a command from an executable and its arguments, with no working directory, no
+	 * environment variables and no output limit. The arguments are a view of
+	 * {@code commandAndArgs}, not a copy.
+	 * @param commandAndArgs the executable, then its arguments
+	 * @return the command
+	 * @throws IllegalArgumentException if {@code commandAndArgs} is empty
 	 */
 	public static Command of(String... commandAndArgs) {
 		if (commandAndArgs == null || commandAndArgs.length == 0) {
@@ -68,27 +69,28 @@ public record Command(
 	}
 
 	/**
-	 * Returns a new Command with the specified working directory.
-	 * @param cwd The working directory
-	 * @return A new Command with the working directory set
+	 * Returns a copy of this command that runs in the given working directory.
+	 * @param cwd the working directory, an absolute path
+	 * @return the new command
 	 */
 	public Command cwd(String cwd) {
 		return new Command(executable, args, cwd, env, outputByteLimit);
 	}
 
 	/**
-	 * Returns a new Command with the specified environment variables.
-	 * @param env The environment variables
-	 * @return A new Command with the environment variables set
+	 * Returns a copy of this command with these environment variables, in place of any set before.
+	 * @param env the variable names and values
+	 * @return the new command
 	 */
 	public Command env(Map<String, String> env) {
 		return new Command(executable, args, cwd, env, outputByteLimit);
 	}
 
 	/**
-	 * Returns a new Command with the specified output byte limit.
-	 * @param limit The maximum bytes of output to capture
-	 * @return A new Command with the output byte limit set
+	 * Returns a copy of this command with an output limit: the most bytes of output the client
+	 * keeps.
+	 * @param limit the limit in bytes
+	 * @return the new command
 	 */
 	public Command outputByteLimit(long limit) {
 		return new Command(executable, args, cwd, env, limit);
