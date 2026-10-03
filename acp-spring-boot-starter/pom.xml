@@ -1,35 +1,66 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springaicommunity</groupId>
-        <artifactId>acp-autoconfig-parent</artifactId>
-        <version>0.13.0-SNAPSHOT</version>
+        <groupId>com.agentclientprotocol</groupId>
+        <artifactId>acp-java-sdk</artifactId>
+        <version>0.19.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>acp-spring-boot-starter</artifactId>
+    <packaging>jar</packaging>
+
     <name>ACP Spring Boot Starter</name>
-    <description>Spring Boot starter for the ACP Java SDK</description>
+    <description>Spring Boot starter for ACP clients and agents</description>
+
+    <properties>
+        <spring-boot.version>4.1.0</spring-boot.version>
+        <!-- No code: nothing to cover. -->
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Every Jetty jar at the SDK's jetty.version. The parent manages only the Jetty
+                 artifacts the SDK declares; without this their transitive jetty-io, jetty-util
+                 and the rest came from Boot's older Jetty, and the listener failed to start. -->
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-bom</artifactId>
+                <version>${jetty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-bom</artifactId>
+                <version>${jetty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
-            <groupId>org.springaicommunity</groupId>
+            <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-spring-boot-autoconfigure</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-annotations</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-agent-support</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
