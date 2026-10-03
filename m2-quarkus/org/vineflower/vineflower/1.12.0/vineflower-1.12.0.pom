@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.vineflower</groupId>
+  <artifactId>vineflower</artifactId>
+  <version>1.12.0</version>
+  <name>Vineflower</name>
+  <description>Modern Java &amp; JVM language decompiler aiming to be as accurate as possible, with an emphasis on output quality.</description>
+  <url>https://vineflower.org</url>
+  <licenses>
+    <license>
+      <name>The Apache License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>vineflower</id>
+      <name>Vineflower Development Team</name>
+      <email>~jasmine/vineflower-discuss@lists.sr.ht</email>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/Vineflower/vineflower.git</connection>
+    <developerConnection>scm:git:ssh:git@github.com:Vineflower/vineflower.git</developerConnection>
+    <url>https://github.com/Vineflower/vineflower</url>
+  </scm>
+</project>
