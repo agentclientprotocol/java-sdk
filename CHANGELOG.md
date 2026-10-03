@@ -489,6 +489,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking: `PromptResponse.text(String)` is removed, and a `@Prompt` method's String now reaches
+  the client.** `text(String)` threw its text away and returned the same response as `endTurn()`: a
+  prompt response carries no content, and a static factory cannot send a session update. So an
+  annotated `@Prompt` method that returned a `String` (documented as "converted to
+  `PromptResponse.text()`") ended the turn and sent nothing. That String is now sent to the client
+  as an `agent_message_chunk` session update of the prompt's session, then the turn ends with
+  `end_turn`; a null or empty String sends nothing. Migration: replace
+  `return PromptResponse.text(message);` with `context.sendMessage(message); return
+  PromptResponse.endTurn();` (`SyncPromptContext` or, in an async handler, `PromptContext`), or,
+  in a `@Prompt` method, return the String itself.
+
 - **Breaking: the session-model API (`session/set_model`) is removed.** Deprecated for removal in
   0.14.0; the ACP schema 1.9.1 (stable and unstable) no longer defines the method, its request and
   response, or the `models` field on session responses. Removed: `AcpSchema.METHOD_SESSION_SET_MODEL`,

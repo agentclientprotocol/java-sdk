@@ -667,17 +667,6 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Creates a response indicating the agent has finished its turn with a text result.
-		 * Note: The text content should be sent via the context before returning this response.
-		 * @param text The text (for documentation purposes; actual content sent via context)
-		 * @return A PromptResponse with END_TURN stop reason
-		 */
-		public static PromptResponse text(String text) {
-			// Text content should be sent via context.sendMessage() before returning
-			return new PromptResponse(StopReason.END_TURN);
-		}
-
-		/**
 		 * Creates a response indicating the agent refused the request.
 		 * @return A PromptResponse with REFUSAL stop reason
 		 */

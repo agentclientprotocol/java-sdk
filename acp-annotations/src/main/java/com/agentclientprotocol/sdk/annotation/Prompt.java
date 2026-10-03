@@ -29,7 +29,7 @@ import java.lang.annotation.Target;
  * <p>The method should return one of:
  * <ul>
  *   <li>{@code PromptResponse} - the prompt response</li>
- *   <li>{@code String} - converted to PromptResponse.text()</li>
+ *   <li>{@code String} - sent to the client as an agent message chunk, then the turn ends</li>
  *   <li>{@code void} - converted to PromptResponse.endTurn()</li>
  *   <li>{@code Mono<PromptResponse>} - for async handling</li>
  * </ul>
@@ -43,7 +43,8 @@ import java.lang.annotation.Target;
  *     // Read files, execute commands, etc.
  *     String content = context.readFile("/path/to/file.txt");
  *
- *     return PromptResponse.text("Here's what I found: " + content);
+ *     context.sendMessage("Here's what I found: " + content);
+ *     return PromptResponse.endTurn();
  * }
  * }</pre>
  *
