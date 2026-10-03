@@ -276,6 +276,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NegotiatedCapabilities` besides their one params parameter
   (`ExtensionParamsResolver.isConnectionType`).
 
+- **Shortcuts for the messages real code writes most:** `new NewSessionRequest(cwd)` (no MCP
+  servers), `new NewSessionResponse(sessionId)` (no modes or config options) and
+  `PromptRequest.text(sessionId, text)` (a prompt of one text block). Each equals, and writes the
+  same JSON as, the long form.
+
 ### Changed
 
 - **Breaking: an annotated agent with `@SetSessionMode` or `@SetSessionConfigOption` needs a
