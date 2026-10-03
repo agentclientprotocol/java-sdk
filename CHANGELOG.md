@@ -533,6 +533,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`session/close` cancels the session's ongoing work before it closes.** ACP v1 says the agent
+  "**must** cancel any ongoing work related to the session (treat it as if `session/cancel` was
+  called) and then free up any resources associated with the session" (schema
+  `CloseSessionRequest`). The agent session passed `session/close` straight to its handler: a
+  running prompt kept running and the `session/cancel` handler was never told. Now, when the agent
+  has a `session/close` handler, the session first does what a `session/cancel` does: it tells the
+  `session/cancel` handler (`cancelHandler`, `@Cancel`) and marks a running prompt cancelled, so
+  it answers stop reason `cancelled` (by itself, or from the session after the cancel grace
+  period). The close handler runs once that prompt has answered. An agent without a close handler
+  still answers `session/close` with "Method not found" and cancels nothing.
+
 - **A response result that lacks a required field fails the request.** Only inbound params were
   checked for the fields the ACP schema requires, so a peer's `{}` read as a `PromptResponse` whose
   `stopReason()` was null, or a `NewSessionResponse` whose `sessionId()` was null, against the

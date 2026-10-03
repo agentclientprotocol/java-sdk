@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 /**
  * The single-turn rule of an agent session: at most one active prompt per logical ACP
@@ -50,6 +51,9 @@ final class ActivePrompts {
 
 		private final PromptAnswer answer = new PromptAnswer();
 
+		/** Completes when the turn ends and releases its session. */
+		private final Sinks.Empty<Void> ended = Sinks.empty();
+
 		/** Runs when a cancel arrives; set by {@link PromptDeadlines} to start the grace period. */
 		private volatile @Nullable Runnable onCancelRequested;
 
@@ -84,6 +88,11 @@ final class ActivePrompts {
 
 		String sessionId() {
 			return this.sessionId;
+		}
+
+		/** Completes once the turn has ended (its prompt answered, failed or was dropped). */
+		Mono<Void> ended() {
+			return this.ended.asMono();
 		}
 
 		@Nullable Object requestId() {
@@ -136,6 +145,7 @@ final class ActivePrompts {
 		if (this.active.remove(turn.sessionId(), turn)) {
 			logger.debug("Prompt lock released for sessionId={} requestId={} ({})", turn.sessionId(),
 					turn.requestId(), reason);
+			turn.ended.tryEmitEmpty();
 			return true;
 		}
 		return false;
@@ -198,7 +208,7 @@ final class ActivePrompts {
 	}
 
 	void clear() {
-		this.active.clear();
+		new HashSet<>(this.active.values()).forEach(turn -> end(turn, "cleared"));
 	}
 
 }

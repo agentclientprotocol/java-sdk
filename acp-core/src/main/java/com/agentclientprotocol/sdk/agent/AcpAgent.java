@@ -817,8 +817,10 @@ public interface AcpAgent {
 		}
 
 		/**
-		 * Sets the handler for {@code session/close}, which ends an active session: stop its work
-		 * as for {@code session/cancel}, then free what it holds.
+		 * Sets the handler for {@code session/close}, which ends an active session and frees what
+		 * it holds. The session first cancels its work as for {@code session/cancel} (the cancel
+		 * handler is called and a running prompt answers {@code cancelled}), then calls this
+		 * handler.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -1204,8 +1206,10 @@ public interface AcpAgent {
 		}
 
 		/**
-		 * Sets the handler for {@code session/close}, which ends an active session: stop its work
-		 * as for {@code session/cancel}, then free what it holds.
+		 * Sets the handler for {@code session/close}, which ends an active session and frees what
+		 * it holds. The session first cancels its work as for {@code session/cancel} (the cancel
+		 * handler is called and a running prompt answers {@code cancelled}), then calls this
+		 * handler.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
