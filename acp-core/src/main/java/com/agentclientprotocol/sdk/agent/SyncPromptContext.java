@@ -20,8 +20,8 @@ import org.jspecify.annotations.Nullable;
  * <p>It offers the same calls as {@link PromptContext}, at the same two levels, and blocks on that
  * context's {@code Mono}s ({@link #async()} returns it). It adds {@link #tryReadFile(String)}, and
  * {@link #askChoice(String, String...)} returns an {@link Optional}. Blocking is safe here because
- * synchronous handlers run on {@link AcpAgent#SYNC_HANDLER_SCHEDULER}, not on the transport's
- * thread.
+ * synchronous handlers run on the builder's handler executor
+ * ({@link AcpAgent.SyncAgentBuilder#handlerExecutor}), not on the transport's thread.
  *
  * <pre>{@code
  * AcpAgent.sync(transport)

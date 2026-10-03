@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -186,6 +187,10 @@ public class AcpAgentSupport {
 				.requestTimeout(definition.requestTimeout())
 				.cancelGracePeriod(definition.cancelGracePeriod())
 				.maxPromptDuration(definition.maxPromptDuration());
+		ExecutorService handlerExecutor = definition.handlerExecutor();
+		if (handlerExecutor != null) {
+			agentBuilder.handlerExecutor(handlerExecutor);
+		}
 
 		// Wire discovered handlers to the agent builder
 		wireHandlers(agentBuilder);
@@ -514,7 +519,8 @@ public class AcpAgentSupport {
 	private record Definition(Map<String, AcpHandlerMethod> handlers, AgentAdvertisement advertisement,
 			ArgumentResolverComposite argumentResolvers,
 			ReturnValueHandlerComposite returnValueHandlers, List<AcpInterceptor> interceptors,
-			Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration) {
+			Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration,
+			@Nullable ExecutorService handlerExecutor) {
 	}
 
 	// ========== BUILDER ==========
@@ -545,6 +551,8 @@ public class AcpAgentSupport {
 		private Duration cancelGracePeriod = PromptTimeouts.DEFAULT_CANCEL_GRACE_PERIOD;
 
 		private Duration maxPromptDuration = Duration.ZERO;
+
+		private @Nullable ExecutorService handlerExecutor;
 
 		/**
 		 * Register an agent instance.
@@ -595,6 +603,24 @@ public class AcpAgentSupport {
 		 */
 		public Builder transport(AcpAgentTransport transport) {
 			this.transport = transport;
+			return this;
+		}
+
+		/**
+		 * Sets the executor the agent's handler methods run on, for example
+		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool, as
+		 * {@code AcpAgent.SyncAgentBuilder#handlerExecutor} does. Without it they run on the SDK's
+		 * shared pool of daemon threads. The executor must allow blocking; the SDK never shuts it
+		 * down.
+		 * @param executor the executor the handler methods run on
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code executor} is null
+		 */
+		public Builder handlerExecutor(ExecutorService executor) {
+			if (executor == null) {
+				throw new IllegalArgumentException("Executor must not be null");
+			}
+			this.handlerExecutor = executor;
 			return this;
 		}
 
@@ -739,7 +765,8 @@ public class AcpAgentSupport {
 			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
 					HANDLER_ANNOTATIONS);
 			return new Definition(handlers, advertisement, argumentResolvers, returnValueHandlers,
-					List.copyOf(interceptors), requestTimeout, cancelGracePeriod, maxPromptDuration);
+					List.copyOf(interceptors), requestTimeout, cancelGracePeriod, maxPromptDuration,
+					handlerExecutor);
 		}
 
 		/**

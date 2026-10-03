@@ -61,8 +61,8 @@ public interface AcpAgentFactory {
 	/**
 	 * Returns a factory that calls the given function for each connection and hands the connection
 	 * the asynchronous agent behind the synchronous one ({@link AcpSyncAgent#async()}). The
-	 * handlers still run as the synchronous builder runs them, on
-	 * {@link AcpAgent#SYNC_HANDLER_SCHEDULER}.
+	 * handlers still run as the synchronous builder runs them, on its handler executor
+	 * ({@link AcpAgent.SyncAgentBuilder#handlerExecutor}).
 	 * @param factory builds a new agent on the transport it is given, typically
 	 * {@code transport -> AcpAgent.sync(transport)...build()}
 	 * @return the factory

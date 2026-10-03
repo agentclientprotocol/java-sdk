@@ -300,6 +300,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: `handlerExecutor(ExecutorService)` on `AcpAgent.SyncAgentBuilder` and
+  `AcpClient.SyncSpec` (and `AcpAgentSupport.Builder` for annotated agents); the static handler
+  pools and the agent's default timeout are no longer public constants.** Sync handlers (and a sync client's session update consumers) ran on static,
+  unbounded, JVM-wide cached pools exposed as `AcpAgent.SYNC_HANDLER_SCHEDULER` and
+  `AcpClient.SYNC_HANDLER_SCHEDULER` (Reactor `Scheduler`s on the entry-point interfaces). Pass an
+  executor of your own, for example `Executors.newVirtualThreadPerTaskExecutor()`, a Quarkus worker
+  pool or Micronaut's `TaskExecutors.BLOCKING` executor; the SDK cancels a handler by cancelling
+  its task (interrupting the thread) and never shuts the executor down. Without one, handlers keep
+  running on the same daemon pools as before. `AcpAgent.DEFAULT_REQUEST_TIMEOUT` is removed too;
+  the default (60 seconds) is stated on `requestTimeout`. Migration: drop references to
+  `AcpAgent.SYNC_HANDLER_SCHEDULER`/`AcpClient.SYNC_HANDLER_SCHEDULER` (use your own scheduler, or
+  `handlerExecutor(...)` to choose where handlers run) and replace `AcpAgent.DEFAULT_REQUEST_TIMEOUT`
+  with `Duration.ofSeconds(60)`.
+
 - **Breaking: the agent builders reject a null handler and a second handler for the same
   method.** The typed setters of `AcpAgent.AsyncAgentBuilder` and `AcpAgent.SyncAgentBuilder`
   accepted `null` (every request for that method was then answered `-32603`), and registering a

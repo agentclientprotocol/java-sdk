@@ -7,7 +7,7 @@ package com.agentclientprotocol.sdk.agent;
 import java.time.Duration;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -75,10 +75,11 @@ import reactor.core.scheduler.Schedulers;
  *
  * <h2>Timeouts and threads</h2>
  *
- * <p>Requests the agent sends the client wait at most {@link #DEFAULT_REQUEST_TIMEOUT} (60 seconds)
- * unless the builder's {@code requestTimeout} says otherwise; the client builders' default is 30
- * seconds. Asynchronous handlers are called on the transport's thread and must not block.
- * Synchronous handlers run on {@link #SYNC_HANDLER_SCHEDULER}.
+ * <p>Requests the agent sends the client wait at most 60 seconds unless the builder's
+ * {@code requestTimeout} says otherwise; the client builders' default is 30 seconds. Asynchronous
+ * handlers are called on the transport's thread and must not block. Synchronous handlers run on the
+ * executor given to {@link SyncAgentBuilder#handlerExecutor}, by default a pool of daemon threads
+ * the SDK shares between all synchronous agents in the JVM.
  *
  * <p>Not to be confused with the class annotation
  * {@link com.agentclientprotocol.sdk.annotation.AcpAgent}, which marks an annotated agent. Where a
@@ -98,28 +99,8 @@ public interface AcpAgent {
 	Logger logger = LoggerFactory.getLogger(AcpAgent.class);
 
 	/**
-	 * How long an agent waits for the client to answer a request the agent sent, when the builder's
-	 * {@code requestTimeout} is not set: 60 seconds. The client builders' default is 30 seconds.
-	 */
-	Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
-
-	/**
-	 * The scheduler every synchronous agent's handlers run on: a cached pool of daemon threads
-	 * named {@code acp-agent-sync-handler}, shared by all agents in the JVM. Its threads may block,
-	 * so a handler can wait for the client (through {@link SyncPromptContext}) without holding up
-	 * the transport, and the daemon threads do not keep the JVM alive. The pool has no size limit:
-	 * every handler running at the same time takes a thread of its own.
-	 */
-	Scheduler SYNC_HANDLER_SCHEDULER = Schedulers.fromExecutorService(
-			Executors.newCachedThreadPool(r -> {
-				Thread t = new Thread(r, "acp-agent-sync-handler");
-				t.setDaemon(true);
-				return t;
-			}), "acp-agent-sync-handler");
-
-	/**
 	 * Starts a builder for an agent whose handlers return plain values and may block. The handlers
-	 * run on {@link #SYNC_HANDLER_SCHEDULER}.
+	 * run on the builder's handler executor ({@link SyncAgentBuilder#handlerExecutor}).
 	 * @param transport the agent-side transport the agent serves, for example a
 	 * {@link com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport}
 	 * @return a new builder
@@ -658,6 +639,9 @@ public interface AcpAgent {
 
 		private final AcpAgentTransport transport;
 
+		/** How long the agent waits for the client's answers unless {@code requestTimeout} is set. */
+		private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+
 		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
 		private PromptTimeouts promptTimeouts = PromptTimeouts.DEFAULTS;
@@ -676,7 +660,7 @@ public interface AcpAgent {
 		 * read or write, a permission or elicitation request, a terminal call or an extension
 		 * request. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the agent sends the client a
-		 * {@code $/cancel_request}. Default: 60 seconds ({@link AcpAgent#DEFAULT_REQUEST_TIMEOUT}).
+		 * {@code $/cancel_request}. Default: 60 seconds.
 		 * It does not limit the agent's own handlers; for prompts, see {@code maxPromptDuration}.
 		 * @param timeout the timeout
 		 * @return this builder
@@ -1072,7 +1056,8 @@ public interface AcpAgent {
 	 * one from {@link AcpAgent#sync(AcpAgentTransport)}. Use it when handler code blocks, for
 	 * example on file or network I/O, or on {@link SyncPromptContext} calls to the client.
 	 *
-	 * <p>Every handler runs on {@link AcpAgent#SYNC_HANDLER_SCHEDULER}, not on the transport's
+	 * <p>Every handler runs on the builder's handler executor ({@link #handlerExecutor}), by default a
+	 * pool of daemon threads shared by the synchronous agents in the JVM, not on the transport's
 	 * thread, so it may block. Handlers for different requests run at the same time on different
 	 * threads, so state they share must be thread-safe. The builder turns each handler into its
 	 * asynchronous counterpart on an {@link AsyncAgentBuilder} and builds the agent from it, so the
@@ -1098,8 +1083,29 @@ public interface AcpAgent {
 
 		private final AsyncAgentBuilder asyncBuilder;
 
+		/** Where the handlers run; read when a handler is called. */
+		private Scheduler handlerScheduler = SyncHandlerScheduler.DEFAULT;
+
 		SyncAgentBuilder(AcpAgentTransport transport) {
 			this.asyncBuilder = new AsyncAgentBuilder(transport);
+		}
+
+		/**
+		 * Sets the executor the handlers run on, for example
+		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool. Without
+		 * it the handlers run on a pool of daemon threads named {@code acp-agent-sync-handler},
+		 * shared by every synchronous agent in the JVM, which has no size limit: each handler
+		 * running at the same time takes a thread of its own. The executor must allow blocking.
+		 * The SDK cancels a handler by interrupting its thread (cancelling the task submitted to
+		 * the executor), and never shuts the executor down; that is the application's job.
+		 * @param executor the executor the handlers run on
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code executor} is null
+		 */
+		public SyncAgentBuilder handlerExecutor(ExecutorService executor) {
+			Assert.notNull(executor, "Executor must not be null");
+			this.handlerScheduler = Schedulers.fromExecutorService(executor, "acp-agent-handlers");
+			return this;
 		}
 
 		/**
@@ -1108,7 +1114,7 @@ public interface AcpAgent {
 		 * request. When it passes, the blocking call throws an
 		 * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the
 		 * {@link java.util.concurrent.TimeoutException}, and the agent sends the client a
-		 * {@code $/cancel_request}. Default: 60 seconds ({@link AcpAgent#DEFAULT_REQUEST_TIMEOUT}).
+		 * {@code $/cancel_request}. Default: 60 seconds.
 		 * It does not limit the agent's own handlers; for prompts, see {@code maxPromptDuration}.
 		 * @param timeout the timeout
 		 * @return this builder
@@ -1393,7 +1399,7 @@ public interface AcpAgent {
 		public SyncAgentBuilder cancelHandler(SyncCancelHandler handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.cancelHandler(notification -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(notification)))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER));
+				.subscribeOn(this.handlerScheduler));
 			return this;
 		}
 
@@ -1452,7 +1458,7 @@ public interface AcpAgent {
 				SyncExtNotificationHandler<T> handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.extNotificationHandler(method, paramsType,
-					params -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(params))).subscribeOn(SYNC_HANDLER_SCHEDULER));
+					params -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(params))).subscribeOn(this.handlerScheduler));
 			return this;
 		}
 
@@ -1484,12 +1490,12 @@ public interface AcpAgent {
 		}
 
 		/**
-		 * Runs a sync handler on the library-owned daemon scheduler, so it may block (on
+		 * Runs a sync handler on the handler executor, so it may block (on
 		 * {@link SyncPromptContext} calls back to the client, for one) without stalling the
 		 * transport.
 		 */
-		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
-			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(SYNC_HANDLER_SCHEDULER);
+		private <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
+			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(this.handlerScheduler);
 		}
 
 	}

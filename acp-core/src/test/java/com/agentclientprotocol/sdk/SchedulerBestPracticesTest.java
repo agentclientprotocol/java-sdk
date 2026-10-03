@@ -217,34 +217,19 @@ class SchedulerBestPracticesTest {
 	}
 
 	/**
-	 * Verifies that AcpClient defines a library-owned scheduler with daemon threads.
-	 *
-	 * <p>This positive test ensures the SYNC_HANDLER_SCHEDULER is properly configured.
+	 * Verifies that the sync client's default handler pool is library-owned and uses daemon
+	 * threads.
 	 */
 	@Test
 	void acpClientHasDaemonScheduler() throws IOException {
-		Path acpClientPath = SOURCE_ROOT.resolve(
-				"com/agentclientprotocol/sdk/client/AcpClient.java");
+		Path holder = SOURCE_ROOT.resolve("com/agentclientprotocol/sdk/client/SyncHandlerScheduler.java");
 
-		assertThat(acpClientPath)
-			.describedAs("AcpClient.java should exist")
-			.exists();
+		assertThat(holder).describedAs("client/SyncHandlerScheduler.java should exist").exists();
 
-		String content = Files.readString(acpClientPath);
+		String content = Files.readString(holder);
 
-		// Verify SYNC_HANDLER_SCHEDULER is defined
-		assertThat(content)
-			.describedAs("AcpClient should define SYNC_HANDLER_SCHEDULER")
-			.contains("SYNC_HANDLER_SCHEDULER");
-
-		// Verify daemon thread configuration
-		assertThat(content)
-			.describedAs("SYNC_HANDLER_SCHEDULER should use daemon threads")
-			.contains("setDaemon(true)");
-
-		// Verify it uses fromExecutorService (library-owned)
-		assertThat(content)
-			.describedAs("SYNC_HANDLER_SCHEDULER should use Schedulers.fromExecutorService")
+		assertThat(content).describedAs("the default pool should use daemon threads").contains("setDaemon(true)");
+		assertThat(content).describedAs("the default pool should use Schedulers.fromExecutorService")
 			.contains("Schedulers.fromExecutorService");
 	}
 

@@ -13,7 +13,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
@@ -72,7 +72,8 @@ import reactor.core.scheduler.Schedulers;
  * request reaches its handler once the session updates the agent sent before it have been handled
  * (see below); handlers do not wait for each other. Asynchronous handlers are called on the thread
  * that delivered the request or finished the last of those updates, and must not block;
- * synchronous handlers run on {@link #SYNC_HANDLER_SCHEDULER}. A handler that fails is answered with an error: an
+ * synchronous handlers run on the executor given to {@link SyncSpec#handlerExecutor}, by default a
+ * pool of daemon threads the SDK shares between all synchronous clients in the JVM. A handler that fails is answered with an error: an
  * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
  * error).
  *
@@ -113,24 +114,6 @@ public interface AcpClient {
 	Logger logger = LoggerFactory.getLogger(AcpClient.class);
 
 	// ====================================================================
-	// Sync Handler Scheduler (library-owned, daemon threads)
-	// ====================================================================
-
-	/**
-	 * The scheduler the handlers and session update consumers of every synchronous client run on: a
-	 * cached pool of daemon threads named {@code acp-sync-handler}, shared by all clients in the
-	 * JVM. Its threads may block, so a handler can do file or process I/O without holding up the
-	 * transport, and the daemon threads do not keep the JVM alive. The pool has no size limit:
-	 * every handler running at the same time takes a thread of its own.
-	 */
-	Scheduler SYNC_HANDLER_SCHEDULER = Schedulers.fromExecutorService(
-			Executors.newCachedThreadPool(r -> {
-				Thread t = new Thread(r, "acp-sync-handler");
-				t.setDaemon(true);
-				return t;
-			}), "acp-sync-handler");
-
-	// ====================================================================
 	// Sync Handler Interfaces (for use with AcpClient.sync())
 	// ====================================================================
 
@@ -145,7 +128,7 @@ public interface AcpClient {
 	@FunctionalInterface
 	interface SyncRequestHandler<T> {
 		/**
-		 * Answers one request from the agent. It runs on {@link AcpClient#SYNC_HANDLER_SCHEDULER}
+		 * Answers one request from the agent. It runs on the sync builder's handler executor
 		 * and may block.
 		 * @param params the request's params as the transport read them, usually a {@code Map}; an
 		 * omitted params arrives as an empty object
@@ -157,7 +140,7 @@ public interface AcpClient {
 
 	/**
 	 * Starts a builder for a client with blocking calls ({@link AcpSyncClient}) and blocking
-	 * handlers, which run on {@link #SYNC_HANDLER_SCHEDULER}.
+	 * handlers, which run on the builder's handler executor.
 	 * @param transport the client transport, for example a
 	 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport}, which starts
 	 * the agent process
@@ -701,7 +684,7 @@ public interface AcpClient {
 	 * notifications, each returning a plain value. Get one from
 	 * {@link AcpClient#sync(AcpClientTransport)}.
 	 *
-	 * <p>Handlers and session update consumers run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}, not
+	 * <p>Handlers and session update consumers run on the sync builder's handler executor, not
 	 * on the transport's thread, so they may block. A request is handed to its handler once the
 	 * session updates before it have been handled, without waiting for other handlers, so several
 	 * handlers can run at the same time and state they share must be thread-safe. A request handler
@@ -714,26 +697,47 @@ public interface AcpClient {
 
 		private final AsyncSpec asyncSpec;
 
+		/** Where the handlers and consumers run; read when one is called. */
+		private Scheduler handlerScheduler = SyncHandlerScheduler.DEFAULT;
+
 		private SyncSpec(AcpClientTransport transport) {
 			this.asyncSpec = new AsyncSpec(transport);
 		}
 
 		/**
+		 * Sets the executor the handlers and session update consumers run on, for example
+		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool. Without
+		 * it they run on a pool of daemon threads named {@code acp-sync-handler}, shared by every
+		 * synchronous client in the JVM, which has no size limit: each handler running at the same
+		 * time takes a thread of its own. The executor must allow blocking. A handler the agent
+		 * cancels is interrupted (its task is cancelled), and the SDK never shuts the executor
+		 * down; that is the application's job.
+		 * @param executor the executor the handlers run on
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code executor} is null
+		 */
+		public SyncSpec handlerExecutor(ExecutorService executor) {
+			Assert.notNull(executor, "Executor must not be null");
+			this.handlerScheduler = Schedulers.fromExecutorService(executor, "acp-client-handlers");
+			return this;
+		}
+
+		/**
 		 * Converts a sync request handler to an async request handler.
 		 * Follows the MCP SDK pattern of wrapping sync handlers with Mono.fromCallable()
-		 * and scheduling on a library-owned daemon scheduler to prevent blocking the event loop.
+		 * and scheduling on the handler executor to prevent blocking the event loop.
 		 *
 		 * @param <T> The response type
 		 * @param syncHandler The synchronous handler to convert
 		 * @return An async handler that wraps the sync handler
 		 */
-		private static <T> AcpClientSession.RequestHandler<T> fromSync(SyncRequestHandler<T> syncHandler) {
+		private <T> AcpClientSession.RequestHandler<T> fromSync(SyncRequestHandler<T> syncHandler) {
 			return params -> onSyncHandlerThread(() -> syncHandler.handle(params));
 		}
 
-		/** Runs a sync handler on the library-owned daemon scheduler, so it may block. */
-		private static <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
-			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(SYNC_HANDLER_SCHEDULER);
+		/** Runs a sync handler on the handler executor, so it may block. */
+		private <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
+			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(this.handlerScheduler);
 		}
 
 		/**
@@ -975,7 +979,7 @@ public interface AcpClient {
 			Assert.notNull(handler, "Complete elicitation handler must not be null");
 			asyncSpec.completeElicitationHandler(notification -> Mono
 				.fromRunnable(HandlerFailures.guard(() -> handler.accept(notification)))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER)
+				.subscribeOn(this.handlerScheduler)
 				.then());
 			return this;
 		}
@@ -984,7 +988,7 @@ public interface AcpClient {
 		 * Adds a consumer for {@code session/update} notifications: the message and thought chunks,
 		 * tool calls, plans and other updates the agent streams during a prompt turn, and the
 		 * updates it sends between turns. The consumer runs on
-		 * {@link AcpClient#SYNC_HANDLER_SCHEDULER} and has finished with a notification when it
+		 * the sync builder's handler executor and has finished with a notification when it
 		 * returns.
 		 *
 		 * <p>Notifications are delivered one at a time, in the order the agent sent them, and each
@@ -1014,7 +1018,7 @@ public interface AcpClient {
 			// Convert sync consumer to async Function
 			asyncSpec.sessionUpdateConsumer(notification -> Mono
 				.fromRunnable(HandlerFailures.guard(() -> sessionUpdateConsumer.accept(notification)))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER)
+				.subscribeOn(this.handlerScheduler)
 				.then());
 			return this;
 		}
@@ -1027,7 +1031,7 @@ public interface AcpClient {
 		 * methods.
 		 * @param <T> the result type
 		 * @param method the method name
-		 * @param handler the handler, run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}
+		 * @param handler the handler, run on the sync builder's handler executor
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
 		 */
@@ -1107,7 +1111,7 @@ public interface AcpClient {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncSpec.extNotificationHandler(method, paramsType, params -> Mono
 				.<Void>fromRunnable(HandlerFailures.guard(() -> handler.accept(params)))
-				.subscribeOn(SYNC_HANDLER_SCHEDULER));
+				.subscribeOn(this.handlerScheduler));
 			return this;
 		}
 
