@@ -271,6 +271,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A builder agent answers `initialize` without an initialize handler, and needs a prompt
+  handler.** `AcpAgent.sync(..)`/`async(..)` agents with no `initializeHandler` answered
+  `initialize` with `-32601` (Method not found), so a prompt-only agent could not even connect.
+  They now answer with the protocol version negotiated with the client and the capabilities their
+  handlers imply (`loadSessionHandler` → `loadSession`, `listSessionsHandler`/`closeSessionHandler`/
+  `resumeSessionHandler`/`deleteSessionHandler`/`forkSessionHandler` → `sessionCapabilities`,
+  `logoutHandler` → `auth.logout`, `listProvidersHandler` → `providers`), as an annotated agent
+  does. `build()` now throws `IllegalStateException` when no `promptHandler` is registered, and an
+  annotated agent without a `@Prompt` method fails to build the same way: every agent must answer
+  `session/prompt`. **Migration:** register a prompt handler (test agents that never prompt can
+  answer `PromptResponse.endTurn()`).
+
 - **`AcpAgentSupport.Builder` refuses two silent states.** `build()` and `buildFactory()` throw
   `IllegalStateException` when no `@AcpAgent` bean was given (they used to build an agent with no
   handlers), and `buildFactory()` throws when `transport(..)` was set (the transport used to be

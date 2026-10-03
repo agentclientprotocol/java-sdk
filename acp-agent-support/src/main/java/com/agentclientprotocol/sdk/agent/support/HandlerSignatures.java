@@ -140,6 +140,23 @@ final class HandlerSignatures {
 		if (handlers.containsKey(AcpSchema.METHOD_SESSION_NEW)) {
 			return;
 		}
+		checkModeSetters(handlers);
+	}
+
+	/**
+	 * Checks that the agent has a {@code @Prompt} method: every agent must answer
+	 * {@code session/prompt}.
+	 * @param agentClass the agent class, for the message
+	 * @throws IllegalStateException if it has none
+	 */
+	static void checkPrompt(Map<String, AcpHandlerMethod> handlers, String agentClass) {
+		if (!handlers.containsKey(AcpSchema.METHOD_SESSION_PROMPT)) {
+			throw new IllegalStateException(agentClass + " has no @Prompt method, and every agent must answer"
+					+ " session/prompt: add a @Prompt method");
+		}
+	}
+
+	private static void checkModeSetters(Map<String, AcpHandlerMethod> handlers) {
 		Map<String, String> setters = Map.of(AcpSchema.METHOD_SESSION_SET_MODE, "@SetSessionMode",
 				AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, "@SetSessionConfigOption");
 		setters.forEach((acpMethod, annotation) -> {

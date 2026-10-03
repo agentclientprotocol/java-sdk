@@ -70,6 +70,19 @@ final class AgentHandlers {
 		notifications.put(method, new Notification<>(method, notificationType, handler));
 	}
 
+	/** A copy, to which a built agent's defaults are added without changing the builder's. */
+	AgentHandlers copy() {
+		AgentHandlers copy = new AgentHandlers();
+		copy.requests.putAll(this.requests);
+		copy.notifications.putAll(this.notifications);
+		return copy;
+	}
+
+	/** The request methods with a registered handler. */
+	java.util.Set<String> requestMethods() {
+		return java.util.Set.copyOf(requests.keySet());
+	}
+
 	/** A snapshot: registrations made after it do not reach an agent already built. */
 	List<Request<?>> requests() {
 		return List.copyOf(requests.values());

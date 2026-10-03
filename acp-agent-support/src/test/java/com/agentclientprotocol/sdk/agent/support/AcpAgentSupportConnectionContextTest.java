@@ -20,6 +20,7 @@ import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.ExtRequest;
 import com.agentclientprotocol.sdk.annotation.Initialize;
 import com.agentclientprotocol.sdk.annotation.NewSession;
+import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
@@ -35,6 +36,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SessionNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
@@ -93,6 +95,11 @@ class AcpAgentSupportConnectionContextTest {
 				return new NewSessionResponse("s1", null, null);
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
@@ -137,6 +144,11 @@ class AcpAgentSupportConnectionContextTest {
 				return new SetSessionModeResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
@@ -173,6 +185,11 @@ class AcpAgentSupportConnectionContextTest {
 			Echo echo(AcpAsyncAgent agent, Echo params, NegotiatedCapabilities capabilities) {
 				received.set(agent);
 				return new Echo(params.text() + " " + capabilities.supportsReadTextFile());
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -217,6 +234,11 @@ class AcpAgentSupportConnectionContextTest {
 			agent.sendSessionUpdate(request.sessionId(),
 					new AgentMessageChunk(new TextContent("to " + request.sessionId())));
 			return new SetSessionModeResponse();
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}

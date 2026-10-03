@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.spec;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -79,6 +80,7 @@ class AcpClientSessionConnectTest {
 			.requestTimeout(timeout)
 			.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(1,
 					new AcpSchema.AgentCapabilities(true, null, null), List.of())))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().subscribe();
 

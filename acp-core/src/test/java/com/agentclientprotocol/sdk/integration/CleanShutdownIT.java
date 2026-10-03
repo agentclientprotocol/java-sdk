@@ -120,6 +120,7 @@ class CleanShutdownIT {
 			.requestTimeout(Duration.ofSeconds(5))
 			.initializeHandler(request ->
 				new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()))
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 			.build();
 
 		// Track whether await() returned
@@ -172,6 +173,7 @@ class CleanShutdownIT {
 			.requestTimeout(Duration.ofSeconds(5))
 			.initializeHandler(request ->
 				new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()))
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 			.build();
 
 		// Track whether run() returned

@@ -81,7 +81,7 @@ public abstract class AbstractAcpClientAgentIT {
 					return Mono.just(new AcpSchema.InitializeResponse(1,
 							new AcpSchema.AgentCapabilities(true, null, null), List.of())); // loadSession=true
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			// Build client
 			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
@@ -124,7 +124,7 @@ public abstract class AbstractAcpClientAgentIT {
 					assertThat(request.cwd()).isEqualTo("/test/workspace");
 					return Mono.just(new AcpSchema.NewSessionResponse("session-123", null, null));
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			// Build client
 			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
@@ -171,6 +171,7 @@ public abstract class AbstractAcpClientAgentIT {
 				.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("s1", null, options)))
 				.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, options)))
 				.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, options)))
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 				.build();
 			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
 			agent.start().subscribe();
@@ -452,6 +453,7 @@ public abstract class AbstractAcpClientAgentIT {
 				.requestTimeout(TIMEOUT)
 				.initializeHandler(request -> Mono
 					.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 				.build();
 
 			// Build client
@@ -492,7 +494,7 @@ public abstract class AbstractAcpClientAgentIT {
 					cancelLatch.countDown();
 					return Mono.empty();
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			// Build client
 			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
@@ -534,7 +536,7 @@ public abstract class AbstractAcpClientAgentIT {
 					assertThat(request.sessionId()).isEqualTo("session-original");
 					return Mono.just(new AcpSchema.ForkSessionResponse("session-forked", null));
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			AcpAsyncClient client = AcpClient.async(clientTransport)
 				.requestTimeout(TIMEOUT)

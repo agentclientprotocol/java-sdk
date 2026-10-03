@@ -57,6 +57,7 @@ class ElicitationTest {
 			.requestTimeout(TIMEOUT)
 			.initializeHandler(request -> Mono
 				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		return agent;

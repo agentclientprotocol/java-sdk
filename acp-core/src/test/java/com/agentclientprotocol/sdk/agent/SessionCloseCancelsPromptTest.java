@@ -103,7 +103,7 @@ class SessionCloseCancelsPromptTest {
 				this.events.add("close " + request.sessionId());
 				return new AcpSchema.CloseSessionResponse();
 			}))
-			.build();
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		this.agent.start().block(TIMEOUT);
 		this.client = AcpClient.async(this.pair.clientTransport()).requestTimeout(TIMEOUT).build();
 		this.client.initialize().block(TIMEOUT);

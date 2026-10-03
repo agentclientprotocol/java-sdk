@@ -59,6 +59,7 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 				return Mono.delay(Duration.ofMillis(250)).thenReturn(new AcpSchema.InitializeResponse(
 						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), null));
 			}))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build());
 		try (FixtureServer server = FixtureServer.start(agentFactory)) {
 			HttpClient rawClient = HttpClient.newHttpClient();

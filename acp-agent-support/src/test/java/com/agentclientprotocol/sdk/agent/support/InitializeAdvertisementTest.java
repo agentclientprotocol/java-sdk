@@ -169,6 +169,11 @@ class InitializeAdvertisementTest {
 			return null;
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@Test
@@ -285,6 +290,11 @@ class InitializeAdvertisementTest {
 					Map.of("k", "v"));
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent(name = "ok-agent", version = "1", authMethods = @AuthMethod(id = "token", name = "Token"))
@@ -303,6 +313,11 @@ class InitializeAdvertisementTest {
 		@Initialize
 		InitializeResponse initialize() {
 			return InitializeResponse.ok();
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}
@@ -373,20 +388,40 @@ class InitializeAdvertisementTest {
 	@AcpAgent(authMethods = @AuthMethod(id = "api-key", name = "API key"))
 	static class AgentMethodWithoutAuthenticate {
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent(authMethods = { @AuthMethod(id = "same", name = "One"), @AuthMethod(id = "same", name = "Two") })
 	static class DuplicateAuthMethodIds {
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
 
 	}
 
 	@AcpAgent(authMethods = @AuthMethod(id = "t", name = "T", type = AuthMethod.Type.TERMINAL, env = "NO_EQUALS"))
 	static class MalformedEnv {
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent(authMethods = @AuthMethod(id = "t", name = "T", type = AuthMethod.Type.TERMINAL))
 	static class TerminalOnly {
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
 
 	}
 

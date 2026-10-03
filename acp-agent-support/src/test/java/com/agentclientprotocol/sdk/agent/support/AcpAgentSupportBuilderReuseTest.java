@@ -58,6 +58,11 @@ class AcpAgentSupportBuilderReuseTest {
 			return new NewSessionResponse(request.cwd(), null, null);
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	private static String sessionIdFrom(AcpAgentSupport.Builder builder) {

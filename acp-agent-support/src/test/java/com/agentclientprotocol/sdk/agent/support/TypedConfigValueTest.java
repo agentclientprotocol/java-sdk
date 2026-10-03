@@ -13,12 +13,14 @@ import java.util.function.Consumer;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.ConfigId;
 import com.agentclientprotocol.sdk.annotation.ConfigValue;
+import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.SessionId;
 import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpError;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionResponse;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
@@ -52,6 +54,11 @@ class TypedConfigValueTest {
 			return new SetSessionConfigOptionResponse(List.of());
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent
@@ -70,6 +77,11 @@ class TypedConfigValueTest {
 			return new SetSessionConfigOptionResponse(List.of());
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent
@@ -86,6 +98,11 @@ class TypedConfigValueTest {
 		SetSessionConfigOptionResponse set(@ConfigId String id, @ConfigValue Object value) {
 			received.put(id, value);
 			return new SetSessionConfigOptionResponse(List.of());
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}

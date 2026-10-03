@@ -701,6 +701,7 @@ public class AcpAgentSupport {
 			HandlerSignatures.check(handlers, HANDLER_ANNOTATIONS, argumentResolvers, customArgumentResolvers,
 					returnValueHandlers, customReturnValueHandlers);
 			HandlerSignatures.checkSessionSetup(handlers);
+			HandlerSignatures.checkPrompt(handlers, agentClasses.get(0).getName());
 			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
 					HANDLER_ANNOTATIONS);
 			return new Definition(handlers, advertisement, argumentResolvers, returnValueHandlers,

@@ -305,6 +305,11 @@ class AcpAgentSupportTest {
 				return new LoadSessionResponse(null, null);
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new LoadSessionAgent())
@@ -338,6 +343,11 @@ class AcpAgentSupportTest {
 			void setMode(SetSessionModeRequest req) {
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		assertThatThrownBy(() -> AcpAgentSupport.create(new VoidSetModeAgent())
@@ -357,6 +367,11 @@ class AcpAgentSupportTest {
 			@SetSessionMode
 			String setMode(SetSessionModeRequest req) {
 				return "code";
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -395,6 +410,11 @@ class AcpAgentSupportTest {
 			@SetSessionMode
 			SetSessionModeResponse setMode(SetSessionModeRequest req) {
 				return new SetSessionModeResponse();
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -473,6 +493,11 @@ class AcpAgentSupportTest {
 				return new CloseSessionResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new LifecycleAgent())
@@ -523,6 +548,11 @@ class AcpAgentSupportTest {
 				return new SetSessionModeResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new SetModeAgent())
@@ -564,6 +594,11 @@ class AcpAgentSupportTest {
 			@Cancel
 			void onCancel(CancelNotification notification) {
 				cancelledSessionId.set(notification.sessionId());
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -609,6 +644,11 @@ class AcpAgentSupportTest {
 						List.of(new SessionInfo("session-1", "/workspace")));
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new ListSessionsAgent())
@@ -649,6 +689,11 @@ class AcpAgentSupportTest {
 			CloseSessionResponse closeSession(CloseSessionRequest req) {
 				closedSessionId.set(req.sessionId());
 				return new CloseSessionResponse();
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -736,6 +781,11 @@ class AcpAgentSupportTest {
 				return new AuthenticateResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new AuthenticateAgent())
@@ -773,6 +823,11 @@ class AcpAgentSupportTest {
 			LogoutResponse logout(LogoutRequest req) {
 				loggedOut.set(true);
 				return new LogoutResponse();
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -814,6 +869,11 @@ class AcpAgentSupportTest {
 				return new DeleteSessionResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new DeleteSessionAgent())
@@ -849,6 +909,11 @@ class AcpAgentSupportTest {
 			@ListProviders
 			ListProvidersResponse listProviders(ListProvidersRequest req) {
 				return new ListProvidersResponse(List.of(new ProviderInfo("openai", List.of("openai"), false, null)));
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -893,6 +958,11 @@ class AcpAgentSupportTest {
 				return new SetProviderResponse();
 			}
 
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
+			}
+
 		}
 
 		agentSupport = AcpAgentSupport.create(new SetProviderAgent())
@@ -933,6 +1003,11 @@ class AcpAgentSupportTest {
 			ResumeSessionResponse resumeSession(ResumeSessionRequest req) {
 				resumedSessionId.set(req.sessionId());
 				return new ResumeSessionResponse(null, null);
+			}
+
+			@Prompt
+			PromptResponse prompt() {
+				return PromptResponse.endTurn();
 			}
 
 		}

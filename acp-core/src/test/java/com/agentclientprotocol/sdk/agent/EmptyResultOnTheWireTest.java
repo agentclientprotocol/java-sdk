@@ -45,6 +45,7 @@ class EmptyResultOnTheWireTest {
 			.initializeHandler(request -> Mono.just(AcpSchema.InitializeResponse.ok()))
 			.setSessionModeHandler(request -> Mono.just(new AcpSchema.SetSessionModeResponse()))
 			.closeSessionHandler(request -> Mono.just(new AcpSchema.CloseSessionResponse()))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 

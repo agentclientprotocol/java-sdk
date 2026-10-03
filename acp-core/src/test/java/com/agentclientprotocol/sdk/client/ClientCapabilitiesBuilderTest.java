@@ -69,7 +69,7 @@ class ClientCapabilitiesBuilderTest {
 				capabilitiesLatch.countDown();
 				return Mono.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()));
 			})
-			.build();
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 		// Create custom client capabilities with file system and terminal enabled
 		FileSystemCapability fsCaps = new FileSystemCapability(true, true);
@@ -197,7 +197,7 @@ class ClientCapabilitiesBuilderTest {
 		return AcpAgent.async(transportPair.agentTransport()).requestTimeout(TIMEOUT).initializeHandler(request -> {
 			received.set(request);
 			return Mono.just(AcpSchema.InitializeResponse.ok());
-		}).build();
+		}).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 	}
 
 }

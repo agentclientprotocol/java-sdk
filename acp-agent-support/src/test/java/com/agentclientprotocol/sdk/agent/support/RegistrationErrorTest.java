@@ -314,6 +314,24 @@ class RegistrationErrorTest {
 	}
 
 	@AcpAgent
+	static class NoPromptMethod {
+
+		@NewSession
+		NewSessionResponse newSession() {
+			return new NewSessionResponse("s", null, null);
+		}
+
+	}
+
+	@Test
+	void anAgentWithoutAPromptMethod() {
+		assertThatThrownBy(() -> AcpAgentSupport.create(new NoPromptMethod()).buildFactory())
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("NoPromptMethod")
+			.hasMessageContaining("@Prompt");
+	}
+
+	@AcpAgent
 	static class PrivateAndStaticHandlers {
 
 		@NewSession

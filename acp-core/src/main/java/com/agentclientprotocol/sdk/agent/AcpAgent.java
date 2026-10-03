@@ -1010,10 +1010,24 @@ public interface AcpAgent {
 		 * Builds the agent on the builder's transport, with the handlers registered so far;
 		 * handlers registered afterwards do not reach it. The agent does nothing until
 		 * {@link AcpAsyncAgent#start()}. A transport serves one agent, so build once per transport.
+		 * Without an initialize handler, the agent answers {@code initialize} with the protocol
+		 * version negotiated with the client and the capabilities its handlers imply
+		 * ({@code loadSessionHandler} advertises {@code loadSession}, {@code listSessionsHandler}
+		 * {@code sessionCapabilities.list}, {@code logoutHandler} {@code auth.logout}, and so on).
 		 * @return the new agent
+		 * @throws IllegalStateException if no prompt handler is registered
 		 */
 		public AcpAsyncAgent build() {
-			return new DefaultAcpAsyncAgent(transport, requestTimeout, promptTimeouts, handlers);
+			java.util.Set<String> methods = handlers.requestMethods();
+			if (!methods.contains(AcpSchema.METHOD_SESSION_PROMPT)) {
+				throw new IllegalStateException("An agent needs a prompt handler: call promptHandler(..) before build()");
+			}
+			AgentHandlers built = handlers.copy();
+			if (!methods.contains(AcpSchema.METHOD_INITIALIZE)) {
+				built.request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
+				}, (request, agent) -> Mono.just(DefaultInitialize.respond(methods, request)));
+			}
+			return new DefaultAcpAsyncAgent(transport, requestTimeout, promptTimeouts, built);
 		}
 
 	}
@@ -1395,8 +1409,11 @@ public interface AcpAgent {
 		 * Builds the agent on the builder's transport, with the handlers registered so far;
 		 * handlers registered afterwards do not reach it. The agent does nothing until
 		 * {@link AcpSyncAgent#start()} or {@link AcpSyncAgent#run()}. A transport serves one agent,
-		 * so build once per transport.
+		 * so build once per transport. Without an initialize handler, the agent answers
+		 * {@code initialize} with the capabilities its handlers imply (see
+		 * {@link AsyncAgentBuilder#build()}).
 		 * @return the new agent
+		 * @throws IllegalStateException if no prompt handler is registered
 		 */
 		public AcpSyncAgent build() {
 			return new AcpSyncAgent(asyncBuilder.build());

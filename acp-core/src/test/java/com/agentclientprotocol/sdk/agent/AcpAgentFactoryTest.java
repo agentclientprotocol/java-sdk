@@ -18,6 +18,7 @@ class AcpAgentFactoryTest {
 		AcpAgentFactory factory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
 			.initializeHandler(request -> Mono.just(AcpSchema.InitializeResponse.ok()))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("session", null, null)))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build());
 
 		AcpAsyncAgent first = factory.create(InMemoryTransportPair.create().agentTransport());
@@ -31,6 +32,7 @@ class AcpAgentFactoryTest {
 		AcpAgentFactory factory = AcpAgentFactory.sync(transport -> AcpAgent.sync(transport)
 			.initializeHandler(request -> AcpSchema.InitializeResponse.ok())
 			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session", null, null))
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 			.build());
 
 		AcpAsyncAgent agent = factory.create(InMemoryTransportPair.create().agentTransport());

@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import reactor.core.publisher.Mono;
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PipedInputStream;
@@ -50,7 +52,7 @@ class ExtensionResultOnTheWireTest {
 		PipedOutputStream agentOut = new PipedOutputStream();
 		clientIn = new BufferedReader(
 				new InputStreamReader(new PipedInputStream(agentOut, 65536), StandardCharsets.UTF_8));
-		agent = AcpAgent.async(new StdioAcpAgentTransport(mapper, agentIn, agentOut)).requestTimeout(TIMEOUT).build();
+		agent = AcpAgent.async(new StdioAcpAgentTransport(mapper, agentIn, agentOut)).requestTimeout(TIMEOUT).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		agent.start().block(TIMEOUT);
 	}
 

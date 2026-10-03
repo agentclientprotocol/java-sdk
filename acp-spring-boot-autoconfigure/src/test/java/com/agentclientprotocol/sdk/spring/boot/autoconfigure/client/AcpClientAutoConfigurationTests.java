@@ -109,7 +109,7 @@ class AcpClientAutoConfigurationTests {
 		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport()).initializeHandler(request -> {
 			initializeRequests.add(request);
 			return AcpSchema.InitializeResponse.ok();
-		}).build();
+		}).promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn()).build();
 		agent.start();
 		try {
 			this.runner.withBean(AcpClientTransport.class, pair::clientTransport).run(context -> {

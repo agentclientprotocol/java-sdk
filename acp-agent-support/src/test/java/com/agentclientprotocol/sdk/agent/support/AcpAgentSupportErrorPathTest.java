@@ -102,6 +102,11 @@ class AcpAgentSupportErrorPathTest {
 			return new DisableProviderResponse();
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@Test
@@ -228,6 +233,11 @@ class AcpAgentSupportErrorPathTest {
 		@Initialize
 		InitializeResponse initialize() {
 			return InitializeResponse.ok();
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}

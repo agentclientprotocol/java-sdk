@@ -330,6 +330,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				return Mono.just(new AcpSchema.InitializeResponse(AcpSchema.LATEST_PROTOCOL_VERSION,
 						new AcpSchema.AgentCapabilities(true, null, null), List.of()));
 			})
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build());
 
 		try (FixtureServer server = FixtureServer.start(agentFactory)) {

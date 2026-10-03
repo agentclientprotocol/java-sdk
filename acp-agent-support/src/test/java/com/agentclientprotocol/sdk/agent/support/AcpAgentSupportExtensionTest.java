@@ -13,11 +13,13 @@ import java.util.concurrent.TimeUnit;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.ExtNotification;
 import com.agentclientprotocol.sdk.annotation.ExtRequest;
+import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpError;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,6 +107,11 @@ class AcpAgentSupportExtensionTest {
 			rawNote.complete(params);
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	private ExtAgent start() {
@@ -168,6 +175,11 @@ class AcpAgentSupportExtensionTest {
 			return params;
 		}
 
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
 	}
 
 	@AcpAgent
@@ -175,6 +187,11 @@ class AcpAgentSupportExtensionTest {
 
 		@ExtNotification("x/y")
 		void note(Map<String, Object> params) {
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}
@@ -185,6 +202,11 @@ class AcpAgentSupportExtensionTest {
 		@ExtRequest("_test/two")
 		Object two(Ping ping, String other) {
 			return ping;
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
 		}
 
 	}

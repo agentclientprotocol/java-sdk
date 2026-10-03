@@ -196,7 +196,7 @@ class HandlerErrorTest {
 				throw new NoSuchMethodError("secret payload");
 			})
 			.listSessionsHandler(request -> new AcpSchema.ListSessionsResponse(List.of()))
-			.build();
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn()).build();
 		closers.add(agent::closeGracefully);
 		agent.start();
 		AcpAsyncClient client = connectAsyncClient();

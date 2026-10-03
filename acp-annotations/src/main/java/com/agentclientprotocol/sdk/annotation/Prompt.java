@@ -15,8 +15,8 @@ import java.lang.annotation.Target;
  * user's message, and the method does the agent's work for that prompt turn. While it runs, it
  * streams progress to the client (message chunks, thoughts, tool calls) through its prompt context,
  * and it can read files, run commands and ask permission on the client. It returns how the turn
- * ended. Without a {@code @Prompt} method the agent answers every prompt with "Method not found"
- * ({@code -32601}).
+ * ended. Every agent has one: building an agent without a {@code @Prompt} method fails with an
+ * {@code IllegalStateException}.
  *
  * <p>The method can take these parameters, all optional and in any order:
  * <ul>

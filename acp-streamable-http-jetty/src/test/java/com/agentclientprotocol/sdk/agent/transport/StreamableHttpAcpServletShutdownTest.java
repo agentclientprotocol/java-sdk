@@ -106,7 +106,7 @@ class StreamableHttpAcpServletShutdownTest {
 				AcpAgentFactory.async(transport -> AcpAgent.async(transport).initializeHandler(request -> {
 					initializing.countDown();
 					return release.asMono();
-				}).build()));
+				}).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build()));
 		try (Container container = Container.start(servlet)) {
 			HttpClient http = HttpClient.newHttpClient();
 			CompletableFuture<HttpResponse<String>> initialize = http.sendAsync(HttpRequest
@@ -142,6 +142,7 @@ class StreamableHttpAcpServletShutdownTest {
 			.initializeHandler(r -> Mono.just(new AcpSchema.InitializeResponse(AcpSchema.LATEST_PROTOCOL_VERSION,
 					new AcpSchema.AgentCapabilities(), List.of())))
 			.newSessionHandler(r -> Mono.just(new AcpSchema.NewSessionResponse("shutdown-1", null, null)))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build()));
 	}
 

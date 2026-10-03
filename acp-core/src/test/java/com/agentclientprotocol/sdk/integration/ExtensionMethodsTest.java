@@ -74,6 +74,7 @@ class ExtensionMethodsTest {
 	void clientSendsTypedExtRequestToAgent() {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.extRequestHandler("_test/ping", PING, ExtensionMethodsTest::pong)
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -87,6 +88,7 @@ class ExtensionMethodsTest {
 	void clientSendsRawExtRequestToAgent() {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.extRequestHandler("_test/raw", params -> Mono.just(Map.of("echo", params, "list", List.of(1, 2))))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -103,6 +105,7 @@ class ExtensionMethodsTest {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.extNotificationHandler("_test/typed", PING, ping -> Mono.fromRunnable(() -> typed.complete(ping)))
 			.extNotificationHandler("_test/raw", params -> Mono.fromRunnable(() -> raw.complete(params)))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -121,6 +124,7 @@ class ExtensionMethodsTest {
 			.extRequestHandler("_test/ping", PING, ping -> new Pong("sync: " + ping.text(), 0))
 			.extRequestHandler("_test/raw", params -> Map.of("got", params))
 			.extNotificationHandler("_test/note", PING, notified::complete)
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 			.build();
 		agent.start();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -137,6 +141,7 @@ class ExtensionMethodsTest {
 		CompletableFuture<Object> notified = new CompletableFuture<>();
 		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
 			.extNotificationHandler("_test/note", notified::complete)
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 			.build();
 		agent.start();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -152,7 +157,7 @@ class ExtensionMethodsTest {
 
 	@Test
 	void agentSendsTypedAndRawExtRequestsToClient() {
-		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		agent.start().block(TIMEOUT);
 		AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
@@ -170,7 +175,7 @@ class ExtensionMethodsTest {
 	void agentSendsExtNotificationsToClient() throws Exception {
 		CompletableFuture<Ping> typed = new CompletableFuture<>();
 		CompletableFuture<Object> raw = new CompletableFuture<>();
-		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		agent.start().block(TIMEOUT);
 		AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
@@ -189,7 +194,7 @@ class ExtensionMethodsTest {
 	void syncAgentSendsToSyncClientHandlers() throws Exception {
 		CompletableFuture<Ping> typed = new CompletableFuture<>();
 		CompletableFuture<Object> raw = new CompletableFuture<>();
-		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport()).build();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport()).promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn()).build();
 		agent.start();
 		AcpClient.sync(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
@@ -216,6 +221,7 @@ class ExtensionMethodsTest {
 	void unhandledExtRequestIsMethodNotFoundAndUnhandledNotificationIsIgnored() {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.extRequestHandler("_test/ping", PING, ExtensionMethodsTest::pong)
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -232,7 +238,7 @@ class ExtensionMethodsTest {
 
 	@Test
 	void clientAnswersUnhandledExtRequestWithMethodNotFound() {
-		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		agent.start().block(TIMEOUT);
 		AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
 
@@ -246,6 +252,7 @@ class ExtensionMethodsTest {
 	void extHandlerThatProducesNoResultIsAnsweredWithAnError() {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.extRequestHandler("_test/empty", params -> Mono.empty())
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
@@ -305,7 +312,7 @@ class ExtensionMethodsTest {
 
 	@Test
 	void sendersRejectNamesWithoutUnderscore() {
-		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
 		AcpSyncAgent syncAgent = new AcpSyncAgent(agent);
@@ -335,7 +342,7 @@ class ExtensionMethodsTest {
 
 	@Test
 	void agentNotStartedFailsExtSends() {
-		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 		assertThatThrownBy(() -> agent.sendExtRequest("_test/x", Map.of()).block(TIMEOUT))
 			.isInstanceOf(IllegalStateException.class);
@@ -350,6 +357,7 @@ class ExtensionMethodsTest {
 		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
 			.initializeHandler(request -> Mono.just(AcpSchema.InitializeResponse.ok()))
 			.extRequestHandler("_test/ping", PING, ExtensionMethodsTest::pong)
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 			.build();
 		agent.start().block(TIMEOUT);
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();

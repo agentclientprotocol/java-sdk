@@ -53,7 +53,7 @@ class AcpAgentTest {
 	void callsToTheClientBeforeStartFailWithIllegalState() {
 		var transportPair = InMemoryTransportPair.create();
 		try {
-			AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).build();
+			AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 			List<Mono<?>> calls = List.of(
 					agent.sendSessionUpdate("s", new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("hi"))),
 					agent.readTextFile(new AcpSchema.ReadTextFileRequest("s", "/f", null, null)),
@@ -111,7 +111,7 @@ class AcpAgentTest {
 					return Mono.just(new AcpSchema.InitializeResponse(1,
 							new AcpSchema.AgentCapabilities(true, null, null), List.of()));
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			agent.start().block(TIMEOUT);
 			Thread.sleep(100);
@@ -158,7 +158,7 @@ class AcpAgentTest {
 					receivedRequest.set(request);
 					return Mono.just(new AcpSchema.NewSessionResponse("session-123", null, null));
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			agent.start().block(TIMEOUT);
 			Thread.sleep(100);
@@ -255,7 +255,7 @@ class AcpAgentTest {
 					notificationLatch.countDown();
 					return Mono.empty();
 				})
-				.build();
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 			agent.start().block(TIMEOUT);
 			Thread.sleep(100);
@@ -294,7 +294,7 @@ class AcpAgentTest {
 					receivedRequest.set(request);
 					return new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of());
 				})
-				.build();
+				.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn()).build();
 
 			// Verify async() returns the underlying agent
 			assertThat(agent.async()).isNotNull();
@@ -310,7 +310,7 @@ class AcpAgentTest {
 	void agentCloseGracefullyCompletesWithoutError() throws Exception {
 		var transportPair = InMemoryTransportPair.create();
 
-		AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).build();
+		AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport()).promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn())).build();
 
 		agent.start().block(TIMEOUT);
 		Thread.sleep(100);
@@ -327,6 +327,7 @@ class AcpAgentTest {
 			AcpSyncAgent agent = AcpAgent.sync(transportPair.agentTransport())
 				.initializeHandler(
 						request -> new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()))
+				.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 				.build();
 
 			// Before initialization, capabilities should be null
@@ -346,6 +347,7 @@ class AcpAgentTest {
 			AcpAsyncAgent agent = AcpAgent.async(transportPair.agentTransport())
 				.initializeHandler(request -> Mono
 					.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
+				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 				.build();
 
 			// Before initialization, capabilities should be null
