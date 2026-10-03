@@ -452,6 +452,7 @@ server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/ac
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
+| `acp-micronaut` | Micronaut 4 integration: serves an `@AcpAgent` bean over stdio, Streamable HTTP or WebSocket, and builds a client from `acp.client.*` ([README](acp-micronaut/README.md)) |
 
 ### Transports
 

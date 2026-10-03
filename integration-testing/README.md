@@ -104,6 +104,7 @@ artifact.
 | `conf-java-agent-<t>`, `conf-java-client-<t>`, `conf-java-client-catalogue-<t>` | the raw driver probing the Java agent, the Java client's raw mode, and the Java client running catalogue steps against the raw agent ([programs/raw/gen_conf.py](programs/raw/gen_conf.py)) |
 | `load-50`, `load-300`, `load-1000` | N Java clients on their own connections, each: initialize, session/new, then 10 (or 5) prompts streaming two updates each |
 | `load-shared-300` | 300 clients sharing one HttpClient, so one HTTP/2 connection |
+| `micronaut-typescript-stdio`, `micronaut-typescript-http` | hand-written: the TypeScript client against the `acp-micronaut` sample agent ([programs/micronaut](programs/micronaut), an annotated `@AcpAgent` bean served by Micronaut) over the steps a plain echo agent answers; over stdio, `stdio.eof-exit` checks that the Micronaut application exits when its input ends. They run in the TypeScript legs of `cross-sdk.yml` |
 
 Over Streamable HTTP the cells also assert, through `matrix.json` facts, what the retired
 hand-written `interop-*` scenarios checked: the negotiated HTTP version on both sides (h2c between

@@ -49,7 +49,8 @@ jobs:
           PEER: ${{ github.event.inputs.peer || 'all' }}
         run: |
           # Per peer: its toolchain, its transports (cells x-java-<peer>-<t> and x-<peer>-java-<t>),
-          # and the cache paths of its build.
+          # and the cache paths of its build. A peer's legs also run its micronaut-<peer>-<t> scenarios
+          # (the acp-micronaut sample agent against that peer's client), where they exist.
           # java runs as one leg: the Java <-> Java cells, conformance, load.
           # kotlin has no Streamable HTTP; its Gradle toolchain is JDK 21 while the SDK and the
           # Java programs stay on 17 (the last version listed is the default).
@@ -73,11 +74,12 @@ jobs:
           )"
           picked="$(jq -c --arg p "$PEER" '[.[] | select($p == "all" or .peer == $p)]' <<< "$peers")"
           prepare="$(jq -c '{include: [.[] | select(.sdk)
-            | . + {only: (["x-*-\(.peer)-*", "x-\(.peer)-*"] | join(","))}
+            | . + {only: (["x-*-\(.peer)-*", "x-\(.peer)-*", "micronaut-\(.peer)-*"] | join(","))}
             | del(.transports)]}' <<< "$picked")"
           cells="$(jq -c '{include: [.[] as $x | ($x.transports // ["all"])[] as $t
             | $x + (if $t == "all" then {leg: $x.peer} else {leg: "\($x.peer)-\($t)", transport: $t,
-                only: (["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*"] | join(","))} end)
+                only: (["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*", "micronaut-\($x.peer)-\($t)*"]
+                  | join(","))} end)
             | del(.transports)]}' <<< "$picked")"
           jq . <<< "$cells"
           {

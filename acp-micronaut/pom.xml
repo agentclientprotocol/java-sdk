@@ -66,6 +66,13 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- The Servlet API Jetty 12.1's ee10 servlet (acp-streamable-http-jetty) is built
+                 on; the platform would otherwise bring 6.1. -->
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>6.0.0</version>
+            </dependency>
             <!-- logback-classic comes from the parent at logback.version; the platform would
                  otherwise pair it with an older logback-core. -->
             <dependency>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Micronaut-hosted agent of the micronaut-* scenarios: the SDK's acp-micronaut-sample
+  application (an annotated @AcpAgent bean served by acp-micronaut) behind the launcher contract
+  of integration-testing/README.md. Not a module of the SDK reactor: RunScenario builds it against
+  the SDK installed from this checkout (-Dacp.version=<root pom version>).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.agentclientprotocol.integration</groupId>
+    <artifactId>acp-integration-micronaut</artifactId>
+    <version>1</version>
+
+    <properties>
+        <!-- Set by RunScenario from the root pom's version (-Dacp.version); never a literal here. -->
+        <acp.version>set-by-RunScenario</acp.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- The sample application: acp-micronaut, the Jetty listener, logback to stderr -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-micronaut-sample</artifactId>
+            <version>${acp.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
