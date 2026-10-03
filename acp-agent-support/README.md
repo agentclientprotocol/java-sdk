@@ -84,6 +84,8 @@ without one is ignored.
 | Annotation | Description |
 |------------|-------------|
 | `@SessionId` | Injects the current session ID as a `String`, in handlers of session-scoped methods. |
+| `@ConfigId` | In a `@SetSessionConfigOption` method, injects the id of the option being set as a `String`. |
+| `@ConfigValue` | In a `@SetSessionConfigOption` method, injects the value being set, typed by the parameter: `String` (a select option), `boolean`/`Boolean` (a boolean option) or `Object` (either). A value of the other kind is answered `-32602` without calling the method. |
 
 ## Advertising Capabilities
 
@@ -160,6 +162,7 @@ Handler methods support flexible signatures. The runtime automatically resolves 
 | `SyncPromptContext` | Synchronous context for sending messages, file I/O, permissions, etc. (in `@Prompt` handlers). |
 | `PromptContext` | The async context the sync one wraps, for a `@Prompt` handler that composes `Mono`s. |
 | `@SessionId String` | The current session ID. |
+| `@ConfigId String`, `@ConfigValue String/boolean/Object` | The option id and typed value, in a `@SetSessionConfigOption` handler. |
 | `NegotiatedCapabilities` | The capabilities negotiated with the client on the request's connection (any handler). |
 | `AcpSyncAgent` / `AcpAsyncAgent` | The agent serving the request's connection (any handler). |
 

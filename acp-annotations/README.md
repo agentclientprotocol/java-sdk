@@ -28,6 +28,8 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 | `@ExtRequest` | Method | Handles a `_`-prefixed extension request |
 | `@ExtNotification` | Method | Handles a `_`-prefixed extension notification |
 | `@SessionId` | Parameter | Injects the current session ID |
+| `@ConfigId` | Parameter | Injects the id of the config option being set |
+| `@ConfigValue` | Parameter | Injects the config option's new value, typed `String`, `boolean` or `Object` |
 | `@UnstableAcpApi` | Any | Marks API for protocol elements not in the stable schema |
 
 ## Installation

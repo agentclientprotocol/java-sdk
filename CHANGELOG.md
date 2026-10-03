@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Typed values in `@SetSessionConfigOption` methods.** New parameter annotations `@ConfigId`
+  (the option id, a `String`) and `@ConfigValue` (the new value, typed by the parameter: `String`
+  for a select option, `boolean`/`Boolean` for a boolean option, `Object` for either), resolved by
+  the new `ConfigOptionResolver`. A value of the other kind than the parameter's is answered
+  `-32602` (invalid params) without calling the method. The SDK still does not reject an id or a
+  value the session never offered; that needs per-session option tracking and is the method's to
+  check.
+
 - **Prompt handlers see their prompt's cancellation.** `SyncPromptContext.isCancelled()` and
   `onCancel(Runnable)`, and `PromptContext.isCancelled()` and `whenCancelled()` (a `Mono<Void>`
   that completes on cancel), signal a cancel by `session/cancel` for the prompt's session or by

@@ -43,6 +43,7 @@ import com.agentclientprotocol.sdk.agent.support.resolver.AuthenticateRequestRes
 import com.agentclientprotocol.sdk.agent.support.resolver.CancelNotificationResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CapabilitiesResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.CloseSessionRequestResolver;
+import com.agentclientprotocol.sdk.agent.support.resolver.ConfigOptionResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.DeleteSessionRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.DisableProviderRequestResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ExtensionParamsResolver;
@@ -789,6 +790,7 @@ public class AcpAgentSupport {
 			// Built-in resolvers (order matters - first match wins), after the custom ones
 			return List.of(
 					new ExtensionParamsResolver(),
+					new ConfigOptionResolver(),
 					new InitializeRequestResolver(),
 					new AuthenticateRequestResolver(),
 					new LogoutRequestResolver(),
