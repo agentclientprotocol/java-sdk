@@ -775,6 +775,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An `Error` while reading a stdio agent's output is reported as itself.** When handling a line
+  of the agent's standard output threw an `Error` (typically a `NoSuchMethodError` from a Jackson
+  version clash), `StdioAcpClientTransport` ended as if the agent had "closed its standard output
+  but has not exited". The real cause is now logged, passed to the exception handler, and is the
+  cause of the `AcpConnectionException` that ends the transport ("Reading the agent's output
+  failed: ...").
+
 - **A message sent after a transport closed fails instead of being dropped.**
   `StdioAcpClientTransport`, `StdioAcpAgentTransport` and `WebSocketAcpClientTransport` dropped a
   message sent once they were closed and completed its `Mono`, so a request then waited out its

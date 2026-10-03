@@ -341,7 +341,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 */
 	private void startErrorProcessing(Process process) {
 		readLines(this.errorScheduler, process.getErrorStream(), "error stream", this::emitError,
-				this.errorSink::tryEmitComplete);
+				failure -> this.errorSink.tryEmitComplete());
 	}
 
 	private boolean emitError(String line) {
@@ -364,11 +364,14 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	/**
 	 * Reads one of the process's output streams line by line on its own thread, until the
 	 * stream ends, the transport closes, or {@code accept} refuses a line; then marks the
-	 * transport closing and runs {@code onEnd}.
+	 * transport closing and runs {@code onEnd} with what ended the reading when it failed: an
+	 * error reading the stream, or a failure handling a line, such as a JSON library that throws
+	 * an {@link Error} (a {@code NoSuchMethodError} from a version clash).
 	 */
 	private void readLines(Scheduler scheduler, InputStream stream, String streamName, Predicate<String> accept,
-			Runnable onEnd) {
+			Consumer<@Nullable Throwable> onEnd) {
 		scheduler.schedule(() -> {
+			Throwable failure = null;
 			try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
 				while (!isClosing) {
 					String line = reader.readLine();
@@ -379,13 +382,21 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			}
 			catch (IOException e) {
 				if (!isClosing) {
+					failure = e;
 					logger.error("Error reading from " + streamName, e);
 					this.exceptionHandler.accept(e);
 				}
 			}
+			catch (RuntimeException | Error e) {
+				// Not the stream: handling a line failed. Report the real cause, which would
+				// otherwise end the reading as if the agent had closed its output.
+				failure = e;
+				logger.error("Reading the agent's " + streamName + " failed", e);
+				this.exceptionHandler.accept(e);
+			}
 			finally {
 				isClosing = true;
-				onEnd.run();
+				onEnd.accept(failure);
 			}
 		});
 	}
@@ -429,19 +440,25 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * process's input stream. Messages are deserialized and emitted to the inbound sink.
 	 */
 	private void startInboundProcessing(Process process) {
-		readLines(this.inboundScheduler, process.getInputStream(), "input stream", this::emitInbound, () -> {
+		readLines(this.inboundScheduler, process.getInputStream(), "input stream", this::emitInbound, failure -> {
 			this.inboundSink.tryEmitComplete();
-			terminated(process);
+			terminated(process, failure);
 		});
 	}
 
 	/**
 	 * The agent's standard output has ended: once the process has exited, reports the end of
-	 * the transport, naming the exit, unless it was closed locally.
+	 * the transport, naming the exit, unless it was closed locally. When reading it failed, the
+	 * failure is the reason.
 	 */
-	private void terminated(Process process) {
+	private void terminated(Process process, @Nullable Throwable readFailure) {
 		if (this.closedLocally) {
 			this.terminationSink.tryEmitEmpty();
+			return;
+		}
+		if (readFailure != null) {
+			this.terminationSink.tryEmitError(
+					new AcpConnectionException("Reading the agent's output failed: " + readFailure, readFailure));
 			return;
 		}
 		String reason;

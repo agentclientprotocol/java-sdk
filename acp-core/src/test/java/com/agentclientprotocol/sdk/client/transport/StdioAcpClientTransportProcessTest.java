@@ -303,6 +303,43 @@ class StdioAcpClientTransportProcessTest {
 			.hasMessageContaining("/nonexistent/acp-agent-binary");
 	}
 
+	/**
+	 * A JSON library that fails with an {@link Error} while reading the agent's output (a
+	 * {@code NoSuchMethodError} from a Jackson version clash, say) is reported as that error, not as
+	 * "the agent closed its standard output".
+	 */
+	@Test
+	void anErrorReadingTheAgentsOutputIsReportedAsItself() {
+		com.agentclientprotocol.sdk.json.AcpJsonMapper real = com.agentclientprotocol.sdk.json.AcpJsonMapper
+			.createDefault();
+		com.agentclientprotocol.sdk.json.AcpJsonMapper clashing = (com.agentclientprotocol.sdk.json.AcpJsonMapper) java.lang.reflect.Proxy
+			.newProxyInstance(getClass().getClassLoader(),
+					new Class<?>[] { com.agentclientprotocol.sdk.json.AcpJsonMapper.class }, (proxy, method, args) -> {
+						if (method.getName().startsWith("readValue")) {
+							throw new NoSuchMethodError("'com.fasterxml.jackson.core.JsonParser.example()' (version clash)");
+						}
+						try {
+							return method.invoke(real, args);
+						}
+						catch (java.lang.reflect.InvocationTargetException e) {
+							throw e.getCause();
+						}
+					});
+		java.util.List<Throwable> reported = new java.util.concurrent.CopyOnWriteArrayList<>();
+		transport = new StdioAcpClientTransport(echoAgent(), clashing);
+		transport.setStdErrorHandler(line -> {
+		});
+		transport.setExceptionHandler(reported::add);
+		transport.connect(message -> message.then(Mono.empty())).block(TIMEOUT);
+
+		transport.sendMessage(new JSONRPCNotification("test/ping", null)).block(TIMEOUT);
+
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> transport.awaitTermination().block(TIMEOUT))
+			.hasMessageContaining("NoSuchMethodError")
+			.hasMessageNotContaining("closed its standard output");
+		org.assertj.core.api.Assertions.assertThat(reported).anyMatch(e -> e instanceof NoSuchMethodError);
+	}
+
 	/** Echoes each stdin line to stdout, and exits on the {@link #EXIT} notification. */
 	public static final class EchoAgent {
 
