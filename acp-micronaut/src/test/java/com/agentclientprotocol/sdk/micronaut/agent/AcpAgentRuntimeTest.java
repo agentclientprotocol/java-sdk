@@ -1,0 +1,105 @@
+/*
+ * Copyright 2025-2026 the original author or authors.
+ */
+
+package com.agentclientprotocol.sdk.micronaut.agent;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import com.agentclientprotocol.sdk.client.AcpClient;
+import com.agentclientprotocol.sdk.client.AcpSyncClient;
+import com.agentclientprotocol.sdk.spec.AcpError;
+import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import io.micronaut.context.annotation.Property;
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static com.agentclientprotocol.sdk.micronaut.Eventually.eventually;
+
+/**
+ * The {@code @AcpAgent} bean served over an application transport bean (here in memory,
+ * in place of stdio), driven by an SDK client: the bean is found, its injected dependency,
+ * interceptor and argument resolver beans take part, and Publisher, Flux and Mono returns
+ * are answered.
+ */
+@MicronautTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Property(name = TestAgents.ECHO, value = "true")
+@Property(name = TestAgents.IN_MEMORY, value = "true")
+class AcpAgentRuntimeTest {
+
+	@Inject
+	InMemoryTransportPair pair;
+
+	@Inject
+	AcpAgentRuntime runtime;
+
+	@Inject
+	TestAgents.RecordingInterceptor interceptor;
+
+	private final List<String> chunks = new CopyOnWriteArrayList<>();
+
+	/** One client: the in-memory transport connects once, for the context's life. */
+	private AcpSyncClient acp;
+
+	private AcpSchema.InitializeResponse init;
+
+	@BeforeAll
+	void connect() {
+		acp = AcpClient.sync(pair.clientTransport())
+			.requestTimeout(Duration.ofSeconds(10))
+			.sessionUpdateConsumer(notification -> {
+				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
+						&& chunk.content() instanceof AcpSchema.TextContent text) {
+					chunks.add(text.text());
+				}
+			})
+			.build();
+		init = acp.initialize();
+	}
+
+	@Test
+	void servesTheAgentBeanWithItsDependenciesInterceptorsAndResolvers() {
+		assertThat(init.protocolVersion()).isEqualTo(1);
+		// Today's defaults. TIGHTEN when devex lands: the capabilities derived from the
+		// declared handlers, and agentInfo from @AcpAgent(name, version).
+		assertThat(init.agentInfo()).isNull();
+		assertThat(init.agentCapabilities().loadSession()).isFalse();
+
+		// @NewSession returns a Flux: a Publisher of one response
+		String sessionId = acp.newSession(new AcpSchema.NewSessionRequest("/tmp", List.of())).sessionId();
+		assertThat(sessionId).isNotBlank();
+
+		AcpSchema.PromptResponse response = acp
+			.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent("hello"))));
+		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+		eventually(Duration.ofSeconds(5), () -> assertThat(String.join("", chunks))
+			// the injected Prefix bean, the prompt, and the LocaleResolver bean's argument
+			.isEqualTo("echo: hello [fr-CA]"));
+
+		// @SetSessionMode returns a Mono
+		assertThat(acp.setSessionMode(new AcpSchema.SetSessionModeRequest(sessionId, "any"))).isNotNull();
+
+		// The SDK's default initialize handler (no @Initialize declared) is not intercepted.
+		assertThat(interceptor.methods).contains("session/new", "session/prompt", "session/set_mode");
+		assertThat(runtime.isRunning()).isTrue();
+		assertThat(runtime.port()).isEmpty();
+	}
+
+	@Test
+	void anEmptyPublisherIsNoResponse() {
+		assertThatThrownBy(() -> acp.sendExtRequest("_test/empty", Map.of())).isInstanceOf(AcpError.class)
+			.hasMessageContaining("produced no response")
+			.satisfies(error -> assertThat(((AcpError) error).getCode()).isEqualTo(-32603));
+	}
+
+}
