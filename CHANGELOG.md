@@ -15,6 +15,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Spring Boot autoconfiguration and starter, now part of the SDK.** The former
+  `spring-ai-community/acp-autoconfig` project moves into this repository, with its history, as two modules
+  released with the SDK:
+  - `com.agentclientprotocol:acp-spring-boot-starter` and `com.agentclientprotocol:acp-spring-boot-autoconfigure`,
+    for Spring Boot 4.1. Boot's BOM is imported by these two modules only; the SDK's other modules do not depend on Spring.
+  - Packages `com.agentclientprotocol.sdk.spring.boot.autoconfigure` (`.client`, `.agent`).
+  - **Client:** an `AcpSyncClient` and an `AcpAsyncClient` over one transport from `spring.acp.client.transport.*`:
+    stdio (`stdio.command`), WebSocket (`websocket.uri`) or Streamable HTTP (`http.uri`). An explicit `type`
+    without its property fails at startup, naming the property. `AcpClientCustomizer` beans register session-update,
+    permission, file system and terminal handlers. File system and terminal capabilities are off by default:
+    advertise one only together with its handler.
+  - **Agent:** the application's single `@AcpAgent` bean is served over stdio (the default) or, with
+    `spring.acp.agent.transport.type=http` and `acp-streamable-http-jetty` on the classpath, over Streamable
+    HTTP. In a servlet web application that means on the application's own server; otherwise on the SDK's
+    listener, which also takes WebSocket upgrades. A stdio agent closes the application context when its client
+    closes stdin, so a `spring.main.keep-alive` application exits 0 (`spring.acp.agent.shutdown-on-transport-end`).
+
+  **Migrating from `org.springaicommunity:acp-spring-boot-starter` 0.12.0** (the old repository is redirected and
+  publishes no further releases):
+  - Coordinates: `org.springaicommunity:acp-spring-boot-starter` becomes `com.agentclientprotocol:acp-spring-boot-starter`,
+    with the SDK's version. Drop any separate ACP SDK version pin; the starter brings the matching SDK modules.
+  - Imports: `com.agentclientprotocol.autoconfigure.*` becomes `com.agentclientprotocol.sdk.spring.boot.autoconfigure.*`.
+    Most applications import nothing from these packages; they configure `spring.acp.*`, whose keys are unchanged
+    except as listed here.
+  - Behaviour changes since 0.12.0:
+    - the `spring.acp.agent.transport.websocket.*` properties are removed; they never configured anything;
+    - `spring.acp.client.capabilities.read-text-file` and `write-text-file` now default to `false`;
+    - a client-only application no longer gets an agent transport bean;
+    - session updates with no consumer of your own are logged at DEBUG instead of a WARN.
+  - Everything else in this release's breaking changes applies too: Spring applications compile against the
+    SDK's API.
+
 - **`$/cancel_request` (ACP v1, Cancellation), both directions.** Client and agent sessions alike:
   - **Cancelling a request you sent:** dispose (cancel) the subscription to its `Mono` before the
     response arrives, directly or through `timeout(...)`, `take...`, or the SDK's own request
