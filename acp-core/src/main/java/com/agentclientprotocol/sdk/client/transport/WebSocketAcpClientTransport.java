@@ -110,6 +110,17 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * Creates a transport for the WebSocket endpoint at {@code serverUri}, with an HTTP client
+	 * of its own and the default JSON mapper ({@link AcpJsonMapper#createDefault()}).
+	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
+	 * path, such as {@code ws://localhost:8080/acp}
+	 * @throws IllegalArgumentException if {@code serverUri} is null
+	 */
+	public WebSocketAcpClientTransport(URI serverUri) {
+		this(serverUri, AcpJsonMapper.createDefault());
+	}
+
+	/**
+	 * Creates a transport for the WebSocket endpoint at {@code serverUri}, with an HTTP client
 	 * of its own.
 	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
 	 * path, such as {@code ws://localhost:8080/acp}

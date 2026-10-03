@@ -136,6 +136,16 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	private transient volatile @Nullable Disposable keepAliveTask;
 
 	/**
+	 * Creates a servlet with the default limits and timings and the default JSON mapper
+	 * ({@link AcpJsonMapper#createDefault()}).
+	 * @param agentFactory creates the agent for each connection
+	 * @throws IllegalArgumentException if {@code agentFactory} is null
+	 */
+	public StreamableHttpAcpServlet(AcpAgentFactory agentFactory) {
+		this(AcpJsonMapper.createDefault(), agentFactory);
+	}
+
+	/**
 	 * Creates a servlet with the default limits and timings.
 	 * @param jsonMapper the mapper that reads and writes the messages
 	 * @param agentFactory creates the agent for each connection

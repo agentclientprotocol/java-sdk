@@ -104,6 +104,18 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
 	/**
+	 * Creates a transport for the endpoint at {@code endpointUri}, with the default HTTP client,
+	 * limits and JSON mapper ({@link AcpJsonMapper#createDefault()}).
+	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
+	 * its path, such as {@code http://localhost:8080/acp}
+	 * @throws IllegalArgumentException if {@code endpointUri} is null or its scheme is not
+	 * {@code http} or {@code https}
+	 */
+	public StreamableHttpAcpClientTransport(URI endpointUri) {
+		this(endpointUri, AcpJsonMapper.createDefault());
+	}
+
+	/**
 	 * Creates a transport for the endpoint at {@code endpointUri}, with the default HTTP
 	 * client (HTTP/2, its own {@link CookieManager}) and the default limits.
 	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including

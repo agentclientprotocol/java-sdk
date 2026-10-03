@@ -106,6 +106,20 @@ public class StreamableHttpAcpAgentTransport {
 	private volatile int boundPort;
 
 	/**
+	 * Creates a listener on the default path, {@value #DEFAULT_ACP_PATH}, with the default limits
+	 * and JSON mapper ({@link AcpJsonMapper#createDefault()}). Nothing listens until
+	 * {@link #start()}.
+	 * @param port the port to listen on, or 0 for an ephemeral port chosen when the listener
+	 * starts
+	 * @param agentFactory creates the agent for each connection
+	 * @throws IllegalArgumentException if the port is outside 0 to 65535 or
+	 * {@code agentFactory} is null
+	 */
+	public StreamableHttpAcpAgentTransport(int port, AcpAgentFactory agentFactory) {
+		this(port, AcpJsonMapper.createDefault(), agentFactory);
+	}
+
+	/**
 	 * Creates a listener on the default path, {@value #DEFAULT_ACP_PATH}, with the default
 	 * limits. Nothing listens until {@link #start()}.
 	 * @param port the port to listen on, or 0 for an ephemeral port chosen when the listener

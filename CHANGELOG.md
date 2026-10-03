@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Transport constructors without a JSON mapper:** `StreamableHttpAcpClientTransport(URI)`,
+  `WebSocketAcpClientTransport(URI)`, `StreamableHttpAcpAgentTransport(int port, AcpAgentFactory)`
+  and `StreamableHttpAcpServlet(AcpAgentFactory)` use `AcpJsonMapper.createDefault()`, as the stdio
+  transports already did.
+
 - **`AgentParameters.Builder.inheritEnvironment(boolean)`: start a stdio agent without the
   client's environment.** The "safe" default variables of `AgentParameters` (HOME, PATH, USER and
   the like) had no effect: `StdioAcpClientTransport` added them to the whole environment the
