@@ -338,7 +338,9 @@ public interface PromptContext {
 	 * @param options the texts to choose from, at least two
 	 * @return a {@code Mono} emitting the text of the chosen option, or completing empty if the
 	 * client cancelled the request; it fails with {@link IllegalArgumentException} if fewer than
-	 * two options are given
+	 * two options are given, and with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} ({@code -32603}) if the client
+	 * answers with an option ID it was not offered
 	 */
 	Mono<String> askChoice(String question, String... options);
 

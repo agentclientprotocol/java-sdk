@@ -7,10 +7,13 @@ package com.agentclientprotocol.sdk.agent;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateTerminalResponse;
@@ -135,6 +138,75 @@ class PromptContextHelpersTest {
 
 		client.closeGracefully().block(TIMEOUT);
 		agent.closeGracefully();
+	}
+
+	/**
+	 * A client that answers {@code askChoice} with an option ID it was not offered gets a clear
+	 * protocol error, not a {@code NumberFormatException} or {@code ArrayIndexOutOfBoundsException}.
+	 */
+	@Test
+	void askChoiceAnsweredWithAnOptionThatWasNotOfferedFailsWithAProtocolError() {
+		for (String answer : List.of("7", "-1", "yes")) {
+			AtomicReference<Throwable> failure = new AtomicReference<>();
+			InMemoryTransportPair pair = InMemoryTransportPair.create();
+			AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
+				.requestTimeout(TIMEOUT)
+				.initializeHandler(req -> Mono.just(InitializeResponse.ok()))
+				.newSessionHandler(req -> Mono.just(new NewSessionResponse("s1", null, null)))
+				.promptHandler((request, context) -> context.askChoice("Which?", "red", "green")
+					.doOnError(failure::set)
+					.onErrorResume(e -> Mono.empty())
+					.thenReturn(PromptResponse.endTurn()))
+				.build();
+			AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+				.requestTimeout(TIMEOUT)
+				.requestPermissionHandler(req -> Mono.just(
+						new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected(answer))))
+				.build();
+			try {
+				agent.start().block(TIMEOUT);
+				connect(client);
+				client.prompt(prompt()).block(TIMEOUT);
+
+				assertThat(failure.get()).as("answer %s", answer)
+					.isInstanceOf(AcpProtocolException.class)
+					.hasMessageContaining(answer);
+			}
+			finally {
+				client.closeGracefully().block(TIMEOUT);
+				agent.closeGracefully().block(TIMEOUT);
+				pair.closeGracefully().block(TIMEOUT);
+			}
+		}
+	}
+
+	@Test
+	void askChoiceReturnsTheChosenOption() {
+		AcpAsyncAgent agent = AcpAgent.async(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> Mono.just(InitializeResponse.ok()))
+			.newSessionHandler(req -> Mono.just(new NewSessionResponse("s1", null, null)))
+			.promptHandler((request, context) -> context.askChoice("Which?", "red", "green")
+				.flatMap(context::sendMessage)
+				.thenReturn(PromptResponse.endTurn()))
+			.build();
+		List<String> messages = new CopyOnWriteArrayList<>();
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.requestPermissionHandler(req -> Mono
+				.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected("1"))))
+			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> {
+				if (n.update() instanceof AcpSchema.AgentMessageChunk chunk) {
+					messages.add(((TextContent) chunk.content()).text());
+				}
+			}))
+			.build();
+		agent.start().block(TIMEOUT);
+		connect(client);
+		client.prompt(prompt()).block(TIMEOUT);
+		assertThat(messages).containsExactly("green");
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully().block(TIMEOUT);
 	}
 
 	private AcpAsyncClient terminalClient(CountDownLatch created, CountDownLatch released) {
