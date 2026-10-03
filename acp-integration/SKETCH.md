@@ -10,6 +10,10 @@ manager's framework-neutrality review (2026-10-03). Each type below names the Sp
 Not in the 0.80.0 scope: build-time handler registration, native-image metadata and a non-blocking
 annotation runtime. Those are SDK hooks (review section 2) and live in acp-agent-support or acp-core, not here.
 
+Quarkus and Micronaut integrations are required for 0.80.0, not previews (owner). Reviewed by acp-dev-steward
+on 2026-10-03; its changes are folded in below. Next come the Quarkus and Micronaut reviews. Extraction
+waits for those reviews and for devex slice 1.
+
 ## Settings
 
 Immutable records with builders. Each framework binds its own configuration onto them; `from(..)` lets any
@@ -20,7 +24,7 @@ public enum AcpTransportType { STDIO, WEBSOCKET, HTTP }
 
 public record AcpAgentSettings(
         boolean enabled,                        // default true
-        Duration requestTimeout,                // default 60s
+        @Nullable Duration requestTimeout,      // null = SDK default (api1 unifies it); never hardcoded
         @Nullable Duration cancelGracePeriod,   // SDK default when null (new: the review)
         @Nullable Duration maxPromptDuration,   // SDK default when null (new: the review)
         boolean shutdownOnTransportEnd,         // default true
@@ -36,12 +40,16 @@ public record AcpAgentSettings(
     }
 
     public static Builder builder();
-    /** Keys relative to prefix, e.g. "request-timeout", "transport.type", "transport.http.port". */
+    /**
+     * Keys relative to prefix, kebab-case only, e.g. "request-timeout", "transport.type",
+     * "transport.http.port". Normalising the framework's own key forms to kebab-case is the binder's job.
+     */
     public static AcpAgentSettings from(Function<String, @Nullable String> lookup, String prefix);
 }
 
 public record AcpClientSettings(
-        Duration requestTimeout,                // default 60s
+        @Nullable Duration requestTimeout,      // null = SDK default (api1 unifies it); never hardcoded
+        @Nullable Duration promptTimeout,       // none by default; separate from requestTimeout (api1 A4)
         @Nullable AcpTransportType transport,   // null = infer (see AcpClientTransports)
         Stdio stdio, WebSocket websocket, Http http,
         Capabilities capabilities) {
@@ -49,10 +57,16 @@ public record AcpClientSettings(
     public record Stdio(@Nullable String command, List<String> args, Map<String, String> env) {}
     public record WebSocket(@Nullable URI uri, Duration connectTimeout) {}   // 10s
     public record Http(@Nullable URI uri) {}
-    /** All false by default: advertise only what the application serves. */
-    public record Capabilities(boolean readTextFile, boolean writeTextFile, boolean terminal) {}
+    /**
+     * All false by default. Advertise only what the application registers handlers for: from api1 (A7)
+     * the client fails at build() when a capability is advertised without its handler, so a framework
+     * layer turns a capability on only alongside the handler the application provides.
+     */
+    public record Capabilities(boolean readTextFile, boolean writeTextFile, boolean terminal,
+            boolean elicitationForm, boolean elicitationUrl, boolean booleanConfigOptions) {}
 
     public static Builder builder();
+    /** Kebab-case keys only, as for AcpAgentSettings.from. */
     public static AcpClientSettings from(Function<String, @Nullable String> lookup, String prefix);
 }
 ```
@@ -95,8 +109,10 @@ public final class AcpAgentDiscovery {
 
 public final class AcpAgents {
     /**
-     * AcpAgentSupport.builder().agent(userClass, instance) with the settings' timeouts and the given
-     * interceptors, argument resolvers and return-value handlers, in order.
+     * The SDK's discovery entry point taking the user class and an instance supplier (devex keeps a
+     * (Class<?> userClass, Supplier<?> instance) form; use whatever devex lands, proxy-safe and with
+     * superclass handlers), with the settings' timeouts and the given interceptors, argument resolvers and
+     * return-value handlers, in order.
      */
     public static AcpAgentSupport.Builder builder(AgentCandidate agent, AcpAgentSettings settings,
             List<AcpInterceptor> interceptors, List<ArgumentResolver> resolvers,
@@ -111,7 +127,12 @@ The DEBUG-logging default and the rest of the client side:
 public interface AcpClientCustomizer { void customize(AcpClient.AsyncSpec spec); }   // moved from Spring
 
 public final class AcpClients {
-    /** Capabilities from settings, a DEBUG-logging session-update consumer, then the customizers in order. */
+    /**
+     * Capabilities, request timeout and prompt timeout from settings (prompt timeout: TODO pass through when
+     * api1 A4 lands), then the customizers in order. Session updates go to a DEBUG-logging consumer only
+     * when no customizer registered one: the default is replaced, not added to. That holds in every
+     * framework, so an unhandled session update is visible at DEBUG everywhere.
+     */
     public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
             List<AcpClientCustomizer> customizers);
     /** The sync facade over the one async client: one session per transport. */
@@ -122,7 +143,11 @@ public final class AcpClients {
 ## Lifecycles (the framework calls these from its own hooks)
 
 ```java
-/** A single-transport agent (stdio). */
+/**
+ * A single-transport agent (stdio). Built on the SDK's own lifecycle: devex's AcpAgentSupport.Builder.run()
+ * and fix4's AutoCloseable AcpSyncAgent/AcpAgentSupport, not a copy of their start and stop logic. The
+ * host adds onTransportEnd and the host-thread semantics.
+ */
 public final class AcpAgentHost {
     public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport);
     public void start();
@@ -145,7 +170,7 @@ public final class AcpListenerHost {
     public void stop();
 }
 
-/** The servlet inside a framework's container. */
+/** The servlet inside a framework's Servlet container. Servlet-only: Spring is its user. */
 public final class AcpServletHost {
     /**
      * Call before the container's graceful shutdown: each connection holds an open SSE response,
@@ -167,13 +192,21 @@ public final class AcpClientHost {
   plus metadata; `SmartLifecycle` adapters and their phases; `ServletRegistrationBean`; `destroyMethod=""`;
   `AutoConfiguration.imports`.
 - **Quarkus:** see the review's section 3: `@ConfigMapping`, a recorder, Jandex validation, the `Uni` return
-  handler and Vert.x context hops.
+  handler and Vert.x context hops. HTTP: a binding into Vert.x HTTP or the SDK listener, still being decided.
+  Undertow is not assumed.
 - **Micronaut:** see the review's section 3: `@ConfigurationProperties`, `@Factory`, `byStereotype` discovery.
+  HTTP: the SDK listener, or the Micronaut agent's own Netty binding if it ships one. Not micronaut-servlet.
 
-## Open questions for the reviewers
+## Settled questions (acp-dev-steward, 2026-10-03)
 
-1. `from(lookup, prefix)`: are relaxed keys (`request-timeout` vs `requestTimeout`) the binder's job, or
-   should `from` accept both?
-2. `AcpServletHost` assumes a Servlet container. Quarkus will use undertow for the preview; does Micronaut
-   take the listener or micronaut-servlet?
-3. Should `AcpClients.async` keep the DEBUG default consumer in every framework, or is it a Spring-ism?
+1. `from(lookup, prefix)` takes kebab-case keys only; normalising them is the binder's job.
+2. Micronaut uses the SDK listener or its own Netty binding; `AcpServletHost` stays servlet-only.
+3. The DEBUG default consumer applies in every framework, and is replaced (not added to) when the
+   application registers its own consumer.
+
+## Spring layer changes that follow at extraction
+
+- The `request-timeout` properties stop defaulting to 60s (they become null, meaning the SDK default).
+- A new `prompt-timeout` client property.
+- The new capability properties.
+- The DEBUG consumer becomes replace-not-add. Today the Spring client adds it beside the customizers' consumers.
