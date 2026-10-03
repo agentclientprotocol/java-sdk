@@ -64,7 +64,7 @@ class AgentConfigBindingTest {
 		assertThat(buildTime.agent().transport().http().path()).isEqualTo("/configured");
 
 		AcpRuntimeConfig.Agent agent = runtime.agent();
-		assertThat(agent.requestTimeout()).isEqualTo(Duration.ofSeconds(42));
+		assertThat(agent.requestTimeout()).contains(Duration.ofSeconds(42));
 		assertThat(agent.cancelGracePeriod()).contains(Duration.ofSeconds(7));
 		assertThat(agent.maxPromptDuration()).contains(Duration.ofMinutes(5));
 		assertThat(agent.shutdownOnTransportEnd()).isFalse();

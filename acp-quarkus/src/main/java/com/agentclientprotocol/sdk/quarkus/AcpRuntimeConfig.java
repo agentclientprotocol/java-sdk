@@ -44,11 +44,11 @@ public interface AcpRuntimeConfig {
 	interface Agent {
 
 		/**
-		 * How long the agent waits for the client to answer a request it sent.
+		 * How long the agent waits for the client to answer a request it sent. Unset keeps
+		 * the SDK default.
 		 * @return the request timeout
 		 */
-		@WithDefault("60s")
-		Duration requestTimeout();
+		Optional<Duration> requestTimeout();
 
 		/**
 		 * How long a cancelled prompt may run before the SDK answers it {@code cancelled}
@@ -145,11 +145,11 @@ public interface AcpRuntimeConfig {
 	interface Client {
 
 		/**
-		 * How long the client waits for the agent to answer a request.
+		 * How long the client waits for the agent to answer a request. Unset keeps the SDK
+		 * default.
 		 * @return the request timeout
 		 */
-		@WithDefault("30s")
-		Duration requestTimeout();
+		Optional<Duration> requestTimeout();
 
 		/**
 		 * The client transport.
@@ -247,7 +247,10 @@ public interface AcpRuntimeConfig {
 
 	}
 
-	/** The client capabilities advertised in {@code initialize}. */
+	/**
+	 * The client capabilities advertised in {@code initialize}. Advertise only what the
+	 * application registers handlers for, through an {@code AcpClientCustomizer}.
+	 */
 	interface Capabilities {
 
 		/**
@@ -270,6 +273,27 @@ public interface AcpRuntimeConfig {
 		 */
 		@WithDefault("false")
 		boolean terminal();
+
+		/**
+		 * Whether the client serves form-mode {@code elicitation/create}.
+		 * @return the capability
+		 */
+		@WithDefault("false")
+		boolean elicitationForm();
+
+		/**
+		 * Whether the client serves URL-mode {@code elicitation/create}.
+		 * @return the capability
+		 */
+		@WithDefault("false")
+		boolean elicitationUrl();
+
+		/**
+		 * Whether the client accepts boolean session config options.
+		 * @return the capability
+		 */
+		@WithDefault("false")
+		boolean booleanConfigOptions();
 
 	}
 
