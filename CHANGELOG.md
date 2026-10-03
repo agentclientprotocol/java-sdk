@@ -201,6 +201,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: the sync API throws `AcpTimeoutException` for a timeout, and `CancellationException`
+  when interrupted, instead of Reactor's internal `Exceptions$ReactiveException`.** Every blocking
+  method of `AcpSyncClient`, `AcpSyncAgent` and `SyncPromptContext` let a request timeout escape as
+  `reactor.core.Exceptions$ReactiveException` (cause `TimeoutException`), and `AcpSyncAgent`'s block
+  timeout as `IllegalStateException("Timeout on blocking read ...")`. Both now throw the new
+  `com.agentclientprotocol.sdk.error.AcpTimeoutException` (an `AcpException`), whose cause is the
+  `TimeoutException`. A blocked call whose thread is interrupted (the SDK interrupts a sync handler
+  to cancel it) throws `java.util.concurrent.CancellationException` and leaves the interrupt flag
+  set; any other checked cause is thrown as an `AcpException`. The asynchronous API is unchanged
+  (its `Mono` fails with the `TimeoutException`). Migration: replace
+  `catch (RuntimeException e) { if (e.getCause() instanceof TimeoutException) ... }` (or
+  `Exceptions.unwrap(e)`) with `catch (AcpTimeoutException e)`, and catch `CancellationException`
+  where you handled an interrupt.
+
 - **Breaking (behaviour): a client's prompt is no longer bounded by its request timeout; new
   `promptTimeout(Duration)` on `AcpClient.AsyncSpec` and `AcpClient.SyncSpec`, default none.** A
   prompt's answer comes only at the end of its turn, so the 30-second request timeout cancelled
