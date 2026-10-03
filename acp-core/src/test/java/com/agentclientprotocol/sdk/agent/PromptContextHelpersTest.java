@@ -265,6 +265,58 @@ class PromptContextHelpersTest {
 		agent.closeGracefully();
 	}
 
+	/**
+	 * {@code askPermission} asks about a tool call the client knows: it announces it with a
+	 * {@code tool_call} update (kind {@code other}, not {@code edit} for every action) before the
+	 * permission request names it, and settles it once the user answered.
+	 */
+	@Test
+	void askPermissionAnnouncesTheToolCallItAsksAbout() {
+		List<AcpSchema.SessionUpdate> updates = new CopyOnWriteArrayList<>();
+		List<String> knownWhenAsked = new CopyOnWriteArrayList<>();
+		AtomicReference<AcpSchema.ToolCallUpdate> asked = new AtomicReference<>();
+
+		AcpAsyncAgent agent = AcpAgent.async(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> Mono.just(InitializeResponse.ok()))
+			.newSessionHandler(req -> Mono.just(new NewSessionResponse("s1", null, null)))
+			.promptHandler((request, context) -> context.askPermission("Run the tests")
+				.thenReturn(PromptResponse.endTurn()))
+			.build();
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> updates.add(n.update())))
+			.requestPermissionHandler(req -> {
+				asked.set(req.toolCall());
+				updates.stream()
+					.filter(u -> u instanceof AcpSchema.ToolCall call && call.toolCallId().equals(req.toolCall().toolCallId()))
+					.forEach(u -> knownWhenAsked.add(((AcpSchema.ToolCall) u).toolCallId()));
+				return Mono.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected("allow")));
+			})
+			.build();
+
+		agent.start().block(TIMEOUT);
+		connect(client);
+		client.prompt(prompt()).block(TIMEOUT);
+
+		assertThat(asked.get()).isNotNull();
+		assertThat(knownWhenAsked).as("tool call announced before the permission request")
+			.containsExactly(asked.get().toolCallId());
+		AcpSchema.ToolCall announced = (AcpSchema.ToolCall) updates.get(0);
+		assertThat(announced.title()).isEqualTo("Run the tests");
+		assertThat(announced.kind()).isEqualTo(AcpSchema.ToolKind.OTHER);
+		assertThat(announced.status()).isEqualTo(AcpSchema.ToolCallStatus.PENDING);
+		assertThat(asked.get().kind()).isNotEqualTo(AcpSchema.ToolKind.EDIT);
+		assertThat(updates).last()
+			.isInstanceOfSatisfying(AcpSchema.ToolCallUpdateNotification.class, done -> {
+				assertThat(done.toolCallId()).isEqualTo(asked.get().toolCallId());
+				assertThat(done.status()).isEqualTo(AcpSchema.ToolCallStatus.COMPLETED);
+			});
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully().block(TIMEOUT);
+	}
+
 	private AcpAsyncClient terminalClient(CountDownLatch created, CountDownLatch released) {
 		return AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)

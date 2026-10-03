@@ -54,7 +54,8 @@ class StdioAgentEndOfInputProcessTest {
 	void aRequestToTheClientAfterItsInputEndedFailsAndThePromptIsAnswered() throws Exception {
 		List<String> output = runAgent(INITIALIZE, NEW_SESSION, prompt("ask"));
 
-		assertThat(output).filteredOn(line -> line.contains("session/update"))
+		// askPermission announces its tool call first (a tool_call update), then asks.
+		assertThat(output).filteredOn(line -> line.contains("session/update") && line.contains("agent_message_chunk"))
 			.singleElement()
 			.asString()
 			.contains("permission failed")

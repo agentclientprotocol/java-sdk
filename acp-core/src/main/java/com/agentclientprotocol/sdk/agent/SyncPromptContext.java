@@ -337,12 +337,24 @@ public interface SyncPromptContext {
 	/**
 	 * Asks the user to allow or deny an action and waits for the answer, as
 	 * {@link PromptContext#askPermission(String)} does: a permission request with the options
-	 * "Allow" and "Deny" for a pending tool call titled with the action.
+	 * "Allow" and "Deny" for a tool call of kind {@code other} titled with the action, announced
+	 * first with a {@code tool_call} update.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied or the
 	 * client cancelled the request
 	 */
 	boolean askPermission(String action);
+
+	/**
+	 * Asks the user to allow or deny an action of the given kind and waits for the answer, as
+	 * {@link PromptContext#askPermission(String, AcpSchema.ToolKind)} does: it announces a pending
+	 * tool call of that kind, asks permission for it, and settles it once answered.
+	 * @param action what the agent wants to do, shown to the user as the tool call's title
+	 * @param kind the kind of tool call, for example {@code execute} for a command
+	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied or the
+	 * client cancelled the request
+	 */
+	boolean askPermission(String action, AcpSchema.ToolKind kind);
 
 	/**
 	 * Asks the user to pick one of several options and waits for the answer, as

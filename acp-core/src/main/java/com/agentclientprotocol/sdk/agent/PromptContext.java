@@ -321,8 +321,8 @@ public interface PromptContext {
 
 	/**
 	 * Asks the user to allow or deny an action, with a permission request of two options: "Allow"
-	 * (allow once) and "Deny" (reject once). The request describes a pending tool call with a new
-	 * random ID, the action as its title and the kind {@code edit}.
+	 * (allow once) and "Deny" (reject once), as {@link #askPermission(String, AcpSchema.ToolKind)}
+	 * does with the kind {@code other}.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @return a {@code Mono} emitting {@code true} only if the user chose "Allow"; {@code false} if
 	 * the user denied or the client cancelled the request
@@ -330,10 +330,27 @@ public interface PromptContext {
 	Mono<Boolean> askPermission(String action);
 
 	/**
+	 * Asks the user to allow or deny an action of the given kind, with a permission request of two
+	 * options: "Allow" (allow once) and "Deny" (reject once). ACP asks permission for a tool call,
+	 * so the context first announces one: a {@code tool_call} session update with a new random ID,
+	 * the action as its title, the kind, and status {@code pending}. The permission request names
+	 * that tool call, and once the user answered, a {@code tool_call_update} sets its status to
+	 * {@code completed} (answered, either way) or {@code failed} (the client cancelled the request).
+	 * For a tool call the agent announced itself, send {@link #requestPermission} instead.
+	 * @param action what the agent wants to do, shown to the user as the tool call's title
+	 * @param kind the kind of tool call, which clients use to pick an icon, for example
+	 * {@code execute} for a command
+	 * @return a {@code Mono} emitting {@code true} only if the user chose "Allow"; {@code false} if
+	 * the user denied or the client cancelled the request
+	 */
+	Mono<Boolean> askPermission(String action, AcpSchema.ToolKind kind);
+
+	/**
 	 * Asks the user to pick one of several options, with a permission request whose options are the
-	 * given texts. The request describes a pending tool call with a new random ID, the question as
-	 * its title and the kind {@code other}; every option has the kind "allow once", and its ID is
-	 * its position in {@code options}.
+	 * given texts. Like {@link #askPermission(String, AcpSchema.ToolKind)}, it announces a pending
+	 * tool call with a new random ID, the question as its title and the kind {@code other}, and
+	 * settles it once the user answered; every option has the kind "allow once", and its ID is its
+	 * position in {@code options}.
 	 * @param question the question, shown to the user as the tool call's title
 	 * @param options the texts to choose from, at least two
 	 * @return a {@code Mono} emitting the text of the chosen option, or completing empty if the

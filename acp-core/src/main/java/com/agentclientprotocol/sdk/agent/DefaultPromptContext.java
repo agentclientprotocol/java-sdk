@@ -25,8 +25,10 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ReleaseTerminalRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.RequestPermissionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TerminalOutputRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCall;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallStatus;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallUpdate;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallUpdateNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolKind;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WaitForTerminalExitRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WriteTextFileRequest;
@@ -185,15 +187,43 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Boolean> askPermission(String action) {
-		ToolCallUpdate toolCall = new ToolCallUpdate(UUID.randomUUID().toString(), action, ToolKind.EDIT, ToolCallStatus.PENDING);
+		return askPermission(action, ToolKind.OTHER);
+	}
 
+	@Override
+	public Mono<Boolean> askPermission(String action, ToolKind kind) {
 		List<PermissionOption> options = List.of(
 				new PermissionOption("allow", "Allow", PermissionOptionKind.ALLOW_ONCE),
 				new PermissionOption("deny", "Deny", PermissionOptionKind.REJECT_ONCE));
 
-		return requestPermission(new RequestPermissionRequest(sessionId, toolCall, options))
+		return ask(action, kind, options)
 				.map(response -> response.outcome() instanceof PermissionSelected s
 						&& "allow".equals(s.optionId()));
+	}
+
+	/**
+	 * Asks the user about a tool call the client knows: announces it with a pending
+	 * {@code tool_call} update, sends the permission request naming it, then settles it with a
+	 * {@code tool_call_update}: completed once the user answered, failed if the request was
+	 * cancelled.
+	 */
+	private Mono<AcpSchema.RequestPermissionResponse> ask(String title, ToolKind kind, List<PermissionOption> options) {
+		return Mono.defer(() -> {
+			String toolCallId = UUID.randomUUID().toString();
+			ToolCall announce = new ToolCall("tool_call", toolCallId, title, null, kind, ToolCallStatus.PENDING, null, null,
+					null, null, null);
+			ToolCallUpdate toolCall = new ToolCallUpdate(toolCallId, title, kind, ToolCallStatus.PENDING);
+			return agent.sendSessionUpdate(sessionId, announce)
+				.then(requestPermission(new RequestPermissionRequest(sessionId, toolCall, options)))
+				.flatMap(response -> {
+					ToolCallStatus status = (response.outcome() instanceof PermissionSelected) ? ToolCallStatus.COMPLETED
+							: ToolCallStatus.FAILED;
+					return agent
+						.sendSessionUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, null, null, null,
+								status, null, null, null, null, null))
+						.thenReturn(response);
+				});
+		});
 	}
 
 	@Override
@@ -208,9 +238,7 @@ class DefaultPromptContext implements PromptContext {
 					String.valueOf(i), options[i], PermissionOptionKind.ALLOW_ONCE));
 		}
 
-		ToolCallUpdate toolCall = new ToolCallUpdate(UUID.randomUUID().toString(), question, ToolKind.OTHER, ToolCallStatus.PENDING);
-
-		return requestPermission(new RequestPermissionRequest(sessionId, toolCall, permOptions))
+		return ask(question, ToolKind.OTHER, permOptions)
 				.flatMap(response -> {
 					if (response.outcome() instanceof PermissionSelected s) {
 						for (int i = 0; i < options.length; i++) {

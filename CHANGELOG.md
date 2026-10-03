@@ -291,6 +291,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`askPermission` and `askChoice` ask about a tool call the client knows; new
+  `askPermission(String action, ToolKind kind)`** on `PromptContext` and `SyncPromptContext`. The
+  permission request named a tool call ID that was never announced (clients that look it up in their
+  tool-call list found nothing), and `askPermission` labelled every action `edit`. Both helpers now
+  announce the tool call first with a `tool_call` session update (status `pending`), ask about it,
+  and settle it with a `tool_call_update` (`completed` once the user answered, `failed` if the client
+  cancelled the request). `askPermission(action)` uses kind `other`; pass a kind with the new
+  overload, for example `askPermission("Run the tests", ToolKind.EXECUTE)`. Breaking (behaviour):
+  the session update consumers now see two more updates per call, and a client that showed these
+  as edits shows them as `other`. Migration: none needed; to keep the old kind, call
+  `askPermission(action, ToolKind.EDIT)`. Implementations of `PromptContext`/`SyncPromptContext`
+  (test doubles) add the new overload.
+
 - **Breaking: the sync API throws `AcpTimeoutException` for a timeout, and `CancellationException`
   when interrupted, instead of Reactor's internal `Exceptions$ReactiveException`.** Every blocking
   method of `AcpSyncClient`, `AcpSyncAgent` and `SyncPromptContext` let a request timeout escape as

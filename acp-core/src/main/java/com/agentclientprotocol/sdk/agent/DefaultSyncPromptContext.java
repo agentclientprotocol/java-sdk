@@ -175,6 +175,12 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	}
 
 	@Override
+	public boolean askPermission(String action, AcpSchema.ToolKind kind) {
+		Boolean result = SyncCalls.block(asyncContext.askPermission(action, kind));
+		return result != null && result;
+	}
+
+	@Override
 	public Optional<String> askChoice(String question, String... options) {
 		return Optional.ofNullable(SyncCalls.block(asyncContext.askChoice(question, options)));
 	}

@@ -934,16 +934,14 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 						"""
 								{"jsonrpc":"2.0","id":"prompt-perm","method":"session/prompt","params":{"sessionId":"%s","prompt":[{"type":"text","text":"permission please"}]}}
 								""".formatted(sessionId));
-				AcpSchema.JSONRPCMessage request = sessionStream.nextMessage();
-				assertThat(request).isInstanceOf(AcpSchema.JSONRPCRequest.class);
-				String id = JSON_MAPPER.writeValueAsString(((AcpSchema.JSONRPCRequest) request).id());
+				AcpSchema.JSONRPCRequest request = sessionStream.nextRequest();
+				String id = JSON_MAPPER.writeValueAsString(request.id());
 
 				HttpResponse<String> accepted = postJson(rawClient, server.endpoint(), connectionId, null,
 						"""
 								{"jsonrpc":"2.0","id":%s,"result":{"outcome":{"outcome":"selected","optionId":"allow"}}}
 								""".formatted(id));
 				assertThat(accepted.statusCode()).as("response without Acp-Session-Id").isEqualTo(202);
-				sessionStream.nextMessage();
 				assertThat(sessionStream.nextResponse().id()).isEqualTo("prompt-perm");
 			}
 		}
@@ -1173,12 +1171,25 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			return new SseReader(response.body());
 		}
 
+		/** The next response, skipping the session updates before it. */
 		AcpSchema.JSONRPCResponse nextResponse() throws Exception {
-			return (AcpSchema.JSONRPCResponse) nextMessage();
+			return (AcpSchema.JSONRPCResponse) nextNonNotification();
 		}
 
+		/**
+		 * The next request, skipping the session updates before it (askPermission announces its
+		 * tool call with a tool_call update first).
+		 */
 		AcpSchema.JSONRPCRequest nextRequest() throws Exception {
-			return (AcpSchema.JSONRPCRequest) nextMessage();
+			return (AcpSchema.JSONRPCRequest) nextNonNotification();
+		}
+
+		private AcpSchema.JSONRPCMessage nextNonNotification() throws Exception {
+			AcpSchema.JSONRPCMessage message = nextMessage();
+			while (message instanceof AcpSchema.JSONRPCNotification) {
+				message = nextMessage();
+			}
+			return message;
 		}
 
 		AcpSchema.JSONRPCMessage nextMessage() throws Exception {
