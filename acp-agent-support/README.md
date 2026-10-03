@@ -5,13 +5,8 @@ The `acp-agent-support` module provides an annotation-based programming model fo
 ## Quick Start
 
 ```java
-@AcpAgent
+@AcpAgent(name = "my-agent", version = "1.0.0")
 class MyAgent {
-
-    @Initialize
-    InitializeResponse init() {
-        return InitializeResponse.ok();
-    }
 
     @NewSession
     NewSessionResponse newSession(NewSessionRequest req) {
@@ -30,6 +25,9 @@ AcpAgentSupport.create(new MyAgent())
     .transport(new StdioAcpAgentTransport())
     .run();
 ```
+
+No `@Initialize` method is needed: the agent answers `initialize` with what its annotations declare
+(see [Advertising Capabilities](#advertising-capabilities)).
 
 ## Installation
 
@@ -51,31 +49,32 @@ This module transitively includes `acp-annotations` and `acp-core`.
 
 | Annotation | Description |
 |------------|-------------|
-| `@AcpAgent` | Marks a class as an ACP agent. Required on all agent classes. Its optional `name` and `version` attributes are descriptive only: the runtime does not read them, so report the agent's identity in the `InitializeResponse` (`agentInfo`). |
+| `@AcpAgent` | Marks a class as an ACP agent. Required on all agent classes. Its attributes are advertised in the `initialize` response: `name`, `version` and `title` as `agentInfo` (the name defaults to the class's simple name, the version to the jar manifest's `Implementation-Version`, else `"unknown"`), `authMethods` (`@AuthMethod`s) as `authMethods`, and `mcpHttp`/`mcpSse` as `mcpCapabilities`. |
+| `@AuthMethod` | One authentication method inside `@AcpAgent(authMethods = ...)`: `id`, `name`, `description`, and `type` `AGENT` (served by `@Authenticate`) or `TERMINAL` (the client reruns the agent program with `args` and `env`). |
 
 ### Handler Methods
 
-| Annotation | JSON-RPC Method | Description |
-|------------|-----------------|-------------|
-| `@Initialize` | `initialize` | Handles protocol initialization and capability negotiation. Without one, the agent answers `InitializeResponse.ok()`. |
-| `@Authenticate` | `authenticate` | Authenticates with one of the methods the agent advertised in `authMethods`. |
-| `@Logout` | `logout` | Clears stored credentials. |
-| `@NewSession` | `session/new` | Creates a new agent session. Without one, the agent answers with a random session ID. |
-| `@LoadSession` | `session/load` | Loads an existing session by ID, replaying its history. |
-| `@ResumeSession` | `session/resume` | Reconnects to an existing session without replaying history. |
-| `@ListSessions` | `session/list` | Lists sessions, optionally filtered by working directory. |
-| `@CloseSession` | `session/close` | Closes an active session. |
-| `@DeleteSession` | `session/delete` | Permanently deletes a stored session. |
-| `@ForkSession` | `session/fork` | Creates a session branched from an existing one (unstable, `@UnstableAcpApi`). |
-| `@Prompt` | `session/prompt` | Handles user prompts within a session. |
-| `@SetSessionMode` | `session/set_mode` | Changes the operational mode of a session. |
-| `@SetSessionConfigOption` | `session/set_config_option` | Changes a session configuration option. |
-| `@ListProviders` | `providers/list` | Lists the providers the agent can route to (unstable). |
-| `@SetProvider` | `providers/set` | Configures a provider (unstable). |
-| `@DisableProvider` | `providers/disable` | Disables a provider (unstable). |
-| `@Cancel` | `session/cancel` | Handles cancellation notifications (fire-and-forget). The cancel does not end the prompt turn: the cancelled `@Prompt` method still returns, with stop reason `cancelled`, and the session rejects a new prompt until it has, or until the cancel grace period (default 60 s, `cancelGracePeriod`) passes and the agent answers `cancelled` itself. |
-| `@ExtRequest("_name")` | any `_`-prefixed request | Serves a custom extension request; the name must start with `_`. |
-| `@ExtNotification("_name")` | any `_`-prefixed notification | Handles a custom extension notification; the name must start with `_`. |
+| Annotation | JSON-RPC Method | Advertises | Description |
+|------------|-----------------|------------|-------------|
+| `@Initialize` | `initialize` | (the exchange itself) | Optional. Without one, the agent answers with the response derived from its annotations; with one, the method's response is laid over the derived one (see [Advertising Capabilities](#advertising-capabilities)). |
+| `@Authenticate` | `authenticate` | `authMethods`, from `@AcpAgent(authMethods = ...)` | Authenticates with one of the agent methods the agent advertised. |
+| `@Logout` | `logout` | `auth.logout` | Clears stored credentials. |
+| `@NewSession` | `session/new` | nothing (baseline) | Creates a new agent session. Without one, the agent answers with a random session ID. |
+| `@LoadSession` | `session/load` | `loadSession` | Loads an existing session by ID, replaying its history. |
+| `@ResumeSession` | `session/resume` | `sessionCapabilities.resume` | Reconnects to an existing session without replaying history. |
+| `@ListSessions` | `session/list` | `sessionCapabilities.list` | Lists sessions, optionally filtered by working directory. |
+| `@CloseSession` | `session/close` | `sessionCapabilities.close` | Closes an active session. |
+| `@DeleteSession` | `session/delete` | `sessionCapabilities.delete` | Permanently deletes a stored session. |
+| `@ForkSession` | `session/fork` | `sessionCapabilities.fork` | Creates a session branched from an existing one (unstable, `@UnstableAcpApi`). |
+| `@Prompt` | `session/prompt` | `promptCapabilities`, from its `image`, `audio` and `embeddedContext` attributes | Handles user prompts within a session. |
+| `@SetSessionMode` | `session/set_mode` | nothing (modes are offered per session) | Changes the operational mode of a session. |
+| `@SetSessionConfigOption` | `session/set_config_option` | nothing (options are offered per session) | Changes a session configuration option. |
+| `@ListProviders` | `providers/list` | `providers` | Lists the providers the agent can route to (unstable). |
+| `@SetProvider` | `providers/set` | `providers` | Configures a provider (unstable). |
+| `@DisableProvider` | `providers/disable` | `providers` | Disables a provider (unstable). |
+| `@Cancel` | `session/cancel` | nothing (baseline) | Handles cancellation notifications (fire-and-forget). The cancel does not end the prompt turn: the cancelled `@Prompt` method still returns, with stop reason `cancelled`, and the session rejects a new prompt until it has, or until the cancel grace period (default 60 s, `cancelGracePeriod`) passes and the agent answers `cancelled` itself. |
+| `@ExtRequest("_name")` | any `_`-prefixed request | nothing (agreed outside the protocol) | Serves a custom extension request; the name must start with `_`. |
+| `@ExtNotification("_name")` | any `_`-prefixed notification | nothing | Handles a custom extension notification; the name must start with `_`. |
 
 A method without a handler for it is answered with `-32601` (Method not found); a notification
 without one is ignored.
@@ -85,6 +84,68 @@ without one is ignored.
 | Annotation | Description |
 |------------|-------------|
 | `@SessionId` | Injects the current session ID as a `String`, in handlers of session-scoped methods. |
+
+## Advertising Capabilities
+
+A client learns what an agent supports from the agent's `initialize` response, and only uses what
+is advertised there: a client that is not told `loadSession` never calls `session/load`. An annotated
+agent's response is derived from its class, so every handler it has is advertised:
+
+```java
+@AcpAgent(name = "notes-agent", version = "1.2.0", mcpHttp = true,
+        authMethods = {
+            @AuthMethod(id = "api-key", name = "API key", description = "Uses NOTES_API_KEY"),
+            @AuthMethod(id = "login", name = "Log in", type = AuthMethod.Type.TERMINAL, args = "--login") })
+class NotesAgent {
+
+    @Authenticate AuthenticateResponse authenticate(AuthenticateRequest req) { ... }
+    @Logout LogoutResponse logout() { ... }
+    @LoadSession LoadSessionResponse load(LoadSessionRequest req) { ... }
+    @ListSessions ListSessionsResponse list(ListSessionsRequest req) { ... }
+
+    @Prompt(image = true, embeddedContext = true)
+    PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) { ... }
+}
+```
+
+answers `initialize` with
+
+```json
+{
+  "protocolVersion": 1,
+  "agentCapabilities": {
+    "loadSession": true,
+    "sessionCapabilities": { "list": {} },
+    "mcpCapabilities": { "http": true, "sse": false },
+    "promptCapabilities": { "audio": false, "embeddedContext": true, "image": true },
+    "auth": { "logout": {} }
+  },
+  "authMethods": [
+    { "id": "api-key", "name": "API key", "description": "Uses NOTES_API_KEY" },
+    { "id": "login", "name": "Log in", "args": ["--login"], "type": "terminal" }
+  ],
+  "agentInfo": { "name": "notes-agent", "version": "1.2.0" }
+}
+```
+
+- **Capabilities** come from the handler annotations, as the *Advertises* column of the
+  [handler table](#handler-methods) lists. A test fails the build if a handler annotation has no
+  declared mapping.
+- **Prompt content and MCP transports** the agent accepts are declared, default false:
+  `@Prompt(image, audio, embeddedContext)` and `@AcpAgent(mcpHttp, mcpSse)`.
+- **Auth methods** are declared with `@AcpAgent(authMethods = @AuthMethod(...))`. An `AGENT` method
+  needs an `@Authenticate` handler (the builder fails otherwise); a `TERMINAL` method is advertised
+  only to a client that announced `clientCapabilities.auth.terminal`, as ACP requires.
+- **`agentInfo`** is `@AcpAgent`'s `name`, `version` and `title`.
+- **`protocolVersion`** is the client's when the SDK speaks it, otherwise the latest the SDK speaks.
+
+**With an `@Initialize` method**, the derived response is the base and the method's response is laid
+over it: a capability is advertised when either side advertises it (so `return InitializeResponse.ok()`
+keeps every derived capability, and a handler's capability cannot be withdrawn: remove the handler);
+the returned `authMethods` follow the derived ones, replacing any with the same id; the returned
+`protocolVersion`, and the returned `agentInfo` and `_meta` when not null, win. Use it to read the
+client's request, or to advertise what annotations cannot express, such as
+`sessionCapabilities.additionalDirectories`.
 
 ## Handler Method Signatures
 
@@ -393,12 +454,6 @@ class CodeAssistant {
 
     private final Map<String, List<String>> sessionHistory = new ConcurrentHashMap<>();
 
-    @Initialize
-    InitializeResponse init(InitializeRequest req) {
-        // Customize response based on client capabilities
-        return InitializeResponse.ok();
-    }
-
     @NewSession
     NewSessionResponse newSession(NewSessionRequest req) {
         String sessionId = UUID.randomUUID().toString();
@@ -482,9 +537,8 @@ AcpAgent.sync(transport)
 ### Annotation API (After)
 
 ```java
-@AcpAgent
+@AcpAgent(name = "my-agent", version = "1.0")
 class MyAgent {
-    @Initialize InitializeResponse init() { return InitializeResponse.ok(); }
     @NewSession NewSessionResponse newSession() { return new NewSessionResponse("session-1", null, null); }
     @Prompt PromptResponse prompt(SyncPromptContext ctx) {
         ctx.sendMessage("Hello!");
@@ -495,7 +549,9 @@ class MyAgent {
 AcpAgentSupport.create(new MyAgent()).transport(transport).run();
 ```
 
-Both approaches produce identical runtime behavior and can coexist in the same application.
+Both approaches produce the same runtime behavior and can coexist in the same application. The
+annotated agent needs no initialize handler: it advertises what its annotations declare, where a
+builder agent's initialize handler must build the response itself.
 
 ## Architecture
 
