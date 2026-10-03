@@ -25,6 +25,8 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- The Quarkus BOM alone, as a user application imports it: these tests run on the
+                 Jackson Quarkus manages (2.21.x), not the SDK's pin (acp-quarkus/README.md). -->
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-bom</artifactId>

@@ -638,6 +638,11 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
+                            <!-- The Quarkus extension's sample application and its tests are not a
+                                 library: never published (the module also sets maven.deploy.skip). -->
+                            <excludeArtifacts>
+                                <excludeArtifact>acp-quarkus-integration-tests</excludeArtifact>
+                            </excludeArtifacts>
                         </configuration>
                     </plugin>
 
