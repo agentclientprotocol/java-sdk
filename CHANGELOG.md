@@ -522,6 +522,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Every transport can be closed more than once, with `close()` and `closeGracefully()` in
+  either order.** `WebSocketAcpClientTransport.closeGracefully()` sent a second WebSocket close
+  frame on a second call, which failed with `IOException: Output closed`, so a second
+  `AcpSyncClient.closeGracefully()` returned false and logged stack traces (try-with-resources after
+  an explicit close, or a container that destroys a client bean more than once, did this). Only
+  the first call now closes; later calls complete when it has, and a close frame is not sent once
+  the connection's output is closed. `TransportCloseIdempotenceTest` closes every shipped transport
+  (WebSocket client, Streamable HTTP client and its agent-side connection over HTTP and WebSocket,
+  stdio client and agent, in-memory client and agent) twice in each order.
+
 - **The stdio client's graceful close lets the agent exit by itself, and logs the stop once.**
   `StdioAcpClientTransport.closeGracefully()` sent SIGTERM straight away without closing the
   agent's standard input, so an agent's end-of-input handling (an SDK stdio agent answers what it

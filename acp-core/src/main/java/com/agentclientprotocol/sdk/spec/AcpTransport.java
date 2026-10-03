@@ -50,6 +50,8 @@ public interface AcpTransport {
 	 * Closes the transport: stops reading from and writing to the peer, and releases the
 	 * threads, streams or network connections it holds. What it waits for differs per
 	 * implementation; the stdio client, for example, gives the agent process time to exit.
+	 * The shipped transports can be closed more than once, with this method and
+	 * {@link #close()} in either order: only the first call closes.
 	 * @return a Mono that completes when the transport is closed
 	 */
 	Mono<Void> closeGracefully();

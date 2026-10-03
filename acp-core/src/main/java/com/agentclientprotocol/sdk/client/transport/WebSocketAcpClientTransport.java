@@ -93,6 +93,12 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final AtomicBoolean isConnected = new AtomicBoolean(false);
 
+	/** Set by the first {@link #closeGracefully()}: only that call closes. */
+	private final AtomicBoolean closeStarted = new AtomicBoolean(false);
+
+	/** Completes once the first close has finished. */
+	private final Sinks.Empty<Void> closed = Sinks.empty();
+
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	private Duration connectTimeout = Duration.ofSeconds(30);
@@ -240,24 +246,21 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * {@inheritDoc}
 	 * <p>Stops delivering and sending messages, completes {@link #awaitTermination()}, sends a
 	 * normal close frame (1000) when the connection is open, and stops the writer thread. It
-	 * does not wait for the agent's close frame.
+	 * does not wait for the agent's close frame. Only the first call closes; a later call
+	 * completes when that close has finished.
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
-		return Mono.fromRunnable(() -> {
-			logger.debug("WebSocket transport closing gracefully");
-			isClosing.set(true);
-			inboundSink.tryEmitComplete();
-			outboundSink.tryEmitComplete();
-			terminationSink.tryEmitEmpty();
-		}).then(Mono.defer(() -> {
-			WebSocket webSocket = this.webSocket;
-			if (webSocket != null) {
-				return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")
-					.thenApply(ws -> null));
+		return Mono.defer(() -> {
+			if (this.closeStarted.compareAndSet(false, true)) {
+				close(Mono.fromRunnable(this::stopMessages).then(Mono.defer(this::sendClose)));
 			}
-			return Mono.empty();
-		})).then(Mono.fromRunnable(() -> {
+			return this.closed.asMono();
+		});
+	}
+
+	private void close(Mono<Void> closing) {
+		closing.doFinally(signal -> {
 			try {
 				outboundScheduler.dispose();
 				logger.debug("WebSocket transport closed");
@@ -265,7 +268,25 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			catch (Exception e) {
 				logger.error("Error during graceful shutdown", e);
 			}
-		}));
+			this.closed.tryEmitEmpty();
+		}).subscribe(ignored -> {
+		}, error -> logger.debug("WebSocket close frame not sent: {}", error.getMessage()));
+	}
+
+	private void stopMessages() {
+		logger.debug("WebSocket transport closing gracefully");
+		isClosing.set(true);
+		inboundSink.tryEmitComplete();
+		outboundSink.tryEmitComplete();
+		terminationSink.tryEmitEmpty();
+	}
+
+	private Mono<Void> sendClose() {
+		WebSocket webSocket = this.webSocket;
+		if (webSocket == null || webSocket.isOutputClosed()) {
+			return Mono.empty();
+		}
+		return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")).then();
 	}
 
 	/**
