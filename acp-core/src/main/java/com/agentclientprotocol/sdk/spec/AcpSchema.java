@@ -1014,19 +1014,6 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Returns a response with stop reason {@link StopReason#END_TURN}, the same as
-		 * {@link #endTurn()}. The text is not sent: a {@code PromptResponse} carries no content.
-		 * Send the reply with the prompt context, for example {@code context.sendMessage(text)},
-		 * before returning.
-		 * @param text not used
-		 * @return a response that ends the turn
-		 */
-		public static PromptResponse text(String text) {
-			// Text content should be sent via context.sendMessage() before returning
-			return new PromptResponse(StopReason.END_TURN);
-		}
-
-		/**
 		 * Returns a response with stop reason {@link StopReason#REFUSAL}: the agent refused to
 		 * continue.
 		 * @return a response that ends the turn as refused

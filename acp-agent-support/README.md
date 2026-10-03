@@ -21,7 +21,8 @@ class MyAgent {
     @Prompt
     PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) {
         ctx.sendMessage("Processing your request...");
-        return PromptResponse.text("Done!");
+        ctx.sendMessage("Done!");
+        return PromptResponse.endTurn();
     }
 }
 
@@ -153,7 +154,7 @@ The runtime automatically converts return values to protocol response types:
 |-------------|------------|
 | The method's response type (`InitializeResponse`, `NewSessionResponse`, `PromptResponse`, ...) | Passed through directly. |
 | `Mono` of the response type | Unwrapped (blocked on) and returned. |
-| `String` (`@Prompt` only) | Converted to `PromptResponse.text(value)`. |
+| `String` (`@Prompt` only) | Sent to the client as an `agent_message_chunk` session update, then the turn ends (`PromptResponse.endTurn()`). |
 | `void` (`@Prompt` only) | Converted to `PromptResponse.endTurn()`. |
 | `void` (`@Cancel`, `@ExtNotification`) | Notifications have no response. |
 | Any value the JSON mapper can write (`@ExtRequest`) | Sent as the extension request's result. |

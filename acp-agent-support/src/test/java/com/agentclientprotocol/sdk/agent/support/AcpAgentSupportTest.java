@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -30,6 +31,7 @@ import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
+import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AuthenticateRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AuthenticateResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
@@ -55,10 +57,12 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ProviderInfo;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SessionInfo;
+import com.agentclientprotocol.sdk.spec.AcpSchema.SessionNotification;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetProviderResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.StopReason;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
@@ -155,7 +159,8 @@ class AcpAgentSupportTest {
 			PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) {
 				receivedPrompt.set(req.prompt().get(0).toString());
 				receivedSessionId.set(ctx.getSessionId());
-				return PromptResponse.text("Got it!");
+				ctx.sendMessage("Got it!");
+				return PromptResponse.endTurn();
 			}
 
 		}
@@ -180,8 +185,12 @@ class AcpAgentSupportTest {
 		assertThat(receivedPrompt.get()).contains("Test message");
 	}
 
+	/**
+	 * A {@code @Prompt} method's String is the agent's reply: the client receives it as an
+	 * agent message chunk of the turn, then the turn ends.
+	 */
 	@Test
-	void stringReturnValueConvertedToPromptResponse() throws Exception {
+	void aStringReturnedByAPromptMethodReachesTheClientAsAMessageChunk() throws Exception {
 		@AcpAgent
 		class StringReturningAgent {
 
@@ -197,7 +206,7 @@ class AcpAgentSupportTest {
 
 			@Prompt
 			String prompt(PromptRequest req) {
-				return "Hello from String!";
+				return "hello";
 			}
 
 		}
@@ -208,10 +217,14 @@ class AcpAgentSupportTest {
 				.build();
 
 		agentSupport.start();
-		Thread.sleep(100);
 
+		List<SessionNotification> updates = new CopyOnWriteArrayList<>();
 		client = AcpClient.async(transportPair.clientTransport())
 				.requestTimeout(TIMEOUT)
+				.sessionUpdateConsumer(notification -> {
+					updates.add(notification);
+					return Mono.empty();
+				})
 				.build();
 
 		client.initialize().block(TIMEOUT);
@@ -219,8 +232,12 @@ class AcpAgentSupportTest {
 		PromptResponse resp = client.prompt(new PromptRequest("string-session", List.of(new TextContent("test"))))
 				.block(TIMEOUT);
 
-		// String should be converted to PromptResponse with END_TURN
-		assertThat(resp.stopReason()).isNotNull();
+		assertThat(resp.stopReason()).isEqualTo(StopReason.END_TURN);
+		assertThat(updates).singleElement().satisfies(notification -> {
+			assertThat(notification.sessionId()).isEqualTo("string-session");
+			assertThat(notification.update()).isInstanceOfSatisfying(AgentMessageChunk.class,
+					chunk -> assertThat(chunk.content()).isEqualTo(new TextContent("hello")));
+		});
 	}
 
 	@Test

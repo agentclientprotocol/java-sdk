@@ -36,8 +36,8 @@ import java.lang.annotation.Target;
  *   <li>{@code void}: the same as {@code PromptResponse.endTurn()}</li>
  *   <li>{@code Mono<PromptResponse>}: the runtime waits for it on the handler thread; an empty
  *   {@code Mono} is answered with an internal error ({@code -32603})</li>
- *   <li>{@code String}: ends the turn like {@code void}. The string is not sent to the client, so
- *   send text with {@code sendMessage} before returning</li>
+ *   <li>{@code String}: sent to the client as an agent message chunk of the turn, then the turn
+ *   ends like {@code void}; a null or empty string sends nothing</li>
  * </ul>
  *
  * <p>A session has one prompt turn at a time. Until this method returns, a second prompt on the
