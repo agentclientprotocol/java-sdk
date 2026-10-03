@@ -262,12 +262,16 @@ public class AcpClientSession implements AcpSession {
 
 	/**
 	 * Answers a request from the agent; a failed handler is answered with an error response,
-	 * a request cancelled by $/cancel_request with -32800 unless it already answered.
+	 * a request cancelled by $/cancel_request with -32800 unless it already answered. The
+	 * handler is called only once the notifications that arrived before the request have been
+	 * handled (InboundOrder), so a permission request follows the tool_call update before it;
+	 * the request is tracked from its arrival, so a $/cancel_request reaches it while it waits.
 	 */
 	private void respondTo(AcpSchema.JSONRPCRequest request) {
 		logger.debug("Received request method={} id={}", request.method(), request.id());
 		logger.trace("Incoming request method='{}' id={}", request.method(), request.id());
-		this.inbound.track(request, handleIncomingRequest(request))
+		Mono<Void> inOrder = Mono.create(sink -> this.notifications.inOrder(sink::success));
+		this.inbound.track(request, inOrder.then(handleIncomingRequest(request)))
 			.onErrorResume(error -> Mono.just(InboundMessages.error(request, error)))
 			.flatMap(this.transport::sendMessage)
 			.onErrorComplete(t -> {

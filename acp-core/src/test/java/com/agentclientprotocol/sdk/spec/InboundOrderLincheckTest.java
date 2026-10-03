@@ -25,9 +25,10 @@ import reactor.core.publisher.Sinks;
  *
  * <p>
  * The invariant, checked after every interleaving by {@link Inbound#orderedAndReleased()}:
- * every response is released exactly once; one released while the session was open was
- * released only after every notification that arrived before it was handled; and once the
- * remaining handlers finish (or the session is closed), no response is still held.
+ * every response, and every request from the peer, is released exactly once; one released
+ * while the session was open was released only after every notification that arrived before
+ * it was handled; and once the remaining handlers finish (or the session is closed), none is
+ * still held. Responses and requests share the bookkeeping below (a "release").
  * </p>
  */
 class InboundOrderLincheckTest {
@@ -36,7 +37,7 @@ class InboundOrderLincheckTest {
 	private static final int SCALE = Integer.getInteger("lincheck.scale", 1);
 
 	@Test
-	void aResponseIsReleasedOnceAfterTheNotificationsBeforeItWereHandled() {
+	void aResponseOrRequestIsReleasedOnceAfterTheNotificationsBeforeItWereHandled() {
 		new ModelCheckingOptions().iterations(20 * SCALE)
 			.invocationsPerIteration(200)
 			.threads(3)
@@ -104,6 +105,19 @@ class InboundOrderLincheckTest {
 			});
 		}
 
+		@Operation(nonParallelGroup = "inbound")
+		public void request() {
+			int index = this.arrivedBefore.size();
+			int before = this.accepted;
+			this.arrivedBefore.add(before);
+			this.order.inOrder(() -> {
+				if (!this.closing && this.handled.get() < before) {
+					this.early[index] = true;
+				}
+				this.releases[index].incrementAndGet();
+			});
+		}
+
 		@Operation
 		public void finish() {
 			Sinks.Empty<Void> done = this.running.getAndSet(null);
@@ -134,11 +148,11 @@ class InboundOrderLincheckTest {
 			}
 			for (int i = 0; i < this.arrivedBefore.size(); i++) {
 				if (this.early[i]) {
-					throw new IllegalStateException("response " + i + " released before the " + this.arrivedBefore.get(i)
+					throw new IllegalStateException("release " + i + " released before the " + this.arrivedBefore.get(i)
 							+ " notifications before it were handled; handled " + this.handled.get());
 				}
 				if (this.releases[i].get() != 1) {
-					throw new IllegalStateException("response " + i + " released " + this.releases[i].get() + " times");
+					throw new IllegalStateException("release " + i + " released " + this.releases[i].get() + " times");
 				}
 			}
 		}
@@ -151,6 +165,9 @@ class InboundOrderLincheckTest {
 		}
 
 		public void response() {
+		}
+
+		public void request() {
 		}
 
 		public void finish() {

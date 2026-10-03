@@ -352,12 +352,14 @@ class CancelRequestTest {
 
 	@Test
 	void theClientAnswersACancelledPermissionRequestWithoutWaitingForItsNotificationDrain() {
-		AtomicBoolean handlerCancelled = new AtomicBoolean();
+		// The request waits behind the slow session/update before it (InboundOrder); a cancel
+		// still answers it at once, and its handler is never called.
+		AtomicBoolean handlerCalled = new AtomicBoolean();
 		Sinks.Empty<Void> releaseUpdate = Sinks.empty();
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 		AcpClientSession session = new AcpClientSession(TIMEOUT, transport,
 				Map.of(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
-						params -> Mono.never().doOnCancel(() -> handlerCancelled.set(true))),
+						params -> Mono.never().doOnSubscribe(s -> handlerCalled.set(true))),
 				// A slow session/update consumer holds the ordered notification drain.
 				Map.of(AcpSchema.METHOD_SESSION_UPDATE, params -> releaseUpdate.asMono()), Function.identity());
 		try {
@@ -372,10 +374,36 @@ class CancelRequestTest {
 			AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) transport.getLastSentMessage();
 			assertThat(response.id()).isEqualTo("p1");
 			assertThat(response.error().code()).isEqualTo(AcpErrorCodes.REQUEST_CANCELLED);
-			assertThat(handlerCancelled).isTrue();
+
+			releaseUpdate.tryEmitEmpty();
+			assertThat(handlerCalled).isFalse();
+			assertThat(transport.getSentMessages()).hasSize(1);
 		}
 		finally {
 			releaseUpdate.tryEmitEmpty();
+			session.close();
+		}
+	}
+
+	@Test
+	void theClientCancelsARunningPermissionHandler() {
+		AtomicBoolean handlerCancelled = new AtomicBoolean();
+		MockAcpClientTransport transport = new MockAcpClientTransport();
+		AcpClientSession session = new AcpClientSession(TIMEOUT, transport,
+				Map.of(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
+						params -> Mono.never().doOnCancel(() -> handlerCancelled.set(true))),
+				Map.of(), Function.identity());
+		try {
+			transport.simulateIncomingMessage(
+					request("p1", AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, Map.of("sessionId", "s1")));
+			transport.simulateIncomingMessage(cancelRequest("p1"));
+
+			eventually(() -> !transport.getSentMessages().isEmpty());
+			AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) transport.getLastSentMessage();
+			assertThat(response.error().code()).isEqualTo(AcpErrorCodes.REQUEST_CANCELLED);
+			assertThat(handlerCancelled).isTrue();
+		}
+		finally {
 			session.close();
 		}
 	}

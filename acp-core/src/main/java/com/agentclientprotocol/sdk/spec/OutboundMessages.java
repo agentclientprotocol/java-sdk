@@ -88,6 +88,7 @@ final class OutboundMessages {
 			// One id per subscription: a resubscribed request (a retry) is a new request.
 			String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
 			long sentAt = this.responseOrder.position();
+			Runnable answered = this.responseOrder.awaiting(sentAt);
 			// Completes once the request is handed to the transport; a $/cancel_request
 			// waits for it, so it never overtakes its request on an ordered transport.
 			Sinks.Empty<Void> written = Sinks.empty();
@@ -123,7 +124,10 @@ final class OutboundMessages {
 						}
 					}));
 				}
-			}).doFinally(signal -> gracefulCancel.dispose())
+			}).doFinally(signal -> {
+				gracefulCancel.dispose();
+				answered.run();
+			})
 				.flatMap(answer -> this.responseOrder.after(sentAt, answer));
 		});
 		if (timeout != null) {
