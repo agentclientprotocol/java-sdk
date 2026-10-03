@@ -106,6 +106,51 @@ class ConfigOptionBuildersTest {
 	}
 
 	@Test
+	void selectBuilderRequiresOptions() {
+		assertThatThrownBy(() -> AcpSchema.SessionConfigSelect.builder()
+			.id("model")
+			.name("Model")
+			.currentValue("model-a")
+			.options(List.of())
+			.build()).isInstanceOf(IllegalStateException.class).hasMessageContaining("no options");
+		assertThatThrownBy(() -> AcpSchema.SessionConfigSelect.builder()
+			.id("model")
+			.name("Model")
+			.currentValue("model-a")
+			.groups(List.of(new AcpSchema.SessionConfigSelectGroup("empty", "Empty", List.of())))
+			.build()).isInstanceOf(IllegalStateException.class).hasMessageContaining("no options");
+	}
+
+	@Test
+	void selectBuilderRequiresTheCurrentValueAmongTheOptions() {
+		assertThatThrownBy(() -> AcpSchema.SessionConfigSelect.builder()
+			.id("model")
+			.name("Model")
+			.currentValue("model-c")
+			.options(List.of(A, B))
+			.build()).isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("model-c")
+			.hasMessageContaining("model-a")
+			.hasMessageContaining("model-b");
+		var groups = List.of(new AcpSchema.SessionConfigSelectGroup("fast", "Fast", List.of(A)),
+				new AcpSchema.SessionConfigSelectGroup("smart", "Smart", List.of(B)));
+		assertThat(AcpSchema.SessionConfigSelect.builder()
+			.id("model")
+			.name("Model")
+			.currentValue("model-b")
+			.groups(groups)
+			.build()
+			.currentValue()).isEqualTo("model-b");
+	}
+
+	@Test
+	void theRecordConstructorStaysLenientForOtherAgentsOutput() {
+		var select = new AcpSchema.SessionConfigSelect("model", "Model", "model-c", List.of(A, B));
+
+		assertThat(select.currentValue()).isEqualTo("model-c");
+	}
+
+	@Test
 	void booleanBuilderReachesEveryField() {
 		var toggle = AcpSchema.SessionConfigBoolean.builder()
 			.id("web")
