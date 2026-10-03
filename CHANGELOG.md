@@ -533,6 +533,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A response result that lacks a required field fails the request.** Only inbound params were
+  checked for the fields the ACP schema requires, so a peer's `{}` read as a `PromptResponse` whose
+  `stopReason()` was null, or a `NewSessionResponse` whose `sessionId()` was null, against the
+  records' `@NullMarked` contract. A result is now checked the same way, on both sides and down
+  into nested records: the caller's `Mono` fails with an `AcpProtocolException` with code `-32603`
+  (internal error) and the message `The response to <method> lacks the required field <path>`
+  (for example `modes.currentModeId`). JSON-RPC 2.0 defines no code for an invalid response;
+  `-32603` is the one the SDK already uses for a response without a result. A null result for a
+  response type whose fields are all optional still reads as `{}`.
+
 - **A failed close is logged as the failure it is.** `AcpSyncClient.closeGracefully()` logged
   "Client didn't close within timeout of 10000 ms" for any failure, also one that happened at once;
   it now logs that only when the timeout passes, and otherwise `Client close failed: <cause>` with

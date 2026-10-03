@@ -56,8 +56,9 @@ import org.slf4j.LoggerFactory;
  * when it is {@code null}. Every other component is required and must not be {@code null}.
  * The SDK checks this for the params of inbound requests and notifications: params without a
  * required component never reach a handler. A request is answered with {@code -32602}
- * (Invalid params), and a notification is logged and skipped. The result of a response is not
- * checked: a required component the peer left out reads as {@code null}.
+ * (Invalid params), and a notification is logged and skipped. The result of a response is
+ * checked the same way: a result without a required component fails the request with
+ * {@code -32603} (Internal error), naming the component.
  *
  * <h2>Forward compatibility</h2>
  * <p>
