@@ -328,16 +328,11 @@ class AcpAgentSupportTest {
 	}
 
 	@Test
-	void requestHandlerWithoutResultAnswersWithError() throws Exception {
-		// A void handler for a request used to produce no JSON-RPC response at all, leaving
-		// the client waiting for its timeout. It now answers with an error.
+	void requestHandlerWithoutResultIsRejectedWhenBuilt() {
+		// A void handler for a request used to produce no JSON-RPC response at all, then an
+		// error at every call. It is now rejected when the agent is built.
 		@AcpAgent
 		class VoidSetModeAgent {
-
-			@Initialize
-			InitializeResponse init() {
-				return InitializeResponse.ok();
-			}
 
 			@SetSessionMode
 			void setMode(SetSessionModeRequest req) {
@@ -345,32 +340,19 @@ class AcpAgentSupportTest {
 
 		}
 
-		agentSupport = AcpAgentSupport.create(new VoidSetModeAgent())
-				.transport(transportPair.agentTransport())
-				.requestTimeout(TIMEOUT)
-				.build();
-		agentSupport.start();
-		Thread.sleep(100);
-
-		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize().block(TIMEOUT);
-
-		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
-			.hasMessageContaining("produced no response");
+		assertThatThrownBy(() -> AcpAgentSupport.create(new VoidSetModeAgent())
+			.transport(transportPair.agentTransport())
+			.build()).isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("setMode")
+			.hasMessageContaining("void")
+			.hasMessageContaining(SetSessionModeResponse.class.getSimpleName());
 	}
 
 	@Test
-	void handlerReturningWrongTypeAnswersWithNamedError() throws Exception {
-		// A handler whose result is not the method's response type used to fail on an
-		// unchecked cast, answering with an opaque ClassCastException message. The error now
-		// names the method and both types.
+	void handlerReturningWrongTypeIsRejectedWhenBuilt() {
+		// A handler whose result is not the method's response type used to fail at every call.
 		@AcpAgent
 		class WrongTypeSetModeAgent {
-
-			@Initialize
-			InitializeResponse init() {
-				return InitializeResponse.ok();
-			}
 
 			@SetSessionMode
 			String setMode(SetSessionModeRequest req) {
@@ -379,19 +361,12 @@ class AcpAgentSupportTest {
 
 		}
 
-		agentSupport = AcpAgentSupport.create(new WrongTypeSetModeAgent())
-				.transport(transportPair.agentTransport())
-				.requestTimeout(TIMEOUT)
-				.build();
-		agentSupport.start();
-		Thread.sleep(100);
-
-		client = AcpClient.async(transportPair.clientTransport()).requestTimeout(TIMEOUT).build();
-		client.initialize().block(TIMEOUT);
-
-		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
-			.hasMessageContaining("session/set_mode handler produced a java.lang.String")
-			.hasMessageContaining(SetSessionModeResponse.class.getName());
+		assertThatThrownBy(() -> AcpAgentSupport.create(new WrongTypeSetModeAgent())
+			.transport(transportPair.agentTransport())
+			.build()).isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("setMode")
+			.hasMessageContaining("String")
+			.hasMessageContaining(SetSessionModeResponse.class.getSimpleName());
 	}
 
 	@Test

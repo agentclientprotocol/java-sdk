@@ -223,8 +223,19 @@ The runtime automatically converts return values to protocol response types:
 | `void` (`@Cancel`, `@ExtNotification`) | Notifications have no response. |
 | Any value the JSON mapper can write (`@ExtRequest`) | Sent as the extension request's result. |
 
-A request handler other than `@Prompt` that returns `void` or `null` (or an empty `Mono`) is
-answered with `-32603` (Internal error): a request must get a result.
+A request handler other than `@Prompt` declared `void`, or declared to return a type that cannot
+give its response, is rejected when the agent is built; one that returns `null` (or an empty `Mono`)
+is answered with `-32603` (Internal error): a request must get a result.
+
+### Mistakes Fail Early
+
+Annotation misuse fails when the agent is registered or built, with a message naming the class, the
+method and the fix, never at the first request: two methods for one annotation, two handler
+annotations on one method, a parameter no resolver supplies or that does not suit the method (the
+request type of another method, `@SessionId` where there is no session, a prompt context outside
+`@Prompt`, `@ConfigValue` outside `@SetSessionConfigOption`), and a return type that cannot give the
+method's response. Parameters and return types that a custom `ArgumentResolver` or
+`ReturnValueHandler` supports are left to it.
 
 ## Using SyncPromptContext
 

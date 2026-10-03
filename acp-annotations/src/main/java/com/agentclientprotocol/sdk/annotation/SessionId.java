@@ -19,10 +19,11 @@ import java.lang.annotation.Target;
  * {@link LoadSession}, {@link ResumeSession}, {@link CloseSession}, {@link DeleteSession},
  * {@link SetSessionMode}, {@link SetSessionConfigOption} and {@link ForkSession}. In
  * {@link Initialize}, {@link Authenticate}, {@link Logout}, {@link NewSession} and
- * {@link ListSessions} methods there is no session id, and every call fails with an internal error
- * ({@code -32603}). In {@link ExtRequest} and {@link ExtNotification} methods the parameter
- * receives the extension's params instead. On a parameter that is not a {@code String} the
- * annotation has no effect.
+ * {@link ListSessions} methods there is no session id, and building the agent fails with an
+ * {@code IllegalStateException} naming the method; in {@link ExtRequest} and
+ * {@link ExtNotification} methods registering the agent fails with an
+ * {@code IllegalArgumentException}. A parameter that is not a {@code String} is not supplied
+ * either, and building the agent fails the same way.
  *
  * <p>Example usage:
  * <pre>{@code
