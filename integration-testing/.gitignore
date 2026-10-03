@@ -3,6 +3,7 @@
 # Per-scenario logs (uploaded as a CI artifact)
 logs/
 programs/java/target/
+programs/micronaut/target/
 programs/rust/target/
 programs/rust/Cargo.lock
 # The repository .gitignore ignores README.md (for plans/ research checkouts); keep ours.

@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`acp-micronaut`: Micronaut 4 integration** (Java 17+), with `acp-micronaut-sample` (not published).
+  - **Agent.** Annotate an `@AcpAgent` class `@Singleton` and it is served with the application
+    context. The bean is found from its compile-time bean definition; exactly one is allowed.
+    `AcpInterceptor`, `ArgumentResolver` and `ReturnValueHandler` beans are added to it, and handlers
+    may also return a Reactive Streams `Publisher`. Configured under `acp.agent.*`: stdio by default
+    (the context closes and the process exits 0 when the client closes the agent's input; SIGTERM
+    closes the agent gracefully), or `http`/`websocket` through the SDK's Jetty listener on its own
+    port, with every `StreamableHttpAcpAgentTransportOptions` limit as a property, plus
+    `cancel-grace-period` and `max-prompt-duration`.
+  - **Client.** `acp.client.*` builds the stdio, WebSocket or Streamable HTTP transport, an
+    `AcpAsyncClient` customized by `AcpClientCustomizer` beans in order, and an `AcpSyncClient` over
+    it; it closes gracefully, once, with the context.
+  - The Micronaut platform BOM (4.10) is imported only by these modules, after the SDK's Reactor,
+    Jackson, Jetty and JUnit BOMs, so they run on the SDK's versions. The wire format stays the SDK's
+    Jackson mapper.
 - **`$/cancel_request` (ACP v1, Cancellation), both directions.** Client and agent sessions alike:
   - **Cancelling a request you sent:** dispose (cancel) the subscription to its `Mono` before the
     response arrives, directly or through `timeout(...)`, `take...`, or the SDK's own request
