@@ -39,10 +39,12 @@ import org.jspecify.annotations.Nullable;
  * throws {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending anything;
  * check {@link #getClientCapabilities()} first. An error answer throws
  * {@link com.agentclientprotocol.sdk.spec.AcpError}. A call has no time limit of its own: a request
- * waits at most the agent's request timeout and then throws a {@link RuntimeException} whose cause
- * is a {@link java.util.concurrent.TimeoutException}. When the SDK cancels the handler (after the
+ * waits at most the agent's request timeout and then throws
+ * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the
+ * {@link java.util.concurrent.TimeoutException}. When the SDK cancels the handler (after the
  * cancel grace period, or for a {@code $/cancel_request}), it interrupts the handler's thread, and
- * a call blocked at that moment throws. The context does not check that its turn is still active.
+ * a call blocked at that moment throws {@link java.util.concurrent.CancellationException} and
+ * leaves the thread's interrupt flag set. The context does not check that its turn is still active.
  *
  * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
  * for test doubles, and include {@link #async()}.

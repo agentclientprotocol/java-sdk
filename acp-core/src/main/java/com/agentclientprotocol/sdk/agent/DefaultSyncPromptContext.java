@@ -9,6 +9,7 @@ import java.util.Optional;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.spec.SyncCalls;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -39,7 +40,7 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public void sendUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		asyncContext.sendUpdate(sessionId, update).block();
+		SyncCalls.block(asyncContext.sendUpdate(sessionId, update));
 	}
 
 	@Override
@@ -90,7 +91,7 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public void completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
-		asyncContext.completeElicitation(notification).block();
+		SyncCalls.block(asyncContext.completeElicitation(notification));
 	}
 
 	@Override
@@ -129,12 +130,12 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public void sendMessage(String text) {
-		asyncContext.sendMessage(text).block();
+		SyncCalls.block(asyncContext.sendMessage(text));
 	}
 
 	@Override
 	public void sendThought(String text) {
-		asyncContext.sendThought(text).block();
+		SyncCalls.block(asyncContext.sendThought(text));
 	}
 
 	@Override
@@ -159,18 +160,18 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 
 	@Override
 	public void writeFile(String path, String content) {
-		asyncContext.writeFile(path, content).block();
+		SyncCalls.block(asyncContext.writeFile(path, content));
 	}
 
 	@Override
 	public boolean askPermission(String action) {
-		Boolean result = asyncContext.askPermission(action).block();
+		Boolean result = SyncCalls.block(asyncContext.askPermission(action));
 		return result != null && result;
 	}
 
 	@Override
 	public Optional<String> askChoice(String question, String... options) {
-		return Optional.ofNullable(asyncContext.askChoice(question, options).block());
+		return Optional.ofNullable(SyncCalls.block(asyncContext.askChoice(question, options)));
 	}
 
 	@Override

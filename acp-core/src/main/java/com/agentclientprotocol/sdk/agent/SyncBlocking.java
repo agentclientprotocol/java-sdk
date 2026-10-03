@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 
+import com.agentclientprotocol.sdk.spec.SyncCalls;
 import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
@@ -21,11 +22,11 @@ final class SyncBlocking {
 	}
 
 	static <T> T awaitResponse(Mono<T> response) {
-		return requireResponse(response.block());
+		return requireResponse(SyncCalls.block(response));
 	}
 
 	static <T> T awaitResponse(Mono<T> response, Duration timeout) {
-		return requireResponse(response.block(timeout));
+		return requireResponse(SyncCalls.block(response, timeout));
 	}
 
 	private static <T> T requireResponse(@Nullable T value) {

@@ -1087,8 +1087,9 @@ public interface AcpAgent {
 		/**
 		 * Sets how long the agent waits for the client to answer a request the agent sent: a file
 		 * read or write, a permission or elicitation request, a terminal call or an extension
-		 * request. When it passes, the blocking call throws a {@link RuntimeException} whose cause
-		 * is a {@link java.util.concurrent.TimeoutException} and the agent sends the client a
+		 * request. When it passes, the blocking call throws an
+		 * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the
+		 * {@link java.util.concurrent.TimeoutException}, and the agent sends the client a
 		 * {@code $/cancel_request}. Default: 60 seconds ({@link AcpAgent#DEFAULT_REQUEST_TIMEOUT}).
 		 * It does not limit the agent's own handlers; for prompts, see {@code maxPromptDuration}.
 		 * @param timeout the timeout

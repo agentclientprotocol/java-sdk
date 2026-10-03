@@ -8,6 +8,7 @@ import java.time.Duration;
 
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.SyncCalls;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -32,10 +33,12 @@ import org.jspecify.annotations.Nullable;
  * }</pre>
  *
  * <p>Each call blocks on the asynchronous agent's {@code Mono} ({@link #async()} returns that
- * agent) for at most the block timeout, 5 minutes unless given to the constructor, and then throws
- * {@link IllegalStateException}. Requests to the client usually end sooner, at the builder's
- * request timeout (60 seconds by default), with a {@link RuntimeException} whose cause is a
- * {@link java.util.concurrent.TimeoutException}. Other failures are thrown as they are:
+ * agent) for at most the block timeout, 5 minutes unless given to the constructor. Requests to the
+ * client usually end sooner, at the builder's request timeout (60 seconds by default). Either
+ * timeout throws {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the
+ * {@link java.util.concurrent.TimeoutException}; an interrupt of the waiting thread throws
+ * {@link java.util.concurrent.CancellationException} and leaves the interrupt flag set. Other
+ * failures are thrown as they are:
  * {@link IllegalStateException} before {@link #start()},
  * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} for a capability the client did
  * not advertise, and {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer from the
@@ -83,7 +86,7 @@ public class AcpSyncAgent {
 	 * started before
 	 */
 	public void start() {
-		asyncAgent.start().block(blockTimeout);
+		SyncCalls.block(asyncAgent.start(), blockTimeout);
 	}
 
 	/**
@@ -98,7 +101,7 @@ public class AcpSyncAgent {
 	 * }</pre>
 	 */
 	public void await() {
-		asyncAgent.awaitTermination().block();
+		SyncCalls.block(asyncAgent.awaitTermination());
 	}
 
 	/**
@@ -136,7 +139,7 @@ public class AcpSyncAgent {
 	 * @throws IllegalStateException if the agent is not started
 	 */
 	public void sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		asyncAgent.sendSessionUpdate(sessionId, update).block(blockTimeout);
+		SyncCalls.block(asyncAgent.sendSessionUpdate(sessionId, update), blockTimeout);
 	}
 
 	/**
@@ -153,7 +156,7 @@ public class AcpSyncAgent {
 	 * @see AcpAsyncAgent#sendExtRequest(String, Object, TypeRef)
 	 */
 	public <T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType) {
-		return asyncAgent.sendExtRequest(method, params, resultType).block(blockTimeout);
+		return SyncCalls.block(asyncAgent.sendExtRequest(method, params, resultType), blockTimeout);
 	}
 
 	/**
@@ -166,7 +169,7 @@ public class AcpSyncAgent {
 	 * @see AcpAsyncAgent#sendExtRequest(String, Object)
 	 */
 	public @Nullable Object sendExtRequest(String method, Object params) {
-		return asyncAgent.sendExtRequest(method, params).block(blockTimeout);
+		return SyncCalls.block(asyncAgent.sendExtRequest(method, params), blockTimeout);
 	}
 
 	/**
@@ -178,7 +181,7 @@ public class AcpSyncAgent {
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 */
 	public void sendExtNotification(String method, Object params) {
-		asyncAgent.sendExtNotification(method, params).block(blockTimeout);
+		SyncCalls.block(asyncAgent.sendExtNotification(method, params), blockTimeout);
 	}
 
 	/**
@@ -293,7 +296,7 @@ public class AcpSyncAgent {
 	 * @param notification the ID of the elicitation that finished
 	 */
 	public void completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
-		asyncAgent.completeElicitation(notification).block(blockTimeout);
+		SyncCalls.block(asyncAgent.completeElicitation(notification), blockTimeout);
 	}
 
 	/**
@@ -321,7 +324,7 @@ public class AcpSyncAgent {
 	 * transport to close, at most the block timeout.
 	 */
 	public void closeGracefully() {
-		asyncAgent.closeGracefully().block(blockTimeout);
+		SyncCalls.block(asyncAgent.closeGracefully(), blockTimeout);
 	}
 
 	/**

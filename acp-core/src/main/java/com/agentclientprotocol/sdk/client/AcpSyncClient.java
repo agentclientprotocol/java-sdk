@@ -13,6 +13,7 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.spec.SyncCalls;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +45,11 @@ import reactor.core.publisher.Mono;
  * request timeout (30 seconds by default), or, for {@link #prompt}, the builder's prompt timeout
  * (none by default). Failures are thrown:
  * {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer, whose {@code getCode()} is
- * the JSON-RPC error code; a {@link RuntimeException} whose cause is a
- * {@link java.util.concurrent.TimeoutException} when no answer came in time, after the client has
- * sent the agent a {@code $/cancel_request}; and {@link IllegalArgumentException} for a null
+ * the JSON-RPC error code; {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose
+ * cause is the {@link java.util.concurrent.TimeoutException}, when no answer came in time, after
+ * the client has sent the agent a {@code $/cancel_request};
+ * {@link java.util.concurrent.CancellationException} when the waiting thread is interrupted (the
+ * request is cancelled and the interrupt flag stays set); and {@link IllegalArgumentException} for a null
  * argument. The client does not check the agent's capabilities before a call; see
  * {@link #getAgentCapabilities()}. Methods may be called from several threads at once, but not from
  * a thread that must not block, and not from a session update consumer waiting for a prompt in
@@ -403,7 +406,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpSchema#METHOD_SESSION_CANCEL
 	 */
 	public void cancel(AcpSchema.CancelNotification cancelNotification) {
-		this.delegate.cancel(cancelNotification).block();
+		SyncCalls.block(this.delegate.cancel(cancelNotification));
 	}
 
 	/**
@@ -419,7 +422,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpAsyncClient#sendExtRequest(String, Object, TypeRef)
 	 */
 	public <T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType) {
-		return this.delegate.sendExtRequest(method, params, resultType).block();
+		return SyncCalls.block(this.delegate.sendExtRequest(method, params, resultType));
 	}
 
 	/**
@@ -432,7 +435,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @see AcpAsyncClient#sendExtRequest(String, Object)
 	 */
 	public @Nullable Object sendExtRequest(String method, Object params) {
-		return this.delegate.sendExtRequest(method, params).block();
+		return SyncCalls.block(this.delegate.sendExtRequest(method, params));
 	}
 
 	/**
@@ -444,7 +447,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 */
 	public void sendExtNotification(String method, Object params) {
-		this.delegate.sendExtNotification(method, params).block();
+		SyncCalls.block(this.delegate.sendExtNotification(method, params));
 	}
 
 	/**
@@ -454,7 +457,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * as such rather than returned as a null response.
 	 */
 	private static <T> T awaitResponse(Mono<T> response) {
-		T value = response.block();
+		T value = SyncCalls.block(response);
 		if (value == null) {
 			throw new IllegalStateException("ACP request completed without a response");
 		}
