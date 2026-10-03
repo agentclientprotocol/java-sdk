@@ -141,7 +141,17 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			logger.info("Serving @AcpAgent bean {} over {}", agent.getBeanType().getName(),
 					config.getTransport().getType());
 			AgentHost newHost = createHost(builder(agent));
-			newHost.start();
+			// Before the host serves anything, so a SIGTERM after the first answer is handled.
+			registerShutdownHook();
+			try {
+				newHost.start();
+			}
+			catch (RuntimeException ex) {
+				removeShutdownHook();
+				throw ex;
+			}
+			newHost.port().ifPresent(port -> logger.info("ACP agent listening on port {}, path {}", port,
+					config.getTransport().getHttp().getPath()));
 			this.host = newHost;
 			watch(newHost);
 		}
@@ -185,6 +195,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		}
 		removeShutdownHook();
 		if (current != null) {
+			logger.info("Stopping the ACP agent");
 			current.closeGracefully().block(closeTimeout());
 		}
 	}
@@ -254,17 +265,20 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		}
 	}
 
-	/**
-	 * Holds the JVM open while a single transport runs (the SDK's threads are daemons), closes
-	 * the context when that transport ends by itself, and closes the context on SIGTERM when
-	 * no embedded server does.
-	 */
-	private void watch(AgentHost started) {
+	/** Closes the context on SIGTERM when no embedded server's hook of Micronaut's does. */
+	private void registerShutdownHook() {
 		if (context.findBean(EmbeddedApplication.class).isEmpty()) {
-			Thread hook = new Thread(this::closeContext, "acp-agent-shutdown-hook");
+			Thread hook = new Thread(this::onSignal, "acp-agent-shutdown-hook");
 			Runtime.getRuntime().addShutdownHook(hook);
 			this.shutdownHook = hook;
 		}
+	}
+
+	/**
+	 * Holds the JVM open while a single transport runs (the SDK's threads are daemons) and
+	 * closes the context when that transport ends by itself.
+	 */
+	private void watch(AgentHost started) {
 		if (!started.endsWithItsClient()) {
 			return;
 		}
@@ -290,6 +304,15 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		}
 		logger.info("ACP agent transport ended; closing the application context");
 		// On this thread, not the transport's: closing the context closes the transport.
+		closeContext();
+	}
+
+	/**
+	 * SIGTERM: closes the agent itself first, since the context may still be starting (it
+	 * counts as running only once every startup listener has returned), then the context.
+	 */
+	private void onSignal() {
+		close();
 		closeContext();
 	}
 

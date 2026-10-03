@@ -7,7 +7,7 @@ package com.agentclientprotocol.sdk.micronaut;
 /**
  * The ACP transport an agent serves or a client connects with, as configured by
  * {@code acp.agent.transport.type} and {@code acp.client.transport.type}. Configuration
- * values are matched ignoring case ({@code stdio}, {@code http}, {@code websocket}).
+ * values are written in lower or upper case ({@code stdio}, {@code http}, {@code websocket}).
  */
 public enum TransportType {
 

@@ -13,6 +13,8 @@ import java.util.Map;
 
 import com.agentclientprotocol.sdk.micronaut.TransportType;
 import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.core.convert.format.MapFormat;
+import io.micronaut.core.naming.conventions.StringConvention;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -223,7 +225,8 @@ public class AcpClientConfiguration {
 			 * Sets environment variables added to the agent's environment.
 			 * @param env environment variables added to the agent's environment
 			 */
-			public void setEnv(Map<String, String> env) {
+			public void setEnv(@MapFormat(transformation = MapFormat.MapTransformation.FLAT,
+					keyFormat = StringConvention.RAW) Map<String, String> env) {
 				this.env = env;
 			}
 

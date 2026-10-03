@@ -17,11 +17,11 @@
     <description>Micronaut integration for ACP: serves an @AcpAgent bean over stdio, Streamable HTTP or WebSocket, and builds an ACP client from configuration</description>
 
     <properties>
-        <!-- Coverage floors: measured from a clean verify, less 2 points (parent pom, JaCoCo).
-             The tests live in acp-micronaut-tests; this module's own tests cover what needs
-             no running application. -->
-        <jacoco.minimum.line>0.00</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.00</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 95.92%, branch 90.36%, less 2 points (parent pom,
+             JaCoCo). The bean definitions Micronaut generates are marked @Generated, which
+             JaCoCo leaves out. -->
+        <jacoco.minimum.line>0.93</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.88</jacoco.minimum.branch>
     </properties>
 
     <!-- The Micronaut platform BOM is imported here, in the Micronaut modules only, never in
