@@ -40,6 +40,10 @@ import java.lang.annotation.Target;
  *   ends like {@code void}; a null or empty string sends nothing</li>
  * </ul>
  *
+ * <p>Prompts always carry text and resource links. The {@link #image()}, {@link #audio()} and
+ * {@link #embeddedContext()} attributes declare the other content the method accepts; they are
+ * advertised as {@code promptCapabilities}, and a client sends only content the agent advertised.
+ *
  * <p>A session has one prompt turn at a time. Until this method returns, a second prompt on the
  * same session is answered with {@code -32600} (Invalid request); prompts on other sessions run at
  * the same time, on other threads. When the client cancels the turn, this method keeps running:
@@ -69,5 +73,26 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Prompt {
+
+	/**
+	 * Whether the handler accepts image content blocks, advertised as
+	 * {@code agentCapabilities.promptCapabilities.image}.
+	 * @return false by default
+	 */
+	boolean image() default false;
+
+	/**
+	 * Whether the handler accepts audio content blocks, advertised as
+	 * {@code agentCapabilities.promptCapabilities.audio}.
+	 * @return false by default
+	 */
+	boolean audio() default false;
+
+	/**
+	 * Whether the handler accepts embedded resources ({@code resource} content blocks),
+	 * advertised as {@code agentCapabilities.promptCapabilities.embeddedContext}.
+	 * @return false by default
+	 */
+	boolean embeddedContext() default false;
 
 }

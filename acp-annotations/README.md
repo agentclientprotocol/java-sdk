@@ -6,8 +6,9 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 
 | Annotation | Target | Purpose |
 |-----------|--------|---------|
-| `@AcpAgent` | Class | Marks a class as an ACP agent |
-| `@Initialize` | Method | Handles `initialize` |
+| `@AcpAgent` | Class | Marks a class as an ACP agent; its `name`, `version`, `title`, `authMethods`, `mcpHttp` and `mcpSse` are advertised in the `initialize` response |
+| `@AuthMethod` | (inside `@AcpAgent`) | Declares one advertised authentication method, agent or terminal |
+| `@Initialize` | Method | Optionally handles `initialize`; its response is laid over the one derived from the annotations |
 | `@Authenticate` | Method | Handles `authenticate` |
 | `@Logout` | Method | Handles `logout` |
 | `@NewSession` | Method | Handles `session/new` |
@@ -17,7 +18,7 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 | `@CloseSession` | Method | Handles `session/close` |
 | `@DeleteSession` | Method | Handles `session/delete` |
 | `@ForkSession` | Method | Handles `session/fork` (unstable) |
-| `@Prompt` | Method | Handles `session/prompt` |
+| `@Prompt` | Method | Handles `session/prompt`; `image`, `audio` and `embeddedContext` advertise the prompt content accepted |
 | `@SetSessionMode` | Method | Handles `session/set_mode` |
 | `@SetSessionConfigOption` | Method | Handles `session/set_config_option` |
 | `@ListProviders` | Method | Handles `providers/list` (unstable) |

@@ -26,16 +26,22 @@ import java.lang.annotation.Target;
  * {@code IllegalArgumentException}. It finds methods of any visibility declared in the class
  * itself; methods inherited from a superclass are not found. Declare at most one method for each
  * annotation: with two, one of them is used and the other is ignored without an error. With no
- * {@link Initialize} method the agent answers {@code initialize} with default capabilities, which
- * advertise no optional method; with no {@link NewSession} method it answers {@code session/new}
+ * {@link Initialize} method the agent answers {@code initialize} with the response derived from
+ * its annotations (see Capabilities below); with no {@link NewSession} method it answers {@code session/new}
  * with a random UUID as the session id. Any other request without a handler method is answered
  * "Method not found" ({@code -32601}).
  *
  * <p><b>Capabilities.</b> ACP lets a client call an optional method, such as {@code session/load}
  * or {@code logout}, only when the agent advertised it in its {@code initialize} response. The SDK
- * neither adds these capabilities nor checks them: a handler method is served whether or not its
- * capability was advertised. Return the capabilities your handlers need from your
- * {@link Initialize} method; each annotation names the one it needs.
+ * derives that response from the class, so no {@link Initialize} method is needed to advertise:
+ * each handler annotation advertises the capability its method needs ({@link LoadSession} sets
+ * {@code loadSession}, {@link ListSessions} sets {@code sessionCapabilities.list}, {@link Logout}
+ * sets {@code auth.logout}, and so on; each annotation names its own), {@link #name()},
+ * {@link #version()} and {@link #title()} become {@code agentInfo}, {@link #authMethods()} become
+ * {@code authMethods}, and {@link #mcpHttp()}, {@link #mcpSse()} and the attributes of
+ * {@link Prompt} declare the MCP transports and the prompt content the agent accepts. The protocol
+ * version answered is the client's when the SDK speaks it, otherwise the latest it speaks. An
+ * {@link Initialize} method, when present, adds to the derived response (see {@link Initialize}).
  *
  * <p><b>Parameters.</b> Each annotation lists the parameters its methods can take, all optional
  * and in any order. Besides those, every handler method, extension handlers included, can take
@@ -73,13 +79,8 @@ import java.lang.annotation.Target;
  *
  * <p>Example usage:
  * <pre>{@code
- * @AcpAgent
+ * @AcpAgent(name = "greeting-agent", version = "1.0")
  * public class GreetingAgent {
- *
- *     @Initialize
- *     public InitializeResponse initialize(InitializeRequest request) {
- *         return InitializeResponse.ok();
- *     }
  *
  *     @Prompt
  *     public PromptResponse prompt(PromptRequest request, SyncPromptContext context) {
@@ -108,18 +109,49 @@ import java.lang.annotation.Target;
 public @interface AcpAgent {
 
 	/**
-	 * A name for the agent, for people reading the code. {@code AcpAgentSupport} neither reads
-	 * it nor sends it to the client: set the name the client sees as {@code agentInfo} in the
-	 * response of the {@link Initialize} method.
-	 * @return the agent name, empty by default
+	 * The agent's name, sent to the client as {@code agentInfo.name} in the {@code initialize}
+	 * response. Empty (the default) sends the class's simple name.
+	 * @return the agent name
 	 */
 	String name() default "";
 
 	/**
-	 * A version for the agent, for people reading the code; like {@link #name()}, it is not
-	 * sent to the client.
-	 * @return the agent version, empty by default
+	 * The agent's version, sent as {@code agentInfo.version}. Empty (the default) sends the
+	 * {@code Implementation-Version} of the class's jar manifest, or {@code "unknown"} when it
+	 * has none.
+	 * @return the agent version
 	 */
 	String version() default "";
+
+	/**
+	 * A human-readable title for the agent, sent as {@code agentInfo.title}. Empty (the
+	 * default) sends none.
+	 * @return the agent title
+	 */
+	String title() default "";
+
+	/**
+	 * The authentication methods the agent advertises in its {@code initialize} response
+	 * ({@code authMethods}). An agent that declares an {@link AuthMethod.Type#AGENT} method
+	 * must have an {@link Authenticate} handler. Terminal methods are advertised only to a
+	 * client that announced {@code clientCapabilities.auth.terminal}.
+	 * @return the authentication methods; none by default
+	 */
+	AuthMethod[] authMethods() default {};
+
+	/**
+	 * Whether the agent connects to MCP servers over HTTP, advertised as
+	 * {@code agentCapabilities.mcpCapabilities.http}: a client then may pass HTTP MCP servers
+	 * in {@code session/new}, {@code session/load} and {@code session/resume}.
+	 * @return false by default
+	 */
+	boolean mcpHttp() default false;
+
+	/**
+	 * Whether the agent connects to MCP servers over SSE, advertised as
+	 * {@code agentCapabilities.mcpCapabilities.sse}.
+	 * @return false by default
+	 */
+	boolean mcpSse() default false;
 
 }

@@ -533,6 +533,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An annotated agent advertises what its annotations declare.** Without an `@Initialize` method,
+  `AcpAgentSupport` answered `initialize` with `InitializeResponse.ok()`: `loadSession: false`, no
+  session, auth or provider capabilities, no `authMethods` and no `agentInfo`. An agent with
+  `@LoadSession`, `@ListSessions`, `@ResumeSession`, `@CloseSession`, `@DeleteSession`, `@Logout`
+  or `@Authenticate` told clients it supported none of them, and clients that honour capabilities
+  never called those methods; `@AcpAgent(name, version)` was never sent. The response is now
+  derived from the annotation model:
+  - each handler annotation advertises the capability its method needs: `@LoadSession` →
+    `loadSession`; `@ListSessions`, `@ResumeSession`, `@CloseSession`, `@DeleteSession` →
+    `sessionCapabilities.list`/`resume`/`close`/`delete`; `@Logout` → `auth.logout`; the unstable
+    `@ForkSession` → `sessionCapabilities.fork` and `@ListProviders`/`@SetProvider`/`@DisableProvider`
+    → `providers`. The others need no capability (baseline methods, per-session modes and config
+    options, extensions), and `HandlerAnnotationCoverageTest` fails if a new handler annotation has
+    no declared mapping;
+  - `@AcpAgent(name, version, title)` → `agentInfo`; a blank name sends the class's simple name, a
+    blank version the jar manifest's `Implementation-Version`, else `"unknown"`;
+  - new `@AcpAgent(authMethods = @AuthMethod(...))` → `authMethods`, agent or terminal methods.
+    Terminal methods are advertised only to a client that announced
+    `clientCapabilities.auth.terminal`. Declaring an agent method without an `@Authenticate`
+    handler fails the build, as do duplicate ids and an `env` entry not written `NAME=value`;
+  - new `@Prompt(image, audio, embeddedContext)` → `promptCapabilities` and
+    `@AcpAgent(mcpHttp, mcpSse)` → `mcpCapabilities`, default false;
+  - `protocolVersion` is the client's when the SDK speaks it, otherwise the latest it speaks.
+
+  An `@Initialize` method is now optional. When present, its response is laid over the derived
+  one: a capability is advertised when either side advertises it, so existing code returning
+  `InitializeResponse.ok()` keeps every derived capability; returned `authMethods` follow the
+  derived ones, replacing any with the same id; the returned `protocolVersion`, and the returned
+  `agentInfo` and `_meta` when not null, win.
+
+  **Migration:** an `@Initialize` that only returned `InitializeResponse.ok()` can be deleted. One
+  that built capabilities by hand can drop what the annotations now derive. A capability a handler
+  implies can no longer be withdrawn from `@Initialize`; remove the handler instead.
 - **`session/close` cancels the session's ongoing work before it closes.** ACP v1 says the agent
   "**must** cancel any ongoing work related to the session (treat it as if `session/cancel` was
   called) and then free up any resources associated with the session" (schema

@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
  * {@code session/delete} with "Method not found" ({@code -32601}).
  *
  * <p>ACP lets a client call {@code session/delete} only when the agent advertised
- * {@code sessionCapabilities.delete} in its {@link Initialize} response. To end an active session
+ * {@code sessionCapabilities.delete} in its {@code initialize} response; the agent advertises it for you when it has this method. To end an active session
  * without deleting it, the client uses {@link CloseSession}.
  *
  * <p>The method can take a {@code DeleteSessionRequest}, a {@link SessionId @SessionId}

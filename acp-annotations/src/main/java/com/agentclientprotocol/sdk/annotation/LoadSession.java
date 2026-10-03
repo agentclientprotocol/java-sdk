@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
  * ({@code -32601}).
  *
  * <p>ACP lets a client call {@code session/load} only when the agent advertised
- * {@code loadSession} in its {@link Initialize} response. It also requires the agent to send the
+ * {@code loadSession} in its {@code initialize} response; the agent advertises it for you when it has this method. It also requires the agent to send the
  * whole conversation, as session updates like those of a prompt turn, before the method returns:
  * take an {@code AcpSyncAgent} parameter and call its {@code sendSessionUpdate}. To reopen a
  * session without the replay, the client uses {@link ResumeSession}.

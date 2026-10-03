@@ -167,13 +167,8 @@ import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.spec.AcpSchema.*;
 
-@AcpAgent
+@AcpAgent(name = "hello-agent", version = "1.0")
 class HelloAgent {
-
-    @Initialize
-    InitializeResponse init() {
-        return InitializeResponse.ok();
-    }
 
     @NewSession
     NewSessionResponse newSession() {
@@ -192,6 +187,10 @@ AcpAgentSupport.create(new HelloAgent())
     .transport(new StdioAcpAgentTransport())
     .run();
 ```
+
+The agent answers `initialize` with what its annotations declare: a capability for each handler
+(`@LoadSession` advertises `loadSession`, and so on), `agentInfo` from `@AcpAgent`, and declared
+auth methods, prompt content and MCP transports. No `@Initialize` method is needed.
 
 ### 3. Hello World Agent (Sync)
 

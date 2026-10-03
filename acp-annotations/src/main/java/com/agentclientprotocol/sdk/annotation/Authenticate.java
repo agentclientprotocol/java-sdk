@@ -13,7 +13,9 @@ import java.lang.annotation.Target;
 /**
  * Marks the {@link AcpAgent} method that answers {@code authenticate}: the client logs in with one
  * of the authentication methods the agent listed ({@code authMethods}) in its {@code initialize}
- * response, and the method checks the login. Declare one when the user must log in before the
+ * response, and the method checks the login. Declare those methods on the class, in
+ * {@link AcpAgent#authMethods()}; they are advertised without an {@link Initialize} method, and an
+ * agent that declares an agent-type method without an {@code @Authenticate} method fails to build. Declare one when the user must log in before the
  * agent can work. Without an {@code @Authenticate} method the agent answers {@code authenticate}
  * with "Method not found" ({@code -32601}).
  *
@@ -28,6 +30,7 @@ import java.lang.annotation.Target;
  *
  * <p>Example usage:
  * <pre>{@code
+ * // on the class: @AcpAgent(authMethods = @AuthMethod(id = "api-key", name = "API key"))
  * @Authenticate
  * public AuthenticateResponse authenticate(AuthenticateRequest request) {
  *     if (System.getenv("EXAMPLE_API_KEY") == null) {
@@ -42,6 +45,7 @@ import java.lang.annotation.Target;
  * @since 0.80.0
  * @see AcpAgent
  * @see Logout
+ * @see AuthMethod
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
