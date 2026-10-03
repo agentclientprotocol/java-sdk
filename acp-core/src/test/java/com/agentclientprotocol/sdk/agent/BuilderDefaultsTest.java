@@ -62,6 +62,17 @@ class BuilderDefaultsTest {
 	}
 
 	@Test
+	void theDefaultInitializeSendsTheBuildersAgentInfo() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.agentInfo(new AcpSchema.Implementation("builder-agent", "3.1"))
+			.promptHandler((request, context) -> PromptResponse.endTurn())
+			.build();
+
+		assertThat(initialize(pair, agent).agentInfo()).isEqualTo(new AcpSchema.Implementation("builder-agent", "3.1"));
+	}
+
+	@Test
 	void anAgentWithoutAPromptHandlerIsRefused() {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
 		assertThatThrownBy(() -> AcpAgent.sync(pair.agentTransport()).build())

@@ -27,10 +27,12 @@ final class DefaultInitialize {
 	/**
 	 * The default response for an agent serving {@code methods}.
 	 * @param methods the request methods the agent has handlers for
+	 * @param agentInfo the agent's name and version, or null to send none
 	 * @param request the client's initialize request
 	 * @return the response
 	 */
-	static AcpSchema.InitializeResponse respond(Set<String> methods, AcpSchema.InitializeRequest request) {
+	static AcpSchema.InitializeResponse respond(Set<String> methods, AcpSchema.@Nullable Implementation agentInfo,
+			AcpSchema.InitializeRequest request) {
 		boolean anySession = methods.contains(AcpSchema.METHOD_SESSION_LIST)
 				|| methods.contains(AcpSchema.METHOD_SESSION_CLOSE) || methods.contains(AcpSchema.METHOD_SESSION_RESUME)
 				|| methods.contains(AcpSchema.METHOD_SESSION_DELETE) || methods.contains(AcpSchema.METHOD_SESSION_FORK);
@@ -45,7 +47,8 @@ final class DefaultInitialize {
 			.providers(methods.contains(AcpSchema.METHOD_PROVIDERS_LIST) ? new AcpSchema.ProvidersCapabilities(null)
 					: null)
 			.build();
-		return new AcpSchema.InitializeResponse(negotiate(request.protocolVersion()), capabilities, null);
+		return new AcpSchema.InitializeResponse(negotiate(request.protocolVersion()), capabilities, null, agentInfo,
+				null);
 	}
 
 	/** The client's version when this SDK speaks it, otherwise the latest it speaks. */

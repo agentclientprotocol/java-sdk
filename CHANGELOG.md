@@ -294,7 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handlers imply (`loadSessionHandler` → `loadSession`, `listSessionsHandler`/`closeSessionHandler`/
   `resumeSessionHandler`/`deleteSessionHandler`/`forkSessionHandler` → `sessionCapabilities`,
   `logoutHandler` → `auth.logout`, `listProvidersHandler` → `providers`), as an annotated agent
-  does. `build()` now throws `IllegalStateException` when no `promptHandler` is registered, and an
+  does, and with the `agentInfo` set by the new builder method `agentInfo(Implementation)`. `build()` now throws `IllegalStateException` when no `promptHandler` is registered, and an
   annotated agent without a `@Prompt` method fails to build the same way: every agent must answer
   `session/prompt`. **Migration:** register a prompt handler (test agents that never prompt can
   answer `PromptResponse.endTurn()`).

@@ -29,7 +29,8 @@ class BuilderAnnotationParityTest {
 	/** Builder methods an annotated agent reaches another way, or does not need, and why. */
 	private static final Map<String, String> BUILDER_ONLY = Map.of("extRequestHandler",
 			"served by @ExtRequest methods, one per extension method name", "extNotificationHandler",
-			"served by @ExtNotification methods, one per extension method name");
+			"served by @ExtNotification methods, one per extension method name", "agentInfo",
+			"declared by @AcpAgent(name, version, title)");
 
 	@Test
 	void everySyncBuilderMethodHasAnAnnotationEquivalent() {

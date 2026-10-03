@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.spec.ExtensionMethods;
 import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.util.HandlerFailures;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -662,6 +663,8 @@ public interface AcpAgent {
 
 		private final AgentHandlers handlers = new AgentHandlers();
 
+		private AcpSchema.@Nullable Implementation agentInfo;
+
 		AsyncAgentBuilder(AcpAgentTransport transport) {
 			Assert.notNull(transport, "Transport must not be null");
 			this.transport = transport;
@@ -698,6 +701,19 @@ public interface AcpAgent {
 		 */
 		public AsyncAgentBuilder cancelGracePeriod(Duration gracePeriod) {
 			this.promptTimeouts = this.promptTimeouts.withCancelGracePeriod(gracePeriod);
+			return this;
+		}
+
+		/**
+		 * Sets the agent's name and version, sent as {@code agentInfo} in the {@code initialize}
+		 * response the agent answers when no initialize handler is registered. An initialize
+		 * handler sets {@code agentInfo} in its own response.
+		 * @param agentInfo the agent's name, version and optional title
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder agentInfo(AcpSchema.Implementation agentInfo) {
+			Assert.notNull(agentInfo, "agentInfo must not be null");
+			this.agentInfo = agentInfo;
 			return this;
 		}
 
@@ -1025,7 +1041,7 @@ public interface AcpAgent {
 			AgentHandlers built = handlers.copy();
 			if (!methods.contains(AcpSchema.METHOD_INITIALIZE)) {
 				built.request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
-				}, (request, agent) -> Mono.just(DefaultInitialize.respond(methods, request)));
+				}, (request, agent) -> Mono.just(DefaultInitialize.respond(methods, agentInfo, request)));
 			}
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, promptTimeouts, built);
 		}
@@ -1099,6 +1115,18 @@ public interface AcpAgent {
 		 */
 		public SyncAgentBuilder cancelGracePeriod(Duration gracePeriod) {
 			asyncBuilder.cancelGracePeriod(gracePeriod);
+			return this;
+		}
+
+		/**
+		 * Sets the agent's name and version, sent as {@code agentInfo} in the {@code initialize}
+		 * response the agent answers when no initialize handler is registered. An initialize
+		 * handler sets {@code agentInfo} in its own response.
+		 * @param agentInfo the agent's name, version and optional title
+		 * @return this builder
+		 */
+		public SyncAgentBuilder agentInfo(AcpSchema.Implementation agentInfo) {
+			asyncBuilder.agentInfo(agentInfo);
 			return this;
 		}
 
