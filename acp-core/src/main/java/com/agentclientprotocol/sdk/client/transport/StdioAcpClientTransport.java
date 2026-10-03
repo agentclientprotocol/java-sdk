@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -311,11 +312,13 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * Blocks until the agent process exits. It does not stop the process; close the transport
-	 * for that.
+	 * for that. Unlike {@link #awaitTermination()}, which completes when the transport ends, it
+	 * waits for the operating system process itself.
 	 * @throws IllegalStateException if {@link #connect} has not started the process
-	 * @throws RuntimeException if the calling thread is interrupted while it waits
+	 * @throws CancellationException if the calling thread is interrupted
+	 * while it waits; the thread's interrupt flag stays set
 	 */
-	public void awaitForExit() {
+	public void awaitProcessExit() {
 		Process process = this.process;
 		if (process == null) {
 			throw new IllegalStateException("The agent process has not been started: connect first");
@@ -324,7 +327,11 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			process.waitFor();
 		}
 		catch (InterruptedException e) {
-			throw new RuntimeException("Process interrupted", e);
+			Thread.currentThread().interrupt();
+			CancellationException cancelled = new CancellationException(
+					"Interrupted while waiting for the agent process to exit");
+			cancelled.initCause(e);
+			throw cancelled;
 		}
 	}
 

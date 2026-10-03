@@ -305,6 +305,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: `StdioAcpClientTransport.awaitForExit()` is renamed `awaitProcessExit()`**, so it does
+  not sit beside `awaitTermination()` (which completes when the transport ends, not the process).
+  Interrupted, it now throws `CancellationException` and keeps the thread's interrupt flag; it used
+  to throw a plain `RuntimeException` and clear the flag. Migration: rename the call; catch
+  `CancellationException` instead of `RuntimeException` around it.
+
 - **Breaking: sync lifecycle names line up.** `AcpSyncAgent.await()` is renamed
   `awaitTermination()`, matching `AcpAsyncAgent` and the transports. `AcpSyncAgent` and
   `AcpAgentSupport` implement `AutoCloseable`, and their `close()` now means what it means on

@@ -200,8 +200,31 @@ class StdioAcpClientTransportProcessTest {
 			});
 	}
 
+	/**
+	 * Waiting for the process is interruptible, and the interrupt is not lost: the call throws
+	 * {@link java.util.concurrent.CancellationException} and the thread stays interrupted.
+	 */
 	@Test
-	void awaitForExitReturnsWhenTheAgentExits() {
+	void awaitProcessExitKeepsTheInterruptFlag() {
+		transport = new StdioAcpClientTransport(echoAgent());
+		transport.setStdErrorHandler(line -> {
+		});
+		transport.connect(message -> message.then(Mono.empty())).block(TIMEOUT);
+
+		Thread.currentThread().interrupt();
+		try {
+			org.assertj.core.api.Assertions.assertThatThrownBy(transport::awaitProcessExit)
+				.isInstanceOf(java.util.concurrent.CancellationException.class)
+				.hasCauseInstanceOf(InterruptedException.class);
+			org.assertj.core.api.Assertions.assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		}
+		finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
+	void awaitProcessExitReturnsWhenTheAgentExits() {
 		transport = new StdioAcpClientTransport(echoAgent());
 		transport.setStdErrorHandler(line -> {
 		});
@@ -209,7 +232,7 @@ class StdioAcpClientTransportProcessTest {
 
 		transport.sendMessage(new JSONRPCNotification(EchoAgent.EXIT, null)).block(TIMEOUT);
 
-		Mono.fromRunnable(transport::awaitForExit).block(TIMEOUT);
+		Mono.fromRunnable(transport::awaitProcessExit).block(TIMEOUT);
 	}
 
 	/**
