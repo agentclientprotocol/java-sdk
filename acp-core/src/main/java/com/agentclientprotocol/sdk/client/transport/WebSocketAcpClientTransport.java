@@ -166,9 +166,8 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * {@inheritDoc}
 	 * <p>Opens the WebSocket connection when the returned Mono is subscribed, and completes
 	 * once the handshake has finished. A second call fails with an
-	 * {@link IllegalStateException} unless the first one failed. A connect that failed may be
-	 * tried again, but the agent's messages then no longer reach the handler; create a new
-	 * transport instead.
+	 * {@link IllegalStateException} unless the first one failed: a connect that failed may be
+	 * tried again on the same transport, before it is closed.
 	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
@@ -179,15 +178,16 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		return Mono.fromFuture(() -> {
 			logger.info("Connecting to WebSocket server at {}", serverUri);
 
-			// Set up inbound message handling
-			handleIncomingMessages(handler);
-
-			// Build WebSocket connection with listener
+			// Build WebSocket connection with listener; frames that arrive before the handshake
+			// completes wait in the inbound sink.
 			return httpClient.newWebSocketBuilder()
 				.connectTimeout(connectTimeout)
 				.buildAsync(serverUri, new AcpWebSocketListener());
 		}).doOnSuccess(ws -> {
 			this.webSocket = ws;
+			// Only an open connection takes the inbound sink's one subscriber, so a connect that
+			// failed can be tried again.
+			handleIncomingMessages(handler);
 			startOutboundProcessing();
 			connectionReady.tryEmitValue(null);
 			logger.info("Connected to WebSocket server at {}", serverUri);

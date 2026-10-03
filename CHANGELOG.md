@@ -726,6 +726,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A `WebSocketAcpClientTransport` whose connect failed can connect again.** The failed `connect`
+  had already subscribed the transport's single-subscriber inbound sink, so a retry on the same
+  transport "succeeded" but no message from the agent ever reached the handler (Reactor logged
+  "unicast() sinks only allow a single Subscriber"). The inbound side is now subscribed only once
+  the connection is open.
+
 - **`CommandResult` carries the terminal output's `truncated` flag** (new last record component
   `truncated`, accessor `truncated()`). `execute` dropped the flag of the client's
   `terminal/output` answer, so a caller could not tell output cut to the command's output limit

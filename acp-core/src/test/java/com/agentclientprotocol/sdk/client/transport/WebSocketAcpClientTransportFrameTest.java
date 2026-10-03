@@ -189,6 +189,12 @@ class WebSocketAcpClientTransportFrameTest {
 		httpClient.failConnect = false;
 		connect();
 		assertThat(webSocket.requested).isEqualTo(1);
+
+		// The retried connection works: the agent's request reaches the handler and is answered.
+		httpClient.listener().onText(webSocket, REQUEST, true);
+		awaitSentFrames(1);
+		assertThat(received).singleElement().isInstanceOf(AcpSchema.JSONRPCRequest.class);
+		assertThat(webSocket.sent.get(0)).contains("\"id\":7").contains("\"result\":\"ok\"");
 	}
 
 	@Test
