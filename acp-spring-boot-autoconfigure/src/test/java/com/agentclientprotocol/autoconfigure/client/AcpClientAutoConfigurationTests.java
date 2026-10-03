@@ -1,11 +1,15 @@
 package com.agentclientprotocol.autoconfigure.client;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.agent.AcpAgent;
+import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
+import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
@@ -18,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
 import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,6 +99,65 @@ class AcpClientAutoConfigurationTests {
 				assertThat(props.getCapabilities().isWriteTextFile()).isFalse();
 				assertThat(props.getCapabilities().isTerminal()).isTrue();
 			});
+	}
+
+	@Test
+	void appliesCustomizersInOrder() {
+		List<String> applied = new CopyOnWriteArrayList<>();
+		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class)
+			.withBean("second", AcpClientCustomizer.class, () -> new OrderedCustomizer(2, "second", applied))
+			.withBean("first", AcpClientCustomizer.class, () -> new OrderedCustomizer(1, "first", applied))
+			.run(context -> {
+				assertThat(context).hasSingleBean(AcpAsyncClient.class);
+				assertThat(applied).containsExactly("first", "second");
+			});
+	}
+
+	@Test
+	void customizerReceivesSessionUpdates() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.initializeHandler(request -> AcpSchema.InitializeResponse.ok())
+			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-1", null, null))
+			.promptHandler((request, prompt) -> {
+				prompt.sendMessage("hello");
+				return AcpSchema.PromptResponse.endTurn();
+			})
+			.build();
+		agent.start();
+		List<AcpSchema.SessionNotification> received = new CopyOnWriteArrayList<>();
+		try {
+			this.runner.withBean(AcpClientTransport.class, pair::clientTransport)
+				.withBean(AcpClientCustomizer.class, () -> spec -> spec.sessionUpdateConsumer(notification -> {
+					received.add(notification);
+					return Mono.empty();
+				}))
+				.run(context -> {
+					AcpSyncClient client = context.getBean(AcpSyncClient.class);
+					client.initialize();
+					client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()));
+					client.prompt(new AcpSchema.PromptRequest("session-1", List.of(new AcpSchema.TextContent("hi"))));
+					assertThat(received).singleElement()
+						.satisfies(notification -> assertThat(notification.sessionId()).isEqualTo("session-1"));
+				});
+		}
+		finally {
+			agent.closeGracefully();
+		}
+	}
+
+	record OrderedCustomizer(int order, String name, List<String> applied) implements AcpClientCustomizer, Ordered {
+
+		@Override
+		public void customize(AcpClient.AsyncSpec spec) {
+			this.applied.add(this.name);
+		}
+
+		@Override
+		public int getOrder() {
+			return this.order;
+		}
+
 	}
 
 	@Test

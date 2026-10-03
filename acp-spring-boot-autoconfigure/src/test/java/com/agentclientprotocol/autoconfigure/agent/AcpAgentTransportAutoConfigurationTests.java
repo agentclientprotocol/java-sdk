@@ -15,7 +15,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AcpAgentTransportAutoConfigurationTests {
 
 	private final ApplicationContextRunner runner = new ApplicationContextRunner()
-		.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class));
+		.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class))
+		.withBean(TestAgent.class);
+
+	@Test
+	void noTransportInClientOnlyApplication() {
+		new ApplicationContextRunner()
+			.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class))
+			.run(context -> assertThat(context).doesNotHaveBean(AcpAgentTransport.class));
+	}
 
 	@Test
 	void createsStdioTransportByDefault() {
@@ -45,6 +53,11 @@ class AcpAgentTransportAutoConfigurationTests {
 			assertThat(context).hasSingleBean(AcpAgentTransport.class);
 			assertThat(context.getBean(AcpAgentTransport.class)).isInstanceOf(StubAgentTransport.class);
 		});
+	}
+
+	@com.agentclientprotocol.sdk.annotation.AcpAgent(name = "test-agent", version = "1.0")
+	static class TestAgent {
+
 	}
 
 	@Configuration(proxyBeanMethods = false)

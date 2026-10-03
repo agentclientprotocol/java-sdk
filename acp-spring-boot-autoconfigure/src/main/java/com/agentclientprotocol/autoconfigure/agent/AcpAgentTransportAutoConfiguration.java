@@ -6,6 +6,7 @@ import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,8 +20,11 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(AcpAgentProperties.class)
 public class AcpAgentTransportAutoConfiguration {
 
+	// Only for an application that defines an @AcpAgent bean: a client-only application
+	// gets no agent transport.
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnMissingBean(AcpAgentTransport.class)
+	@ConditionalOnBean(annotation = com.agentclientprotocol.sdk.annotation.AcpAgent.class)
 	@ConditionalOnProperty(prefix = "spring.acp.agent.transport", name = "type", havingValue = "stdio",
 			matchIfMissing = true)
 	static class StdioAgentTransportConfiguration {

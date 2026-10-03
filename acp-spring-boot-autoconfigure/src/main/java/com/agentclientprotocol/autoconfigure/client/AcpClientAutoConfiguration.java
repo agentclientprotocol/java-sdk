@@ -5,8 +5,12 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Mono;
 
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -20,16 +24,28 @@ import org.springframework.context.annotation.Bean;
 @EnableConfigurationProperties(AcpClientProperties.class)
 public class AcpClientAutoConfiguration {
 
+	private static final Logger logger = LoggerFactory.getLogger(AcpClientAutoConfiguration.class);
+
 	@Bean
 	@ConditionalOnMissingBean
-	AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientProperties properties) {
+	AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientProperties properties,
+			ObjectProvider<AcpClientCustomizer> customizers) {
 		var caps = properties.getCapabilities();
 		var clientCapabilities = new AcpSchema.ClientCapabilities(
 				new AcpSchema.FileSystemCapability(caps.isReadTextFile(), caps.isWriteTextFile()), caps.isTerminal());
-		return AcpClient.async(transport)
+		var spec = AcpClient.async(transport)
 			.requestTimeout(properties.getRequestTimeout())
 			.clientCapabilities(clientCapabilities)
-			.build();
+			// Session updates always have a consumer, so the SDK does not warn about an
+			// unhandled session/update; an application adds its own through a customizer.
+			.sessionUpdateConsumer(AcpClientAutoConfiguration::logSessionUpdate);
+		customizers.orderedStream().forEach(customizer -> customizer.customize(spec));
+		return spec.build();
+	}
+
+	private static Mono<Void> logSessionUpdate(AcpSchema.SessionNotification notification) {
+		logger.debug("Session update for {}: {}", notification.sessionId(), notification.update());
+		return Mono.empty();
 	}
 
 	/**
