@@ -11,29 +11,34 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for loading existing ACP sessions.
+ * Marks the {@link AcpAgent} method that answers {@code session/load}: the client reopens a session
+ * the agent stored earlier, and the method restores it and replays its conversation to the client.
+ * Declare one when the agent keeps conversations, so that a user can return to one. Without a
+ * {@code @LoadSession} method the agent answers {@code session/load} with "Method not found"
+ * ({@code -32601}).
  *
- * <p>The annotated method handles the {@code session/load} JSON-RPC method,
- * which is called when a client wants to resume an existing session.
+ * <p>ACP lets a client call {@code session/load} only when the agent advertised
+ * {@code loadSession} in its {@link Initialize} response. It also requires the agent to send the
+ * whole conversation, as session updates like those of a prompt turn, before the method returns:
+ * take an {@code AcpSyncAgent} parameter and call its {@code sendSessionUpdate}. To reopen a
+ * session without the replay, the client uses {@link ResumeSession}.
  *
- * <p>The method can have the following parameters (all optional):
- * <ul>
- *   <li>{@code LoadSessionRequest} - the load session request containing sessionId, cwd, and mcpServers</li>
- *   <li>{@code @SessionId String} - the session ID being loaded</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code LoadSessionResponse} - the load session response with modes</li>
- *   <li>{@code Mono<LoadSessionResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code LoadSessionRequest} (session id, {@code cwd} and
+ * {@code mcpServers}), a {@link SessionId @SessionId} {@code String} and the connection parameters
+ * (see {@link AcpAgent}). It returns a {@code LoadSessionResponse} with the session's modes and
+ * config options, or a {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final Map<String, List<String>> history = new ConcurrentHashMap<>();
+ *
  * @LoadSession
- * public LoadSessionResponse load(LoadSessionRequest req) {
- *     // Restore session state
- *     return new LoadSessionResponse(modes);
+ * public LoadSessionResponse load(LoadSessionRequest request, AcpSyncAgent agent) {
+ *     for (String message : history.getOrDefault(request.sessionId(), List.of())) {
+ *         agent.sendSessionUpdate(request.sessionId(),
+ *                 new AgentMessageChunk(new TextContent(message)));
+ *     }
+ *     return new LoadSessionResponse(null, null);  // no modes, no config options
  * }
  * }</pre>
  *

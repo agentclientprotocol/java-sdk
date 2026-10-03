@@ -11,27 +11,31 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for new session requests.
+ * Marks the {@link AcpAgent} method that answers {@code session/new}: the client starts a new ACP
+ * session (a conversation) in a working directory, with the MCP servers the agent should use, and
+ * the method returns the new session's id. Declare one to choose the ids, set up per-session state,
+ * or offer modes and config options for the session. Without a {@code @NewSession} method the agent
+ * answers with a random UUID as the session id and no modes or config options.
  *
- * <p>The annotated method handles the {@code session/new} JSON-RPC method,
- * which is called when a client wants to create a new conversation session.
+ * <p>The SDK keeps no list of sessions: later requests reach their handler methods with whatever
+ * session id the client sends. Keep the sessions you create, for example in a concurrent map, and
+ * answer an unknown id with an {@code AcpProtocolException}, such as one with
+ * {@code AcpErrorCodes.RESOURCE_NOT_FOUND}.
  *
- * <p>The method can have the following parameters (all optional):
- * <ul>
- *   <li>{@code NewSessionRequest} - the new session request</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code NewSessionResponse} - the new session response with session ID</li>
- *   <li>{@code Mono<NewSessionResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code NewSessionRequest}, which carries {@code cwd} and
+ * {@code mcpServers}, and the connection parameters (see {@link AcpAgent}). It cannot take a
+ * {@link SessionId} parameter: the session does not exist yet. It returns a
+ * {@code NewSessionResponse}, or a {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final Map<String, String> workingDirectories = new ConcurrentHashMap<>();
+ *
  * @NewSession
- * public NewSessionResponse newSession(NewSessionRequest req) {
- *     return new NewSessionResponse(UUID.randomUUID().toString(), null, null);
+ * public NewSessionResponse newSession(NewSessionRequest request) {
+ *     String sessionId = UUID.randomUUID().toString();
+ *     workingDirectories.put(sessionId, request.cwd());
+ *     return new NewSessionResponse(sessionId, null, null);  // no modes, no config options
  * }
  * }</pre>
  *

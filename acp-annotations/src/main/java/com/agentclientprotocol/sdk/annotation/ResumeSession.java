@@ -11,31 +11,29 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for resuming ACP sessions.
+ * Marks the {@link AcpAgent} method that answers {@code session/resume}: the client reconnects to a
+ * session the agent stored earlier, and the method restores it without replaying the conversation.
+ * Declare one instead of a {@link LoadSession} method when the agent can continue a session but
+ * cannot send its history. Without a {@code @ResumeSession} method the agent answers
+ * {@code session/resume} with "Method not found" ({@code -32601}).
  *
- * <p>The annotated method handles the {@code session/resume} JSON-RPC method,
- * which is called when a client wants to reconnect to an existing session
- * without replaying conversation history. Unlike {@link LoadSession}, this
- * method does not send previous messages via session/update notifications.
+ * <p>ACP lets a client call {@code session/resume} only when the agent advertised
+ * {@code sessionCapabilities.resume} in its {@link Initialize} response, and does not allow the
+ * agent to send the earlier conversation as session updates before the method returns.
  *
- * <p>The method can have the following parameters (all optional):
- * <ul>
- *   <li>{@code ResumeSessionRequest} - the resume session request containing sessionId, cwd, and mcpServers</li>
- *   <li>{@code @SessionId String} - the session ID being resumed</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code ResumeSessionResponse} - the resume session response with modes</li>
- *   <li>{@code Mono<ResumeSessionResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code ResumeSessionRequest} (session id, {@code cwd} and
+ * {@code mcpServers}), a {@link SessionId @SessionId} {@code String} and the connection parameters
+ * (see {@link AcpAgent}). It returns a {@code ResumeSessionResponse} with the session's modes and
+ * config options, or a {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final Map<String, String> workingDirectories = new ConcurrentHashMap<>();
+ *
  * @ResumeSession
- * public ResumeSessionResponse resume(ResumeSessionRequest req) {
- *     // Reconnect to session without history replay
- *     return new ResumeSessionResponse(modes);
+ * public ResumeSessionResponse resume(ResumeSessionRequest request) {
+ *     workingDirectories.put(request.sessionId(), request.cwd());
+ *     return new ResumeSessionResponse(null, null);  // no modes, no config options
  * }
  * }</pre>
  *

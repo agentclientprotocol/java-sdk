@@ -11,32 +11,27 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for deleting ACP sessions.
+ * Marks the {@link AcpAgent} method that answers {@code session/delete}: the client removes a
+ * stored session for good, and the method deletes it so that {@code session/list} no longer
+ * returns it. Declare one, together with a {@link ListSessions} method, when users can clean up
+ * their session history. Without a {@code @DeleteSession} method the agent answers
+ * {@code session/delete} with "Method not found" ({@code -32601}).
  *
- * <p>The annotated method handles the {@code session/delete} JSON-RPC method,
- * which is called when a client wants to permanently delete a stored session so
- * it no longer appears in {@code session/list}.
+ * <p>ACP lets a client call {@code session/delete} only when the agent advertised
+ * {@code sessionCapabilities.delete} in its {@link Initialize} response. To end an active session
+ * without deleting it, the client uses {@link CloseSession}.
  *
- * <p>Only available if the agent advertises the {@code sessionCapabilities.delete}
- * capability.
- *
- * <p>The method can have the following parameters (all optional):
- * <ul>
- *   <li>{@code DeleteSessionRequest} - the delete session request containing the sessionId</li>
- *   <li>{@code @SessionId String} - the session ID being deleted</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code DeleteSessionResponse} - the delete session response</li>
- *   <li>{@code Mono<DeleteSessionResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code DeleteSessionRequest}, a {@link SessionId @SessionId}
+ * {@code String} and the connection parameters (see {@link AcpAgent}). It must return a
+ * {@code DeleteSessionResponse} (not {@code void}), or a {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final Map<String, List<String>> history = new ConcurrentHashMap<>();
+ *
  * @DeleteSession
- * public DeleteSessionResponse delete(DeleteSessionRequest req) {
- *     // Permanently remove the stored session
+ * public DeleteSessionResponse delete(@SessionId String sessionId) {
+ *     history.remove(sessionId);
  *     return new DeleteSessionResponse();
  * }
  * }</pre>

@@ -11,21 +11,24 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a String parameter to receive the current session ID.
+ * Marks a {@code String} parameter of a handler method that receives the session id of the request
+ * being handled, the same value as the request's {@code sessionId()}. Use it when the method needs
+ * only the id, or does not take the request at all.
  *
- * <p>This annotation can be used on a {@code String} parameter in handler
- * methods to inject the current session identifier without needing to
- * extract it from the request object.
+ * <p>It works in the methods of requests that name a session: {@link Prompt}, {@link Cancel},
+ * {@link LoadSession}, {@link ResumeSession}, {@link CloseSession}, {@link DeleteSession},
+ * {@link SetSessionMode}, {@link SetSessionConfigOption} and {@link ForkSession}. In
+ * {@link Initialize}, {@link Authenticate}, {@link Logout}, {@link NewSession} and
+ * {@link ListSessions} methods there is no session id, and every call fails with an internal error
+ * ({@code -32603}). In {@link ExtRequest} and {@link ExtNotification} methods the parameter
+ * receives the extension's params instead. On a parameter that is not a {@code String} the
+ * annotation has no effect.
  *
  * <p>Example usage:
  * <pre>{@code
  * @Prompt
- * public PromptResponse handlePrompt(
- *         PromptRequest req,
- *         @SessionId String sessionId,
- *         SyncPromptContext context) {
- *
- *     context.sendMessage("Processing request for session: " + sessionId);
+ * public PromptResponse prompt(@SessionId String sessionId, SyncPromptContext context) {
+ *     context.sendMessage("This is session " + sessionId);
  *     return PromptResponse.endTurn();
  * }
  * }</pre>
