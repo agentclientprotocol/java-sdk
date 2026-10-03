@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure.agent;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.util.List;
 import java.util.Map;

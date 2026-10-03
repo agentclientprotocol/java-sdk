@@ -1,8 +1,8 @@
-package com.agentclientprotocol.autoconfigure.agent;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.net.URI;
 
-import com.agentclientprotocol.autoconfigure.agent.AcpAgentHttpAutoConfigurationTests.EchoAgentConfiguration;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentHttpAutoConfigurationTests.EchoAgentConfiguration;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;

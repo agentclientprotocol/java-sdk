@@ -1,5 +1,5 @@
-com.agentclientprotocol.autoconfigure.client.AcpClientTransportAutoConfiguration
-com.agentclientprotocol.autoconfigure.client.AcpClientAutoConfiguration
-com.agentclientprotocol.autoconfigure.agent.AcpAgentTransportAutoConfiguration
-com.agentclientprotocol.autoconfigure.agent.AcpAgentAutoConfiguration
-com.agentclientprotocol.autoconfigure.agent.AcpAgentHttpAutoConfiguration
+com.agentclientprotocol.sdk.spring.boot.autoconfigure.client.AcpClientTransportAutoConfiguration
+com.agentclientprotocol.sdk.spring.boot.autoconfigure.client.AcpClientAutoConfiguration
+com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentTransportAutoConfiguration
+com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentAutoConfiguration
+com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentHttpAutoConfiguration

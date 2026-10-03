@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure;
 
 import java.io.ByteArrayInputStream;
 

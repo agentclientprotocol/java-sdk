@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure.client;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure.agent;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.net.URI;
 import java.time.Duration;
@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import com.agentclientprotocol.autoconfigure.client.AcpClientAutoConfiguration;
-import com.agentclientprotocol.autoconfigure.client.AcpClientTransportAutoConfiguration;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.client.AcpClientAutoConfiguration;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.client.AcpClientTransportAutoConfiguration;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;

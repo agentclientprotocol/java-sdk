@@ -1,8 +1,8 @@
-package com.agentclientprotocol.autoconfigure.agent;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.time.Duration;
 
-import com.agentclientprotocol.autoconfigure.agent.AcpAgentProperties.AgentHttpProperties;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentProperties.AgentHttpProperties;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;

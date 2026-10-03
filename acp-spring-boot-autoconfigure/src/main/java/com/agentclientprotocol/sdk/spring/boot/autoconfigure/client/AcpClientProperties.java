@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure.client;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
 import java.net.URI;
 import java.time.Duration;
@@ -7,7 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.agentclientprotocol.autoconfigure.TransportType;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

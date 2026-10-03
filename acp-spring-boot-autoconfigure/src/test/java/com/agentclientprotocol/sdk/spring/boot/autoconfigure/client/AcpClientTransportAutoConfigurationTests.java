@@ -1,4 +1,4 @@
-package com.agentclientprotocol.autoconfigure.client;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;

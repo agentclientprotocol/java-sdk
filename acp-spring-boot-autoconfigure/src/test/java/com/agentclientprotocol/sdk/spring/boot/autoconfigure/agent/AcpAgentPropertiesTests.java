@@ -1,8 +1,8 @@
-package com.agentclientprotocol.autoconfigure.agent;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.time.Duration;
 
-import com.agentclientprotocol.autoconfigure.TransportType;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
 
 import org.junit.jupiter.api.Test;
 

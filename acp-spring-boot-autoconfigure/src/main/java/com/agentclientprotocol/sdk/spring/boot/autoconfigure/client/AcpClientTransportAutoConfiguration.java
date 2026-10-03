@@ -1,8 +1,8 @@
-package com.agentclientprotocol.autoconfigure.client;
+package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
 import java.net.URI;
 
-import com.agentclientprotocol.autoconfigure.TransportType;
+import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
