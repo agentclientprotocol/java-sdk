@@ -97,6 +97,11 @@
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
