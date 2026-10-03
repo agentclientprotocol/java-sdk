@@ -191,6 +191,39 @@ class PromptContextCancellationTest {
 		}
 	}
 
+	/** session/close cancels the session's running prompt, which its context reports. */
+	@Test
+	void closingTheSessionSignalsItsPrompt() throws Exception {
+		CountDownLatch sawCancel = new CountDownLatch(1);
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.cancelGracePeriod(LONG_GRACE)
+			.newSessionHandler(request -> new AcpSchema.NewSessionResponse(SESSION, null, null))
+			.closeSessionHandler(request -> new AcpSchema.CloseSessionResponse(null))
+			.promptHandler((request, context) -> {
+				while (!context.isCancelled()) {
+					sleep(10);
+				}
+				sawCancel.countDown();
+				return PromptResponse.cancelled();
+			})
+			.build();
+		agent.start();
+		AcpAsyncClient client = client(pair);
+		try {
+			Mono<PromptResponse> response = startPrompt(client);
+			client.closeSession(new AcpSchema.CloseSessionRequest(SESSION, null)).block(TIMEOUT);
+
+			assertThat(sawCancel.await(5, TimeUnit.SECONDS)).isTrue();
+			assertThat(response.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
+		}
+		finally {
+			close(client, pair);
+			agent.closeGracefully();
+		}
+	}
+
 	private static AcpAsyncClient client(InMemoryTransportPair pair) {
 		return AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
 	}

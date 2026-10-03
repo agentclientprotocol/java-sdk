@@ -203,8 +203,8 @@ public interface PromptContext {
 	// ========================================================================
 
 	/**
-	 * Whether this prompt has been cancelled: by {@code session/cancel} for its session, by
-	 * {@code $/cancel_request} for its request, or by the agent itself (the cancel grace
+	 * Whether this prompt has been cancelled: by {@code session/cancel} or {@code session/close}
+	 * for its session, by {@code $/cancel_request} for its request, or by the agent itself (the cancel grace
 	 * period or the maximum prompt duration passed, or the connection closed). Once true, it
 	 * stays true.
 	 *
