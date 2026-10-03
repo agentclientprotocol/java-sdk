@@ -12,7 +12,8 @@ annotation runtime. Those are SDK hooks (review section 2) and live in acp-agent
 
 Quarkus and Micronaut integrations are required for 0.80.0, not previews (owner). Reviewed by acp-dev-steward
 on 2026-10-03; its changes are folded in below. The Micronaut review (ten items, accepted by acp-dev-steward,
-see `acp-java-steward/plans/journal/2026-10-03-micronaut-progress.md`) is folded in too. Quarkus's review is next. Extraction
+see `acp-java-steward/plans/journal/2026-10-03-micronaut-progress.md`) is folded in too, as is the Quarkus review (`acp-java-steward/plans/journal/2026-10-03-quarkus-progress.md`;
+Quarkus serves HTTP on its own server: the SDK servlet on quarkus-undertow plus a Vert.x WebSocket route, no Jetty). Extraction
 waits for those reviews and for devex slice 1.
 
 ## Settings
@@ -33,18 +34,29 @@ public record AcpAgentSettings(
                                                 // listener serves both); default STDIO
         Http http) {
 
-    public record Http(int port, String path,   // 8080, "/acp"; port 0 = ephemeral
-            @Nullable Long maxPostBodyBytes, @Nullable Duration keepAliveInterval,
+    /** The endpoint, wherever it is served: the framework's own server or the SDK listener. */
+    public record Http(String path,              // "/acp"
+            Limits limits, Listener listener) {}
+
+    /** Message and stream bounds; unset → SDK default. */
+    public record Limits(@Nullable Long maxPostBodyBytes, @Nullable Duration keepAliveInterval,
             @Nullable Integer mailboxCapacity, @Nullable Integer maxPendingSseEvents,
             @Nullable Integer maxWebSocketPendingFrames, @Nullable Integer maxProvisionalSessions,
-            @Nullable Integer maxConcurrentStreamsPerConnection, @Nullable Duration shutdownTimeout) {
-        public StreamableHttpAcpAgentTransportOptions toOptions();   // unset → SDK default
-    }
+            @Nullable Duration shutdownTimeout) {}
+
+    /** Only for the SDK's own listener; meaningless inside a framework's server. */
+    public record Listener(int port,             // 8080; 0 = ephemeral
+            @Nullable Integer maxConcurrentStreamsPerConnection) {}
+
+    /** Limits plus, for the listener, its stream limit; unset → SDK default. */
+    public StreamableHttpAcpAgentTransportOptions toOptions(boolean listener);
 
     public static Builder builder();
     /**
-     * Keys relative to prefix, kebab-case only, e.g. "request-timeout", "transport.type",
-     * "transport.http.port". Normalising the framework's own key forms to kebab-case is the binder's job.
+     * Optional path: keys relative to prefix, kebab-case only, e.g. "request-timeout", "transport.type",
+     * "transport.http.listener.port". Normalising the framework's own key forms to kebab-case is the
+     * binder's job. A framework that binds its configuration straight onto the builders (Quarkus
+     * @ConfigMapping) does not use it; Micronaut does.
      */
     public static AcpAgentSettings from(SettingsSource source, String prefix);
 }
@@ -86,8 +98,9 @@ public interface SettingsSource {
 public final class AcpClientTransports {
     /**
      * An explicit type wins. Otherwise exactly one of stdio.command, websocket.uri and http.uri selects
-     * the transport; more than one with no explicit type throws, naming them (a change for Spring, which
-     * picked one; it goes in the CHANGELOG at extraction). Empty when none is set (a client-only app).
+     * the transport; more than one with no explicit type throws, naming them. That replaces Spring's rule,
+     * which picked websocket, then http, then stdio; it goes in the CHANGELOG at extraction, and a test in
+     * acp-integration pins it. Empty when none is set (a client-only app).
      * An explicit type without its property throws IllegalStateException naming the property.
      */
     public static Optional<AcpClientTransport> create(AcpClientSettings settings);
@@ -119,6 +132,9 @@ public final class AcpAgentDiscovery {
      * from the container's metadata, never a proxy class (CGLIB, ArC, Micronaut AOP).
      */
     public static Optional<AgentCandidate<?>> requireSingle(Collection<? extends AgentCandidate<?>> candidates);
+
+    /** Build-time discovery (Quarkus/Jandex): the same rule over class names, no classes loaded. */
+    public static Optional<String> requireSingle(List<String> classNames);
 
     public record AgentCandidate<T>(String name, Class<T> userClass, Supplier<? extends T> instance) {}
 }
@@ -181,13 +197,13 @@ public interface AcpHost {
  * and fix4's AutoCloseable AcpSyncAgent/AcpAgentSupport, not a copy of their start and stop logic.
  */
 public final class AcpAgentHost implements AcpHost {
-    public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport);
     /**
-     * Latched: runs once, on a host-owned thread (never the transport's), also when the transport had
-     * already ended before the call. Not run when the host itself stopped the agent. The framework passes
+     * onTransportEnd is latched: it runs once, on a host-owned thread (never the transport's), also when
+     * the transport ended before the host saw it, and not when the host itself stopped the agent. It is
+     * fixed at construction, so there is no window in which the end is missed. The framework passes
      * "close my container" (Spring: ConfigurableApplicationContext::close; Quarkus: () -> Quarkus.asyncExit(0)).
      */
-    public void onTransportEnd(Runnable action);
+    public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport, Runnable onTransportEnd);
 }
 
 /** The HTTP listener (in AcpListeners' optional part). */
@@ -195,7 +211,7 @@ public final class AcpListenerHost implements AcpHost {
     public AcpListenerHost(StreamableHttpAcpAgentTransport listener);
 }
 
-/** The servlet inside a framework's Servlet container. Servlet-only: Spring is its user. */
+/** The servlet inside a framework's Servlet container: Spring (Tomcat, Jetty) and Quarkus (undertow). */
 public final class AcpServletHost {
     /**
      * Call before the container's graceful shutdown: each connection holds an open SSE response,
@@ -212,7 +228,8 @@ public final class AcpClientHost {
 }
 ```
 
-Not here: the `Publisher` return-value handler belongs in acp-agent-support (devex is adding it).
+Not here: the `CompletionStage` and `Publisher` return-value handlers belong in acp-agent-support (devex);
+Mutiny's `Uni` and `Multi` stay in acp-quarkus.
 
 ## What stays in each framework
 
@@ -228,9 +245,16 @@ Not here: the `Publisher` return-value handler belongs in acp-agent-support (dev
 ## Settled questions (acp-dev-steward, 2026-10-03)
 
 1. `from(lookup, prefix)` takes kebab-case keys only; normalising them is the binder's job.
-2. Micronaut uses the SDK listener or its own Netty binding; `AcpServletHost` stays servlet-only.
+2. Micronaut uses the SDK listener or its own Netty binding. `AcpServletHost` is for Servlet containers:
+   Spring and Quarkus (undertow).
 3. The DEBUG default consumer applies in every framework, and is replaced (not added to) when the
    application registers its own consumer.
+
+## After 0.80.0
+
+- A container-neutral WebSocket connection API, so Quarkus (Vert.x), Micronaut (Netty) and others route
+  WebSocket upgrades to the SDK without Jetty.
+- A Jetty-free `acp-streamable-http-servlet` module, with the servlet apart from the Jetty listener.
 
 ## Spring layer changes that follow at extraction
 
@@ -239,6 +263,8 @@ Not here: the `Publisher` return-value handler belongs in acp-agent-support (dev
 - The new capability properties.
 - The DEBUG consumer becomes replace-not-add (once the SDK supports it). Today the Spring client adds it beside the
   customizers' consumers.
-- Several client transport properties set with no `type` fail at startup (today: stdio, then websocket, then http
-  wins). It goes in the CHANGELOG with the extraction.
+- Several client transport properties set with no `type` fail at startup (today websocket, then http, then
+  stdio wins). It goes in the CHANGELOG with the extraction.
+- The agent's `transport.http.port` and `max-concurrent-streams-per-connection` move under
+  `transport.http.listener.*`.
 - `spring.acp.agent.transport.type=websocket` becomes a synonym for `http`.
