@@ -22,6 +22,7 @@ import io.quarkus.test.QuarkusUnitTest;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -55,6 +56,14 @@ class AgentBeanTest {
 		assertThat(bean.getScope()).isEqualTo(Singleton.class);
 		assertThat(Arc.container().instance(EchoAgent.class).get().getClass()).isEqualTo(EchoAgent.class);
 		assertThat(host.agent()).isNotNull();
+	}
+
+	@Test
+	void stdioKeepsStandardOutputForTheProtocol() {
+		var config = ConfigProvider.getConfig();
+		assertThat(config.getValue("quarkus.log.console.stderr", Boolean.class)).isTrue();
+		assertThat(config.getValue("quarkus.banner.enabled", Boolean.class)).isFalse();
+		assertThat(config.getValue("quarkus.http.host-enabled", Boolean.class)).isFalse();
 	}
 
 	@Test

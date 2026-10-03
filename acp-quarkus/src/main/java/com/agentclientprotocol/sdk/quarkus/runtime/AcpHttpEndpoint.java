@@ -48,15 +48,27 @@ public class AcpHttpEndpoint {
 		return options.build();
 	}
 
-	AcpJsonMapper jsonMapper() {
+	/**
+	 * The JSON mapper of the endpoint (the SDK default, never the application's).
+	 * @return the mapper
+	 */
+	public AcpJsonMapper jsonMapper() {
 		return jsonMapper;
 	}
 
-	AcpAgentFactory agentFactory() {
+	/**
+	 * The factory creating one agent per connection, all on the {@code @AcpAgent} bean.
+	 * @return the agent factory
+	 */
+	public AcpAgentFactory agentFactory() {
 		return agentFactory;
 	}
 
-	StreamableHttpAcpAgentTransportOptions options() {
+	/**
+	 * The endpoint limits, from the configuration.
+	 * @return the transport options
+	 */
+	public StreamableHttpAcpAgentTransportOptions options() {
 		return options;
 	}
 
