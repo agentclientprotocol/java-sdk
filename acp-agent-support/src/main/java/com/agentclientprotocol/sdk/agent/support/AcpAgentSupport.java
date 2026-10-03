@@ -640,10 +640,25 @@ public class AcpAgentSupport {
 		public AcpAgentSupport build() {
 			AcpAgentTransport transport = this.transport;
 			if (transport == null) {
-				throw new IllegalStateException("Transport must be configured");
+				throw new IllegalStateException("Transport must be configured: call transport(..) before build(),"
+						+ " or call buildFactory() for a listener transport");
 			}
 			return new AcpAgentSupport(definition(), transport);
 		}
+
+		/**
+		 * Build the agent on the configured transport, start it, and block until the
+		 * transport ends (stdin closes, or the agent is closed). The one call a stdio agent's
+		 * {@code main} method needs:
+		 * <pre>{@code
+		 * AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run();
+		 * }</pre>
+		 * @throws IllegalStateException if no transport or agent bean is configured
+		 */
+		public void run() {
+			build().run();
+		}
+
 
 		/**
 		 * Build a factory for a listener transport, such as
@@ -651,11 +666,17 @@ public class AcpAgentSupport {
 		 * creates a fresh agent for each connection it accepts. Every agent invokes the same
 		 * annotated handler instance, concurrently across connections, so its handlers must
 		 * be thread-safe (see {@link AcpAgentSupport}). The factory captures the builder as
-		 * it is now; a {@link #transport} set on the builder is not used, as the listener
-		 * supplies one per connection.
+		 * it is now. The listener supplies a transport per connection, so a builder with a
+		 * {@link #transport} set is refused.
 		 * @return a factory creating one agent per connection
+		 * @throws IllegalStateException if a transport was set, or no agent bean was given
 		 */
 		public AcpAgentFactory buildFactory() {
+			if (this.transport != null) {
+				throw new IllegalStateException("buildFactory() serves a listener transport, which supplies a"
+						+ " transport per connection, but transport(..) was set: drop transport(..), or call build()"
+						+ " for an agent on that transport");
+			}
 			Definition definition = definition();
 			return AcpAgentFactory.sync(connection -> new AcpAgentSupport(definition, connection).getAgent());
 		}
@@ -666,6 +687,10 @@ public class AcpAgentSupport {
 		 * handler to serve it
 		 */
 		private Definition definition() {
+			if (agentClasses.isEmpty()) {
+				throw new IllegalStateException("No @AcpAgent bean was given: use AcpAgentSupport.create(bean),"
+						+ " or builder().agent(..) before building");
+			}
 			ArgumentResolverComposite argumentResolvers = new ArgumentResolverComposite()
 				.addResolvers(customArgumentResolvers)
 				.addResolvers(defaultResolvers());

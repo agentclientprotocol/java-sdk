@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`AcpAgentSupport.Builder.run()`** builds the agent on its transport, starts it and blocks until
+  the transport ends: `AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run()`,
+  the bootstrap the README and Javadoc showed, now compiles.
+
 - **Typed values in `@SetSessionConfigOption` methods.** New parameter annotations `@ConfigId`
   (the option id, a `String`) and `@ConfigValue` (the new value, typed by the parameter: `String`
   for a select option, `boolean`/`Boolean` for a boolean option, `Object` for either), resolved by
@@ -220,6 +224,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ExtensionParamsResolver.isConnectionType`).
 
 ### Changed
+
+- **`AcpAgentSupport.Builder` refuses two silent states.** `build()` and `buildFactory()` throw
+  `IllegalStateException` when no `@AcpAgent` bean was given (they used to build an agent with no
+  handlers), and `buildFactory()` throws when `transport(..)` was set (the transport used to be
+  ignored). **Migration:** pass the bean with `create(bean)`; drop `transport(..)` before
+  `buildFactory()`.
 
 - **Annotation misuse fails when the agent is registered or built, not at the first request.**
   `AcpAgentSupport` now rejects, with a message naming the class, the method and the fix:
