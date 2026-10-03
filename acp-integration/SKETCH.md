@@ -11,7 +11,8 @@ Not in the 0.80.0 scope: build-time handler registration, native-image metadata 
 annotation runtime. Those are SDK hooks (review section 2) and live in acp-agent-support or acp-core, not here.
 
 Quarkus and Micronaut integrations are required for 0.80.0, not previews (owner). Reviewed by acp-dev-steward
-on 2026-10-03; its changes are folded in below. Next come the Quarkus and Micronaut reviews. Extraction
+on 2026-10-03; its changes are folded in below. The Micronaut review (ten items, accepted by acp-dev-steward,
+see `acp-java-steward/plans/journal/2026-10-03-micronaut-progress.md`) is folded in too. Quarkus's review is next. Extraction
 waits for those reviews and for devex slice 1.
 
 ## Settings
@@ -28,7 +29,8 @@ public record AcpAgentSettings(
         @Nullable Duration cancelGracePeriod,   // SDK default when null (new: the review)
         @Nullable Duration maxPromptDuration,   // SDK default when null (new: the review)
         boolean shutdownOnTransportEnd,         // default true
-        AcpTransportType transport,             // STDIO or HTTP; default STDIO
+        AcpTransportType transport,             // STDIO or HTTP (WEBSOCKET accepted as a synonym: the
+                                                // listener serves both); default STDIO
         Http http) {
 
     public record Http(int port, String path,   // 8080, "/acp"; port 0 = ephemeral
@@ -44,7 +46,7 @@ public record AcpAgentSettings(
      * Keys relative to prefix, kebab-case only, e.g. "request-timeout", "transport.type",
      * "transport.http.port". Normalising the framework's own key forms to kebab-case is the binder's job.
      */
-    public static AcpAgentSettings from(Function<String, @Nullable String> lookup, String prefix);
+    public static AcpAgentSettings from(SettingsSource source, String prefix);
 }
 
 public record AcpClientSettings(
@@ -67,7 +69,14 @@ public record AcpClientSettings(
 
     public static Builder builder();
     /** Kebab-case keys only, as for AcpAgentSettings.from. */
-    public static AcpClientSettings from(Function<String, @Nullable String> lookup, String prefix);
+    public static AcpClientSettings from(SettingsSource source, String prefix);
+}
+
+/** What a framework's configuration offers; a single lookup cannot build stdio.args or stdio.env. */
+public interface SettingsSource {
+    @Nullable String get(String key);
+    List<String> list(String key);          // empty when absent
+    Map<String, String> map(String key);    // empty when absent; map keys keep their case
 }
 ```
 
@@ -76,8 +85,9 @@ public record AcpClientSettings(
 ```java
 public final class AcpClientTransports {
     /**
-     * An explicit type wins; otherwise stdio.command, then websocket.uri, then http.uri.
-     * Empty when none is set (a client-only app with no client configured).
+     * An explicit type wins. Otherwise exactly one of stdio.command, websocket.uri and http.uri selects
+     * the transport; more than one with no explicit type throws, naming them (a change for Spring, which
+     * picked one; it goes in the CHANGELOG at extraction). Empty when none is set (a client-only app).
      * An explicit type without its property throws IllegalStateException naming the property.
      */
     public static Optional<AcpClientTransport> create(AcpClientSettings settings);
@@ -86,7 +96,13 @@ public final class AcpClientTransports {
 public final class AcpAgentTransports {
     /** STDIO: a stdio transport over System.in/out. */
     public static AcpAgentTransport stdio();
-    /** HTTP: the SDK listener; throws naming acp-streamable-http-jetty when it is absent. */
+}
+
+/** Separate so that no always-loaded class names the optional Jetty types. */
+public final class AcpListeners {
+    /** Whether acp-streamable-http-jetty is on the classpath. */
+    public static boolean isListenerAvailable();
+    /** HTTP (and WebSocket): the SDK listener; throws naming acp-streamable-http-jetty when it is absent. */
     public static StreamableHttpAcpAgentTransport listener(AcpAgentSettings settings, AcpAgentFactory factory);
     /** HTTP inside the framework's own Servlet container (no WebSocket). */
     public static StreamableHttpAcpServlet servlet(AcpAgentSettings settings, AcpAgentFactory factory);
@@ -102,9 +118,9 @@ public final class AcpAgentDiscovery {
      * more than one → IllegalStateException listing them. Candidates carry the *user* class
      * from the container's metadata, never a proxy class (CGLIB, ArC, Micronaut AOP).
      */
-    public static Optional<AgentCandidate> requireSingle(Collection<AgentCandidate> candidates);
+    public static Optional<AgentCandidate<?>> requireSingle(Collection<? extends AgentCandidate<?>> candidates);
 
-    public record AgentCandidate(String name, Class<?> userClass, Supplier<?> instance) {}
+    public record AgentCandidate<T>(String name, Class<T> userClass, Supplier<? extends T> instance) {}
 }
 
 public final class AcpAgents {
@@ -114,7 +130,7 @@ public final class AcpAgents {
      * superclass handlers), with the settings' timeouts and the given interceptors, argument resolvers and
      * return-value handlers, in order.
      */
-    public static AcpAgentSupport.Builder builder(AgentCandidate agent, AcpAgentSettings settings,
+    public static <T> AcpAgentSupport.Builder builder(AgentCandidate<T> agent, AcpAgentSettings settings,
             List<AcpInterceptor> interceptors, List<ArgumentResolver> resolvers,
             List<ReturnValueHandler> returnValueHandlers);
 }
@@ -131,7 +147,9 @@ public final class AcpClients {
      * Capabilities, request timeout and prompt timeout from settings (prompt timeout: TODO pass through when
      * api1 A4 lands), then the customizers in order. Session updates go to a DEBUG-logging consumer only
      * when no customizer registered one: the default is replaced, not added to. That holds in every
-     * framework, so an unhandled session update is visible at DEBUG everywhere.
+     * framework, so an unhandled session update is visible at DEBUG everywhere. Needs SDK support:
+     * AsyncSpec.sessionUpdateConsumer only adds, so devex or api1 must provide a way to see whether a
+     * consumer is set, or a replacing form.
      */
     public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
             List<AcpClientCustomizer> customizers);
@@ -142,32 +160,39 @@ public final class AcpClients {
 
 ## Lifecycles (the framework calls these from its own hooks)
 
+One host contract. Non-blocking: a framework whose main returns (Micronaut) cannot block in awaitTermination.
+
 ```java
-/**
- * A single-transport agent (stdio). Built on the SDK's own lifecycle: devex's AcpAgentSupport.Builder.run()
- * and fix4's AutoCloseable AcpSyncAgent/AcpAgentSupport, not a copy of their start and stop logic. The
- * host adds onTransportEnd and the host-thread semantics.
- */
-public final class AcpAgentHost {
-    public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport);
-    public void start();
-    /** Closes once; a stop started by the host does not trigger onTransportEnd. */
-    public void stop();
-    /**
-     * Runs once, on a host-owned thread (never the transport's), when the transport ends on its own:
-     * stdin closed and every reply written. The framework passes "close my container"
-     * (Spring: ConfigurableApplicationContext::close; Quarkus: () -> Quarkus.asyncExit(0)).
-     */
-    public void onTransportEnd(Runnable action);
-    /** Blocks until the transport ends; SDK threads are daemons, so a non-web app needs it. */
-    public void awaitTermination();
+public interface AcpHost {
+    void start();
+    CompletionStage<Void> stopGracefully();
+    /** Safe from a JVM shutdown hook, also while start() is still running. */
+    void stop(Duration timeout);
+    /** Completes when the transport or listener ends. */
+    CompletionStage<Void> termination();
+    /** The bound port of a listener host; empty for stdio. */
+    OptionalInt port();
+    /** Optional: one non-daemon thread until termination, for an app with nothing else keeping the JVM up. */
+    default void holdJvmUntilTermination() { ... }
 }
 
-/** The HTTP listener. */
-public final class AcpListenerHost {
-    public AcpListenerHost(StreamableHttpAcpAgentTransport listener, Duration timeout);
-    public void start();
-    public void stop();
+/**
+ * A single-transport agent (stdio). Built on the SDK's own lifecycle: devex's AcpAgentSupport.Builder.run()
+ * and fix4's AutoCloseable AcpSyncAgent/AcpAgentSupport, not a copy of their start and stop logic.
+ */
+public final class AcpAgentHost implements AcpHost {
+    public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport);
+    /**
+     * Latched: runs once, on a host-owned thread (never the transport's), also when the transport had
+     * already ended before the call. Not run when the host itself stopped the agent. The framework passes
+     * "close my container" (Spring: ConfigurableApplicationContext::close; Quarkus: () -> Quarkus.asyncExit(0)).
+     */
+    public void onTransportEnd(Runnable action);
+}
+
+/** The HTTP listener (in AcpListeners' optional part). */
+public final class AcpListenerHost implements AcpHost {
+    public AcpListenerHost(StreamableHttpAcpAgentTransport listener);
 }
 
 /** The servlet inside a framework's Servlet container. Servlet-only: Spring is its user. */
@@ -182,9 +207,12 @@ public final class AcpServletHost {
 /** The client: closed once. The framework must not also close it through an inferred destroy method. */
 public final class AcpClientHost {
     public AcpClientHost(AcpAsyncClient client);
-    public void close();
+    public CompletionStage<Void> closeGracefully();
+    public void close(Duration timeout);
 }
 ```
+
+Not here: the `Publisher` return-value handler belongs in acp-agent-support (devex is adding it).
 
 ## What stays in each framework
 
@@ -209,4 +237,8 @@ public final class AcpClientHost {
 - The `request-timeout` properties stop defaulting to 60s (they become null, meaning the SDK default).
 - A new `prompt-timeout` client property.
 - The new capability properties.
-- The DEBUG consumer becomes replace-not-add. Today the Spring client adds it beside the customizers' consumers.
+- The DEBUG consumer becomes replace-not-add (once the SDK supports it). Today the Spring client adds it beside the
+  customizers' consumers.
+- Several client transport properties set with no `type` fail at startup (today: stdio, then websocket, then http
+  wins). It goes in the CHANGELOG with the extraction.
+- `spring.acp.agent.transport.type=websocket` becomes a synonym for `http`.
