@@ -70,9 +70,11 @@ class AgentBeanTest {
 	void promptIsServedWithInjectedCollaboratorsInterceptorsAndResolvers() {
 		AcpSyncClient client = transport.client();
 		AcpSchema.InitializeResponse initialized = client.initialize();
-		// The SDK's default initialize answer, from main. TODO tighten once the devex branch
-		// lands: capabilities and agentInfo derived from the handlers (loadSession, name).
+		// Derived from the annotations: agentInfo from @AcpAgent, no capability beyond the
+		// baseline (the agent declares only @Prompt).
 		assertThat(initialized.protocolVersion()).isEqualTo(AcpSchema.LATEST_PROTOCOL_VERSION);
+		assertThat(initialized.agentInfo()).isNotNull();
+		assertThat(initialized.agentInfo().name()).isEqualTo("echo");
 		assertThat(initialized.agentCapabilities().loadSession()).isFalse();
 
 		String sessionId = client.newSession(InMemoryAgentTransport.newSession()).sessionId();
