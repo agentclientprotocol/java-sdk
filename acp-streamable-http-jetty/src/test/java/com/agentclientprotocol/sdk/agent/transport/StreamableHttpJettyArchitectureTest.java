@@ -55,6 +55,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StreamableHttpJettyArchitectureTest {
 
 	@ArchTest
+	static final ArchRule isFrameworkNeutral = noClasses().should()
+		.dependOnClassesThat(resideInAnyPackage("org.springframework..", "io.quarkus..", "io.micronaut..",
+				"io.vertx..", "io.smallrye..", "jakarta.enterprise..", "jakarta.inject..",
+				"com.agentclientprotocol.sdk.spring..", "com.agentclientprotocol.sdk.quarkus..",
+				"com.agentclientprotocol.sdk.integration..")
+			.as("a framework or a framework integration"))
+		.because("framework integrations (the Quarkus extension mounts this module's servlet) build on the SDK, never the reverse");
+
+
+	@ArchTest
 	static void importsThisModuleAndNothingElse(JavaClasses classes) {
 		assertThat(classes.contain(ThisModule.ANCHOR)).as("this module's classes are imported").isTrue();
 		assertThat(classes).allMatch(ThisModule::isFromThisModule, "comes from this module's main classes");
