@@ -14,6 +14,7 @@ import java.util.concurrent.TimeoutException;
 
 import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
+import io.vertx.core.http.HttpClosedException;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.ServerWebSocket;
@@ -96,16 +97,25 @@ public class AcpWebSocketRoute {
 			logger.info("ACP WebSocket client disconnected: {} - {}", socket.closeStatusCode(), socket.closeReason());
 			connection.closed();
 		});
-		socket.exceptionHandler(error -> {
-			logger.debug("ACP WebSocket error on connection {}: {}", id, error.getMessage());
-			connection.signalException(error);
-			connection.close(VertxWebSocketConnection.SERVER_ERROR, "WebSocket error");
-		});
+		socket.exceptionHandler(error -> socketFailed(connection, error));
 		connection.start(endpoint.agentFactory()).subscribe(ignored -> {
 		}, error -> {
 			endpointError(error);
 			connection.close(VertxWebSocketConnection.SERVER_ERROR, "agent failed to start");
 		}, socket::resume);
+	}
+
+	/**
+	 * A socket error: the peer going away is left to the close handler; anything else (an
+	 * oversized or corrupt frame, for one) is reported and closes the connection.
+	 */
+	static void socketFailed(VertxWebSocketConnection connection, Throwable error) {
+		if (error instanceof HttpClosedException) {
+			logger.debug("ACP WebSocket connection {} closed: {}", connection.id(), error.getMessage());
+			return;
+		}
+		connection.signalException(error);
+		connection.close(VertxWebSocketConnection.SERVER_ERROR, "WebSocket error");
 	}
 
 	private void endpointError(Throwable error) {

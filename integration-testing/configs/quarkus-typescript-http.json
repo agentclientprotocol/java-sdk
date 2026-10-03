@@ -1,0 +1,57 @@
+{
+  "name": "quarkus-typescript-http",
+  "description": "typescript client -> Quarkus-hosted annotated Java agent (acp-quarkus, @AcpAgent bean on the Quarkus HTTP server) over http: the catalogue steps that agent implements (hand-written)",
+  "timeoutSec": 400,
+  "peers": [
+    "typescript-sdk"
+  ],
+  "processes": [
+    {
+      "name": "agent",
+      "language": "java",
+      "role": "server",
+      "dir": "${ROOT}/programs/quarkus",
+      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/programs/quarkus/launch/build.sh",
+      "run": "${ROOT}/programs/quarkus/launch/agent.sh --transport http --port ${PORT}",
+      "env": {
+        "TS_SDK": "${peer.typescript-sdk}"
+      },
+      "ready": {
+        "line": "READY",
+        "timeoutSec": 90
+      }
+    },
+    {
+      "name": "client",
+      "language": "typescript",
+      "role": "client",
+      "dir": "${ROOT}/programs/node",
+      "build": "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" TS_SDK=\"${peer.typescript-sdk}\" ${ROOT}/programs/node/launch/build.sh",
+      "run": "${ROOT}/programs/node/launch/client.sh --transport http --url http://127.0.0.1:${PORT}/acp",
+      "env": {
+        "STEPS": "init.initialize,session.new,session.multi,update.agent_message_chunk,stop.max_tokens,stop.refusal,stop.max_turn_requests,error.method-not-found,big.prompt-1m,big.update-1m,big.prompt-8m,big.update-8m,conn.close",
+        "TS_SDK": "${peer.typescript-sdk}"
+      },
+      "timeoutSec": 300
+    }
+  ],
+  "assertions": {
+    "requiredOutput": {},
+    "forbiddenOutput": {
+      "agent": [
+        " ERROR ",
+        " WARN "
+      ]
+    },
+    "checks": [
+      "client RESULT pass == 13",
+      "client RESULT fail == 0"
+    ],
+    "expectedFailures": [],
+    "report": {
+      "client": [
+        "TIMEOUT"
+      ]
+    }
+  }
+}

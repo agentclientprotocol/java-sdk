@@ -102,6 +102,7 @@ artifact.
 | `x-<client>-<agent>-<transport>` | generated: the client program of one language against the agent program of another over one transport, running every stable catalogue step (`steps.json`). Pairs are Java<->Java and Java<->X for X in TypeScript, Rust, Python and Kotlin; transports are stdio, Streamable HTTP and WebSocket (Kotlin: stdio and WebSocket) |
 | `x-<client>-<agent>-<transport>-unstable` | the same pair running the `unstable` steps (`session.fork`); on demand only |
 | `conf-java-agent-<t>`, `conf-java-client-<t>`, `conf-java-client-catalogue-<t>` | the raw driver probing the Java agent, the Java client's raw mode, and the Java client running catalogue steps against the raw agent ([programs/raw/gen_conf.py](programs/raw/gen_conf.py)) |
+| `quarkus-typescript-http`, `quarkus-typescript-ws` | hand-written: the TypeScript client program against the Quarkus-hosted agent (`programs/quarkus`, an `@AcpAgent` bean served by `acp-quarkus` on the Quarkus HTTP server), running the catalogue steps that agent implements (initialize, sessions, echo chunks, stop reasons, -32601, 1 MB and 8 MB prompts and updates). Run in the `typescript-http`/`typescript-ws` legs of `cross-sdk.yml` |
 | `load-50`, `load-300`, `load-1000` | N Java clients on their own connections, each: initialize, session/new, then 10 (or 5) prompts streaming two updates each |
 | `load-shared-300` | 300 clients sharing one HttpClient, so one HTTP/2 connection |
 
