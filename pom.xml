@@ -21,6 +21,9 @@
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
+        <module>acp-quarkus</module>
+        <module>acp-quarkus-deployment</module>
+        <module>acp-quarkus-integration-tests</module>
     </modules>
 
     <licenses>
@@ -81,6 +84,10 @@
         <mockito.version>5.23.0</mockito.version>
         <logback.version>1.6.3</logback.version>
         <lincheck.version>3.7</lincheck.version>
+
+        <!-- Quarkus extension (acp-quarkus*). Its BOM is imported only in those modules'
+             own dependencyManagement, never here. -->
+        <quarkus.version>3.40.1</quarkus.version>
 
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
