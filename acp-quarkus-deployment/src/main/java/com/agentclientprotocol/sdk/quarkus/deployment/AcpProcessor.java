@@ -12,6 +12,7 @@ import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.AgentTransportType;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentAssembly;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentClass;
+import com.agentclientprotocol.sdk.quarkus.runtime.AcpClientProducers;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpConfigBuilder;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpEndpoint;
@@ -57,6 +58,12 @@ class AcpProcessor {
 	@BuildStep
 	FeatureBuildItem feature() {
 		return new FeatureBuildItem(FEATURE);
+	}
+
+	/** The client beans, each created only when the application injects it. */
+	@BuildStep
+	AdditionalBeanBuildItem clientBeans() {
+		return new AdditionalBeanBuildItem(AcpClientProducers.class);
 	}
 
 	/** {@code @AcpAgent} alone makes a class a bean, a singleton unless it declares a scope. */
