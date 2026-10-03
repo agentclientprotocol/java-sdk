@@ -22,9 +22,13 @@ import java.lang.annotation.Target;
  * qualified.
  *
  * <p><b>Finding the handler methods.</b> {@code AcpAgentSupport} looks for them once, when the
- * object is given to its builder, and rejects a class without this annotation with an
- * {@code IllegalArgumentException}. It finds methods of any visibility declared in the class
- * itself; methods inherited from a superclass are not found. Declare at most one method for each
+ * object is given to its builder, and rejects a class with this annotation neither on it nor on a
+ * superclass with an {@code IllegalArgumentException}. It finds methods of any visibility declared
+ * in the class and its superclasses, so handlers can live on an abstract base class, and a
+ * subclass that a framework generates for a bean (a Spring CGLIB, Quarkus ArC or Micronaut AOP
+ * proxy, which carries no annotations) is found through the annotated class it extends and
+ * invoked on the proxy, so its interceptors run. An annotated override replaces the method it
+ * overrides. Declare at most one method for each
  * annotation: with two, one of them is used and the other is ignored without an error. With no
  * {@link Initialize} method the agent answers {@code initialize} with the response derived from
  * its annotations (see Capabilities below); with no {@link NewSession} method it answers {@code session/new}
