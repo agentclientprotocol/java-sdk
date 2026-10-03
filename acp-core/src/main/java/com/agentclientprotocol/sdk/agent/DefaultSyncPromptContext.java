@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -100,6 +101,21 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	@Override
 	public PromptContext async() {
 		return asyncContext;
+	}
+
+	// ========================================================================
+	// Cancellation
+	// ========================================================================
+
+	@Override
+	public boolean isCancelled() {
+		return asyncContext.isCancelled();
+	}
+
+	@Override
+	public void onCancel(Runnable action) {
+		Assert.notNull(action, "The action must not be null");
+		asyncContext.whenCancelled().subscribe(null, null, action);
 	}
 
 	// ========================================================================

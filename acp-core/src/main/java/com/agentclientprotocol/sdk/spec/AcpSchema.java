@@ -1022,6 +1022,15 @@ public final class AcpSchema {
 		public static PromptResponse refusal() {
 			return new PromptResponse(StopReason.REFUSAL);
 		}
+
+		/**
+		 * Creates the response to a cancelled prompt, which ACP requires once the client sent
+		 * {@code session/cancel} (ACP v1, prompt turn, Cancellation).
+		 * @return A PromptResponse with CANCELLED stop reason
+		 */
+		public static PromptResponse cancelled() {
+			return new PromptResponse(StopReason.CANCELLED);
+		}
 	}
 
 	/**
@@ -1051,7 +1060,8 @@ public final class AcpSchema {
 	 * turn. A client sends it with {@code cancel(...)} on {@code AcpAsyncClient} or
 	 * {@code AcpSyncClient}. The agent's cancel handler
 	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.CancelHandler} or a
-	 * {@link com.agentclientprotocol.sdk.annotation.Cancel @Cancel} method) receives it. It is a
+	 * {@link com.agentclientprotocol.sdk.annotation.Cancel @Cancel} method) receives it, and the
+	 * running prompt's context reports it ({@code PromptContext.isCancelled()}). It is a
 	 * notification, so it gets no answer of its own.
 	 *
 	 * <p>

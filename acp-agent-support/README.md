@@ -261,6 +261,39 @@ PromptResponse handle(PromptRequest req, SyncPromptContext ctx) {
 }
 ```
 
+### Cancellation
+
+A prompt method learns that its prompt was cancelled from its context, whether by `session/cancel`
+for its session or by `$/cancel_request` for its request; no `@Cancel` handler or shared state is
+needed:
+
+```java
+@Prompt
+PromptResponse handle(PromptRequest req, SyncPromptContext ctx) {
+    for (Step step : plan(req)) {
+        if (ctx.isCancelled()) {
+            ctx.sendMessage("Stopped.");
+            return PromptResponse.cancelled();
+        }
+        step.run(ctx);
+    }
+    return PromptResponse.endTurn();
+}
+
+@Prompt
+Mono<PromptResponse> handle(PromptRequest req, PromptContext ctx) {
+    return work(req, ctx)
+        .takeUntilOther(ctx.whenCancelled())
+        .defaultIfEmpty(PromptResponse.cancelled());
+}
+```
+
+`SyncPromptContext.onCancel(Runnable)` runs an action once on cancel, for work that cannot poll
+(a subprocess, an HTTP call). After `session/cancel` the method must answer `cancelled` within the
+cancel grace period (`cancelGracePeriod`, default 60 s); once it passes the agent answers
+`cancelled` itself and interrupts the method's thread. After `$/cancel_request` the agent has already
+answered (`-32800`, or `cancelled` if the session was cancelled too), so the method just stops.
+
 ## Interceptors
 
 Interceptors allow cross-cutting concerns like logging, metrics, or error handling:

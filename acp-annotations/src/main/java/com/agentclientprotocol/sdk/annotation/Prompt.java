@@ -46,12 +46,18 @@ import java.lang.annotation.Target;
  *
  * <p>A session has one prompt turn at a time. Until this method returns, a second prompt on the
  * same session is answered with {@code -32600} (Invalid request); prompts on other sessions run at
- * the same time, on other threads. When the client cancels the turn, this method keeps running:
- * the {@link Cancel} method is called, and this method should stop and return stop reason
- * {@code cancelled}. If it has not returned when the cancel grace period ends, the SDK answers
- * {@code cancelled} for it and interrupts its thread. {@code AcpAgentSupport.Builder} sets the
- * grace period and can also limit how long any turn runs ({@code maxPromptDuration}, off by
- * default).
+ * the same time, on other threads.
+ *
+ * <p><b>Cancellation.</b> The context tells the method that its turn was cancelled, by
+ * {@code session/cancel} for its session or by {@code $/cancel_request} for its request: a sync
+ * method polls {@code SyncPromptContext.isCancelled()} (or registers {@code onCancel(Runnable)}),
+ * a method returning {@code Mono} composes {@code PromptContext.whenCancelled()}. After
+ * {@code session/cancel} the method keeps running until it returns: it should stop, send any last
+ * updates, and return {@code PromptResponse.cancelled()}. If it has not returned when the cancel
+ * grace period ends, the SDK answers {@code cancelled} for it and interrupts its thread. After
+ * {@code $/cancel_request} the SDK has already answered, so the method just stops.
+ * {@code AcpAgentSupport.Builder} sets the grace period and can also limit how long any turn runs
+ * ({@code maxPromptDuration}, off by default).
  *
  * <p>Example usage:
  * <pre>{@code
