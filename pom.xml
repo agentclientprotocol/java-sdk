@@ -21,6 +21,8 @@
         <module>acp-agent-support</module>
         <module>acp-test</module>
         <module>acp-streamable-http-jetty</module>
+        <module>acp-micronaut</module>
+        <module>acp-micronaut-sample</module>
     </modules>
 
     <licenses>
@@ -73,6 +75,11 @@
         <slf4j.version>2.0.18</slf4j.version>
         <jspecify.version>1.0.0</jspecify.version>
         <jetty.version>12.1.12</jetty.version>
+        <!-- Micronaut 4 (Java 17) for acp-micronaut and its sample only: its platform BOM is
+             imported in those modules' own dependencyManagement, never here. The core version
+             is the one the platform manages, for the annotation processor path. -->
+        <micronaut.platform.version>4.10.20</micronaut.platform.version>
+        <micronaut.core.version>4.10.30</micronaut.core.version>
 
         <!-- Test dependency versions -->
         <junit.version>5.14.4</junit.version>
