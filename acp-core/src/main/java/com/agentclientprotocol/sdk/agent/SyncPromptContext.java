@@ -325,8 +325,9 @@ public interface SyncPromptContext {
 
 	/**
 	 * Runs a command in a client terminal and waits for its output and exit status. It creates a
-	 * terminal, waits for the command to end, reads the output, then releases the terminal, also
-	 * when a step fails. Waiting counts against the agent's request timeout, so a command that runs
+	 * terminal, waits for the command to end, reads the output, then releases the terminal: always,
+	 * also when a step fails or the handler is cancelled while it waits, as ACP requires of an
+	 * agent. Waiting counts against the agent's request timeout, so a command that runs
 	 * longer throws, and the terminal is still released; raise the builder's {@code requestTimeout}
 	 * for long commands.
 	 * @param command the command and its options

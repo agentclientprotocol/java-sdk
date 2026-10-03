@@ -544,6 +544,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`PromptContext.execute`/`SyncPromptContext.execute` release the terminal when cancelled.** ACP
+  says the agent MUST release every terminal it creates (`terminals.mdx`). `execute` released it
+  when the command ended and when a step failed, but not when the prompt was cancelled
+  (`session/cancel` grace period, `maxPromptDuration`, `$/cancel_request`) while it waited in
+  `terminal/wait_for_exit`: the client kept the terminal. It now sends `terminal/release` exactly
+  once on every path.
+
 - **`session/close` cancels the session's ongoing work before it closes.** ACP v1 says the agent
   "**must** cancel any ongoing work related to the session (treat it as if `session/cancel` was
   called) and then free up any resources associated with the session" (schema

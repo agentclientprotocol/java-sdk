@@ -319,8 +319,9 @@ public interface PromptContext {
 
 	/**
 	 * Runs a command in a client terminal and returns its output and exit status. It creates a
-	 * terminal, waits for the command to end, reads the output, then releases the terminal, also
-	 * when a step fails. Waiting counts against the agent's request timeout, so a command that runs
+	 * terminal, waits for the command to end, reads the output, then releases the terminal: always,
+	 * also when a step fails or the returned {@code Mono} is cancelled (for example because the
+	 * prompt was cancelled), as ACP requires of an agent. Waiting counts against the agent's request timeout, so a command that runs
 	 * longer fails with a {@link java.util.concurrent.TimeoutException}, and the terminal is still
 	 * released; raise the builder's {@code requestTimeout} for long commands.
 	 * @param command the command and its options
