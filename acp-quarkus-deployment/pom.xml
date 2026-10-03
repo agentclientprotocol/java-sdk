@@ -22,7 +22,16 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- The Quarkus BOM, here only; the SDK parent's pins win over it. -->
+            <!-- The extension is built and tested on the SDK's Jackson: an import does not
+                 override the Quarkus BOM's Jackson unless it comes first. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- The Quarkus BOM, imported only in the Quarkus modules, never in the parent. -->
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-bom</artifactId>

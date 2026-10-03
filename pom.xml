@@ -650,6 +650,7 @@
                                  reactor, so skipping there skips the whole release. -->
                             <excludeArtifacts>
                                 <excludeArtifact>acp-micronaut-sample</excludeArtifact>
+                                <excludeArtifact>acp-quarkus-integration-tests</excludeArtifact>
                             </excludeArtifacts>
                         </configuration>
                     </plugin>
