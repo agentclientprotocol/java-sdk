@@ -6,14 +6,17 @@ package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
 
 /**
@@ -117,15 +120,23 @@ public class AcpSyncClient implements AutoCloseable {
 
 	/**
 	 * Gracefully closes the client connection with a default timeout.
-	 * @return true if the client closed gracefully, false if it timed out
+	 * @return true if the client closed gracefully, false if closing failed or timed out
 	 */
 	public boolean closeGracefully() {
 		try {
 			logger.debug("Gracefully closing ACP sync client");
-			this.delegate.closeGracefully().block(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+			this.delegate.closeGracefully()
+				.timeout(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS), AcpSchedulers.timeouts())
+				.block();
 		}
 		catch (RuntimeException e) {
-			logger.warn("Client didn't close within timeout of {} ms", DEFAULT_CLOSE_TIMEOUT_MS, e);
+			Throwable cause = Exceptions.unwrap(e);
+			if (cause instanceof TimeoutException) {
+				logger.warn("Client didn't close within timeout of {} ms", DEFAULT_CLOSE_TIMEOUT_MS);
+			}
+			else {
+				logger.warn("Client close failed: {}", cause.toString(), cause);
+			}
 			return false;
 		}
 		return true;

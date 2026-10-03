@@ -194,7 +194,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 						}
 					}
 				}
-			});
+			}, error -> logger.debug("Outbound processing ended: {}", error.toString()));
 	}
 
 	@Override

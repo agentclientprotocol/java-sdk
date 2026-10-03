@@ -156,7 +156,10 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		if (!connected.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Already connected"));
 		}
-		inbound.messages().flatMap(message -> Mono.just(message).transform(handler)).subscribe();
+		inbound.messages()
+			.flatMap(message -> Mono.just(message).transform(handler))
+			.subscribe(ignored -> {
+			}, error -> logger.warn("Inbound message processing ended with an error", error));
 		return Mono.empty();
 	}
 

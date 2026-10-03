@@ -16,6 +16,7 @@ import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAsyncAgent;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
@@ -113,7 +114,9 @@ public class MockAcpAgent {
 	 * Starts the mock agent.
 	 */
 	public void start() {
-		delegate.start().subscribe();
+		delegate.start()
+			.subscribe(ignored -> {
+			}, error -> LoggerFactory.getLogger(MockAcpAgent.class).warn("Mock agent failed to start", error));
 	}
 
 	/**

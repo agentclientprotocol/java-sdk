@@ -11,6 +11,7 @@ import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
@@ -51,7 +52,10 @@ public interface AcpTransport {
 	 * </p>
 	 */
 	default void close() {
-		this.closeGracefully().subscribe();
+		this.closeGracefully()
+			.subscribe(ignored -> {
+			}, error -> LoggerFactory.getLogger(AcpTransport.class)
+				.warn("Closing the transport failed: {}", error.toString(), error));
 	}
 
 	/**

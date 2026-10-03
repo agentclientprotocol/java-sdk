@@ -221,9 +221,10 @@ public final class RemoteAcpConnection {
 					.doOnNext(response -> {
 						outboundConsumer.accept(response);
 					})
-					.doOnError(this::signalException)
 					.doFinally(signal -> terminationSink.tryEmitValue(null))
-					.subscribe();
+					// Reported to the exception handler, not dropped to Reactor's ERROR hook.
+					.subscribe(ignored -> {
+					}, this::signalException);
 				return Mono.empty();
 			});
 		}

@@ -345,13 +345,14 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 			.flatMap(message -> Mono.just(message)
 				.transform(inboundMessageHandler)
 				.contextWrite(ctx -> ctx.put("observation", "myObservation")))
-			.subscribe();
+			.subscribe(ignored -> {
+			}, error -> logger.warn("Inbound message processing ended with an error", error));
 	}
 
 	private void handleIncomingErrors() {
-		this.errorSink.asFlux().subscribe(e -> {
-			this.stdErrorHandler.accept(e);
-		});
+		this.errorSink.asFlux()
+			.subscribe(line -> this.stdErrorHandler.accept(line),
+					error -> logger.warn("Stopped handing the agent's standard error to its handler", error));
 	}
 
 	@Override
@@ -514,7 +515,9 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 				isClosing = true;
 				outboundSink.tryEmitComplete();
 			}
-		}).subscribe();
+			// Logged above unless closing; not dropped to Reactor's ERROR hook.
+		}).subscribe(ignored -> {
+		}, error -> logger.debug("Outbound processing ended: {}", error.toString()));
 	}
 
 	/**
