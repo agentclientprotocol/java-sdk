@@ -50,7 +50,7 @@ This module transitively includes `acp-annotations` and `acp-core`.
 
 | Annotation | Description |
 |------------|-------------|
-| `@AcpAgent` | Marks a class as an ACP agent. Required on all agent classes. Its attributes are advertised in the `initialize` response: `name`, `version` and `title` as `agentInfo` (the name defaults to the class's simple name, the version to the jar manifest's `Implementation-Version`, else `"unknown"`), `authMethods` (`@AuthMethod`s) as `authMethods`, and `mcpHttp`/`mcpSse` as `mcpCapabilities`. |
+| `@AcpAgent` | Marks a class as an ACP agent. Required on the agent class or a superclass of it: handlers are discovered on the class and its superclasses, so a framework proxy of the bean (Spring CGLIB, Quarkus ArC, Micronaut AOP) is accepted and invoked through the proxy. Its attributes are advertised in the `initialize` response: `name`, `version` and `title` as `agentInfo` (the name defaults to the class's simple name, the version to the jar manifest's `Implementation-Version`, else `"unknown"`), `authMethods` (`@AuthMethod`s) as `authMethods`, and `mcpHttp`/`mcpSse` as `mcpCapabilities`. |
 | `@AuthMethod` | One authentication method inside `@AcpAgent(authMethods = ...)`: `id`, `name`, `description`, and `type` `AGENT` (served by `@Authenticate`) or `TERMINAL` (the client reruns the agent program with `args` and `env`). |
 
 ### Handler Methods

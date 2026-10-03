@@ -545,6 +545,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Annotated agents work as framework-proxied beans and with inherited handlers.**
+  `AcpAgentSupport` read `@AcpAgent` and the handler methods from the bean's own class only. A
+  proxy that Spring (CGLIB), Quarkus (ArC) or Micronaut (AOP) generates for the bean is an
+  unannotated subclass, so `create(proxy)` failed with "Class must be annotated with @AcpAgent",
+  and handlers declared on a superclass were never found (the client got `-32601`). Discovery
+  now walks the class hierarchy: `@AcpAgent` may be on a superclass, handlers are collected
+  from every class up to `Object` and invoked on the instance given (through the proxy, so its
+  interceptors run), an annotated override is one handler, and bridge and synthetic methods are
+  skipped. `agentInfo.name` defaults to the annotated class's simple name, not the proxy's.
+
 - **An annotated agent advertises what its annotations declare.** Without an `@Initialize` method,
   `AcpAgentSupport` answered `initialize` with `InitializeResponse.ok()`: `loadSession: false`, no
   session, auth or provider capabilities, no `authMethods` and no `agentInfo`. An agent with

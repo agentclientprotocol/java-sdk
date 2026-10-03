@@ -12,9 +12,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -673,27 +675,88 @@ public class AcpAgentSupport {
 					List.copyOf(interceptors), requestTimeout, cancelGracePeriod, maxPromptDuration);
 		}
 
+		/**
+		 * Discovers the handler methods of {@code agentClass} and its superclasses, and binds
+		 * them to the one instance the factory gives. The {@code @AcpAgent} annotation may be on
+		 * a superclass, as it is for a proxy a framework generates (Spring CGLIB, Quarkus ArC,
+		 * Micronaut AOP), whose subclass carries no annotations: handlers are then found on the
+		 * user's class and invoked on the proxy, so its interceptors run. A method overridden in
+		 * a subclass is one handler, invoked virtually, and bridge and synthetic methods are not
+		 * handlers.
+		 */
 		private void discoverHandlers(Class<?> agentClass, Supplier<Object> instanceFactory) {
-			if (!agentClass.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
-				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName());
+			Class<?> annotatedClass = annotatedAgentClass(agentClass);
+			if (annotatedClass == null) {
+				throw new IllegalArgumentException("Class must be annotated with @AcpAgent: " + agentClass.getName()
+						+ " (neither it nor a superclass is)");
 			}
-			AgentAdvertisement.validate(agentClass);
-			agentClasses.add(agentClass);
+			AgentAdvertisement.validate(annotatedClass);
+			agentClasses.add(annotatedClass);
 			// One instance for every handler and request: handlers share the agent's state
 			Object agentInstance = instanceFactory.get();
-			for (Method method : agentClass.getDeclaredMethods()) {
-				HANDLER_ANNOTATIONS.forEach((annotation, acpMethod) -> {
-					if (method.isAnnotationPresent(annotation)) {
-						handlers.put(acpMethod, new AcpHandlerMethod(agentInstance, method, acpMethod));
-						log.debug("Discovered @{} handler: {}", annotation.getSimpleName(), method.getName());
-					}
-				});
-				String extensionMethod = extensionMethod(method);
-				if (extensionMethod != null) {
-					handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
-					log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
+			Set<String> seen = new HashSet<>();
+			for (Class<?> type = agentClass; type != null && type != Object.class; type = type.getSuperclass()) {
+				discoverDeclaredHandlers(type, agentInstance, seen);
+			}
+		}
+
+		/**
+		 * Registers the handlers {@code type} declares, other than those an annotated override
+		 * below it already registered ({@code seen}, the signatures registered so far). An
+		 * unannotated override, such as a proxy's, leaves the annotations to the method it
+		 * overrides. A generic override's bridge stands for the erased method it overrides.
+		 */
+		private void discoverDeclaredHandlers(Class<?> type, Object agentInstance, Set<String> seen) {
+			Set<String> registeredHere = new HashSet<>();
+			for (Method method : type.getDeclaredMethods()) {
+				if (!method.isBridge() && !method.isSynthetic() && !seen.contains(signature(method))
+						&& discoverHandler(method, agentInstance)) {
+					registeredHere.add(method.getName());
+					seen.add(signature(method));
 				}
 			}
+			for (Method method : type.getDeclaredMethods()) {
+				if (method.isBridge() && registeredHere.contains(method.getName())) {
+					seen.add(signature(method));
+				}
+			}
+		}
+
+		/**
+		 * Registers {@code method} for each handler annotation it carries.
+		 * @return whether it carries any
+		 */
+		private boolean discoverHandler(Method method, Object agentInstance) {
+			boolean handler = false;
+			for (Map.Entry<Class<? extends Annotation>, String> entry : HANDLER_ANNOTATIONS.entrySet()) {
+				if (method.isAnnotationPresent(entry.getKey())) {
+					handlers.put(entry.getValue(), new AcpHandlerMethod(agentInstance, method, entry.getValue()));
+					log.debug("Discovered @{} handler: {}", entry.getKey().getSimpleName(), method.getName());
+					handler = true;
+				}
+			}
+			String extensionMethod = extensionMethod(method);
+			if (extensionMethod != null) {
+				handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
+				log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
+				handler = true;
+			}
+			return handler;
+		}
+
+		/** A method's name and parameter types, which an override shares. */
+		private static String signature(Method method) {
+			return method.getName() + Arrays.toString(method.getParameterTypes());
+		}
+
+		/** The first class from {@code type} up that is annotated {@code @AcpAgent}, or null. */
+		private static @Nullable Class<?> annotatedAgentClass(Class<?> type) {
+			for (Class<?> candidate = type; candidate != null; candidate = candidate.getSuperclass()) {
+				if (candidate.isAnnotationPresent(com.agentclientprotocol.sdk.annotation.AcpAgent.class)) {
+					return candidate;
+				}
+			}
+			return null;
 		}
 
 		/**
