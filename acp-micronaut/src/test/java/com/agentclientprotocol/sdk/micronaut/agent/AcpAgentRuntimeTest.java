@@ -94,8 +94,8 @@ class AcpAgentRuntimeTest {
 		// @SetSessionMode returns a Mono
 		assertThat(acp.setSessionMode(new AcpSchema.SetSessionModeRequest(sessionId, "any"))).isNotNull();
 
-		// The SDK's own initialize answer (no @Initialize declared) is not intercepted.
-		assertThat(interceptor.methods).contains("session/new", "session/prompt", "session/set_mode");
+		// The derived initialize answer (no @Initialize declared) is intercepted like any handler.
+		assertThat(interceptor.methods).contains("initialize", "session/new", "session/prompt", "session/set_mode");
 		assertThat(runtime.isRunning()).isTrue();
 		assertThat(runtime.port()).isEmpty();
 	}

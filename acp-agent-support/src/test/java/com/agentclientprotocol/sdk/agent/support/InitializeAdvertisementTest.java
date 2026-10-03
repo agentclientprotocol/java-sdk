@@ -385,6 +385,31 @@ class InitializeAdvertisementTest {
 		}
 	}
 
+	/** Interceptors see the derived initialize exactly as they see a declared @Initialize method. */
+	@Test
+	void interceptorsSeeTheDerivedInitialize() {
+		java.util.List<String> seen = new java.util.concurrent.CopyOnWriteArrayList<>();
+		com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor recorder = new com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor() {
+			@Override
+			public boolean preInvoke(com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext context) {
+				seen.add("pre " + context.getAcpMethod());
+				return true;
+			}
+
+			@Override
+			public Object postInvoke(com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext context,
+					Object result) {
+				seen.add("post " + context.getAcpMethod() + " " + result.getClass().getSimpleName());
+				return result;
+			}
+		};
+		InitializeResponse response = initialize(AcpAgentSupport.create(new MinimalAgent()).interceptor(recorder),
+				Function.identity());
+
+		assertThat(response.agentInfo().name()).isEqualTo("MinimalAgent");
+		assertThat(seen).containsExactly("pre initialize", "post initialize InitializeResponse");
+	}
+
 	@AcpAgent(authMethods = @AuthMethod(id = "api-key", name = "API key"))
 	static class AgentMethodWithoutAuthenticate {
 

@@ -263,7 +263,7 @@ public class AcpAgentSupport {
 		bind(AcpSchema.METHOD_INITIALIZE,
 				handler -> agent.initializeHandler(req -> AgentAdvertisement.merge(advertisement.derive(req),
 						respond(handler, InitializeResponse.class, req, null))),
-				() -> agent.initializeHandler(advertisement::derive));
+				() -> agent.initializeHandler(req -> deriveInitialize(req)));
 		bind(AcpSchema.METHOD_SESSION_NEW,
 				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
 				() -> agent.newSessionHandler(req -> new NewSessionResponse(UUID.randomUUID().toString(), null, null)));
@@ -382,16 +382,61 @@ public class AcpAgentSupport {
 
 	/**
 	 * Runs the interceptor chain, argument resolution, the handler and its return value
-	 * handling. The invocation sees this connection's agent and, once the client has sent
-	 * initialize, the capabilities negotiated on it.
+	 * handling (see {@link #intercept}).
 	 * @return the handler's result, or null when it produced none or an interceptor vetoed
 	 * the call
 	 */
 	private @Nullable Object invoke(AcpHandlerMethod handler, Object request, @Nullable String sessionId,
 			@Nullable SyncPromptContext syncContext) {
+		return intercept(handler.getAcpMethod(), request, sessionId, syncContext, context -> {
+			// Resolve arguments, invoke, and handle the return value
+			@Nullable Object[] args = resolveArguments(handler, context);
+			Object result = handler.invoke(args);
+			return new Outcome(result, handler.getReturnType());
+		});
+	}
+
+	/**
+	 * The initialize response derived from the annotations, for an agent without an
+	 * {@code @Initialize} method, produced through the interceptor chain as a declared
+	 * handler's would be.
+	 */
+	private InitializeResponse deriveInitialize(AcpSchema.InitializeRequest request) {
+		Object result = intercept(AcpSchema.METHOD_INITIALIZE, request, null, null,
+				context -> new Outcome(advertisement.derive(request), null));
+		if (!(result instanceof InitializeResponse response)) {
+			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+					"The initialize handler produced no response (an interceptor vetoed the call)");
+		}
+		return response;
+	}
+
+	/** The call an interceptor chain wraps. */
+	@FunctionalInterface
+	private interface Call {
+
+		Outcome call(AcpInvocationContext context) throws Exception;
+
+	}
+
+	/**
+	 * What a call produced: its result, and the declared return type that the return value
+	 * handlers convert it by, or null for a result that is already the response.
+	 */
+	private record Outcome(@Nullable Object result, @Nullable AcpMethodParameter returnType) {
+	}
+
+	/**
+	 * Runs the interceptor chain around {@code call}. The invocation sees this connection's
+	 * agent and, once the client has sent initialize, the capabilities negotiated on it. A
+	 * result with a declared return type passes through the return value handlers.
+	 * @return the result, or null when there is none or an interceptor vetoed the call
+	 */
+	private @Nullable Object intercept(String acpMethod, Object request, @Nullable String sessionId,
+			@Nullable SyncPromptContext syncContext, Call call) {
 
 		AcpInvocationContext context = AcpInvocationContext.builder()
-				.acpMethod(handler.getAcpMethod())
+				.acpMethod(acpMethod)
 				.request(request)
 				.sessionId(sessionId)
 				.syncPromptContext(syncContext)
@@ -403,26 +448,15 @@ public class AcpAgentSupport {
 		InterceptorChain chain = new InterceptorChain(interceptors);
 
 		try {
-			// Pre-invoke
 			if (!chain.applyPreInvoke(context)) {
 				return null;
 			}
-
-			// Resolve arguments
-			@Nullable Object[] args = resolveArguments(handler, context);
-
-			// Invoke
-			Object result = handler.invoke(args);
-
-			// Post-invoke
-			result = chain.applyPostInvoke(context, result);
-
-			// Handle return value
-			return returnValueHandlers.handleReturnValue(result, handler.getReturnType(), context);
-
+			Outcome outcome = call.call(context);
+			Object result = chain.applyPostInvoke(context, outcome.result());
+			AcpMethodParameter returnType = outcome.returnType();
+			return (returnType != null) ? returnValueHandlers.handleReturnValue(result, returnType, context) : result;
 		}
 		catch (Exception e) {
-			// On-error
 			Object replacement = chain.applyOnError(context, e);
 			if (replacement != null) {
 				return replacement;

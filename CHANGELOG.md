@@ -675,6 +675,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `@AcpAgent(mcpHttp, mcpSse)` → `mcpCapabilities`, default false;
   - `protocolVersion` is the client's when the SDK speaks it, otherwise the latest it speaks.
 
+  Interceptors see the derived `initialize` exactly as they see a declared `@Initialize` method
+  (`preInvoke`, `postInvoke`, `onError`, `afterCompletion`).
+
   An `@Initialize` method is now optional. When present, its response is laid over the derived
   one: a capability is advertised when either side advertises it, so existing code returning
   `InitializeResponse.ok()` keeps every derived capability; returned `authMethods` follow the
