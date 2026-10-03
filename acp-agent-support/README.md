@@ -217,7 +217,7 @@ The runtime automatically converts return values to protocol response types:
 | Return Type | Conversion |
 |-------------|------------|
 | The method's response type (`InitializeResponse`, `NewSessionResponse`, `PromptResponse`, ...) | Passed through directly. |
-| `Mono` of the response type | Unwrapped (blocked on) and returned. |
+| `Mono`, `CompletionStage` (`CompletableFuture`) or single-value `Publisher` of the response type (or of `String` for `@Prompt`) | Awaited on the handler thread; the value is then handled as if returned directly. |
 | `String` (`@Prompt` only) | Sent to the client as an `agent_message_chunk` session update, then the turn ends (`PromptResponse.endTurn()`). |
 | `void` (`@Prompt` only) | Converted to `PromptResponse.endTurn()`. |
 | `void` (`@Cancel`, `@ExtNotification`) | Notifications have no response. |
@@ -623,7 +623,7 @@ acp-agent-support
 │   ├── DirectResponseHandler
 │   ├── StringToPromptResponseHandler
 │   ├── VoidHandler
-│   ├── MonoHandler
+│   ├── AsyncValueHandler
 │   └── ExtensionResultHandler
 └── interceptor/             # Interceptor chain
     ├── AcpInterceptor       # Interface

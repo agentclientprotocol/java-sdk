@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Annotated handlers may return a `CompletionStage` or a single-value `Publisher`**, besides
+  the value itself and a `Mono`, with the same meaning: the runtime waits for the value on the
+  handler's thread. A `@Prompt` method's `Mono<String>` (or `CompletionStage<String>`) now sends
+  the text as an agent message chunk and ends the turn, as a `String` does; it used to fail every
+  prompt with `-32603`. **Breaking:** `MonoHandler` is renamed `AsyncValueHandler`, and
+  `getMonoGenericType` is now `getValueType`.
+
 - **`AcpAgentSupport.Builder.run()`** builds the agent on its transport, starts it and blocks until
   the transport ends: `AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run()`,
   the bootstrap the README and Javadoc showed, now compiles.

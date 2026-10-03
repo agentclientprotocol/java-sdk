@@ -70,8 +70,9 @@ import java.lang.annotation.Target;
  * {@link ConfigValue} parameter outside a {@link SetSessionConfigOption} method. A parameter a
  * custom argument resolver supplies is the application's to check.
  *
- * <p><b>Return values.</b> A request handler returns its method's response, or a {@code Mono} of
- * it, which the runtime waits for. A request must get a result, so a request handler declared
+ * <p><b>Return values.</b> A request handler returns its method's response, or a {@code Mono}, a
+ * {@code CompletionStage} or a single-value Reactive Streams {@code Publisher} of it, which the
+ * runtime waits for on the handler's thread. A request must get a result, so a request handler declared
  * {@code void}, or declared to return another type than its response, is rejected when the agent
  * is built, and one that returns {@code null} or an empty {@code Mono} is answered with an
  * internal error ({@code -32603}). Of the request handlers, only a {@link Prompt} method may be

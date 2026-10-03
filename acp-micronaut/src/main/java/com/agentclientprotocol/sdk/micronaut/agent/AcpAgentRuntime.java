@@ -61,8 +61,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * {@code AcpInterceptor}, {@code ArgumentResolver} and {@code ReturnValueHandler} beans are
- * added to the agent, in their bean order. Handler methods may also return a Reactive
- * Streams {@code Publisher} (see {@link PublisherReturnValueHandler}).
+ * added to the agent, in their bean order. Handler methods may also return a
+ * {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams {@code Publisher},
+ * which {@code AcpAgentSupport} waits for.
  *
  * <p>
  * Stopping: closing the context closes the agent gracefully, and with
@@ -237,8 +238,6 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		interceptors.forEach(builder::interceptor);
 		argumentResolvers.forEach(builder::argumentResolver);
 		returnValueHandlers.forEach(builder::returnValueHandler);
-		// TODO(devex rebase): drop when acp-agent-support handles Publisher returns.
-		builder.returnValueHandler(new PublisherReturnValueHandler());
 		return builder;
 	}
 

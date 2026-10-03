@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.agentclientprotocol.sdk.agent.support.handler.MonoHandler;
+import com.agentclientprotocol.sdk.agent.support.handler.AsyncValueHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandlerComposite;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandlingException;
 import com.agentclientprotocol.sdk.agent.support.handler.VoidHandler;
@@ -100,18 +100,18 @@ class InvocationInfrastructureTest {
 	}
 
 	@Test
-	void monoGenericTypeIsTheTypeArgumentOrObject() {
-		assertThat(MonoHandler.getMonoGenericType(AcpMethodParameter.forReturnType(method("prompt"))))
+	void asyncValueTypeIsTheTypeArgumentOrObject() {
+		assertThat(AsyncValueHandler.getValueType(AcpMethodParameter.forReturnType(method("prompt"))))
 			.isEqualTo(PromptResponse.class);
-		assertThat(MonoHandler.getMonoGenericType(AcpMethodParameter.forReturnType(method("raw"))))
+		assertThat(AsyncValueHandler.getValueType(AcpMethodParameter.forReturnType(method("raw"))))
 			.isEqualTo(Object.class);
 	}
 
 	@Test
-	void monoHandlerPassesNullThrough() {
+	void asyncValueHandlerPassesNullThrough() {
 		AcpMethodParameter returnType = AcpMethodParameter.forReturnType(method("prompt"));
 
-		assertThat(new MonoHandler().handleReturnValue(null, returnType, context("s"))).isNull();
+		assertThat(new AsyncValueHandler().handleReturnValue(null, returnType, context("s"))).isNull();
 	}
 
 	@Test

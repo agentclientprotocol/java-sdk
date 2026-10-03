@@ -23,6 +23,23 @@ import org.jspecify.annotations.Nullable;
  */
 public class StringToPromptResponseHandler implements ReturnValueHandler {
 
+	/**
+	 * Sends {@code text}, unless null or empty, to the client as an agent message chunk of the
+	 * prompt's session, and ends the turn.
+	 * @param text the text a prompt handler produced
+	 * @param context the prompt's invocation context
+	 * @return {@link PromptResponse#endTurn()}
+	 */
+	static PromptResponse endTurnWith(@Nullable String text, AcpInvocationContext context) {
+		if (text != null && !text.isEmpty()) {
+			SyncPromptContext prompt = context.getSyncPromptContext()
+				.orElseThrow(() -> new ReturnValueHandlingException(
+						"No prompt context to send the returned text to the client"));
+			prompt.sendMessage(text);
+		}
+		return PromptResponse.endTurn();
+	}
+
 	@Override
 	public boolean supportsReturnType(AcpMethodParameter returnType) {
 		return String.class.equals(returnType.getParameterType());
@@ -33,14 +50,7 @@ public class StringToPromptResponseHandler implements ReturnValueHandler {
 			AcpInvocationContext context) {
 		// Only convert to PromptResponse for prompt handlers
 		if ("session/prompt".equals(context.getAcpMethod())) {
-			String text = (String) returnValue;
-			if (text != null && !text.isEmpty()) {
-				SyncPromptContext prompt = context.getSyncPromptContext()
-					.orElseThrow(() -> new ReturnValueHandlingException(
-							"No prompt context to send the returned text to the client"));
-				prompt.sendMessage(text);
-			}
-			return PromptResponse.endTurn();
+			return endTurnWith((String) returnValue, context);
 		}
 		// For other methods, return as-is (may cause error if unexpected)
 		return returnValue;

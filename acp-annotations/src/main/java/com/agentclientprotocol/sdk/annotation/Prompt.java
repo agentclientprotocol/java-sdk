@@ -34,8 +34,10 @@ import java.lang.annotation.Target;
  *   <li>{@code PromptResponse}: the turn's stop reason, usually {@code PromptResponse.endTurn()},
  *   or stop reason {@code cancelled} after a cancel</li>
  *   <li>{@code void}: the same as {@code PromptResponse.endTurn()}</li>
- *   <li>{@code Mono<PromptResponse>}: the runtime waits for it on the handler thread; an empty
- *   {@code Mono} is answered with an internal error ({@code -32603})</li>
+ *   <li>{@code Mono}, {@code CompletionStage} or single-value {@code Publisher} of
+ *   {@code PromptResponse} or {@code String}: the runtime waits for it on the handler thread, and
+ *   the value means what returning it directly means; an empty {@code Mono} is answered with an
+ *   internal error ({@code -32603})</li>
  *   <li>{@code String}: sent to the client as an agent message chunk of the turn, then the turn
  *   ends like {@code void}; a null or empty string sends nothing</li>
  * </ul>

@@ -25,9 +25,9 @@ import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
+import com.agentclientprotocol.sdk.agent.support.handler.AsyncValueHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.DirectResponseHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ExtensionResultHandler;
-import com.agentclientprotocol.sdk.agent.support.handler.MonoHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandlerComposite;
 import com.agentclientprotocol.sdk.agent.support.handler.StringToPromptResponseHandler;
@@ -920,10 +920,10 @@ public class AcpAgentSupport {
 
 		private static List<ReturnValueHandler> defaultReturnValueHandlers() {
 			// Built-in handlers (order matters - first match wins), after the custom ones.
-			// Mono is supported as Reactor is available (acp-core depends on it); extension
-			// results are any value, so their handler is last, after Mono and void.
+			// Async values (Mono, CompletionStage, Publisher) are awaited; extension results are
+			// any value, so their handler is last, after the async values and void.
 			return List.of(new DirectResponseHandler(), new StringToPromptResponseHandler(), new VoidHandler(),
-					new MonoHandler(), new ExtensionResultHandler());
+					new AsyncValueHandler(), new ExtensionResultHandler());
 		}
 
 	}
