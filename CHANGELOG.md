@@ -918,6 +918,11 @@ Found by measuring coverage with JaCoCo; each has a test.
 
 ### Build
 
+- **The Javadoc build knows the `@apiNote`, `@implSpec` and `@implNote` tags.** They were not
+  registered with the javadoc plugin, so their text was silently left out of the generated pages
+  (and doclint reports them as unknown tags). The parent POM now registers them, with the JDK's
+  headings.
+
 - **The JaCoCo coverage gate skips with the tests** (`-DskipTests`). It read whatever execution data
   an earlier run had left in `target/`, so `./mvnw -DskipTests install` after a `-Dtest` run (a
   partial `jacoco.exec`) failed the gate; this broke the cross-SDK suite's SDK install.

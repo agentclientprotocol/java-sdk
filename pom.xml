@@ -352,6 +352,25 @@
                 <configuration>
                     <doclint>none</doclint>
                     <quiet>true</quiet>
+                    <!-- The JDK's own block tags (JDK-8068562); javadoc drops an unregistered tag's
+                         text from the page. -->
+                    <tags>
+                        <tag>
+                            <name>apiNote</name>
+                            <placement>a</placement>
+                            <head>API Note:</head>
+                        </tag>
+                        <tag>
+                            <name>implSpec</name>
+                            <placement>a</placement>
+                            <head>Implementation Requirements:</head>
+                        </tag>
+                        <tag>
+                            <name>implNote</name>
+                            <placement>a</placement>
+                            <head>Implementation Note:</head>
+                        </tag>
+                    </tags>
                 </configuration>
                 <executions>
                     <execution>
