@@ -609,6 +609,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the stable schema copy and fail when a public member serving one lacks the marker, or a stable
   method's member carries it.
 
+- **Breaking: `SessionConfigSelect.Builder.build()` checks the option's value.** It now throws
+  `IllegalStateException` when the options (across all groups) are empty, or when `currentValue`
+  is not the value of one of them, instead of building an option no client can display correctly.
+  The record's constructors stay lenient, since they also read other agents' options.
+  **Migration:** pass at least one option and set `currentValue` to one of their values.
+
 ### Removed
 
 - **Breaking: `PromptResponse.text(String)` is removed, and a `@Prompt` method's String now reaches

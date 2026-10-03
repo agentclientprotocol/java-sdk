@@ -2627,15 +2627,29 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Builds the option.
+			 * Builds the option. Unlike the record's constructors, which also read other agents'
+			 * options and so accept any value, the builder checks that the option can be
+			 * offered: it has at least one choice, and {@code currentValue} is one of them.
 			 * @return the option
 			 * @throws IllegalStateException when {@code id}, {@code name},
-			 * {@code currentValue} or the options were not set
+			 * {@code currentValue} or the options were not set, when the options (across all
+			 * groups) are empty, or when {@code currentValue} is not the value of one of them
 			 */
 			public SessionConfigSelect build() {
-				return new SessionConfigSelect("select", required(this.id, "id"), required(this.name, "name"),
-						this.description, this.category, required(this.currentValue, "currentValue"),
-						required(this.options, "options"), this.meta);
+				String id = required(this.id, "id");
+				String name = required(this.name, "name");
+				String currentValue = required(this.currentValue, "currentValue");
+				SessionConfigSelectOptions options = required(this.options, "options");
+				List<String> values = options.allOptions().stream().map(SessionConfigSelectOption::value).toList();
+				if (values.isEmpty()) {
+					throw new IllegalStateException("Select config option '" + id + "' has no options to choose from");
+				}
+				if (!values.contains(currentValue)) {
+					throw new IllegalStateException("Select config option '" + id + "' has currentValue '"
+							+ currentValue + "', which is not one of its option values " + values);
+				}
+				return new SessionConfigSelect("select", id, name, this.description,
+						this.category, currentValue, options, this.meta);
 			}
 
 		}
