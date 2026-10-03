@@ -77,6 +77,13 @@ class HttpTransportTest {
 	}
 
 	@Test
+	void oneMegabytePromptOverBothTransports() {
+		String big = "x".repeat(1024 * 1024);
+		roundTrip(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault()), true, big);
+		roundTrip(new WebSocketAcpClientTransport(webSocketUri(), AcpJsonMapper.createDefault()), true, big);
+	}
+
+	@Test
 	void connectionsLeftOpenAreCountedAndClosedAtShutdown() {
 		roundTrip(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault()), false);
 		roundTrip(new WebSocketAcpClientTransport(webSocketUri(), AcpJsonMapper.createDefault()), false);
@@ -95,6 +102,10 @@ class HttpTransportTest {
 	}
 
 	private static void roundTrip(AcpClientTransport transport, boolean close) {
+		roundTrip(transport, close, "ping");
+	}
+
+	private static void roundTrip(AcpClientTransport transport, boolean close, String prompt) {
 		List<String> messages = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
 			if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
@@ -105,9 +116,9 @@ class HttpTransportTest {
 		client.initialize();
 		String sessionId = client.newSession(new AcpSchema.NewSessionRequest("/tmp", List.of())).sessionId();
 		AcpSchema.PromptResponse response = client
-			.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent("ping"))));
+			.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(prompt))));
 		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
-		assertThat(messages).containsExactly("pong");
+		assertThat(messages).containsExactly("pong " + prompt.length());
 		if (close) {
 			client.closeGracefully();
 		}
@@ -117,8 +128,9 @@ class HttpTransportTest {
 	public static class HttpAgent {
 
 		@Prompt
-		AcpSchema.PromptResponse prompt(SyncPromptContext context) {
-			context.sendMessage("pong");
+		AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, SyncPromptContext context) {
+			AcpSchema.TextContent text = (AcpSchema.TextContent) request.prompt().get(0);
+			context.sendMessage("pong " + text.text().length());
 			return AcpSchema.PromptResponse.endTurn();
 		}
 
