@@ -15,7 +15,8 @@ import java.lang.annotation.Target;
  *
  * <p>The annotated method handles the {@code authenticate} JSON-RPC method, which a
  * client calls with one of the authentication methods the agent advertised in its
- * initialize response ({@code authMethods}).
+ * initialize response ({@code authMethods}). Declare those methods on the class, in
+ * {@link AcpAgent#authMethods()}; they are advertised without an {@link Initialize} method.
  *
  * <p>The method can have the following parameter (optional):
  * <ul>
@@ -33,6 +34,7 @@ import java.lang.annotation.Target;
  *
  * <p>Example usage:
  * <pre>{@code
+ * // on the class: @AcpAgent(authMethods = @AuthMethod(id = "api-key", name = "API key"))
  * @Authenticate
  * public AuthenticateResponse authenticate(AuthenticateRequest req) {
  *     credentials.login(req.methodId());
@@ -44,6 +46,7 @@ import java.lang.annotation.Target;
  * @since 0.80.0
  * @see AcpAgent
  * @see Logout
+ * @see AuthMethod
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

@@ -56,4 +56,25 @@ import java.lang.annotation.Target;
 @Documented
 public @interface Prompt {
 
+	/**
+	 * Whether the handler accepts image content blocks, advertised as
+	 * {@code agentCapabilities.promptCapabilities.image}.
+	 * @return false by default
+	 */
+	boolean image() default false;
+
+	/**
+	 * Whether the handler accepts audio content blocks, advertised as
+	 * {@code agentCapabilities.promptCapabilities.audio}.
+	 * @return false by default
+	 */
+	boolean audio() default false;
+
+	/**
+	 * Whether the handler accepts embedded resources ({@code resource} content blocks),
+	 * advertised as {@code agentCapabilities.promptCapabilities.embeddedContext}.
+	 * @return false by default
+	 */
+	boolean embeddedContext() default false;
+
 }

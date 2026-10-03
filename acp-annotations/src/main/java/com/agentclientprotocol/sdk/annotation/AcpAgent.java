@@ -34,14 +34,23 @@ import java.lang.annotation.Target;
  *   turn</li>
  * </ul>
  *
+ * <p><b>Advertising.</b> The agent's {@code initialize} response is derived from the class:
+ * each handler annotation advertises the capability its method needs ({@link LoadSession} sets
+ * {@code loadSession}, {@link ListSessions} sets {@code sessionCapabilities.list},
+ * {@link Logout} sets {@code auth.logout}, and so on), {@link #name()} and {@link #version()}
+ * become {@code agentInfo}, {@link #authMethods()} become {@code authMethods}, and the
+ * attributes of {@link #mcpHttp()}, {@link #mcpSse()} and {@link Prompt} declare the MCP
+ * transports and prompt content the agent accepts. An {@link Initialize} method is not needed
+ * to advertise; one that is present adds to the derived response (see {@link Initialize}).
+ *
  * <p>Example usage:
  * <pre>{@code
  * @AcpAgent(name = "support-agent", version = "1.0")
  * public class SupportAgent {
  *
- *     @Initialize
- *     public InitializeResponse init(InitializeRequest req) {
- *         return InitializeResponse.ok();
+ *     @LoadSession
+ *     public LoadSessionResponse load(LoadSessionRequest req) {
+ *         return new LoadSessionResponse(null);
  *     }
  *
  *     @Prompt
@@ -64,17 +73,49 @@ import java.lang.annotation.Target;
 public @interface AcpAgent {
 
 	/**
-	 * The name of the agent, descriptive only: {@code AcpAgentSupport} does not read it.
-	 * Report the agent's identity to the client in the {@code InitializeResponse}
-	 * ({@code agentInfo}).
+	 * The agent's name, sent to the client as {@code agentInfo.name} in the {@code initialize}
+	 * response. Empty (the default) sends the class's simple name.
 	 * @return the agent name
 	 */
 	String name() default "";
 
 	/**
-	 * The version of the agent, descriptive only, like {@link #name()}.
+	 * The agent's version, sent as {@code agentInfo.version}. Empty (the default) sends the
+	 * {@code Implementation-Version} of the class's jar manifest, or {@code "unknown"} when it
+	 * has none.
 	 * @return the agent version
 	 */
 	String version() default "";
+
+	/**
+	 * A human-readable title for the agent, sent as {@code agentInfo.title}. Empty (the
+	 * default) sends none.
+	 * @return the agent title
+	 */
+	String title() default "";
+
+	/**
+	 * The authentication methods the agent advertises in its {@code initialize} response
+	 * ({@code authMethods}). An agent that declares an {@link AuthMethod.Type#AGENT} method
+	 * must have an {@link Authenticate} handler. Terminal methods are advertised only to a
+	 * client that announced {@code clientCapabilities.auth.terminal}.
+	 * @return the authentication methods; none by default
+	 */
+	AuthMethod[] authMethods() default {};
+
+	/**
+	 * Whether the agent connects to MCP servers over HTTP, advertised as
+	 * {@code agentCapabilities.mcpCapabilities.http}: a client then may pass HTTP MCP servers
+	 * in {@code session/new}, {@code session/load} and {@code session/resume}.
+	 * @return false by default
+	 */
+	boolean mcpHttp() default false;
+
+	/**
+	 * Whether the agent connects to MCP servers over SSE, advertised as
+	 * {@code agentCapabilities.mcpCapabilities.sse}.
+	 * @return false by default
+	 */
+	boolean mcpSse() default false;
 
 }

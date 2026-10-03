@@ -27,11 +27,33 @@ import java.lang.annotation.Target;
  *   <li>{@code Mono<InitializeResponse>} - for async handling</li>
  * </ul>
  *
+ * <p><b>Optional.</b> An agent does not need this method to advertise what it supports:
+ * without one, it answers {@code initialize} with the response derived from its class (see
+ * {@link AcpAgent}): the capabilities its handler annotations imply, the
+ * {@link AcpAgent#authMethods()}, and {@code agentInfo} from {@link AcpAgent#name()} and
+ * {@link AcpAgent#version()}, in the protocol version negotiated with the client. Write one to
+ * look at the client's request, or to advertise what the annotations cannot express.
+ *
+ * <p><b>Merge rule.</b> The derived response is the base, and the response this method
+ * returns is laid over it:
+ * <ul>
+ *   <li>a capability is advertised when either side advertises it, so returning
+ *   {@code InitializeResponse.ok()} keeps every derived capability, and a capability a
+ *   handler implies cannot be withdrawn here (remove the handler instead)</li>
+ *   <li>{@code authMethods} are the derived methods followed by the returned ones, a returned
+ *   method replacing a derived method with the same id</li>
+ *   <li>{@code protocolVersion}, and {@code agentInfo} and {@code _meta} when not null, are
+ *   the returned ones</li>
+ * </ul>
+ *
  * <p>Example usage:
  * <pre>{@code
  * @Initialize
  * public InitializeResponse init(InitializeRequest req) {
- *     return InitializeResponse.ok();
+ *     // adds sessionCapabilities.additionalDirectories to the derived capabilities
+ *     return InitializeResponse.ok(AgentCapabilities.builder()
+ *         .sessionCapabilities(new SessionCapabilities(null, null, null, null, Map.of(), null))
+ *         .build());
  * }
  * }</pre>
  *
