@@ -10,6 +10,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentThoughtChunk;
@@ -193,8 +195,14 @@ class DefaultPromptContext implements PromptContext {
 		return requestPermission(new RequestPermissionRequest(sessionId, toolCall, permOptions))
 				.flatMap(response -> {
 					if (response.outcome() instanceof PermissionSelected s) {
-						int idx = Integer.parseInt(s.optionId());
-						return Mono.just(options[idx]);
+						for (int i = 0; i < options.length; i++) {
+							if (String.valueOf(i).equals(s.optionId())) {
+								return Mono.just(options[i]);
+							}
+						}
+						return Mono.error(new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
+								"The client chose option '" + s.optionId() + "', which askChoice did not offer (0 to "
+										+ (options.length - 1) + ")"));
 					}
 					return Mono.empty();
 				});

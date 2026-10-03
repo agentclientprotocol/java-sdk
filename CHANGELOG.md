@@ -544,6 +544,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`askChoice` fails clearly when the client answers with an option it was not offered.** It
+  parsed the chosen option ID as an index, so an unexpected answer failed with
+  `NumberFormatException` or `ArrayIndexOutOfBoundsException`. It now fails with an
+  `AcpProtocolException` (`-32603`) naming the ID; a cancelled request still gives an empty result.
+
 - **A request from the agent reaches its client handler only after the session updates sent
   before it.** Requests were handled as they arrived, outside the ordered notification drain, so a
   `session/request_permission` could reach its handler while the session update consumers had not
