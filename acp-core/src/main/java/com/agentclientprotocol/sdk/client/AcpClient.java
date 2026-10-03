@@ -107,12 +107,6 @@ import reactor.core.scheduler.Schedulers;
  */
 public interface AcpClient {
 
-	/**
-	 * The logger the client builders log received session updates to, at DEBUG. It is public only
-	 * because every field of an interface is; it is not meant for applications.
-	 */
-	Logger logger = LoggerFactory.getLogger(AcpClient.class);
-
 	// ====================================================================
 	// Sync Handler Interfaces (for use with AcpClient.sync())
 	// ====================================================================
@@ -178,6 +172,8 @@ public interface AcpClient {
 	 * thread.
 	 */
 	class AsyncSpec {
+
+		private static final Logger logger = LoggerFactory.getLogger(AcpClient.class);
 
 		/** Reads params as the raw JSON value, for the untyped extension handlers. */
 		private static final TypeRef<Object> RAW_PARAMS = new TypeRef<>() {

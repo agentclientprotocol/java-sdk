@@ -18,8 +18,6 @@ import com.agentclientprotocol.sdk.spec.PromptTimeouts;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.util.HandlerFailures;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
@@ -91,12 +89,6 @@ import reactor.core.scheduler.Schedulers;
  * @see AcpAgentTransport
  */
 public interface AcpAgent {
-
-	/**
-	 * A logger named after this interface. It is public only because every field of an interface
-	 * is; it is not meant for applications.
-	 */
-	Logger logger = LoggerFactory.getLogger(AcpAgent.class);
 
 	/**
 	 * Starts a builder for an agent whose handlers return plain values and may block. The handlers

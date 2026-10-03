@@ -696,6 +696,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public
+  interfaces they were public `org.slf4j.Logger` constants, API by accident. Migration: use a
+  logger of your own (`LoggerFactory.getLogger(MyAgent.class)`); to see the client builders'
+  session-update logging, configure the logger named `com.agentclientprotocol.sdk.client.AcpClient`
+  as before.
+
 - **Breaking: `PromptResponse.text(String)` is removed, and a `@Prompt` method's String now reaches
   the client.** `text(String)` threw its text away and returned the same response as `endTurn()`: a
   prompt response carries no content, and a static factory cannot send a session update. So an
