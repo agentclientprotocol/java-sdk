@@ -171,7 +171,7 @@ class PromptUpdateOrderTest {
 			.initializeHandler(request -> InitializeResponse.ok())
 			.newSessionHandler(request -> new NewSessionResponse(SESSION, null, null))
 			.promptHandler((request, context) -> {
-				context.sendUpdate(SESSION, new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
+				context.sendUpdate(new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
 						AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null));
 				context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
 						new AcpSchema.ToolCallUpdate("call-1", "Edit file", AcpSchema.ToolKind.EDIT,

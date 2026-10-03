@@ -40,8 +40,8 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	// ========================================================================
 
 	@Override
-	public void sendUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		SyncCalls.block(asyncContext.sendUpdate(sessionId, update));
+	public void sendUpdate(AcpSchema.SessionUpdate update) {
+		SyncCalls.block(asyncContext.sendUpdate(update));
 	}
 
 	@Override

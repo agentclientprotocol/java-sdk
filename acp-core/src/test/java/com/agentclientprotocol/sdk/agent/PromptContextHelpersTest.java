@@ -348,6 +348,33 @@ class PromptContextHelpersTest {
 		agent.closeGracefully();
 	}
 
+	/** {@code sendUpdate(update)} sends the update for the context's own session. */
+	@Test
+	void sendUpdateUsesTheContextsSession() {
+		List<String> sessions = new CopyOnWriteArrayList<>();
+		AcpSyncAgent agent = AcpAgent.sync(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("s1", null, null))
+			.promptHandler((request, context) -> {
+				context.sendUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("sync")));
+				context.async().sendUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("async"))).block(TIMEOUT);
+				return PromptResponse.endTurn();
+			})
+			.build();
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> sessions.add(n.sessionId())))
+			.build();
+		agent.start();
+		connect(client);
+		client.prompt(prompt()).block(TIMEOUT);
+
+		assertThat(sessions).containsExactly("s1", "s1");
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
 	private AcpAsyncClient terminalClient(CountDownLatch created, CountDownLatch released) {
 		return AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)

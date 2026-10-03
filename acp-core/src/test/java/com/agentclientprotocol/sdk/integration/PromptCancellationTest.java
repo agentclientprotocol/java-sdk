@@ -56,7 +56,7 @@ class PromptCancellationTest {
 				// The first prompt runs until cancelled, sends a last update, and answers cancelled.
 				return cancelReceived.asMono()
 					.then(finishAborting.asMono())
-					.then(context.sendUpdate(SESSION, new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("aborted"))))
+					.then(context.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("aborted"))))
 					.thenReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
 			})
 			.build();
@@ -116,8 +116,7 @@ class PromptCancellationTest {
 				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(SESSION, null, null)))
 			.promptHandler((request, context) -> context
-				.sendUpdate(SESSION,
-						new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("working")))
+				.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("working")))
 				.doOnSuccess(v -> updateSent.tryEmitEmpty())
 				.then(Mono.never()))
 			.build();

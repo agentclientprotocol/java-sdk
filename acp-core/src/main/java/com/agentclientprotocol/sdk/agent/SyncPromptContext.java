@@ -63,12 +63,13 @@ public interface SyncPromptContext {
 	/**
 	 * Sends a {@code session/update} notification to the client, carrying one
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
-	 * plan, and so on. Returns once the notification has been handed to the transport. The Java
-	 * client hands a turn's updates to its consumers in order, before the prompt's answer.
-	 * @param sessionId the ACP session the update belongs to, normally {@link #getSessionId()}
+	 * plan, and so on, for this prompt's session ({@link #getSessionId()}). Returns once the
+	 * notification has been handed to the transport. The Java client hands a turn's updates to its
+	 * consumers in order, before the prompt's answer. To update another session, use
+	 * {@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}.
 	 * @param update the update
 	 */
-	void sendUpdate(String sessionId, AcpSchema.SessionUpdate update);
+	void sendUpdate(AcpSchema.SessionUpdate update);
 
 	// ========================================================================
 	// File System Operations
@@ -261,14 +262,12 @@ public interface SyncPromptContext {
 	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
 	 * message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
-	 * and an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentMessageChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 */
 	default void sendMessage(String text, @Nullable String messageId) {
-		sendUpdate(getSessionId(),
-				new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
+		sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**
@@ -282,14 +281,12 @@ public interface SyncPromptContext {
 	 * Sends text to the client as an agent thought chunk that belongs to the given message. Chunks
 	 * with the same {@code messageId} make up one message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
-	 * and an {@link AcpSchema.AgentThoughtChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentThoughtChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 */
 	default void sendThought(String text, @Nullable String messageId) {
-		sendUpdate(getSessionId(),
-				new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
+		sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**

@@ -300,6 +300,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: `PromptContext.sendUpdate(update)` and `SyncPromptContext.sendUpdate(update)` replace
+  the two-argument `sendUpdate(sessionId, update)`.** The context belongs to one prompt's session,
+  so the session ID was redundant (and a wrong one sent the update to another session). Migration:
+  drop the first argument, `context.sendUpdate(sessionId, update)` becomes
+  `context.sendUpdate(update)`; to update another session, call
+  `AcpAsyncAgent.sendSessionUpdate(sessionId, update)` (or `AcpSyncAgent.sendSessionUpdate`).
+  Test doubles implementing either context implement the one-argument method.
+
 - **Breaking: `handlerExecutor(ExecutorService)` on `AcpAgent.SyncAgentBuilder` and
   `AcpClient.SyncSpec` (and `AcpAgentSupport.Builder` for annotated agents); the static handler
   pools and the agent's default timeout are no longer public constants.** Sync handlers (and a sync client's session update consumers) ran on static,

@@ -75,7 +75,7 @@ class DefaultPromptContext implements PromptContext {
 	// ========================================================================
 
 	@Override
-	public Mono<Void> sendUpdate(String sessionId, AcpSchema.SessionUpdate update) {
+	public Mono<Void> sendUpdate(AcpSchema.SessionUpdate update) {
 		return agent.sendSessionUpdate(sessionId, update);
 	}
 
@@ -161,12 +161,12 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Void> sendMessage(String text) {
-		return sendUpdate(sessionId, new AgentMessageChunk(new TextContent(text)));
+		return sendUpdate(new AgentMessageChunk(new TextContent(text)));
 	}
 
 	@Override
 	public Mono<Void> sendThought(String text) {
-		return sendUpdate(sessionId, new AgentThoughtChunk(new TextContent(text)));
+		return sendUpdate(new AgentThoughtChunk(new TextContent(text)));
 	}
 
 	@Override

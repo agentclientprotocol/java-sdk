@@ -63,13 +63,13 @@ public interface PromptContext {
 	/**
 	 * Sends a {@code session/update} notification to the client, carrying one
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
-	 * plan, and so on. The Java client hands a turn's updates to its consumers in order, before the
-	 * prompt's answer.
-	 * @param sessionId the ACP session the update belongs to, normally {@link #getSessionId()}
+	 * plan, and so on, for this prompt's session ({@link #getSessionId()}). The Java client hands a
+	 * turn's updates to its consumers in order, before the prompt's answer. To update another
+	 * session, use {@link AcpAsyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}.
 	 * @param update the update
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 */
-	Mono<Void> sendUpdate(String sessionId, AcpSchema.SessionUpdate update);
+	Mono<Void> sendUpdate(AcpSchema.SessionUpdate update);
 
 	// ========================================================================
 	// File System Operations
@@ -254,15 +254,13 @@ public interface PromptContext {
 	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
 	 * message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
-	 * and an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentMessageChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendMessage(String text, @Nullable String messageId) {
-		return sendUpdate(getSessionId(),
-				new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
+		return sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**
@@ -277,15 +275,13 @@ public interface PromptContext {
 	 * Sends text to the client as an agent thought chunk that belongs to the given message. Chunks
 	 * with the same {@code messageId} make up one message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
-	 * and an {@link AcpSchema.AgentThoughtChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentThoughtChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendThought(String text, @Nullable String messageId) {
-		return sendUpdate(getSessionId(),
-				new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
+		return sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**

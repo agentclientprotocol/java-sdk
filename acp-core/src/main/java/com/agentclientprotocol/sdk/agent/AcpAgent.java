@@ -179,7 +179,7 @@ public interface AcpAgent {
 	 *         var file = context.readTextFile(new ReadTextFileRequest(...)).block();
 	 *
 	 *         // Send progress update
-	 *         context.sendUpdate(sessionId, new AgentThoughtChunk(...));
+	 *         context.sendUpdate(new AgentThoughtChunk(...));
 	 *
 	 *         return Mono.just(new PromptResponse(StopReason.END_TURN));
 	 *     })
@@ -435,7 +435,7 @@ public interface AcpAgent {
 	 *         var file = context.readTextFile(new ReadTextFileRequest(...));
 	 *
 	 *         // Send progress update (blocks)
-	 *         context.sendUpdate(sessionId, new AgentThoughtChunk(...));
+	 *         context.sendUpdate(new AgentThoughtChunk(...));
 	 *
 	 *         return new PromptResponse(StopReason.END_TURN);
 	 *     })

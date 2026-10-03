@@ -72,8 +72,7 @@ class MockAcpClientTest {
 				.promptHandler((request, updater) -> {
 					// Send update during prompt
 					return updater
-						.sendUpdate("update-session",
-								new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Processing...")))
+						.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Processing...")))
 						.then(Mono.just(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN)));
 				})
 				.build();

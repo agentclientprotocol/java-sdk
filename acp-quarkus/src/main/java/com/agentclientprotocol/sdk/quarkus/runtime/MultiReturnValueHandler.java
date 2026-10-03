@@ -86,10 +86,10 @@ final class MultiReturnValueHandler implements ReturnValueHandler {
 			prompt.sendMessage(text);
 		}
 		else if (item instanceof AcpSchema.SessionUpdate update) {
-			prompt.sendUpdate(prompt.getSessionId(), update);
+			prompt.sendUpdate(update);
 		}
 		else if (item instanceof AcpSchema.ContentBlock block) {
-			prompt.sendUpdate(prompt.getSessionId(), new AcpSchema.AgentMessageChunk(block));
+			prompt.sendUpdate(new AcpSchema.AgentMessageChunk(block));
 		}
 		else {
 			throw new ReturnValueHandlingException("A Multi from @Prompt emits String, SessionUpdate or "

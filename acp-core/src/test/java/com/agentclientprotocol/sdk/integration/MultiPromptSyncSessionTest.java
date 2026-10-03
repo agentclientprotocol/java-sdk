@@ -63,8 +63,7 @@ class MultiPromptSyncSessionTest {
 			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-14", null, null))
 			.promptHandler((request, context) -> {
 				for (int chunk = 0; chunk < 3; chunk++) {
-					context.sendUpdate(request.sessionId(),
-							new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("chunk " + chunk)));
+					context.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("chunk " + chunk)));
 				}
 				return new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN);
 			})

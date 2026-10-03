@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,8 +73,8 @@ class MutinyReturnValueHandlersTest {
 				promptContext(prompt));
 		assertThat(result).isEqualTo(AcpSchema.PromptResponse.endTurn());
 		verify(prompt).sendMessage("text");
-		verify(prompt).sendUpdate(eq("s1"), any(AcpSchema.AgentMessageChunk.class));
-		verify(prompt).sendUpdate("s1", thought);
+		verify(prompt).sendUpdate(any(AcpSchema.AgentMessageChunk.class));
+		verify(prompt).sendUpdate(thought);
 	}
 
 	@Test
