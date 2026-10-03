@@ -11,45 +11,59 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for prompt requests.
+ * Marks the {@link AcpAgent} method that answers {@code session/prompt}: the client sends the
+ * user's message, and the method does the agent's work for that prompt turn. While it runs, it
+ * streams progress to the client (message chunks, thoughts, tool calls) through its prompt context,
+ * and it can read files, run commands and ask permission on the client. It returns how the turn
+ * ended. Without a {@code @Prompt} method the agent answers every prompt with "Method not found"
+ * ({@code -32601}).
  *
- * <p>The annotated method handles the {@code session/prompt} JSON-RPC method,
- * which is the main entry point for processing user messages.
- *
- * <p>The method can have the following parameters (all optional, in any order):
+ * <p>The method can take these parameters, all optional and in any order:
  * <ul>
- *   <li>{@code PromptRequest} - the prompt request containing user message</li>
- *   <li>{@code SyncPromptContext} - context for sync handlers with convenience methods</li>
- *   <li>{@code PromptContext} - the async context, for handlers returning Mono</li>
- *   <li>{@code NegotiatedCapabilities} - the negotiated client capabilities</li>
- *   <li>{@code AcpSyncAgent} or {@code AcpAsyncAgent} - the connection's agent (see
- *   {@link AcpAgent})</li>
+ *   <li>{@code PromptRequest}: the session id and the prompt's content blocks</li>
+ *   <li>{@code SyncPromptContext}: the turn's context, with blocking calls such as
+ *   {@code sendMessage}, {@code readFile} and {@code askPermission}</li>
+ *   <li>{@code PromptContext}: the same turn's context with calls that return a {@code Mono}, for
+ *   code that composes Reactor operators</li>
+ *   <li>{@link SessionId @SessionId} {@code String}: the session id</li>
+ *   <li>the connection parameters every handler method can take (see {@link AcpAgent})</li>
  * </ul>
  *
- * <p>The method should return one of:
+ * <p>It returns one of:
  * <ul>
- *   <li>{@code PromptResponse} - the prompt response</li>
- *   <li>{@code String} - converted to PromptResponse.text()</li>
- *   <li>{@code void} - converted to PromptResponse.endTurn()</li>
- *   <li>{@code Mono<PromptResponse>} - for async handling</li>
+ *   <li>{@code PromptResponse}: the turn's stop reason, usually {@code PromptResponse.endTurn()},
+ *   or stop reason {@code cancelled} after a cancel</li>
+ *   <li>{@code void}: the same as {@code PromptResponse.endTurn()}</li>
+ *   <li>{@code Mono<PromptResponse>}: the runtime waits for it on the handler thread; an empty
+ *   {@code Mono} is answered with an internal error ({@code -32603})</li>
+ *   <li>{@code String}: sent to the client as an agent message chunk of the turn, then the turn
+ *   ends like {@code void}; a null or empty string sends nothing</li>
  * </ul>
+ *
+ * <p>A session has one prompt turn at a time. Until this method returns, a second prompt on the
+ * same session is answered with {@code -32600} (Invalid request); prompts on other sessions run at
+ * the same time, on other threads. When the client cancels the turn, this method keeps running:
+ * the {@link Cancel} method is called, and this method should stop and return stop reason
+ * {@code cancelled}. If it has not returned when the cancel grace period ends, the SDK answers
+ * {@code cancelled} for it and interrupts its thread. {@code AcpAgentSupport.Builder} sets the
+ * grace period and can also limit how long any turn runs ({@code maxPromptDuration}, off by
+ * default).
  *
  * <p>Example usage:
  * <pre>{@code
  * @Prompt
- * public PromptResponse handlePrompt(PromptRequest req, SyncPromptContext context) {
- *     context.sendMessage("Processing your request...");
- *
- *     // Read files, execute commands, etc.
- *     String content = context.readFile("/path/to/file.txt");
- *
- *     return PromptResponse.text("Here's what I found: " + content);
+ * public PromptResponse prompt(PromptRequest request, SyncPromptContext context) {
+ *     context.sendThought("Reading the README");
+ *     String readme = context.readFile("/workspace/README.md");
+ *     context.sendMessage("The README has " + readme.lines().count() + " lines.");
+ *     return PromptResponse.endTurn();
  * }
  * }</pre>
  *
  * @author Mark Pollack
  * @since 1.0.0
  * @see AcpAgent
+ * @see Cancel
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

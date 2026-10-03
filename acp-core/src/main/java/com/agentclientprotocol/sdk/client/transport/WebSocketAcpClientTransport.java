@@ -31,21 +31,32 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Implementation of the ACP WebSocket transport for clients that communicates with an
- * agent using WebSocket connections. Uses the JDK 11+ {@link java.net.http.WebSocket} API.
+ * The client side of the WebSocket transport: talks to an agent that is already running behind
+ * a WebSocket endpoint, one ACP message per text frame. Use it to reach a remote agent that
+ * accepts WebSocket upgrades, such as the {@code acp-streamable-http-jetty} module's listener
+ * at {@code ws://host:port/acp}; for an agent served by a servlet in a container, which does
+ * not accept WebSocket upgrades, use {@link StreamableHttpAcpClientTransport}, and to start the
+ * agent as a child process, {@link StdioAcpClientTransport}. Pass it to
+ * {@code AcpClient.sync(transport)} or {@code AcpClient.async(transport)}:
  *
- * <p>
- * Messages are exchanged as JSON-RPC messages over WebSocket text frames.
- * </p>
+ * <pre>{@code
+ * var transport = new WebSocketAcpClientTransport(URI.create("ws://localhost:8080/acp"),
+ *         AcpJsonMapper.createDefault());
+ * AcpSyncClient client = AcpClient.sync(transport).build();
+ * }</pre>
  *
- * <p>
- * Key features:
- * <ul>
- * <li>Zero external dependencies (uses JDK built-in WebSocket)</li>
- * <li>Thread-safe message processing with dedicated schedulers</li>
- * <li>Proper resource management and graceful shutdown</li>
- * <li>Backpressure support via Reactor Sinks</li>
- * </ul>
+ * <p>Unlike the stdio transport, it opens a network connection with the JDK's
+ * {@link java.net.http.WebSocket} when {@link #connect} runs (building the client does it), and
+ * it has no process to stop: {@link #closeGracefully()} sends a normal close frame without
+ * waiting for the agent's. If the connection cannot be opened, the client's requests fail with
+ * that error. Messages sent before the connection is open wait for it. A frame that is not a
+ * JSON-RPC message is reported to the exception handler, answered with a JSON-RPC error and
+ * skipped. When the agent closes the connection, or it fails, {@link #awaitTermination()} ends
+ * and the client's pending requests fail.
+ *
+ * <p>The transport is thread-safe: messages may be sent from any thread, and one daemon thread
+ * of its own ({@code acp-ws-client-outbound}) sends them one frame at a time. The default
+ * HTTP client runs on a pool of daemon threads named {@code acp-ws-client}.
  *
  * @author Mark Pollack
  */
@@ -53,7 +64,10 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(WebSocketAcpClientTransport.class);
 
-	/** Default path for ACP WebSocket endpoints */
+	/**
+	 * The endpoint path on which the SDK's listener accepts WebSocket upgrades by default:
+	 * {@value}. The transport does not add it; the URI must include the path.
+	 */
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
 	private final URI serverUri;
@@ -79,14 +93,23 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 	private final AtomicBoolean isConnected = new AtomicBoolean(false);
 
+	/** Set by the first {@link #closeGracefully()}: only that call closes. */
+	private final AtomicBoolean closeStarted = new AtomicBoolean(false);
+
+	/** Completes once the first close has finished. */
+	private final Sinks.Empty<Void> closed = Sinks.empty();
+
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	private Duration connectTimeout = Duration.ofSeconds(30);
 
 	/**
-	 * Creates a new WebSocketAcpClientTransport with the specified server URI and JsonMapper.
-	 * @param serverUri The WebSocket URI to connect to (e.g., "ws://localhost:8080/acp")
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
+	 * Creates a transport for the WebSocket endpoint at {@code serverUri}, with an HTTP client
+	 * of its own.
+	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
+	 * path, such as {@code ws://localhost:8080/acp}
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper) {
 		this(serverUri, jsonMapper, HttpClient.newBuilder()
@@ -99,10 +122,14 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Creates a new WebSocketAcpClientTransport with custom HttpClient.
-	 * @param serverUri The WebSocket URI to connect to
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
-	 * @param httpClient The HttpClient to use for WebSocket connections
+	 * Creates a transport for the WebSocket endpoint at {@code serverUri} that opens its
+	 * connection with {@code httpClient}, for TLS, proxy or authentication settings of your
+	 * own.
+	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
+	 * path
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param httpClient the client the WebSocket connection is opened with
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
 		Assert.notNull(serverUri, "The serverUri can not be null");
@@ -125,15 +152,24 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Sets the connection timeout for WebSocket establishment.
-	 * @param timeout The connection timeout
-	 * @return This transport for chaining
+	 * Sets how long {@link #connect} waits for the WebSocket handshake to finish; default 30
+	 * seconds. Call it before connecting.
+	 * @param timeout the handshake timeout; positive
+	 * @return this transport
 	 */
 	public WebSocketAcpClientTransport connectTimeout(Duration timeout) {
 		this.connectTimeout = timeout;
 		return this;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>Opens the WebSocket connection when the returned Mono is subscribed, and completes
+	 * once the handshake has finished. A second call fails with an
+	 * {@link IllegalStateException} unless the first one failed. A connect that failed may be
+	 * tried again, but the agent's messages then no longer reach the handler; create a new
+	 * transport instead.
+	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		if (!isConnected.compareAndSet(false, true)) {
@@ -188,9 +224,16 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 						}
 					}
 				}
-			});
+			}, error -> logger.debug("Outbound processing ended: {}", error.toString()));
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>Waits until the connection is open, then queues the message for the writer thread;
+	 * the Mono completes once it is queued. A frame that cannot be sent is reported to the
+	 * exception handler, not to the Mono. Once the transport is closed, messages are dropped
+	 * and the Mono still completes.
+	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return connectionReady.asMono().then(Mono.defer(() -> {
@@ -199,22 +242,25 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		}));
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>Stops delivering and sending messages, completes {@link #awaitTermination()}, sends a
+	 * normal close frame (1000) when the connection is open, and stops the writer thread. It
+	 * does not wait for the agent's close frame. Only the first call closes; a later call
+	 * completes when that close has finished.
+	 */
 	@Override
 	public Mono<Void> closeGracefully() {
-		return Mono.fromRunnable(() -> {
-			logger.debug("WebSocket transport closing gracefully");
-			isClosing.set(true);
-			inboundSink.tryEmitComplete();
-			outboundSink.tryEmitComplete();
-			terminationSink.tryEmitEmpty();
-		}).then(Mono.defer(() -> {
-			WebSocket webSocket = this.webSocket;
-			if (webSocket != null) {
-				return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")
-					.thenApply(ws -> null));
+		return Mono.defer(() -> {
+			if (this.closeStarted.compareAndSet(false, true)) {
+				close(Mono.fromRunnable(this::stopMessages).then(Mono.defer(this::sendClose)));
 			}
-			return Mono.empty();
-		})).then(Mono.fromRunnable(() -> {
+			return this.closed.asMono();
+		});
+	}
+
+	private void close(Mono<Void> closing) {
+		closing.doFinally(signal -> {
 			try {
 				outboundScheduler.dispose();
 				logger.debug("WebSocket transport closed");
@@ -222,14 +268,41 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			catch (Exception e) {
 				logger.error("Error during graceful shutdown", e);
 			}
-		}));
+			this.closed.tryEmitEmpty();
+		}).subscribe(ignored -> {
+		}, error -> logger.debug("WebSocket close frame not sent: {}", error.getMessage()));
 	}
 
+	private void stopMessages() {
+		logger.debug("WebSocket transport closing gracefully");
+		isClosing.set(true);
+		inboundSink.tryEmitComplete();
+		outboundSink.tryEmitComplete();
+		terminationSink.tryEmitEmpty();
+	}
+
+	private Mono<Void> sendClose() {
+		WebSocket webSocket = this.webSocket;
+		if (webSocket == null || webSocket.isOutputClosed()) {
+			return Mono.empty();
+		}
+		return Mono.fromFuture(webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Client closing")).then();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * <p>The default logs each error at ERROR. Call it before {@link #connect}.
+	 */
 	@Override
 	public void setExceptionHandler(Consumer<Throwable> handler) {
 		this.exceptionHandler = handler;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>It completes when either side closes the connection, and errors with the cause when
+	 * the connection fails.
+	 */
 	@Override
 	public Mono<Void> awaitTermination() {
 		return terminationSink.asMono();

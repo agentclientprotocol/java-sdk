@@ -24,20 +24,24 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 /**
- * Shared per-connection core for listener-backed remote ACP agent transports.
+ * One client connection on a network listener for agents: it owns the agent an
+ * {@link AcpAgentFactory} creates for the connection, and the connection-bound
+ * {@link AcpAgentTransport} that agent talks through. Use it when you write a network
+ * transport of your own: create one per accepted connection, pass each message from the
+ * client to {@link #acceptInbound}, and send the client each message the outbound consumer
+ * given to the constructor receives. The {@code acp-streamable-http-jetty} module builds its
+ * HTTP and WebSocket connections this way; an application that only serves agents does not
+ * use this class.
  *
- * <p>
- * Remote transports such as Streamable HTTP and WebSocket have different wire-level
- * framing, but they both need the same agent-side shape once a remote ACP connection
- * exists: one connection-bound {@link AcpAgentTransport}, one fresh agent runtime from
- * {@link AcpAgentFactory}, inbound JSON-RPC delivery to the agent, and outbound JSON-RPC
- * delivery back to the wire adapter.
- * </p>
+ * <p>It knows nothing about the wire: HTTP headers, SSE streams, WebSocket sessions and
+ * routing stay in the adapter. Its life is: construct it, {@link #start} it with the factory,
+ * feed it messages and forward what it emits, then {@link #closeGracefully()} or
+ * {@link #close()} it when the client goes away or the listener shuts down.
  *
- * <p>
- * This class intentionally does not know about HTTP headers, SSE streams, WebSocket
- * sessions, or route maps. Those remain transport-adapter concerns.
- * </p>
+ * <p>{@link #acceptInbound} may be called from several threads at once (Streamable HTTP
+ * delivers one connection's POSTs on different server threads); the calls are serialized. The
+ * outbound consumer is called from whichever thread the agent sends on, possibly several at
+ * once, so it must be thread-safe.
  *
  * @author Kaiser Dandangi
  */
@@ -62,24 +66,30 @@ public final class RemoteAcpConnection {
 	private volatile @Nullable AcpAsyncAgent agent;
 
 	/**
-	 * Creates a new remote ACP connection core whose transport errors are logged.
-	 * @param id stable transport connection id
-	 * @param jsonMapper JSON mapper used by the connection transport
-	 * @param outboundConsumer callback that receives agent-originated outbound messages
+	 * Creates a connection whose transport errors are logged at ERROR.
+	 * @param id the connection's id, unique among the listener's connections; the Streamable
+	 * HTTP transport sends it to the client in its Acp-Connection-Id header
+	 * @param jsonMapper the mapper the agent's transport converts params and results with
+	 * @param outboundConsumer receives every message the agent sends to the client, responses
+	 * included
+	 * @throws IllegalArgumentException if {@code id} is empty or an argument is null
 	 */
 	public RemoteAcpConnection(String id, AcpJsonMapper jsonMapper, Consumer<JSONRPCMessage> outboundConsumer) {
 		this(id, jsonMapper, outboundConsumer, error -> logger.error("Remote ACP transport error", error));
 	}
 
 	/**
-	 * Creates a new remote ACP connection core that reports its transport errors to the
-	 * host. The agent runtime installs no exception handler on its transport, so without
-	 * one the host would never see them; the agent factory may still replace it through
+	 * Creates a connection that reports its transport errors to the listener that owns it.
+	 * The agent installs no exception handler on its transport, so without this one the
+	 * listener would never see them; the agent factory may still replace it through
 	 * {@link AcpAgentTransport#setExceptionHandler}.
-	 * @param id stable transport connection id
-	 * @param jsonMapper JSON mapper used by the connection transport
-	 * @param outboundConsumer callback that receives agent-originated outbound messages
+	 * @param id the connection's id, unique among the listener's connections; the Streamable
+	 * HTTP transport sends it to the client in its Acp-Connection-Id header
+	 * @param jsonMapper the mapper the agent's transport converts params and results with
+	 * @param outboundConsumer receives every message the agent sends to the client, responses
+	 * included
 	 * @param exceptionHandler receives the connection's transport errors
+	 * @throws IllegalArgumentException if {@code id} is empty or an argument is null
 	 */
 	public RemoteAcpConnection(String id, AcpJsonMapper jsonMapper, Consumer<JSONRPCMessage> outboundConsumer,
 			Consumer<Throwable> exceptionHandler) {
@@ -93,17 +103,21 @@ public final class RemoteAcpConnection {
 	}
 
 	/**
-	 * Returns the transport-level connection id.
-	 * @return connection id
+	 * Returns the connection's id, as given to the constructor.
+	 * @return the connection id
 	 */
 	public String id() {
 		return id;
 	}
 
 	/**
-	 * Starts a fresh agent runtime for this connection.
-	 * @param agentFactory factory used to create the connection-bound agent runtime
-	 * @return mono that completes when the agent runtime is started
+	 * Creates this connection's agent with {@code agentFactory}, on the connection's
+	 * transport, and starts it. The agent is created when the returned Mono is subscribed; a
+	 * failure, such as a factory that throws, is also reported to the exception handler.
+	 * @param agentFactory creates the agent for this connection
+	 * @return a Mono that completes once the agent has started; it errors with an
+	 * {@link IllegalStateException} if the connection was started before
+	 * @throws IllegalArgumentException if {@code agentFactory} is null
 	 */
 	public Mono<Void> start(AcpAgentFactory agentFactory) {
 		Assert.notNull(agentFactory, "The agentFactory can not be null");
@@ -120,25 +134,33 @@ public final class RemoteAcpConnection {
 	}
 
 	/**
-	 * Accepts one client-originated JSON-RPC message for delivery to the connection's
-	 * agent runtime.
-	 * @param message inbound message
+	 * Hands one message from the client to the connection's agent. It returns once the
+	 * message is queued; the agent's answer, if any, reaches the outbound consumer later.
+	 * Messages accepted before {@link #start} are kept and delivered once the agent runs.
+	 * @param message the message from the client
+	 * @throws AcpConnectionException if the connection is closing, or the message cannot be
+	 * queued
 	 */
 	public void acceptInbound(JSONRPCMessage message) {
 		transport.acceptInbound(message);
 	}
 
 	/**
-	 * Reports a transport adapter exception to the agent transport exception handler.
-	 * @param error exception to report
+	 * Reports an error of the wire adapter, such as a failed write or a dropped stream, to the
+	 * connection's exception handler: the one given to the constructor, unless the agent
+	 * factory replaced it on the transport.
+	 * @param error the error to report
 	 */
 	public void signalException(Throwable error) {
 		transport.signalException(error);
 	}
 
 	/**
-	 * Closes the connection and its agent runtime gracefully.
-	 * @return mono that completes when close work has been requested
+	 * Closes the connection's agent gracefully, then its transport. The agent's in-flight
+	 * handlers are cancelled and the outbound consumer receives nothing more. An error from
+	 * the agent's close is reported to the exception handler, not returned. Only the first
+	 * call has an effect.
+	 * @return a Mono that completes when the agent and the transport are closed
 	 */
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
@@ -221,9 +243,10 @@ public final class RemoteAcpConnection {
 					.doOnNext(response -> {
 						outboundConsumer.accept(response);
 					})
-					.doOnError(this::signalException)
 					.doFinally(signal -> terminationSink.tryEmitValue(null))
-					.subscribe();
+					// Reported to the exception handler, not dropped to Reactor's ERROR hook.
+					.subscribe(ignored -> {
+					}, this::signalException);
 				return Mono.empty();
 			});
 		}

@@ -521,6 +521,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking: `PromptResponse.text(String)` is removed, and a `@Prompt` method's String now reaches
+  the client.** `text(String)` threw its text away and returned the same response as `endTurn()`: a
+  prompt response carries no content, and a static factory cannot send a session update. So an
+  annotated `@Prompt` method that returned a `String` (documented as "converted to
+  `PromptResponse.text()`") ended the turn and sent nothing. That String is now sent to the client
+  as an `agent_message_chunk` session update of the prompt's session, then the turn ends with
+  `end_turn`; a null or empty String sends nothing. Migration: replace
+  `return PromptResponse.text(message);` with `context.sendMessage(message); return
+  PromptResponse.endTurn();` (`SyncPromptContext` or, in an async handler, `PromptContext`), or,
+  in a `@Prompt` method, return the String itself.
+
 - **Breaking: the session-model API (`session/set_model`) is removed.** Deprecated for removal in
   0.14.0; the ACP schema 1.9.1 (stable and unstable) no longer defines the method, its request and
   response, or the `models` field on session responses. Removed: `AcpSchema.METHOD_SESSION_SET_MODEL`,
@@ -553,6 +564,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON-RPC error.
 
 ### Fixed
+
+- **`session/close` cancels the session's ongoing work before it closes.** ACP v1 says the agent
+  "**must** cancel any ongoing work related to the session (treat it as if `session/cancel` was
+  called) and then free up any resources associated with the session" (schema
+  `CloseSessionRequest`). The agent session passed `session/close` straight to its handler: a
+  running prompt kept running and the `session/cancel` handler was never told. Now, when the agent
+  has a `session/close` handler, the session first does what a `session/cancel` does: it tells the
+  `session/cancel` handler (`cancelHandler`, `@Cancel`) and marks a running prompt cancelled, so
+  it answers stop reason `cancelled` (by itself, or from the session after the cancel grace
+  period). The close handler runs once that prompt has answered. An agent without a close handler
+  still answers `session/close` with "Method not found" and cancels nothing.
+
+- **A response result that lacks a required field fails the request.** Only inbound params were
+  checked for the fields the ACP schema requires, so a peer's `{}` read as a `PromptResponse` whose
+  `stopReason()` was null, or a `NewSessionResponse` whose `sessionId()` was null, against the
+  records' `@NullMarked` contract. A result is now checked the same way, on both sides and down
+  into nested records: the caller's `Mono` fails with an `AcpProtocolException` with code `-32603`
+  (internal error) and the message `The response to <method> lacks the required field <path>`
+  (for example `modes.currentModeId`). JSON-RPC 2.0 defines no code for an invalid response;
+  `-32603` is the one the SDK already uses for a response without a result. A null result for a
+  response type whose fields are all optional still reads as `{}`.
+
+- **A failed close is logged as the failure it is.** `AcpSyncClient.closeGracefully()` logged
+  "Client didn't close within timeout of 10000 ms" for any failure, also one that happened at once;
+  it now logs that only when the timeout passes, and otherwise `Client close failed: <cause>` with
+  the cause (it still returns false). `AcpTransport.close()`'s default subscribed to
+  `closeGracefully()` without an error consumer, so a failure reached Reactor's "Operator called
+  default onErrorDropped" at ERROR; it is now logged at WARN by `AcpTransport`'s logger. The
+  transports' and the client session's internal pipelines that subscribed without an error
+  consumer now log their error (at WARN, or at DEBUG where it was already logged or reported), and
+  a stdio client's standard-error handler that throws is logged instead of being dropped.
+
+- **Every transport can be closed more than once, with `close()` and `closeGracefully()` in
+  either order.** `WebSocketAcpClientTransport.closeGracefully()` sent a second WebSocket close
+  frame on a second call, which failed with `IOException: Output closed`, so a second
+  `AcpSyncClient.closeGracefully()` returned false and logged stack traces (try-with-resources after
+  an explicit close, or a container that destroys a client bean more than once, did this). Only
+  the first call now closes; later calls complete when it has, and a close frame is not sent once
+  the connection's output is closed. `TransportCloseIdempotenceTest` closes every shipped transport
+  (WebSocket client, Streamable HTTP client and its agent-side connection over HTTP and WebSocket,
+  stdio client and agent, in-memory client and agent) twice in each order.
 
 - **The stdio client's graceful close lets the agent exit by itself, and logs the stop once.**
   `StdioAcpClientTransport.closeGracefully()` sent SIGTERM straight away without closing the
@@ -897,6 +949,11 @@ Found by measuring coverage with JaCoCo; each has a test.
   `create(Class, Supplier)` that does not exist, is corrected.
 
 ### Build
+
+- **The Javadoc build knows the `@apiNote`, `@implSpec` and `@implNote` tags.** They were not
+  registered with the javadoc plugin, so their text was silently left out of the generated pages
+  (and doclint reports them as unknown tags). The parent POM now registers them, with the JDK's
+  headings.
 
 - **The JaCoCo coverage gate skips with the tests** (`-DskipTests`). It read whatever execution data
   an earlier run had left in `target/`, so `./mvnw -DskipTests install` after a `-Dtest` run (a

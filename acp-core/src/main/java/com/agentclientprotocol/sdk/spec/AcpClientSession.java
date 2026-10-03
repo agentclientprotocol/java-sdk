@@ -180,7 +180,8 @@ public class AcpClientSession implements AcpSession {
 				this.notifications.releaseHeld();
 				this.notificationDrainTerminated.tryEmitEmpty();
 			})
-			.subscribe();
+			.subscribe(ignored -> {
+			}, error -> logger.warn("Notification delivery ended with an error", error));
 
 		this.transport.connect(mono -> mono.doOnNext(this::handle).then(Mono.empty()))
 			.transform(connectHook)

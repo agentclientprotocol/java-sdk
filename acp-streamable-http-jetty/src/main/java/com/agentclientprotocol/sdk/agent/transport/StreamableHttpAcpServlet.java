@@ -49,54 +49,54 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.
 import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.INITIALIZE_TIMEOUT;
 
 /**
- * The HTTP side of the ACP Streamable HTTP endpoint: {@code POST} carries client
- * messages (and {@code initialize}, which creates the connection), {@code GET} opens the
- * connection or a session SSE stream, {@code DELETE} closes the connection.
+ * The ACP Streamable HTTP endpoint as a servlet, for serving remote clients from a Servlet 6
+ * container you already run, such as Spring Boot, Tomcat, Jetty or Undertow. It creates a
+ * fresh agent for each client connection with an {@link AcpAgentFactory}: a POST of
+ * {@code initialize} opens a connection, later POSTs carry the client's messages, a GET opens
+ * the connection's or a session's SSE stream for the agent's messages, and a DELETE closes
+ * the connection. Use it when you have a container; for a stand-alone
+ * agent use {@link StreamableHttpAcpAgentTransport}, which mounts this servlet on a Jetty
+ * server of its own and also accepts WebSocket upgrades, which this servlet does not.
  *
- * <p>
- * <b>Mountable in any Servlet 6 container</b> (Spring Boot, Tomcat, Jetty, Undertow) at
- * the path of your choice; register it with async support enabled:
- * </p>
+ * <p>Register it at the path of your choice, with async support on:
  *
  * <pre>{@code
- * StreamableHttpAcpServlet servlet = new StreamableHttpAcpServlet(AcpJsonMapper.createDefault(), agentFactory);
- * ServletRegistration.Dynamic registration = servletContext.addServlet("acp", servlet);
- * registration.addMapping("/acp");
- * registration.setAsyncSupported(true);
+ * void register(jakarta.servlet.ServletContext servletContext, AcpAgentFactory agentFactory) {
+ *     var servlet = new StreamableHttpAcpServlet(AcpJsonMapper.createDefault(), agentFactory);
+ *     jakarta.servlet.ServletRegistration.Dynamic registration =
+ *         servletContext.addServlet("acp", servlet);
+ *     registration.addMapping("/acp");
+ *     registration.setAsyncSupported(true);
+ * }
  * }</pre>
  *
- * <p>
- * The servlet owns its connections: {@link #init()} starts the SSE keep-alive and
- * {@link #destroy()} closes every connection, cancelling in-flight prompts, so the
- * container's lifecycle drives it. It serves the HTTP/SSE profile of the RFD; the
- * WebSocket upgrade on the same path needs {@link StreamableHttpAcpAgentTransport}, which
- * mounts this servlet on its own Jetty server next to the upgrade handler. HTTP/2 is the
- * container's to configure.
- * </p>
+ * <p>The container's lifecycle drives the servlet: {@link #init()} starts the SSE keep-alive
+ * and {@link #destroy()} closes every connection, cancelling in-flight prompts. HTTP/2 and TLS
+ * are the container's to configure. Agents from one factory run concurrently, so whatever they
+ * share must be thread-safe. The servlet has no authentication of its own: protect its path
+ * as you would any other endpoint.
  *
- * <p>
- * <b>Shutting down.</b> Closing ({@link #closeGracefully()}, or {@link #destroy()} when
- * the container takes the servlet out of service) refuses new connections, answers an
- * {@code initialize} still in flight with 503, cancels in-flight prompts and completes
- * every open SSE response; it never waits for a client to read or answer anything. It
- * finishes within the {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout()
- * shutdown timeout} (5 seconds by default): a connection whose agent has not closed by
- * then is closed at once.
- * </p>
+ * <p><b>Shutting down.</b> Closing ({@link #closeGracefully()}, or {@link #destroy()} when the
+ * container takes the servlet out of service) refuses new connections, answers an
+ * {@code initialize} still in flight with 503, cancels in-flight prompts and completes every
+ * open SSE response; it never waits for a client to read or answer anything. It finishes
+ * within the {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown
+ * timeout} (5 seconds by default): a connection whose agent has not closed by then is closed
+ * at once.
  *
- * <p>
- * <b>Close before a graceful container shutdown.</b> Every SSE stream a client holds open
- * is an in-flight asynchronous request, and a container shutting down gracefully waits
- * for in-flight requests before it destroys servlets. Spring Boot shuts down gracefully by
- * default ({@code server.shutdown=graceful}), so with a client connected it waits its
- * whole {@code spring.lifecycle.timeout-per-shutdown-phase} (30 seconds) before
- * {@code destroy()} is even called. Call {@link #closeGracefully()} before the server
- * stops instead, for instance from a {@code SmartLifecycle} in the default phase, which
- * Spring stops before the web server's graceful shutdown:
- * </p>
+ * <p><b>Close before a graceful container shutdown.</b> Every SSE stream a client holds open
+ * is an asynchronous request in flight, and a container that shuts down gracefully waits for
+ * those before it destroys servlets. Spring Boot shuts down gracefully by default
+ * ({@code server.shutdown=graceful}), so with a client connected it waits its whole
+ * {@code spring.lifecycle.timeout-per-shutdown-phase} (30 seconds) before {@code destroy()} is
+ * even called. Call {@link #closeGracefully()} before the server stops instead, for instance
+ * from a {@code SmartLifecycle} in the default phase, which Spring stops before the web
+ * server's graceful shutdown:
  *
  * <pre>{@code
- * @Override
+ * private StreamableHttpAcpServlet servlet; // the servlet registered above
+ *
+ * // SmartLifecycle.stop(), in the default phase
  * public void stop() {
  *     servlet.closeGracefully().block();
  * }
@@ -136,20 +136,23 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	private transient volatile @Nullable Disposable keepAliveTask;
 
 	/**
-	 * Creates a servlet with the default limits.
-	 * @param jsonMapper JSON mapper used for serialization
-	 * @param agentFactory creates one agent runtime per remote connection
+	 * Creates a servlet with the default limits and timings.
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param agentFactory creates the agent for each connection
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public StreamableHttpAcpServlet(AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory) {
 		this(jsonMapper, agentFactory, StreamableHttpAcpAgentTransportOptions.defaults());
 	}
 
 	/**
-	 * Creates a servlet with explicit limits.
-	 * @param jsonMapper JSON mapper used for serialization
-	 * @param agentFactory creates one agent runtime per remote connection
-	 * @param options bounds and timings; {@code maxConcurrentStreamsPerConnection} is the
-	 * container's to configure when this servlet is mounted elsewhere
+	 * Creates a servlet with the limits and timings of {@code options}.
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param agentFactory creates the agent for each connection
+	 * @param options the endpoint's limits and timings;
+	 * {@code maxConcurrentStreamsPerConnection} is the container's to configure when this
+	 * servlet is mounted in a container
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public StreamableHttpAcpServlet(AcpJsonMapper jsonMapper, AcpAgentFactory agentFactory,
 			StreamableHttpAcpAgentTransportOptions options) {
@@ -162,7 +165,10 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		this.routing = new StreamableHttpRouting(jsonMapper);
 	}
 
-	/** Starts the SSE keep-alive. Called by the container when the servlet is put into service. */
+	/**
+	 * Starts the SSE keep-alive, unless its interval is zero. The container calls it when it
+	 * puts the servlet into service.
+	 */
 	@Override
 	public void init() throws ServletException {
 		super.init();
@@ -188,7 +194,8 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 
 	/**
 	 * Closes every connection and stops the keep-alive, as {@link #closeGracefully()} does,
-	 * within the shutdown timeout. Called by the container on shutdown.
+	 * within the shutdown timeout. The container calls it when it takes the servlet out of
+	 * service.
 	 */
 	@Override
 	public void destroy() {
@@ -205,14 +212,14 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	}
 
 	/**
-	 * Closes every connection this servlet holds, cancelling in-flight prompts and
-	 * completing their SSE responses, refuses an {@code initialize} still in flight with
-	 * 503, and stops the keep-alive. New connections are refused afterwards. A connection
-	 * whose agent has not closed within the
+	 * Closes every connection this servlet holds, cancelling in-flight prompts and completing
+	 * their SSE responses, answers an {@code initialize} still in flight with 503, and stops
+	 * the keep-alive; new connections are refused from then on. A connection whose agent has
+	 * not closed within the
 	 * {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown timeout}
-	 * is closed at once. Nothing here waits for a client.
-	 * @return a Mono that completes when every connection has closed, at the latest after
-	 * the shutdown timeout
+	 * is closed at once. Nothing here waits for a client. Only the first call has an effect.
+	 * @return a Mono that completes when every connection has closed, at the latest after the
+	 * shutdown timeout
 	 */
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
@@ -260,8 +267,9 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	}
 
 	/**
-	 * The number of remote connections this servlet currently holds.
-	 * @return open connections
+	 * Returns the number of client connections this servlet holds, not counting those whose
+	 * {@code initialize} is still being answered.
+	 * @return the number of open connections
 	 */
 	public int activeConnectionCount() {
 		return connections.size();
@@ -273,6 +281,17 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 						this::reportException));
 	}
 
+	/**
+	 * Accepts one JSON-RPC message from a client. An {@code initialize} request without an
+	 * Acp-Connection-Id header opens a connection: it is answered 200 with the agent's
+	 * response and the new connection's id in that header, 503 while the servlet shuts down,
+	 * or 500 if the agent fails or takes more than 30 seconds to answer. Any other message
+	 * names its connection in the Acp-Connection-Id header and is answered 202; the agent's
+	 * answer comes on an SSE stream, as does the -32600 error for a JSON object that is no
+	 * valid JSON-RPC request. A body that is not {@code application/json} gets 415, one over
+	 * the size limit 413, a JSON-RPC batch 501, other invalid input 400, and an unknown
+	 * connection or session 404.
+	 */
 	@Override
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
@@ -302,6 +321,13 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		}
 	}
 
+	/**
+	 * Opens an SSE stream that carries the agent's messages: the connection's stream, or, with
+	 * an Acp-Session-Id header, that session's. The request must accept
+	 * {@code text/event-stream} (406 otherwise) and name its connection in the
+	 * Acp-Connection-Id header (400 without it, 404 for an unknown one); an unknown session
+	 * is answered 404.
+	 */
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
@@ -320,6 +346,10 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		}
 	}
 
+	/**
+	 * Closes the connection named in the Acp-Connection-Id header, and its agent, and answers
+	 * 202; 400 without the header, 404 for an unknown connection.
+	 */
 	@Override
 	protected void doDelete(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {

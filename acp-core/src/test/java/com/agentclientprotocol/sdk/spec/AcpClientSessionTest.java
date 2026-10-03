@@ -527,6 +527,50 @@ class AcpClientSessionTest {
 	}
 
 
+	/** A peer's {@code {}} must not read as a response whose required stopReason is null. */
+	@Test
+	void aPromptResultWithoutItsRequiredStopReasonFailsTheRequest() {
+		assertResultLacksField(AcpSchema.METHOD_SESSION_PROMPT,
+				new AcpSchema.PromptRequest("s", List.of(new AcpSchema.TextContent("hi"))),
+				new TypeRef<AcpSchema.PromptResponse>() {
+				}, Map.of(), "stopReason");
+	}
+
+	@Test
+	void aNewSessionResultWithoutItsRequiredSessionIdFailsTheRequest() {
+		assertResultLacksField(AcpSchema.METHOD_SESSION_NEW, new AcpSchema.NewSessionRequest("/", List.of()),
+				new TypeRef<AcpSchema.NewSessionResponse>() {
+				}, Map.of("modes", Map.of()), "sessionId");
+	}
+
+	@Test
+	void aRequiredFieldMissingInsideAResultIsNamedByItsPath() {
+		assertResultLacksField(AcpSchema.METHOD_SESSION_NEW, new AcpSchema.NewSessionRequest("/", List.of()),
+				new TypeRef<AcpSchema.NewSessionResponse>() {
+				}, Map.of("sessionId", "s-1", "modes", Map.of("availableModes", List.of())), "modes.currentModeId");
+	}
+
+	private <T> void assertResultLacksField(String method, Object params, TypeRef<T> type, Object result,
+			String field) {
+		var transport = new MockAcpClientTransport();
+		var session = new AcpClientSession(TIMEOUT, transport, Map.of(), Map.of(), Function.identity());
+
+		Mono<T> responseMono = session.sendRequest(method, params, type);
+
+		StepVerifier.create(responseMono).then(() -> {
+			AcpSchema.JSONRPCRequest request = transport.getLastSentMessageAsRequest();
+			transport.simulateIncomingMessage(
+					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
+		})
+			.expectErrorSatisfies(error -> assertThat(error)
+				.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+						e -> assertThat(e.getCode()).isEqualTo(-32603))
+				.hasMessageContaining("The response to " + method + " lacks the required field " + field))
+			.verify(TIMEOUT);
+
+		session.close();
+	}
+
 	@Test
 	void nullResultForAnEmptyResponseTypeYieldsAnEmptyResponse() {
 		// JSON-RPC allows "result": null, and the Python SDK sends it when a handler returns None.

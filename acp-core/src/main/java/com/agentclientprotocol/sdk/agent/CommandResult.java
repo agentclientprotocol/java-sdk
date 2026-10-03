@@ -7,28 +7,31 @@ package com.agentclientprotocol.sdk.agent;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Result of executing a terminal command via the convenience API.
+ * What a command run by {@link SyncPromptContext#execute(Command)} or
+ * {@link PromptContext#execute(Command)} left behind: its output and how it ended, as the client's
+ * terminal reported them. Check {@link #success()} for exit code 0, and read {@link #output()} for
+ * what it printed.
  *
- * <p>
- * This record wraps the output and exit code from a terminal command execution,
- * providing a clean interface for the common case of running a command and
- * checking its result.
+ * <p>{@code execute} builds it from two of the client's answers: the exit code or signal from
+ * {@code terminal/wait_for_exit}, then the output from {@code terminal/output}, read after the
+ * command ended. A process ends with an exit code or with a signal, so one of the two is normally
+ * {@code null}. The output is what the client kept: past the command's output limit the client
+ * drops output from the start, and this record does not say whether it did (the {@code truncated}
+ * flag of the client's answer is not carried over). Whether standard error is part of the output is
+ * up to the client.
  *
- * <p>
- * Example usage:
  * <pre>{@code
  * CommandResult result = context.execute("make", "build");
  * if (result.success()) {
- *     context.sendMessage("Build succeeded!");
+ *     context.sendMessage("Build succeeded");
  * } else {
- *     context.sendMessage("Build failed: " + result.output());
+ *     context.sendMessage("Build failed:\n" + result.output());
  * }
  * }</pre>
  *
- * @param output The combined stdout/stderr output from the command
- * @param exitCode The exit code (0 typically means success), or null if the process was
- * terminated by a signal
- * @param signal The signal that terminated the process, or null if it exited normally
+ * @param output the terminal output the client returned
+ * @param exitCode the exit code, or {@code null} if a signal ended the process
+ * @param signal the signal that ended the process, or {@code null} if it exited
  * @author Mark Pollack
  * @since 0.9.2
  * @see SyncPromptContext#execute(String...)
@@ -41,17 +44,17 @@ public record CommandResult(
 ) {
 
 	/**
-	 * Creates a CommandResult for a process that exited with the given code.
-	 * @param output The command output
-	 * @param exitCode The exit code
+	 * Creates a result for a process that exited with the given code, with no signal.
+	 * @param output the terminal output
+	 * @param exitCode the exit code
 	 */
 	public CommandResult(String output, int exitCode) {
 		this(output, exitCode, null);
 	}
 
 	/**
-	 * Returns true if the command completed successfully (exit code 0).
-	 * @return true if the process exited with code 0
+	 * Returns whether the process exited with code 0. A process ended by a signal did not succeed.
+	 * @return {@code true} if the exit code is 0
 	 */
 	public boolean success() {
 		return exitCode != null && exitCode == 0;

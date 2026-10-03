@@ -34,79 +34,76 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Factory class for creating Agent Client Protocol (ACP) clients. ACP is a protocol that
- * enables applications to interact with autonomous coding agents through a standardized
- * interface.
+ * The entry point for an ACP client, the side that starts or connects to an agent and sends it
+ * prompts: {@link #sync(AcpClientTransport)} and {@link #async(AcpClientTransport)} start a builder
+ * on a client transport, you set the client's capabilities and the handlers for the agent's
+ * requests, and {@code build()} returns the client. Use {@code sync} for blocking code and
+ * {@link AcpSyncClient}; use {@code async} for Reactor code and {@link AcpAsyncClient}.
  *
- * <p>
- * This class serves as the main entry point for establishing connections with ACP agents,
- * implementing the client-side of the ACP specification. The protocol follows a
- * client-agent architecture where:
- * <ul>
- * <li>The client (this implementation) initiates connections and sends prompts</li>
- * <li>The agent responds to prompts and can request client capabilities (file access,
- * etc.)</li>
- * <li>Communication occurs through a transport layer (e.g., stdio) using JSON-RPC
- * 2.0</li>
- * </ul>
- *
- * <p>
- * The class provides factory methods to create either:
- * <ul>
- * <li>{@link AcpAsyncClient} for non-blocking operations with Mono responses</li>
- * <li>{@link AcpSyncClient} for blocking operations with direct responses (future)</li>
- * </ul>
- *
- * <p>
- * Example of creating a basic asynchronous client:
+ * <p>The interface is not implemented. It holds the two builders, {@link SyncRequestHandler}, and
+ * the scheduler synchronous handlers run on. Building a client connects its transport, which for
+ * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} starts the agent
+ * process; then call {@code initialize()}, create a session and send prompts. A transport carries
+ * one client.
  *
  * <pre>{@code
- * // Create transport
- * AgentParameters params = AgentParameters.builder("gemini")
- *     .arg("--experimental-acp")
- *     .build();
- * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
- *
- * // Build client
- * AcpAsyncClient client = AcpClient.async(transport)
- *     .requestTimeout(Duration.ofSeconds(30))
- *     .sessionUpdateConsumer(notification -> {
- *         System.out.println("Session update: " + notification);
- *         return Mono.empty();
- *     })
- *     .build();
- *
- * // Initialize (with the builder's capabilities and client info) and use
- * client.initialize()
- *     .flatMap(initResponse -> client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())))
- *     .flatMap(sessionResponse -> client.prompt(new AcpSchema.PromptRequest(
- *         sessionResponse.sessionId(),
- *         List.of(new AcpSchema.TextContent("Fix the failing test")))))
- *     .doOnNext(response -> System.out.println("Response: " + response))
- *     .block();
- *
- * client.closeGracefully().block();
+ * AgentParameters params = AgentParameters.builder("my-agent").arg("--acp").build();
+ * var transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
+ * try (AcpSyncClient client = AcpClient.sync(transport)
+ *         .requestTimeout(Duration.ofMinutes(5))
+ *         .sessionUpdateConsumer(notification -> System.out.println(notification.update()))
+ *         .build()) {
+ *     client.initialize();
+ *     String sessionId = client
+ *         .newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
+ *         .sessionId();
+ *     AcpSchema.PromptResponse response = client.prompt(new AcpSchema.PromptRequest(sessionId,
+ *         List.of(new AcpSchema.TextContent("Fix the failing test"))));
+ *     System.out.println(response.stopReason());
+ * }
  * }</pre>
  *
- * <p>
- * The client supports:
- * <ul>
- * <li>Protocol version negotiation and capability exchange</li>
- * <li>Optional authentication with various methods</li>
- * <li>Session creation and management</li>
- * <li>Prompt submission with streaming updates</li>
- * <li>File system operations (read/write) through client handlers</li>
- * <li>Permission requests for sensitive operations</li>
- * <li>Terminal operations for command execution</li>
- * </ul>
+ * <h2>The agent's requests</h2>
+ *
+ * <p>The agent calls back into the client for files ({@code fs/*}), terminals ({@code terminal/*}),
+ * permission and elicitation. Register a handler for each one you support, and advertise the
+ * matching capabilities with {@code clientCapabilities(...)}: the builder does not derive them from
+ * the handlers. A request without a handler is answered {@code -32601} (method not found). Requests
+ * are handled as they arrive, not queued behind session updates. Asynchronous handlers are called
+ * on the transport's thread and must not block; synchronous handlers run on
+ * {@link #SYNC_HANDLER_SCHEDULER}. A handler that fails is answered with an error: an
+ * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
+ * error).
+ *
+ * <h2>Session updates and ordering</h2>
+ *
+ * <p>{@code session/update} notifications go to the session update consumers one at a time, in the
+ * order the agent sent them. A response completes its caller only after every notification received
+ * before it has been handled, so when {@code prompt} returns, the turn's updates have all been
+ * handled. A consumer must therefore not wait for a prompt in flight to complete.
+ *
+ * <h2>Timeouts and cancellation</h2>
+ *
+ * <p>Requests wait at most 30 seconds unless the builder's {@code requestTimeout} says otherwise,
+ * and a prompt's answer comes only at the end of its turn, so raise it for real agents. When the
+ * timeout passes, or the caller disposes a request's {@code Mono}, the client sends the agent a
+ * {@code $/cancel_request} and the call fails; a Java agent then cancels the handler, which for a
+ * prompt ends the turn. To stop a turn and still receive its answer, send {@code session/cancel}
+ * with {@code cancel(...)}, or put
+ * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context.
  *
  * @author Mark Pollack
  * @author Christian Tzolov
  * @see AcpAsyncClient
+ * @see AcpSyncClient
  * @see AcpClientTransport
  */
 public interface AcpClient {
 
+	/**
+	 * The logger the client builders log received session updates to, at DEBUG. It is public only
+	 * because every field of an interface is; it is not meant for applications.
+	 */
 	Logger logger = LoggerFactory.getLogger(AcpClient.class);
 
 	// ====================================================================
@@ -114,9 +111,11 @@ public interface AcpClient {
 	// ====================================================================
 
 	/**
-	 * Library-owned scheduler for executing synchronous handlers.
-	 * Uses daemon threads with descriptive names to prevent JVM hang on exit.
-	 * This follows the best practice of never using global Schedulers.boundedElastic().
+	 * The scheduler the handlers and session update consumers of every synchronous client run on: a
+	 * cached pool of daemon threads named {@code acp-sync-handler}, shared by all clients in the
+	 * JVM. Its threads may block, so a handler can do file or process I/O without holding up the
+	 * transport, and the daemon threads do not keep the JVM alive. The pool has no size limit:
+	 * every handler running at the same time takes a thread of its own.
 	 */
 	Scheduler SYNC_HANDLER_SCHEDULER = Schedulers.fromExecutorService(
 			Executors.newCachedThreadPool(r -> {
@@ -130,65 +129,64 @@ public interface AcpClient {
 	// ====================================================================
 
 	/**
-	 * Functional interface for synchronous request handlers. Unlike
-	 * {@link AcpClientSession.RequestHandler}, this interface returns the response
-	 * directly without wrapping in Mono, making it natural for blocking I/O operations.
-	 *
-	 * <p>Use with {@link SyncSpec} builder methods to register handlers that don't
-	 * require reactive programming patterns.
-	 *
-	 * @param <T> The response type
+	 * A blocking handler for one agent-to-client request method, registered with
+	 * {@link SyncSpec#requestHandler(String, SyncRequestHandler)} for a method the typed setters do
+	 * not cover. It receives the params as the transport read them and returns the result. Prefer
+	 * the typed setters for ACP methods and {@code extRequestHandler} for extension methods, which
+	 * read the params into a type for you.
+	 * @param <T> the result type
 	 */
 	@FunctionalInterface
 	interface SyncRequestHandler<T> {
 		/**
-		 * Handles an incoming request with the given parameters.
-		 * @param params The raw request parameters (requires unmarshalling)
-		 * @return The response object
+		 * Answers one request from the agent. It runs on {@link AcpClient#SYNC_HANDLER_SCHEDULER}
+		 * and may block.
+		 * @param params the request's params as the transport read them, usually a {@code Map}; an
+		 * omitted params arrives as an empty object
+		 * @return the result, any value the JSON mapper can write; {@code null} answers the request
+		 * with an internal error ({@code -32603})
 		 */
 		T handle(Object params);
 	}
 
 	/**
-	 * Start building a synchronous ACP client with the specified transport layer. The
-	 * synchronous ACP client provides blocking operations. Synchronous clients wait for
-	 * each operation to complete before returning, making them simpler to use but
-	 * potentially less performant for concurrent operations.
-	 * @param transport The transport layer implementation for ACP communication
-	 * @return A new builder instance for configuring the client
-	 * @throws IllegalArgumentException if transport is null
+	 * Starts a builder for a client with blocking calls ({@link AcpSyncClient}) and blocking
+	 * handlers, which run on {@link #SYNC_HANDLER_SCHEDULER}.
+	 * @param transport the client transport, for example a
+	 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport}, which starts
+	 * the agent process
+	 * @return a new builder
+	 * @throws IllegalArgumentException if {@code transport} is null
 	 */
 	static SyncSpec sync(AcpClientTransport transport) {
 		return new SyncSpec(transport);
 	}
 
 	/**
-	 * Start building an asynchronous ACP client with the specified transport layer. The
-	 * asynchronous ACP client provides non-blocking operations using Project Reactor's
-	 * Mono type. The transport layer handles the low-level communication between client
-	 * and agent using protocols like stdio.
-	 * @param transport The transport layer implementation for ACP communication. Common
-	 * implementation is {@code StdioAcpClientTransport} for stdio-based communication.
-	 * @return A new builder instance for configuring the client
-	 * @throws IllegalArgumentException if transport is null
+	 * Starts a builder for a client whose calls return Reactor {@code Mono}s
+	 * ({@link AcpAsyncClient}) and whose handlers return {@code Mono}s and must not block.
+	 * @param transport the client transport, for example a
+	 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport}, which starts
+	 * the agent process
+	 * @return a new builder
+	 * @throws IllegalArgumentException if {@code transport} is null
 	 */
 	static AsyncSpec async(AcpClientTransport transport) {
 		return new AsyncSpec(transport);
 	}
 
 	/**
-	 * Asynchronous client specification. This class follows the builder pattern to
-	 * provide a fluent API for setting up clients with custom configurations.
+	 * Configures and builds an {@link AcpAsyncClient}: the client's capabilities and info, the
+	 * request timeout, the session update consumers, and the handlers for the agent's requests and
+	 * notifications, each returning a Reactor {@code Mono}. Get one from
+	 * {@link AcpClient#async(AcpClientTransport)}. For blocking handlers, use {@link SyncSpec}.
 	 *
-	 * <p>
-	 * The builder supports configuration of:
-	 * <ul>
-	 * <li>Transport layer for client-agent communication</li>
-	 * <li>Request timeouts for operation boundaries</li>
-	 * <li>Client capabilities for feature negotiation</li>
-	 * <li>Request handlers for incoming agent requests (file operations, etc.)</li>
-	 * <li>Notification handlers for streaming updates</li>
-	 * </ul>
+	 * <p>Handlers are called on the transport's thread and must not block: return a {@code Mono}
+	 * that completes later instead. Registering a method again replaces its handler, and a typed
+	 * setter and {@link #requestHandler} for the same method replace each other. A request
+	 * handler's {@code Mono} must emit the answer: an empty one is answered {@code -32603}.
+	 * {@link #build()} connects the transport. A builder is not thread-safe; configure it on one
+	 * thread.
 	 */
 	class AsyncSpec {
 
@@ -218,13 +216,15 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the duration to wait for agent responses before timing out requests. This
-		 * timeout applies to all requests made through the client, including initialize,
-		 * prompt, and session operations.
-		 * @param requestTimeout The duration to wait before timing out requests. Must not
-		 * be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if requestTimeout is null
+		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
+		 * session calls, extension requests and {@code session/prompt}, whose answer comes only at
+		 * the end of the turn. When it passes, the call fails with a
+		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
+		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
+		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * @param requestTimeout the timeout
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code requestTimeout} is null
 		 */
 		public AsyncSpec requestTimeout(Duration requestTimeout) {
 			Assert.notNull(requestTimeout, "Request timeout must not be null");
@@ -233,16 +233,16 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client capabilities advertised to the agent by {@code initialize()}: what
-		 * the client supports, such as file system operations, terminal access, boolean
-		 * config options and elicitation. This is the only place they are set; every
-		 * initialize request carries them. Defaults to {@code new ClientCapabilities()} (no
-		 * file system access, no terminal). Build them with
+		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
+		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
+		 * is the only place they are set, and every initialize request carries them. Register the
+		 * handlers that serve them as well: the builder neither derives the capabilities from the
+		 * handlers nor checks that they match, except for elicitation modes. Default:
+		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
-		 * @param clientCapabilities The client capabilities configuration. Must not be
-		 * null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if clientCapabilities is null
+		 * @param clientCapabilities the capabilities
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code clientCapabilities} is null
 		 */
 		public AsyncSpec clientCapabilities(AcpSchema.ClientCapabilities clientCapabilities) {
 			Assert.notNull(clientCapabilities, "Client capabilities must not be null");
@@ -251,11 +251,10 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client's name and version, sent to the agent by {@code initialize()}.
-		 * Optional.
-		 * @param clientInfo the client's implementation info. Must not be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if clientInfo is null
+		 * Sets the client's name and version, sent to the agent in {@code initialize}. Optional.
+		 * @param clientInfo the client's name and version
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code clientInfo} is null
 		 */
 		public AsyncSpec clientInfo(AcpSchema.Implementation clientInfo) {
 			Assert.notNull(clientInfo, "Client info must not be null");
@@ -264,20 +263,21 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for file system read requests from the agent.
-		 * This is the preferred method as it provides type-safe request handling
-		 * without manual unmarshalling.
+		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
+		 * file, which should include unsaved changes in the user's editor. Advertise
+		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
+		 * it for you.
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .readTextFileHandler(req ->
-		 *     Mono.fromCallable(() -> Files.readString(Path.of(req.path())))
-		 *         .map(ReadTextFileResponse::new))
+		 * .readTextFileHandler(request -> Mono
+		 *     .fromCallable(() -> Files.readString(Path.of(request.path())))
+		 *     .subscribeOn(Schedulers.boundedElastic())
+		 *     .map(AcpSchema.ReadTextFileResponse::new))
 		 * }</pre>
 		 *
-		 * @param handler The typed handler function that processes read requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec readTextFileHandler(
 				Function<AcpSchema.ReadTextFileRequest, Mono<AcpSchema.ReadTextFileResponse>> handler) {
@@ -287,20 +287,20 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for file system write requests from the agent.
-		 * This is the preferred method as it provides type-safe request handling
-		 * without manual unmarshalling.
+		 * Sets the handler for {@code fs/write_text_file}: the agent asks to write a text file,
+		 * which ACP requires the client to create if it does not exist. Advertise
+		 * {@code fs.writeTextFile} in {@link #clientCapabilities} as well.
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .writeTextFileHandler(req ->
-		 *     Mono.fromRunnable(() -> Files.writeString(Path.of(req.path()), req.content()))
-		 *         .then(Mono.just(new WriteTextFileResponse())))
+		 * .writeTextFileHandler(request -> Mono
+		 *     .fromCallable(() -> Files.writeString(Path.of(request.path()), request.content()))
+		 *     .subscribeOn(Schedulers.boundedElastic())
+		 *     .thenReturn(new AcpSchema.WriteTextFileResponse()))
 		 * }</pre>
 		 *
-		 * @param handler The typed handler function that processes write requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec writeTextFileHandler(
 				Function<AcpSchema.WriteTextFileRequest, Mono<AcpSchema.WriteTextFileResponse>> handler) {
@@ -310,20 +310,21 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for permission requests from the agent.
-		 * This is the preferred method as it provides type-safe request handling
-		 * without manual unmarshalling.
+		 * Sets the handler for {@code session/request_permission}: the agent asks the user to
+		 * approve a tool call and offers the options to choose from. Answer with the selected
+		 * option ({@link AcpSchema.PermissionSelected}), or with
+		 * {@link AcpSchema.PermissionCancelled} once the prompt turn was cancelled, as ACP
+		 * requires. Every client should register one: without it the request is answered
+		 * {@code -32601} (method not found).
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .requestPermissionHandler(req ->
-		 *     Mono.just(new RequestPermissionResponse(
-		 *         new RequestPermissionOutcome("approve", null))))
+		 * .requestPermissionHandler(request -> Mono.just(new AcpSchema.RequestPermissionResponse(
+		 *     new AcpSchema.PermissionSelected(request.options().get(0).optionId()))))
 		 * }</pre>
 		 *
-		 * @param handler The typed handler function that processes permission requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec requestPermissionHandler(
 				Function<AcpSchema.RequestPermissionRequest, Mono<AcpSchema.RequestPermissionResponse>> handler) {
@@ -333,20 +334,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal creation requests from the agent.
+		 * Sets the handler for {@code terminal/create}: the agent asks to start a command in a new
+		 * terminal and gets back its ID. Advertise {@code terminal} in {@link #clientCapabilities}
+		 * and register the other four terminal handlers as well.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .createTerminalHandler(req -> {
-		 *     String terminalId = UUID.randomUUID().toString();
-		 *     // Start process with req.command(), req.args(), req.cwd()
-		 *     return Mono.just(new CreateTerminalResponse(terminalId));
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal creation requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec createTerminalHandler(
 				Function<AcpSchema.CreateTerminalRequest, Mono<AcpSchema.CreateTerminalResponse>> handler) {
@@ -356,19 +350,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal output requests from the agent.
+		 * Sets the handler for {@code terminal/output}: the agent asks for a terminal's output so
+		 * far, whether it was truncated, and the exit status if the command has ended.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .terminalOutputHandler(req -> {
-		 *     String output = getTerminalOutput(req.terminalId());
-		 *     return Mono.just(new TerminalOutputResponse(output, false, null));
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal output requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec terminalOutputHandler(
 				Function<AcpSchema.TerminalOutputRequest, Mono<AcpSchema.TerminalOutputResponse>> handler) {
@@ -378,19 +365,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal release requests from the agent.
+		 * Sets the handler for {@code terminal/release}: the agent is done with a terminal. Kill
+		 * its command if it is still running and free the terminal; its ID is invalid afterwards.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .releaseTerminalHandler(req -> {
-		 *     releaseTerminal(req.terminalId());
-		 *     return Mono.just(new ReleaseTerminalResponse());
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal release requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec releaseTerminalHandler(
 				Function<AcpSchema.ReleaseTerminalRequest, Mono<AcpSchema.ReleaseTerminalResponse>> handler) {
@@ -400,19 +380,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for wait-for-terminal-exit requests from the agent.
+		 * Sets the handler for {@code terminal/wait_for_exit}: answer once the terminal's command
+		 * has ended, with its exit code or the signal that ended it. The agent's request timeout
+		 * bounds how long the agent waits for this answer.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .waitForTerminalExitHandler(req -> {
-		 *     int exitCode = waitForExit(req.terminalId());
-		 *     return Mono.just(new WaitForTerminalExitResponse(exitCode, null));
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes wait-for-exit requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec waitForTerminalExitHandler(
 				Function<AcpSchema.WaitForTerminalExitRequest, Mono<AcpSchema.WaitForTerminalExitResponse>> handler) {
@@ -422,19 +396,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal kill requests from the agent.
+		 * Sets the handler for {@code terminal/kill}: kill the terminal's command but keep the
+		 * terminal, so its output and exit status can still be read until it is released.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .killTerminalHandler(req -> {
-		 *     killProcess(req.terminalId());
-		 *     return Mono.just(new KillTerminalCommandResponse());
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal kill requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec killTerminalHandler(
 				Function<AcpSchema.KillTerminalCommandRequest, Mono<AcpSchema.KillTerminalCommandResponse>> handler) {
@@ -444,20 +411,17 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for {@code elicitation/create} requests from the agent,
-		 * which ask the user for structured input through a form or a URL. The handler
-		 * answers {@code accept}, {@code decline} or {@code cancel}.
+		 * Sets the handler for {@code elicitation/create}: the agent asks the user for structured
+		 * input, with a form or by sending the user to a URL. The handler answers accept (with the
+		 * form content), decline or cancel.
 		 *
-		 * <p>
-		 * The client answers a request whose mode ({@code form} or {@code url}) it did
-		 * not advertise in {@code clientCapabilities.elicitation} at initialization with
-		 * a JSON-RPC {@code -32602} (invalid params) error, without calling the handler.
-		 * Advertise the modes the handler supports, for example with
+		 * <p>A request whose mode ({@code form} or {@code url}) the client did not advertise in its
+		 * elicitation capabilities is answered with {@code -32602} (invalid params) without calling
+		 * the handler. Advertise the modes the handler supports, for example with
 		 * {@link AcpSchema.ElicitationCapabilities#formOnly()}.
-		 *
-		 * @param handler The typed handler function that processes elicitation requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it emits the user's answer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> handler) {
@@ -468,16 +432,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for {@code elicitation/complete} notifications: the agent
-		 * reports that the external interaction of a URL-mode elicitation has finished.
-		 * The spec requires clients to ignore unknown or already-completed elicitation
-		 * IDs, so the handler should check the ID against the URL elicitations it
-		 * accepted.
-		 *
-		 * @param handler The typed handler function that processes completion
-		 * notifications
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * Sets the handler for {@code elicitation/complete} notifications: the agent reports that
+		 * the outside interaction of a URL-mode elicitation has finished. ACP requires clients to
+		 * ignore unknown or already completed elicitation IDs, so check the ID against the URL
+		 * elicitations the user accepted.
+		 * @param handler the handler
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public AsyncSpec completeElicitationHandler(
 				Function<AcpSchema.CompleteElicitationNotification, Mono<Void>> handler) {
@@ -489,21 +450,22 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a consumer to be notified when session update notifications are received
-		 * from the agent. Session updates include agent thoughts, message chunks, and
-		 * other streaming content during prompt processing.
-		 * <p>
-		 * Notifications are delivered one at a time, in the order the agent sent them: the
-		 * next is delivered once every consumer has finished with this one (its Mono completed). A response
-		 * from the agent, such as a prompt's, completes its caller only after the consumers
-		 * have finished with every notification sent before it, so updates collected here
-		 * are complete when {@code prompt} returns. A consumer must not wait for a prompt
-		 * in flight to complete: that prompt waits for the consumer.
-		 * </p>
-		 * @param sessionUpdateConsumer A consumer that receives session update
-		 * notifications. Must not be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if sessionUpdateConsumer is null
+		 * Adds a consumer for {@code session/update} notifications: the message and thought chunks,
+		 * tool calls, plans and other updates the agent streams during a prompt turn, and the
+		 * updates it sends between turns. The consumer's {@code Mono} completes when it has
+		 * finished with a notification.
+		 *
+		 * <p>Notifications are delivered one at a time, in the order the agent sent them, and each
+		 * goes to every consumer added: the next one waits until all consumers have finished with
+		 * this one. A response from the agent, such as a prompt's, completes its caller only after
+		 * the consumers have finished with every notification sent before it, so the updates of a
+		 * turn are all handled when {@code prompt} returns. A slow consumer therefore delays
+		 * responses, and the wait counts against the request timeout. A consumer must not wait for
+		 * a prompt in flight to complete: that prompt waits for the consumer. A consumer that fails
+		 * is logged, and the next notification follows.
+		 * @param sessionUpdateConsumer the consumer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code sessionUpdateConsumer} is null
 		 */
 		public AsyncSpec sessionUpdateConsumer(
 				Function<AcpSchema.SessionNotification, Mono<Void>> sessionUpdateConsumer) {
@@ -513,13 +475,15 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a custom request handler for a specific method. This allows handling
-		 * additional agent requests beyond the standard file system and permission
-		 * operations.
-		 * @param method The method name (e.g., "custom/operation")
-		 * @param handler The handler function for this method
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if method or handler is null
+		 * Registers a handler for any agent-to-client request method, with the params as the
+		 * transport read them. It replaces a typed handler for the same method, and a typed setter
+		 * called later replaces it. The method name is not checked: prefer the typed setters for
+		 * ACP methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension
+		 * methods.
+		 * @param method the method name
+		 * @param handler the handler
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
 		 */
 		public AsyncSpec requestHandler(String method, AcpClientSession.RequestHandler<?> handler) {
 			Assert.notNull(method, "Method must not be null");
@@ -532,12 +496,15 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a custom notification handler for a specific method. This allows handling
-		 * additional agent notifications beyond session updates.
-		 * @param method The method name (e.g., "custom/notification")
-		 * @param handler The handler function for this method
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if method or handler is null
+		 * Registers a handler for any agent-to-client notification method, with the params as the
+		 * transport read them. It is delivered in order with the session updates, and it is called
+		 * on the delivering thread, so it must not block. If a session update consumer is added,
+		 * {@code build()} replaces a handler registered here for {@code session/update}. The method
+		 * name is not checked: prefer {@code extNotificationHandler} for extension methods.
+		 * @param method the method name
+		 * @param handler the handler
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
 		 */
 		public AsyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
 			Assert.notNull(method, "Method must not be null");
@@ -547,25 +514,24 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the handler for a custom extension request ({@code _}-prefixed method
-		 * name, ACP v1 Extensibility) from the agent, its params read as the given type. A
-		 * request for an extension method without a handler is answered with "Method not
-		 * found" (-32601).
+		 * Registers the handler for a custom extension request ({@code _}-prefixed method name, ACP
+		 * v1 Extensibility) from the agent, its params read as the given type. A request for an
+		 * extension method without a handler is answered with "Method not found" ({@code -32601}).
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .extRequestHandler("_example.com/workspace/buffers", new TypeRef<BuffersRequest>() {},
-		 *     req -> Mono.just(new BuffersResponse(openBuffers(req.language()))))
+		 * .extRequestHandler("_example.com/workspace/buffers",
+		 *     params -> Mono.just(Map.of("buffers", List.of())))
 		 * }</pre>
+		 *
 		 * @param <T> the params type
 		 * @param method the method name, which must start with {@code _}
 		 * @param paramsType the type the params are read as
-		 * @param handler the handler; its result is any value the JSON mapper can write,
-		 * and it must not complete empty (the request is then answered with an internal
-		 * error): answer with an empty map when there is nothing to return
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if the method name does not start with
-		 * {@code _}, or the type or handler is null
+		 * @param handler the handler; its result is any value the JSON mapper can write, and it
+		 * must not complete empty (the request is then answered with an internal error,
+		 * {@code -32603}): answer with an empty map when there is nothing to return
+		 * @return this builder
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}, or the
+		 * type or handler is null
 		 */
 		public <T> AsyncSpec extRequestHandler(String method, TypeRef<T> paramsType,
 				Function<T, ? extends Mono<?>> handler) {
@@ -576,12 +542,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the handler for a custom extension request from the agent, its params
-		 * delivered as the raw JSON value (a {@code Map}, {@code List}, {@code String},
-		 * {@code Number} or {@code Boolean}).
+		 * Registers the handler for a custom extension request ({@code _}-prefixed method name, ACP
+		 * v1 Extensibility) from the agent, its params delivered as the raw JSON value (a
+		 * {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}).
 		 * @param method the method name, which must start with {@code _}
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
+		 * @return this builder
 		 * @throws IllegalArgumentException if the method name does not start with {@code _}
 		 * @see #extRequestHandler(String, TypeRef, Function)
 		 */
@@ -590,16 +556,17 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the handler for a custom extension notification ({@code _}-prefixed
-		 * method name) from the agent, its params read as the given type. An extension
-		 * notification without a handler is ignored, as the protocol asks.
+		 * Registers the handler for a custom extension notification ({@code _}-prefixed method
+		 * name) from the agent, its params read as the given type. An extension notification
+		 * without a handler is ignored, as the protocol asks. Extension notifications are delivered
+		 * in order with the session updates.
 		 * @param <T> the params type
 		 * @param method the method name, which must start with {@code _}
 		 * @param paramsType the type the params are read as
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if the method name does not start with
-		 * {@code _}, or the type or handler is null
+		 * @return this builder
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}, or the
+		 * type or handler is null
 		 */
 		public <T> AsyncSpec extNotificationHandler(String method, TypeRef<T> paramsType,
 				Function<T, Mono<Void>> handler) {
@@ -611,11 +578,11 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the handler for a custom extension notification from the agent, its
-		 * params delivered as the raw JSON value.
+		 * Registers the handler for a custom extension notification ({@code _}-prefixed method
+		 * name) from the agent, its params delivered as the raw JSON value.
 		 * @param method the method name, which must start with {@code _}
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
+		 * @return this builder
 		 * @throws IllegalArgumentException if the method name does not start with {@code _}
 		 * @see #extNotificationHandler(String, TypeRef, Function)
 		 */
@@ -632,9 +599,14 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Creates an instance of {@link AcpAsyncClient} with the provided configurations
-		 * or sensible defaults.
-		 * @return a new instance of {@link AcpAsyncClient}
+		 * Builds the client and connects the transport: for a
+		 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} that starts
+		 * the agent process. Call {@link AcpAsyncClient#initialize()} next. A transport carries one
+		 * client, so build once per transport.
+		 * @return the client
+		 * @throws IllegalStateException if the transport refuses to connect at once, for example
+		 * because it is already connected; a connection that fails later fails the client's
+		 * requests instead
 		 */
 		public AcpAsyncClient build() {
 			// Set up session update notification handler
@@ -696,18 +668,18 @@ public interface AcpClient {
 	}
 
 	/**
-	 * Synchronous client specification. This class follows the builder pattern to
-	 * provide a fluent API for setting up synchronous clients with custom configurations.
+	 * Configures and builds an {@link AcpSyncClient}: the client's capabilities and info, the
+	 * request timeout, the session update consumers, and the handlers for the agent's requests and
+	 * notifications, each returning a plain value. Get one from
+	 * {@link AcpClient#sync(AcpClientTransport)}.
 	 *
-	 * <p>
-	 * The builder supports configuration of:
-	 * <ul>
-	 * <li>Transport layer for client-agent communication</li>
-	 * <li>Request timeouts for operation boundaries</li>
-	 * <li>Client capabilities for feature negotiation</li>
-	 * <li>Request handlers for incoming agent requests (file operations, etc.)</li>
-	 * <li>Notification handlers for streaming updates</li>
-	 * </ul>
+	 * <p>Handlers and session update consumers run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}, not
+	 * on the transport's thread, so they may block. Requests are handled as they arrive, so several
+	 * handlers can run at the same time and state they share must be thread-safe. A request handler
+	 * that returns {@code null} is answered {@code -32603}. The builder turns each handler into its
+	 * asynchronous counterpart on an {@link AsyncSpec}, so the rules described there apply; the raw
+	 * {@link #notificationHandler} is passed on as it is and must not block. {@link #build()}
+	 * connects the transport. A builder is not thread-safe; configure it on one thread.
 	 */
 	class SyncSpec {
 
@@ -736,13 +708,15 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the duration to wait for agent responses before timing out requests. This
-		 * timeout applies to all requests made through the client, including initialize,
-		 * prompt, and session operations.
-		 * @param requestTimeout The duration to wait before timing out requests. Must not
-		 * be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if requestTimeout is null
+		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
+		 * session calls, extension requests and {@code session/prompt}, whose answer comes only at
+		 * the end of the turn. When it passes, the call fails with a
+		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
+		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
+		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * @param requestTimeout the timeout
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code requestTimeout} is null
 		 */
 		public SyncSpec requestTimeout(Duration requestTimeout) {
 			asyncSpec.requestTimeout(requestTimeout);
@@ -750,16 +724,16 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client capabilities advertised to the agent by {@code initialize()}: what
-		 * the client supports, such as file system operations, terminal access, boolean
-		 * config options and elicitation. This is the only place they are set; every
-		 * initialize request carries them. Defaults to {@code new ClientCapabilities()} (no
-		 * file system access, no terminal). Build them with
+		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
+		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
+		 * is the only place they are set, and every initialize request carries them. Register the
+		 * handlers that serve them as well: the builder neither derives the capabilities from the
+		 * handlers nor checks that they match, except for elicitation modes. Default:
+		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
-		 * @param clientCapabilities The client capabilities configuration. Must not be
-		 * null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if clientCapabilities is null
+		 * @param clientCapabilities the capabilities
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code clientCapabilities} is null
 		 */
 		public SyncSpec clientCapabilities(AcpSchema.ClientCapabilities clientCapabilities) {
 			asyncSpec.clientCapabilities(clientCapabilities);
@@ -767,11 +741,10 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the client's name and version, sent to the agent by {@code initialize()}.
-		 * Optional.
-		 * @param clientInfo the client's implementation info. Must not be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if clientInfo is null
+		 * Sets the client's name and version, sent to the agent in {@code initialize}. Optional.
+		 * @param clientInfo the client's name and version
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code clientInfo} is null
 		 */
 		public SyncSpec clientInfo(AcpSchema.Implementation clientInfo) {
 			asyncSpec.clientInfo(clientInfo);
@@ -779,18 +752,25 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for file system read requests from the agent.
-		 * Provides type-safe request handling with automatic unmarshalling.
+		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
+		 * file, which should include unsaved changes in the user's editor. Advertise
+		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
+		 * it for you.
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .readTextFileHandler(req ->
-		 *     new ReadTextFileResponse(Files.readString(Path.of(req.path()))))
+		 * .readTextFileHandler(request -> {
+		 *     try {
+		 *         String content = Files.readString(Path.of(request.path()));
+		 *         return new AcpSchema.ReadTextFileResponse(content);
+		 *     } catch (IOException e) {
+		 *         throw new UncheckedIOException(e);
+		 *     }
+		 * })
 		 * }</pre>
 		 *
-		 * @param handler The typed handler function that processes read requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec readTextFileHandler(
 				Function<AcpSchema.ReadTextFileRequest, AcpSchema.ReadTextFileResponse> handler) {
@@ -800,20 +780,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for file system write requests from the agent.
-		 * Provides type-safe request handling with automatic unmarshalling.
+		 * Sets the handler for {@code fs/write_text_file}: the agent asks to write a text file,
+		 * which ACP requires the client to create if it does not exist. Advertise
+		 * {@code fs.writeTextFile} in {@link #clientCapabilities} as well.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .writeTextFileHandler(req -> {
-		 *     Files.writeString(Path.of(req.path()), req.content());
-		 *     return new WriteTextFileResponse();
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes write requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec writeTextFileHandler(
 				Function<AcpSchema.WriteTextFileRequest, AcpSchema.WriteTextFileResponse> handler) {
@@ -823,22 +796,24 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for permission requests from the agent.
-		 * Provides type-safe request handling with automatic unmarshalling.
+		 * Sets the handler for {@code session/request_permission}: the agent asks the user to
+		 * approve a tool call and offers the options to choose from. Answer with the selected
+		 * option ({@link AcpSchema.PermissionSelected}), or with
+		 * {@link AcpSchema.PermissionCancelled} once the prompt turn was cancelled, as ACP
+		 * requires. Every client should register one: without it the request is answered
+		 * {@code -32601} (method not found).
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
-		 * .requestPermissionHandler(req -> {
-		 *     System.out.println("Permission requested: " + req.toolCall().title());
-		 *     // Show UI or auto-approve
-		 *     return new RequestPermissionResponse(
-		 *         new RequestPermissionOutcome("approve", null));
+		 * .requestPermissionHandler(request -> {
+		 *     System.out.println("Permission requested: " + request.toolCall().title());
+		 *     return new AcpSchema.RequestPermissionResponse(
+		 *         new AcpSchema.PermissionSelected(request.options().get(0).optionId()));
 		 * })
 		 * }</pre>
 		 *
-		 * @param handler The typed handler function that processes permission requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec requestPermissionHandler(
 				Function<AcpSchema.RequestPermissionRequest, AcpSchema.RequestPermissionResponse> handler) {
@@ -848,20 +823,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal creation requests from the agent.
+		 * Sets the handler for {@code terminal/create}: the agent asks to start a command in a new
+		 * terminal and gets back its ID. Advertise {@code terminal} in {@link #clientCapabilities}
+		 * and register the other four terminal handlers as well.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .createTerminalHandler(req -> {
-		 *     String terminalId = UUID.randomUUID().toString();
-		 *     // Start process with req.command(), req.args(), req.cwd()
-		 *     return new CreateTerminalResponse(terminalId);
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal creation requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec createTerminalHandler(
 				Function<AcpSchema.CreateTerminalRequest, AcpSchema.CreateTerminalResponse> handler) {
@@ -871,19 +839,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal output requests from the agent.
+		 * Sets the handler for {@code terminal/output}: the agent asks for a terminal's output so
+		 * far, whether it was truncated, and the exit status if the command has ended.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .terminalOutputHandler(req -> {
-		 *     String output = getTerminalOutput(req.terminalId());
-		 *     return new TerminalOutputResponse(output, false, null);
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal output requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec terminalOutputHandler(
 				Function<AcpSchema.TerminalOutputRequest, AcpSchema.TerminalOutputResponse> handler) {
@@ -893,19 +854,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal release requests from the agent.
+		 * Sets the handler for {@code terminal/release}: the agent is done with a terminal. Kill
+		 * its command if it is still running and free the terminal; its ID is invalid afterwards.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .releaseTerminalHandler(req -> {
-		 *     releaseTerminal(req.terminalId());
-		 *     return new ReleaseTerminalResponse();
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal release requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec releaseTerminalHandler(
 				Function<AcpSchema.ReleaseTerminalRequest, AcpSchema.ReleaseTerminalResponse> handler) {
@@ -915,19 +869,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for wait-for-terminal-exit requests from the agent.
+		 * Sets the handler for {@code terminal/wait_for_exit}: answer once the terminal's command
+		 * has ended, with its exit code or the signal that ended it. The agent's request timeout
+		 * bounds how long the agent waits for this answer.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .waitForTerminalExitHandler(req -> {
-		 *     int exitCode = waitForExit(req.terminalId());
-		 *     return new WaitForTerminalExitResponse(exitCode, null);
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes wait-for-exit requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec waitForTerminalExitHandler(
 				Function<AcpSchema.WaitForTerminalExitRequest, AcpSchema.WaitForTerminalExitResponse> handler) {
@@ -937,19 +885,12 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for terminal kill requests from the agent.
+		 * Sets the handler for {@code terminal/kill}: kill the terminal's command but keep the
+		 * terminal, so its output and exit status can still be read until it is released.
 		 *
-		 * <p>Example usage:
-		 * <pre>{@code
-		 * .killTerminalHandler(req -> {
-		 *     killProcess(req.terminalId());
-		 *     return new KillTerminalCommandResponse();
-		 * })
-		 * }</pre>
-		 *
-		 * @param handler The typed handler function that processes terminal kill requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * @param handler the handler; it returns the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec killTerminalHandler(
 				Function<AcpSchema.KillTerminalCommandRequest, AcpSchema.KillTerminalCommandResponse> handler) {
@@ -959,14 +900,14 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a typed handler for {@code elicitation/create} requests from the agent.
-		 * See {@link AsyncSpec#createElicitationHandler(Function)}: a request for a mode
-		 * the client did not advertise is answered with {@code -32602} without calling
-		 * the handler.
-		 *
-		 * @param handler The typed handler function that processes elicitation requests
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * Sets the handler for {@code elicitation/create}: the agent asks the user for structured
+		 * input, with a form or by sending the user to a URL, and the handler returns accept,
+		 * decline or cancel. As with {@link AsyncSpec#createElicitationHandler(Function)}, a
+		 * request for a mode the client did not advertise is answered with {@code -32602} without
+		 * calling the handler.
+		 * @param handler the handler; it returns the user's answer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, AcpSchema.CreateElicitationResponse> handler) {
@@ -976,13 +917,13 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a synchronous handler for {@code elicitation/complete} notifications: the
-		 * agent reports that the external interaction of a URL-mode elicitation has
-		 * finished. Clients must ignore unknown or already-completed elicitation IDs.
-		 *
-		 * @param handler The handler that processes completion notifications
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if handler is null
+		 * Sets the handler for {@code elicitation/complete} notifications: the agent reports that
+		 * the outside interaction of a URL-mode elicitation has finished. ACP requires clients to
+		 * ignore unknown or already completed elicitation IDs, so check the ID against the URL
+		 * elicitations the user accepted.
+		 * @param handler the handler
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public SyncSpec completeElicitationHandler(Consumer<AcpSchema.CompleteElicitationNotification> handler) {
 			Assert.notNull(handler, "Complete elicitation handler must not be null");
@@ -994,31 +935,33 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a synchronous consumer to be notified when session update notifications
-		 * are received from the agent. This is the preferred method for sync clients.
+		 * Adds a consumer for {@code session/update} notifications: the message and thought chunks,
+		 * tool calls, plans and other updates the agent streams during a prompt turn, and the
+		 * updates it sends between turns. The consumer runs on
+		 * {@link AcpClient#SYNC_HANDLER_SCHEDULER} and has finished with a notification when it
+		 * returns.
 		 *
-		 * <p>
-		 * Notifications are delivered one at a time, in the order the agent sent them: the
-		 * next is delivered once every consumer has finished with this one (it returned). A response
-		 * from the agent, such as a prompt's, completes its caller only after the consumers
-		 * have finished with every notification sent before it, so updates collected here
-		 * are complete when {@code prompt} returns. A consumer must not wait for a prompt
-		 * in flight to complete: that prompt waits for the consumer.
-		 * </p>
+		 * <p>Notifications are delivered one at a time, in the order the agent sent them, and each
+		 * goes to every consumer added: the next one waits until all consumers have finished with
+		 * this one. A response from the agent, such as a prompt's, completes its caller only after
+		 * the consumers have finished with every notification sent before it, so the updates of a
+		 * turn are all handled when {@code prompt} returns. A slow consumer therefore delays
+		 * responses, and the wait counts against the request timeout. A consumer must not wait for
+		 * a prompt in flight to complete: that prompt waits for the consumer. A consumer that fails
+		 * is logged, and the next notification follows.
 		 *
-		 * <p>Example usage:
 		 * <pre>{@code
 		 * .sessionUpdateConsumer(notification -> {
-		 *     if (notification.update() instanceof AgentMessageChunk msg) {
-		 *         System.out.println(msg.content());
+		 *     if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
+		 *             && chunk.content() instanceof AcpSchema.TextContent text) {
+		 *         System.out.print(text.text());
 		 *     }
 		 * })
 		 * }</pre>
 		 *
-		 * @param sessionUpdateConsumer A consumer that receives session update
-		 * notifications. Must not be null.
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if sessionUpdateConsumer is null
+		 * @param sessionUpdateConsumer the consumer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code sessionUpdateConsumer} is null
 		 */
 		public SyncSpec sessionUpdateConsumer(Consumer<AcpSchema.SessionNotification> sessionUpdateConsumer) {
 			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
@@ -1031,14 +974,16 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a synchronous custom request handler for a specific method.
-		 * This is the preferred method for sync clients.
-		 *
-		 * @param <T> The response type
-		 * @param method The method name (e.g., "custom/operation")
-		 * @param handler The synchronous handler function for this method
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if method or handler is null
+		 * Registers a blocking handler for any agent-to-client request method, with the params as
+		 * the transport read them. It replaces a typed handler for the same method, and a typed
+		 * setter called later replaces it. The method name is not checked: prefer the typed setters
+		 * for ACP methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension
+		 * methods.
+		 * @param <T> the result type
+		 * @param method the method name
+		 * @param handler the handler, run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
 		 */
 		public <T> SyncSpec requestHandler(String method, SyncRequestHandler<T> handler) {
 			Assert.notNull(method, "Method must not be null");
@@ -1048,12 +993,15 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a custom notification handler for a specific method. This allows handling
-		 * additional agent notifications beyond session updates.
-		 * @param method The method name (e.g., "custom/notification")
-		 * @param handler The handler function for this method
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if method or handler is null
+		 * Registers a handler for any agent-to-client notification method, with the params as the
+		 * transport read them. It is delivered in order with the session updates, and it is called
+		 * on the delivering thread, so it must not block. If a session update consumer is added,
+		 * {@code build()} replaces a handler registered here for {@code session/update}. The method
+		 * name is not checked: prefer {@code extNotificationHandler} for extension methods.
+		 * @param method the method name
+		 * @param handler the handler
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
 		 */
 		public SyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
 			asyncSpec.notificationHandler(method, handler);
@@ -1061,17 +1009,17 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the synchronous handler for a custom extension request
-		 * ({@code _}-prefixed method name) from the agent, its params read as the given
-		 * type.
+		 * Registers the handler for a custom extension request ({@code _}-prefixed method name, ACP
+		 * v1 Extensibility) from the agent, its params read as the given type. A request for an
+		 * extension method without a handler is answered with "Method not found" ({@code -32601}).
 		 * @param <T> the params type
 		 * @param method the method name, which must start with {@code _}
 		 * @param paramsType the type the params are read as
-		 * @param handler the handler; it returns the result, any value the JSON mapper can
-		 * write, and returning null answers the request with an internal error
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if the method name does not start with
-		 * {@code _}, or the type or handler is null
+		 * @param handler the handler; it returns the result, any value the JSON mapper can write,
+		 * and returning {@code null} answers the request with an internal error ({@code -32603})
+		 * @return this builder
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}, or the
+		 * type or handler is null
 		 * @see AsyncSpec#extRequestHandler(String, TypeRef, Function)
 		 */
 		public <T> SyncSpec extRequestHandler(String method, TypeRef<T> paramsType, Function<T, ?> handler) {
@@ -1082,28 +1030,31 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the synchronous handler for a custom extension request from the agent,
-		 * its params delivered as the raw JSON value.
+		 * Registers the handler for a custom extension request ({@code _}-prefixed method name, ACP
+		 * v1 Extensibility) from the agent, its params delivered as the raw JSON value (a
+		 * {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}).
 		 * @param method the method name, which must start with {@code _}
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
+		 * @return this builder
 		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 * @see #extRequestHandler(String, TypeRef, Function)
 		 */
 		public SyncSpec extRequestHandler(String method, Function<Object, ?> handler) {
 			return extRequestHandler(method, AsyncSpec.RAW_PARAMS, handler);
 		}
 
 		/**
-		 * Registers the synchronous handler for a custom extension notification
-		 * ({@code _}-prefixed method name) from the agent, its params read as the given
-		 * type.
+		 * Registers the handler for a custom extension notification ({@code _}-prefixed method
+		 * name) from the agent, its params read as the given type. An extension notification
+		 * without a handler is ignored, as the protocol asks. Extension notifications are delivered
+		 * in order with the session updates.
 		 * @param <T> the params type
 		 * @param method the method name, which must start with {@code _}
 		 * @param paramsType the type the params are read as
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
-		 * @throws IllegalArgumentException if the method name does not start with
-		 * {@code _}, or the type or handler is null
+		 * @return this builder
+		 * @throws IllegalArgumentException if the method name does not start with {@code _}, or the
+		 * type or handler is null
 		 * @see AsyncSpec#extNotificationHandler(String, TypeRef, Function)
 		 */
 		public <T> SyncSpec extNotificationHandler(String method, TypeRef<T> paramsType, Consumer<T> handler) {
@@ -1115,21 +1066,27 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers the synchronous handler for a custom extension notification from the
-		 * agent, its params delivered as the raw JSON value.
+		 * Registers the handler for a custom extension notification ({@code _}-prefixed method
+		 * name) from the agent, its params delivered as the raw JSON value.
 		 * @param method the method name, which must start with {@code _}
 		 * @param handler the handler
-		 * @return This builder instance for method chaining
+		 * @return this builder
 		 * @throws IllegalArgumentException if the method name does not start with {@code _}
+		 * @see #extNotificationHandler(String, TypeRef, Consumer)
 		 */
 		public SyncSpec extNotificationHandler(String method, Consumer<Object> handler) {
 			return extNotificationHandler(method, AsyncSpec.RAW_PARAMS, handler);
 		}
 
 		/**
-		 * Creates an instance of {@link AcpSyncClient} with the provided configurations
-		 * or sensible defaults.
-		 * @return a new instance of {@link AcpSyncClient}
+		 * Builds the client and connects the transport: for a
+		 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} that starts
+		 * the agent process. Call {@link AcpSyncClient#initialize()} next. A transport carries one
+		 * client, so build once per transport.
+		 * @return the client
+		 * @throws IllegalStateException if the transport refuses to connect at once, for example
+		 * because it is already connected; a connection that fails later fails the client's
+		 * requests instead
 		 */
 		public AcpSyncClient build() {
 			return new AcpSyncClient(asyncSpec.build());

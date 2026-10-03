@@ -11,28 +11,31 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for setting the session mode.
+ * Marks the {@link AcpAgent} method that answers {@code session/set_mode}: the client switches a
+ * session to another of the modes the agent offered, such as "ask" or "code", and the method makes
+ * the session work in it. Declare one when the agent returns modes ({@code SessionModeState}) from
+ * its {@link NewSession}, {@link LoadSession} or {@link ResumeSession} method. Without a
+ * {@code @SetSessionMode} method the agent answers {@code session/set_mode} with "Method not found"
+ * ({@code -32601}).
  *
- * <p>The annotated method handles the {@code session/set_mode} JSON-RPC method,
- * which is called when a client wants to change the operating mode of the session.
+ * <p>ACP requires the mode id to be one of the {@code availableModes} the agent offered; the SDK
+ * does not check it. When the agent changes a session's mode itself, it tells the client with a
+ * {@code CurrentModeUpdate} session update. ACP plans to replace modes with config options
+ * ({@link SetSessionConfigOption}); until then, an agent with mode-like settings should offer
+ * both.
  *
- * <p>The method can have the following parameters (all optional):
- * <ul>
- *   <li>{@code SetSessionModeRequest} - the request containing sessionId and modeId</li>
- *   <li>{@code @SessionId String} - the session ID</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code SetSessionModeResponse} - the response (typically empty)</li>
- *   <li>{@code Mono<SetSessionModeResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code SetSessionModeRequest} (session id and {@code modeId}), a
+ * {@link SessionId @SessionId} {@code String} and the connection parameters (see
+ * {@link AcpAgent}). It must return a {@code SetSessionModeResponse} (not {@code void}), or a
+ * {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final Map<String, String> modes = new ConcurrentHashMap<>();
+ *
  * @SetSessionMode
- * public SetSessionModeResponse setMode(SetSessionModeRequest req) {
- *     modes.put(req.sessionId(), req.modeId());
+ * public SetSessionModeResponse setMode(SetSessionModeRequest request) {
+ *     modes.put(request.sessionId(), request.modeId());
  *     return new SetSessionModeResponse();
  * }
  * }</pre>

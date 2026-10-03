@@ -31,22 +31,42 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 /**
- * Client-side ACP transport for the Streamable HTTP profile.
+ * The client side of the Streamable HTTP transport: talks to an agent that is already running
+ * behind an HTTP endpoint, posting the client's messages to it and reading the agent's
+ * messages from Server-Sent Event (SSE) streams. Use it to reach a remote agent, for instance
+ * one served by the {@code acp-streamable-http-jetty} module's listener or servlet; to start
+ * the agent as a child process, use {@link StdioAcpClientTransport}. Pass it to
+ * {@code AcpClient.sync(transport)} or {@code AcpClient.async(transport)}:
  *
- * <p>
- * Streamable HTTP maps ACP's logical duplex conversation onto HTTP POST requests plus
- * long-lived Server-Sent Event (SSE) streams. The transport keeps all HTTP-specific
- * routing state internal so the higher-level ACP session can continue to operate only on
- * JSON-RPC messages.
- * </p>
+ * <pre>{@code
+ * var transport = new StreamableHttpAcpClientTransport(URI.create("http://localhost:8080/acp"),
+ *         AcpJsonMapper.createDefault());
+ * AcpSyncClient client = AcpClient.sync(transport).build();
+ * }</pre>
  *
- * <p>
- * This class owns the transport's lifecycle (connect, initialize, send, close) and
- * delegates the rest: {@link StreamableHttpRequests} the HTTP exchanges,
- * {@link StreamableHttpRoutes} the routing of each message to an HTTP scope,
- * {@link StreamableHttpStreams} the SSE streams and their reconnection, and
- * {@link StreamableHttpInbound} the ordered delivery of what the streams read.
- * </p>
+ * <p>Unlike the stdio transport, connecting does not reach the agent. The {@code initialize}
+ * request opens the connection, so it must be the first message sent; its answer carries the
+ * connection's id in the Acp-Connection-Id header, which every later request sends, and
+ * requests about one ACP session also name it in the Acp-Session-Id header. The transport
+ * opens one SSE stream for the connection and one for each ACP session, before the session's
+ * first request, and reconnects a stream that the server or the network closes. If the
+ * connection's stream, or a session stream that still owes a response, cannot be reopened,
+ * the transport ends: its {@link #awaitTermination()} errors and the client's pending requests
+ * fail. The wire format is the one of ACP's Streamable HTTP and WebSocket transport RFD
+ * (https://agentclientprotocol.com/rfds/streamable-http-websocket-transport).
+ *
+ * <p>The default HTTP client asks for HTTP/2. Over {@code https} it negotiates it; over plain
+ * {@code http} the transport first sends a bodiless GET so that a server that speaks
+ * cleartext HTTP/2 (h2c) can upgrade the connection, and uses HTTP/1.1 for every request when
+ * the server does not. The default client keeps cookies in a cookie manager of its own and
+ * runs on a bounded pool of daemon threads; {@link StreamableHttpAcpClientTransportOptions}
+ * sets its sizes and the number of SSE streams. Pass an {@link HttpClient} of your own for TLS,
+ * proxy or authentication settings.
+ *
+ * <p>{@link #closeGracefully()} closes the streams and sends {@code DELETE} for the connection,
+ * waiting at most five seconds for the answer; {@link #close()} does the same and blocks for up
+ * to ten seconds. The transport is thread-safe: messages may be sent from any thread, and are
+ * posted concurrently.
  *
  * @author Kaiser Dandangi
  */
@@ -54,7 +74,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	private static final Logger logger = LoggerFactory.getLogger(StreamableHttpAcpClientTransport.class);
 
-	/** Default ACP path used by the remote transport RFD. */
+	/**
+	 * The endpoint path that ACP's remote transport RFD names, and that the SDK's listener
+	 * serves by default: {@value}. The transport does not add it; the endpoint URI must
+	 * include the path.
+	 */
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
 	private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
@@ -80,20 +104,27 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
 	/**
-	 * Creates a new Streamable HTTP client transport using a default JDK {@link HttpClient}
-	 * configured with an internal {@link CookieManager}.
-	 * @param endpointUri the remote ACP endpoint URI
-	 * @param jsonMapper JSON mapper used for message serialization
+	 * Creates a transport for the endpoint at {@code endpointUri}, with the default HTTP
+	 * client (HTTP/2, its own {@link CookieManager}) and the default limits.
+	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
+	 * its path, such as {@code http://localhost:8080/acp}
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @throws IllegalArgumentException if an argument is null or the URI's scheme is not
+	 * {@code http} or {@code https}
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper) {
 		this(endpointUri, jsonMapper, StreamableHttpAcpClientTransportOptions.defaults());
 	}
 
 	/**
-	 * Creates a new Streamable HTTP client transport with explicit resource limits.
-	 * @param endpointUri the remote ACP endpoint URI
-	 * @param jsonMapper JSON mapper used for message serialization
-	 * @param options resource limits for this transport
+	 * Creates a transport for the endpoint at {@code endpointUri}, with the default HTTP client
+	 * sized by {@code options}.
+	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
+	 * its path
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param options the transport's limits
+	 * @throws IllegalArgumentException if an argument is null or the URI's scheme is not
+	 * {@code http} or {@code https}
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper,
 			StreamableHttpAcpClientTransportOptions options) {
@@ -101,24 +132,32 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Creates a new Streamable HTTP client transport using a caller-provided
-	 * {@link HttpClient}. This allows advanced callers to customize cookies, TLS,
-	 * executors, or proxy behavior.
-	 * @param endpointUri the remote ACP endpoint URI
-	 * @param jsonMapper JSON mapper used for message serialization
-	 * @param httpClient HTTP client to use for requests
+	 * Creates a transport for the endpoint at {@code endpointUri} that sends its requests with
+	 * {@code httpClient}, for TLS, proxy, authentication or cookie settings of your own. The
+	 * transport does not close the client or its executor.
+	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
+	 * its path
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param httpClient the client the requests are sent with
+	 * @throws IllegalArgumentException if an argument is null or the URI's scheme is not
+	 * {@code http} or {@code https}
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
 		this(endpointUri, jsonMapper, httpClient, StreamableHttpAcpClientTransportOptions.defaults());
 	}
 
 	/**
-	 * Creates a new Streamable HTTP client transport with a caller-provided HTTP client and
-	 * explicit resource limits.
-	 * @param endpointUri the remote ACP endpoint URI
-	 * @param jsonMapper JSON mapper used for message serialization
-	 * @param httpClient HTTP client to use for requests
-	 * @param options resource limits for this transport
+	 * Creates a transport for the endpoint at {@code endpointUri} that sends its requests with
+	 * {@code httpClient} and has the limits of {@code options}. The options' worker threads
+	 * size only the default client, so they do not apply here. The transport does not close
+	 * the client or its executor.
+	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
+	 * its path
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param httpClient the client the requests are sent with
+	 * @param options the transport's limits
+	 * @throws IllegalArgumentException if an argument is null or the URI's scheme is not
+	 * {@code http} or {@code https}
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClient httpClient,
 			StreamableHttpAcpClientTransportOptions options) {
@@ -150,16 +189,34 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return HttpClientBundle.createDefault(options);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>It contacts nothing: it registers the handler and completes at once. The connection
+	 * opens when the {@code initialize} request is sent. A second call fails with an
+	 * {@link IllegalStateException}.
+	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		Assert.notNull(handler, "The handler can not be null");
 		if (!connected.compareAndSet(false, true)) {
 			return Mono.error(new IllegalStateException("Already connected"));
 		}
-		inbound.messages().flatMap(message -> Mono.just(message).transform(handler)).subscribe();
+		inbound.messages()
+			.flatMap(message -> Mono.just(message).transform(handler))
+			.subscribe(ignored -> {
+			}, error -> logger.warn("Inbound message processing ended with an error", error));
 		return Mono.empty();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>The {@code initialize} request opens the connection: its Mono completes once the
+	 * answer has been read and the connection's SSE stream is open, and a second
+	 * {@code initialize} fails with an {@link IllegalStateException}. Every other message is
+	 * posted on the connection, or on its ACP session's stream, and its Mono completes when
+	 * the server has accepted the POST. Sent before {@code initialize}, or once the transport
+	 * is closing, a message fails with an {@link AcpConnectionException}.
+	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		Assert.notNull(message, "The message can not be null");
@@ -274,6 +331,13 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		return inbound.process(actualScope, message);
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>Closes the SSE streams, then sends {@code DELETE} for the connection, when one was
+	 * opened, and waits at most five seconds for the answer; a server that does not answer
+	 * releases the connection by itself. Completes {@link #awaitTermination()} first. Only the
+	 * first call has an effect.
+	 */
 	@Override
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
@@ -301,6 +365,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			});
 	}
 
+	/**
+	 * Closes the transport as {@link #closeGracefully()} does, blocking the calling thread for
+	 * up to ten seconds; if the close has not finished by then, it throws an
+	 * {@link IllegalStateException}.
+	 */
 	@Override
 	public void close() {
 		closeGracefully().block(CLOSE_TIMEOUT);

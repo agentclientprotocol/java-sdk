@@ -11,30 +11,41 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Synchronous context provided to prompt handlers for accessing agent capabilities.
+ * A prompt handler's way back to the client during one prompt turn, with blocking calls: the
+ * session ID, session updates, and the requests an agent sends the client (files, terminals,
+ * permission and elicitation). Every {@link AcpAgent.SyncPromptHandler} receives one with each
+ * {@code session/prompt}; each call returns once the client has answered. Handlers on the
+ * asynchronous builder receive a {@link PromptContext} instead.
  *
- * <p>
- * This is the synchronous equivalent of {@link PromptContext}, providing blocking
- * methods for use with {@link AcpAgent.SyncPromptHandler}.
+ * <p>It offers the same calls as {@link PromptContext}, at the same two levels, and blocks on that
+ * context's {@code Mono}s ({@link #async()} returns it). It adds {@link #tryReadFile(String)}, and
+ * {@link #askChoice(String, String...)} returns an {@link Optional}. Blocking is safe here because
+ * synchronous handlers run on {@link AcpAgent#SYNC_HANDLER_SCHEDULER}, not on the transport's
+ * thread.
  *
- * <p>
- * Example usage:
  * <pre>{@code
  * AcpAgent.sync(transport)
  *     .promptHandler((request, context) -> {
- *         // Send an update (blocks until sent)
- *         context.sendUpdate(sessionId, update);
- *
- *         // Read a file (blocks until complete)
- *         var content = context.readTextFile(new ReadTextFileRequest(...));
- *
- *         // Request permission (blocks until user responds)
- *         var permission = context.requestPermission(new RequestPermissionRequest(...));
- *
- *         return new PromptResponse(StopReason.END_TURN);
+ *         context.sendThought("Running the tests");
+ *         CommandResult result = context.execute("mvn", "-q", "test");
+ *         context.sendMessage(result.success() ? "All tests pass" : result.output());
+ *         return AcpSchema.PromptResponse.endTurn();
  *     })
  *     .build();
  * }</pre>
+ *
+ * <p>Failures are thrown. Once the client has initialized, a call that needs a capability the
+ * client did not advertise (reading or writing files, creating a terminal, an elicitation mode)
+ * throws {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending anything;
+ * check {@link #getClientCapabilities()} first. An error answer throws
+ * {@link com.agentclientprotocol.sdk.spec.AcpError}. A call has no time limit of its own: a request
+ * waits at most the agent's request timeout and then throws a {@link RuntimeException} whose cause
+ * is a {@link java.util.concurrent.TimeoutException}. When the SDK cancels the handler (after the
+ * cancel grace period, or for a {@code $/cancel_request}), it interrupts the handler's thread, and
+ * a call blocked at that moment throws. The context does not check that its turn is still active.
+ *
+ * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
+ * for test doubles, and include {@link #async()}.
  *
  * @author Mark Pollack
  * @since 0.9.1
@@ -48,10 +59,12 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Sends a session update notification to the client.
-	 * Blocks until the notification is sent.
-	 * @param sessionId The session ID
-	 * @param update The session update to send
+	 * Sends a {@code session/update} notification to the client, carrying one
+	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
+	 * plan, and so on. Returns once the notification has been handed to the transport. The Java
+	 * client hands a turn's updates to its consumers in order, before the prompt's answer.
+	 * @param sessionId the ACP session the update belongs to, normally {@link #getSessionId()}
+	 * @param update the update
 	 */
 	void sendUpdate(String sessionId, AcpSchema.SessionUpdate update);
 
@@ -60,20 +73,23 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests the client to read a text file.
-	 * Blocks until the response is received.
-	 * @param request The read file request
-	 * @return The file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Asks the client for the content of a text file ({@code fs/read_text_file}), including unsaved
+	 * changes in its editor, and waits for it.
+	 * @param request the session, an absolute path, and optionally a 1-based first line and a line
+	 * limit
+	 * @return the file content
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code fs.readTextFile}
 	 */
 	AcpSchema.ReadTextFileResponse readTextFile(AcpSchema.ReadTextFileRequest request);
 
 	/**
-	 * Requests the client to write a text file.
-	 * Blocks until the write is complete.
-	 * @param request The write file request
-	 * @return The write response
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file writing
+	 * Asks the client to write a text file ({@code fs/write_text_file}) and waits until it is
+	 * written; ACP requires the client to create the file if it does not exist.
+	 * @param request the session, an absolute path and the new content
+	 * @return the client's empty answer
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code fs.writeTextFile}
 	 */
 	AcpSchema.WriteTextFileResponse writeTextFile(AcpSchema.WriteTextFileRequest request);
 
@@ -82,10 +98,12 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests permission from the client for a sensitive operation.
-	 * Blocks until the user responds.
-	 * @param request The permission request
-	 * @return The permission response
+	 * Asks the client to let the user approve a tool call ({@code session/request_permission}) and
+	 * waits for the user's choice, within the agent's request timeout. Every client handles this
+	 * request, so no capability is checked.
+	 * @param request the session, the tool call and the permission options
+	 * @return the user's choice: the selected option, or a cancelled outcome when the client
+	 * cancelled the prompt turn
 	 */
 	AcpSchema.RequestPermissionResponse requestPermission(AcpSchema.RequestPermissionRequest request);
 
@@ -94,43 +112,47 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests the client to create a terminal.
-	 * Blocks until the terminal is created.
-	 * @param request The create terminal request
-	 * @return The terminal ID response
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Asks the client to start a command in a new terminal ({@code terminal/create}) and waits for
+	 * the terminal's ID. ACP requires the agent to release every terminal it creates with
+	 * {@link #releaseTerminal}; {@link #execute(Command)} does the whole sequence for you.
+	 * @param request the session, the command, its arguments and optionally a working directory,
+	 * environment variables and an output limit
+	 * @return the new terminal's ID
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code terminal}
 	 */
 	AcpSchema.CreateTerminalResponse createTerminal(AcpSchema.CreateTerminalRequest request);
 
 	/**
-	 * Requests terminal output from the client.
-	 * Blocks until the output is received.
-	 * @param request The terminal output request
-	 * @return The terminal output
+	 * Asks the client for a terminal's output so far ({@code terminal/output}), without waiting for
+	 * the command to end.
+	 * @param request the session and the terminal ID
+	 * @return the output, whether it was truncated, and the exit status if the command has ended
 	 */
 	AcpSchema.TerminalOutputResponse getTerminalOutput(AcpSchema.TerminalOutputRequest request);
 
 	/**
-	 * Requests the client to release a terminal.
-	 * Blocks until the terminal is released.
-	 * @param request The release terminal request
-	 * @return The release response
+	 * Asks the client to release a terminal ({@code terminal/release}), which kills its command if
+	 * it is still running, and waits until it is released. The terminal ID is invalid afterwards.
+	 * @param request the session and the terminal ID
+	 * @return the client's empty answer
 	 */
 	AcpSchema.ReleaseTerminalResponse releaseTerminal(AcpSchema.ReleaseTerminalRequest request);
 
 	/**
-	 * Waits for a terminal to exit.
-	 * Blocks until the terminal exits.
-	 * @param request The wait for exit request
-	 * @return The exit status
+	 * Waits until a terminal's command has ended ({@code terminal/wait_for_exit}). The wait counts
+	 * against the agent's request timeout, so a long command makes this call throw.
+	 * @param request the session and the terminal ID
+	 * @return the exit code or the signal that ended the command
 	 */
 	AcpSchema.WaitForTerminalExitResponse waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request);
 
 	/**
-	 * Requests the client to kill a terminal.
-	 * Blocks until the terminal is killed.
-	 * @param request The kill terminal request
-	 * @return The kill response
+	 * Asks the client to kill a terminal's command ({@code terminal/kill}) without releasing the
+	 * terminal, and waits until it is killed. The output and exit status can still be read, and the
+	 * terminal must still be released.
+	 * @param request the session and the terminal ID
+	 * @return the client's empty answer
 	 */
 	AcpSchema.KillTerminalCommandResponse killTerminal(AcpSchema.KillTerminalCommandRequest request);
 
@@ -139,16 +161,22 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Requests structured user input from the client via a form or URL.
-	 * Blocks until the user responds.
-	 * @param request The elicitation request
-	 * @return The user's response
+	 * Asks the client to collect structured input from the user ({@code elicitation/create}), with
+	 * a form or by sending the user to a URL, and waits for the answer, within the agent's request
+	 * timeout.
+	 * @param request the elicitation, made with {@link AcpSchema.CreateElicitationRequest#form} or
+	 * {@link AcpSchema.CreateElicitationRequest#url}
+	 * @return the user's answer: accept (with the form content), decline or cancel
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise the request's mode
 	 */
 	AcpSchema.CreateElicitationResponse createElicitation(AcpSchema.CreateElicitationRequest request);
 
 	/**
-	 * Notifies the client that a URL-mode elicitation has completed.
-	 * @param notification The completion notification
+	 * Tells the client that the outside interaction of a URL-mode elicitation has finished
+	 * ({@code elicitation/complete}). Returns once the notification has been handed to the
+	 * transport.
+	 * @param notification the ID of the elicitation that finished
 	 */
 	void completeElicitation(AcpSchema.CompleteElicitationNotification notification);
 
@@ -157,20 +185,17 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Returns the capabilities negotiated with the client during initialization.
-	 *
-	 * <p>
-	 * Use this to check what features the client supports before calling
-	 * methods like {@link #readTextFile} or {@link #createTerminal}.
-	 *
-	 * @return the negotiated client capabilities, or null if not yet initialized
+	 * Returns what the client advertised in its {@code initialize} request. Check it before a call
+	 * that needs a capability, for example {@code supportsTerminal()} before
+	 * {@link #execute(Command)}.
+	 * @return the client's capabilities, or {@code null} if the client has not initialized
 	 */
 	@Nullable NegotiatedCapabilities getClientCapabilities();
 
 	/**
-	 * Returns the async context this context blocks on: the same session, prompt turn and
-	 * client. Use it to compose non-blocking calls from a sync handler.
-	 * @return the async prompt context
+	 * Returns the asynchronous context this one blocks on: the same session, turn and client. Use
+	 * it to start client calls from a synchronous handler without waiting for each.
+	 * @return the asynchronous prompt context
 	 */
 	PromptContext async();
 
@@ -179,25 +204,27 @@ public interface SyncPromptContext {
 	// ========================================================================
 
 	/**
-	 * Returns the session ID for this prompt invocation.
-	 * @return the session ID
+	 * Returns the ID of the ACP session this prompt belongs to.
+	 * @return the session ID from the prompt request
 	 */
 	String getSessionId();
 
 	/**
-	 * Sends a message to the client as an agent message chunk.
-	 * This is a convenience method that wraps the text in the appropriate
-	 * session update structure.
-	 * @param text The message text to send
+	 * Sends text to the client as an agent message chunk, the visible reply of this prompt's
+	 * session. Call it as often as needed: the client shows the chunks as one growing message.
+	 * @param text the text
 	 */
 	void sendMessage(String text);
 
 	/**
-	 * Sends a message to the client as an agent message chunk, tagged with a message ID.
-	 * Chunks sharing the same {@code messageId} belong to the same logical message; a change
-	 * in {@code messageId} signals a new message.
-	 * @param text The message text to send
-	 * @param messageId The message identifier, or {@code null} for none
+	 * Sends text to the client as an agent message chunk that belongs to the given message. Chunks
+	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
+	 * message.
+	 *
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
+	 * and an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * @param text the text
+	 * @param messageId the message ID, or {@code null} for none
 	 */
 	default void sendMessage(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
@@ -205,18 +232,20 @@ public interface SyncPromptContext {
 	}
 
 	/**
-	 * Sends a thought to the client as an agent thought chunk.
-	 * Thoughts are typically displayed differently than messages,
-	 * showing the agent's reasoning process.
-	 * @param text The thought text to send
+	 * Sends text to the client as an agent thought chunk: the agent's reasoning, which clients
+	 * usually show apart from the reply.
+	 * @param text the text
 	 */
 	void sendThought(String text);
 
 	/**
-	 * Sends a thought to the client as an agent thought chunk, tagged with a message ID.
-	 * Chunks sharing the same {@code messageId} belong to the same logical message.
-	 * @param text The thought text to send
-	 * @param messageId The message identifier, or {@code null} for none
+	 * Sends text to the client as an agent thought chunk that belongs to the given message. Chunks
+	 * with the same {@code messageId} make up one message.
+	 *
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with {@link #getSessionId()}
+	 * and an {@link AcpSchema.AgentThoughtChunk} holding the text.
+	 * @param text the text
+	 * @param messageId the message ID, or {@code null} for none
 	 */
 	default void sendThought(String text, @Nullable String messageId) {
 		sendUpdate(getSessionId(),
@@ -224,70 +253,86 @@ public interface SyncPromptContext {
 	}
 
 	/**
-	 * Reads a text file from the client's file system.
-	 * @param path The path to the file
-	 * @return The file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Reads a whole text file through the client, as {@link #readTextFile} does for this session.
+	 * @param path the absolute path of the file
+	 * @return the file content
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code fs.readTextFile}
 	 */
 	String readFile(String path);
 
 	/**
-	 * Reads a portion of a text file from the client's file system.
-	 * @param path The path to the file
-	 * @param startLine The line number to start reading from (0-indexed, null for beginning)
-	 * @param lineCount The number of lines to read (null for all remaining)
-	 * @return The file content
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file reading
+	 * Reads part of a text file through the client, as {@link #readTextFile} does for this session.
+	 * The line numbers go to the client unchanged; ACP counts lines from 1.
+	 * @param path the absolute path of the file
+	 * @param startLine the first line to read, counting from 1, or {@code null} for the first line
+	 * @param lineCount the most lines to read, or {@code null} for the rest of the file
+	 * @return the content read
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code fs.readTextFile}
 	 */
 	String readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount);
 
 	/**
-	 * Attempts to read a text file, returning empty if the file cannot be read
-	 * or the client doesn't support file reading.
-	 * @param path The path to the file
-	 * @return Optional containing the file content, or empty if unavailable
+	 * Reads a whole text file through the client like {@link #readFile(String)}, but returns empty
+	 * instead of throwing. Any failure gives empty: a missing capability, an error answer, a
+	 * timeout, and also an interrupt of the handler's thread.
+	 * @param path the absolute path of the file
+	 * @return the file content, or empty if it could not be read
 	 */
 	Optional<String> tryReadFile(String path);
 
 	/**
-	 * Writes content to a text file on the client's file system.
-	 * @param path The path to the file
-	 * @param content The content to write
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support file writing
+	 * Writes a text file through the client, as {@link #writeTextFile} does for this session, and
+	 * waits until it is written.
+	 * @param path the absolute path of the file
+	 * @param content the new content of the whole file
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code fs.writeTextFile}
 	 */
 	void writeFile(String path, String content);
 
 	/**
-	 * Asks the client for permission to perform an action.
-	 * Presents a simple Allow/Deny choice.
-	 * @param action A description of the action to request permission for
-	 * @return true if the user allowed the action, false otherwise
+	 * Asks the user to allow or deny an action and waits for the answer, as
+	 * {@link PromptContext#askPermission(String)} does: a permission request with the options
+	 * "Allow" and "Deny" for a pending tool call titled with the action.
+	 * @param action what the agent wants to do, shown to the user as the tool call's title
+	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied or the
+	 * client cancelled the request
 	 */
 	boolean askPermission(String action);
 
 	/**
-	 * Asks the client to choose from multiple options.
-	 * @param question The question to ask
-	 * @param options The available options (at least 2)
-	 * @return the selected option text, or empty if the client cancelled the choice
+	 * Asks the user to pick one of several options and waits for the answer, as
+	 * {@link PromptContext#askChoice(String, String...)} does: a permission request whose options
+	 * are the given texts.
+	 * @param question the question, shown to the user as the tool call's title
+	 * @param options the texts to choose from, at least two
+	 * @return the text of the chosen option, or empty if the client cancelled the request
+	 * @throws IllegalArgumentException if fewer than two options are given
 	 */
 	Optional<String> askChoice(String question, String... options);
 
 	/**
-	 * Executes a command in a terminal and waits for completion.
-	 * The terminal is automatically released after execution.
-	 * @param commandAndArgs The command and arguments to execute
-	 * @return The command result containing output and exit code
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Runs a command in a client terminal and waits for its output and exit status, as
+	 * {@link #execute(Command)} does with {@code Command.of(commandAndArgs)}.
+	 * @param commandAndArgs the executable, then its arguments
+	 * @return the result
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code terminal}
 	 */
 	CommandResult execute(String... commandAndArgs);
 
 	/**
-	 * Executes a command with options and waits for completion.
-	 * The terminal is automatically released after execution.
-	 * @param command The command configuration
-	 * @return The command result containing output and exit code
-	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if client doesn't support terminals
+	 * Runs a command in a client terminal and waits for its output and exit status. It creates a
+	 * terminal, waits for the command to end, reads the output, then releases the terminal, also
+	 * when a step fails. Waiting counts against the agent's request timeout, so a command that runs
+	 * longer throws, and the terminal is still released; raise the builder's {@code requestTimeout}
+	 * for long commands.
+	 * @param command the command and its options
+	 * @return the result
+	 * @throws com.agentclientprotocol.sdk.error.AcpCapabilityException if the client did not
+	 * advertise {@code terminal}
 	 */
 	CommandResult execute(Command command);
 

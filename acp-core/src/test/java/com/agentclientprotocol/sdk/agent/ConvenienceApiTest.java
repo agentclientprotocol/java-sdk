@@ -700,12 +700,6 @@ class ConvenienceApiTest {
 	}
 
 	@Test
-	void promptResponseTextCreatesEndTurnResponse() {
-		PromptResponse response = PromptResponse.text("Hello");
-		assertThat(response.stopReason()).isEqualTo(StopReason.END_TURN);
-	}
-
-	@Test
 	void promptResponseRefusalCreatesRefusalResponse() {
 		PromptResponse response = PromptResponse.refusal();
 		assertThat(response.stopReason()).isEqualTo(StopReason.REFUSAL);

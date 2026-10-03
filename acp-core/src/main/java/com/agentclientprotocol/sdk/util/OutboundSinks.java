@@ -73,7 +73,8 @@ public final class OutboundSinks {
 				outbound.tryEmitComplete();
 				afterTermination.run();
 			})
-			.subscribe();
+			.subscribe(ignored -> {
+			}, error -> logger.warn("Inbound message processing ended with an error", error));
 	}
 
 }

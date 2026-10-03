@@ -261,10 +261,36 @@ public class AcpAgentSession implements AcpSession {
 									error -> Mono.just(cancelledPrompt(request)))));
 			}
 
-			return InboundMessages.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
+			Mono<AcpSchema.JSONRPCResponse> response = InboundMessages
+				.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 						request.method())
 				.map(result -> InboundMessages.result(request, result));
+			if (AcpSchema.METHOD_SESSION_CLOSE.equals(request.method())) {
+				return cancelOngoingWork(extractSessionId(request.params())).then(response);
+			}
+			return response;
 		});
+	}
+
+	/**
+	 * Cancels a closing session's ongoing work as if session/cancel had been received (ACP
+	 * v1, CloseSessionRequest: the agent must cancel any ongoing work related to the
+	 * session, treating it as if session/cancel was called, and then free its resources):
+	 * the session/cancel handler is told, and an active prompt is cancelled and answers
+	 * cancelled. Completes once that prompt's turn has ended, so the close handler frees
+	 * the session after its work has stopped.
+	 */
+	private Mono<Void> cancelOngoingWork(String sessionId) {
+		ActivePrompts.Turn turn = this.activePrompts.current(sessionId);
+		this.activePrompts.cancel(sessionId);
+		Mono<Void> cancelHandler = Mono.empty();
+		if (this.notificationHandlers.containsKey(AcpSchema.METHOD_SESSION_CANCEL)) {
+			cancelHandler = InboundMessages.deliver(logger,
+					new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, AcpSchema.METHOD_SESSION_CANCEL,
+							Map.of("sessionId", sessionId)),
+					this.notificationHandlers, NotificationHandler::handle);
+		}
+		return turn == null ? cancelHandler : cancelHandler.then(turn.ended());
 	}
 
 	/**
@@ -296,6 +322,9 @@ public class AcpAgentSession implements AcpSession {
 		}
 		if (params instanceof AcpSchema.CancelNotification cancelNotification) {
 			return cancelNotification.sessionId() != null ? cancelNotification.sessionId() : "unknown";
+		}
+		if (params instanceof AcpSchema.CloseSessionRequest closeSessionRequest) {
+			return closeSessionRequest.sessionId() != null ? closeSessionRequest.sessionId() : "unknown";
 		}
 		if (params instanceof Map<?, ?> map) {
 			Object sessionId = map.get("sessionId");

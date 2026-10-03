@@ -21,69 +21,48 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * The Agent Client Protocol (ACP) async client implementation that provides asynchronous
- * communication with ACP-compliant agents using Project Reactor's Mono type.
+ * A connected ACP client with a Reactor API: it sends the agent requests (initialize, sessions,
+ * prompts, config options, extension methods) and returns each answer as a {@code Mono}, while the
+ * handlers registered on {@link AcpClient.AsyncSpec} answer the agent's requests. Get one from
+ * {@code AcpClient.async(transport)...build()}. Use {@link AcpSyncClient} for the same calls as
+ * blocking methods.
  *
- * <p>
- * This client implements the ACP specification, enabling applications to interact with
- * autonomous coding agents through a standardized interface. Key features include:
- * <ul>
- * <li>Asynchronous communication using reactive programming patterns</li>
- * <li>Initialize handshake and capability negotiation</li>
- * <li>Session creation and management</li>
- * <li>Prompt submission with streaming updates</li>
- * <li>Authentication support for agents requiring it</li>
- * <li>Cancel operations for long-running tasks</li>
- * </ul>
+ * <p>A client follows ACP's order: {@link #initialize()} first, {@link #authenticate} if the agent
+ * requires it, then {@link #newSession}, {@link #loadSession} or {@link #resumeSession} for a
+ * session ID, then {@link #prompt} as often as needed, one turn at a time per session. Finish with
+ * {@link #closeGracefully()}.
  *
- * <p>
- * The client follows a lifecycle:
- * <ol>
- * <li>Initialization - Establishes connection and negotiates protocol version</li>
- * <li>Authentication - Optional authentication step</li>
- * <li>Session Creation - Creates a new agent session with working directory</li>
- * <li>Prompt Interaction - Sends prompts and receives responses</li>
- * <li>Graceful Shutdown - Ensures clean connection termination</li>
- * </ol>
- *
- * <p>
- * This implementation uses Project Reactor for non-blocking operations, making it
- * suitable for high-throughput scenarios and reactive applications. All operations return
- * Mono types that can be composed into reactive pipelines.
- *
- * <p>
- * Example usage: <pre>{@code
- * // Create transport
- * AgentParameters params = AgentParameters.builder("gemini")
- *     .arg("--experimental-acp")
- *     .build();
- * StdioAcpClientTransport transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
- *
- * // Create client
+ * <pre>{@code
  * AcpAsyncClient client = AcpClient.async(transport)
- *     .requestTimeout(Duration.ofSeconds(30))
+ *     .requestTimeout(Duration.ofMinutes(5))
+ *     .sessionUpdateConsumer(notification -> Mono.fromRunnable(
+ *         () -> System.out.println(notification.update())))
  *     .build();
  *
- * // Initialize: sends the capabilities and client info set on the builder
- * AcpSchema.InitializeResponse initResponse = client.initialize().block();
- *
- * // Create session and interact
- * String sessionId = client
- *     .newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
- *     .map(AcpSchema.NewSessionResponse::sessionId)
+ * client.initialize()
+ *     .then(client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())))
+ *     .flatMap(session -> client.prompt(new AcpSchema.PromptRequest(session.sessionId(),
+ *         List.of(new AcpSchema.TextContent("Fix the failing test")))))
+ *     .doOnNext(response -> System.out.println(response.stopReason()))
+ *     .then(client.closeGracefully())
  *     .block();
- *
- * AcpSchema.PromptResponse response = client
- *     .prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent("Fix the bug"))))
- *     .block();
- *
- * client.closeGracefully().block();
  * }</pre>
+ *
+ * <p>Calls send nothing until their {@code Mono} is subscribed. An error answer fails the
+ * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, whose {@code getCode()} is
+ * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (30
+ * seconds by default), the {@code Mono} fails with a {@link java.util.concurrent.TimeoutException};
+ * then, or when the caller disposes the {@code Mono} first, the client sends the agent a
+ * {@code $/cancel_request}. To send one and still wait for the answer, put
+ * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context.
+ * The client does not check the agent's capabilities before a call; see
+ * {@link #getAgentCapabilities()}. Methods may be called from several threads at once, and a null
+ * argument fails with {@link IllegalArgumentException}.
  *
  * @author Mark Pollack
  * @author Christian Tzolov
- * @see AcpSession
- * @see AcpSchema
+ * @see AcpClient
+ * @see AcpSyncClient
  */
 public class AcpAsyncClient {
 
@@ -222,41 +201,35 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Initializes the connection with the agent: the first step in the ACP lifecycle. The
-	 * client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
+	 * Initializes the connection: the first request of the ACP lifecycle, sent once before any
+	 * other. The client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
 	 * capabilities and client info set on the builder
-	 * ({@link AcpClient.AsyncSpec#clientCapabilities}, {@link AcpClient.AsyncSpec#clientInfo});
-	 * the agent answers with its protocol version, capabilities and authentication methods.
+	 * ({@link AcpClient.AsyncSpec#clientCapabilities}, {@link AcpClient.AsyncSpec#clientInfo}); the
+	 * agent answers with its protocol version, capabilities and authentication methods, and
+	 * {@link #getAgentCapabilities()} returns those capabilities from then on. The client does not
+	 * check the protocol version the agent answers with.
 	 *
-	 * <p>
-	 * The builder is the only place the client's capabilities are set, so what the client
-	 * advertises is also what its handlers honour (an elicitation mode it did not advertise
-	 * is refused). Without {@code clientCapabilities(...)} the client advertises
-	 * {@code new ClientCapabilities()}: no file system access and no terminal.
-	 * </p>
-	 *
-	 * <p>
-	 * After initialization, the agent's capabilities can be accessed via
-	 * {@link #getAgentCapabilities()}.
-	 * </p>
-	 * @return a Mono emitting the initialization response with agent capabilities
+	 * <p>The builder is the only place the client's capabilities are set, so what the client
+	 * advertises is also what its handlers honour (an elicitation mode it did not advertise is
+	 * refused). Without {@code clientCapabilities(...)} the client advertises
+	 * {@code new ClientCapabilities()}: no file system and no terminal.
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_INITIALIZE
 	 * @see #initialize(int, Map)
-	 * @see #getAgentCapabilities()
 	 */
 	public Mono<AcpSchema.InitializeResponse> initialize() {
 		return initialize(AcpSchema.LATEST_PROTOCOL_VERSION, null);
 	}
 
 	/**
-	 * Initializes the connection with the agent, like {@link #initialize()}, with a chosen
-	 * protocol version and {@code _meta}. The capabilities and client info still come
-	 * from the builder; this overload exists for {@code _meta} and for testing version
-	 * negotiation, not for advertising capabilities.
+	 * Initializes the connection like {@link #initialize()}, with a chosen protocol version and
+	 * {@code _meta}. The capabilities and client info still come from the builder; this overload
+	 * exists for {@code _meta} and for testing version negotiation, not for advertising
+	 * capabilities.
 	 * @param protocolVersion the protocol version to announce; this SDK speaks
 	 * {@value AcpSchema#LATEST_PROTOCOL_VERSION}
 	 * @param meta the request's {@code _meta}, or {@code null}
-	 * @return a Mono emitting the initialization response with agent capabilities
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see #initialize()
 	 */
 	public Mono<AcpSchema.InitializeResponse> initialize(int protocolVersion, @Nullable Map<String, Object> meta) {
@@ -275,12 +248,11 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Returns the capabilities negotiated with the agent during initialization.
-	 *
-	 * <p>
-	 * This method returns null if {@link #initialize} has not been called yet.
-	 * </p>
-	 * @return the negotiated agent capabilities, or null if not initialized
+	 * Returns the agent's capabilities from its {@code initialize} answer. Check them before calls
+	 * that need them, for example {@code supportsLoadSession()} before {@link #loadSession} or
+	 * {@code supportsLogout()} before {@link #logout}: the client sends every call without
+	 * checking.
+	 * @return the agent's capabilities, or {@code null} before an {@code initialize} answer arrived
 	 */
 	public @Nullable NegotiatedCapabilities getAgentCapabilities() {
 		return agentCapabilities.get();
@@ -291,15 +263,11 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Authenticates with the agent using the specified authentication method.
-	 *
-	 * <p>
-	 * Authentication is optional and depends on the agent's configuration. The
-	 * authentication methods available are returned in the initialize response.
-	 * </p>
-	 * @param authenticateRequest the authentication request specifying the auth method
-	 * and credentials
-	 * @return a Mono emitting the authentication response
+	 * Logs in with one of the authentication methods the agent listed in its {@code initialize}
+	 * answer ({@code authenticate}). Needed only for an agent that requires it; such an agent
+	 * answers other requests with {@code -32000} (authentication required) until then.
+	 * @param authenticateRequest the ID of the chosen authentication method
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE
 	 */
 	public Mono<AcpSchema.AuthenticateResponse> authenticate(AcpSchema.AuthenticateRequest authenticateRequest) {
@@ -309,16 +277,13 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Logs out of the agent, clearing any stored credentials.
-	 *
-	 * <p>
-	 * Terminates the current authenticated session. After logout, the client must
-	 * authenticate again before performing operations that require authentication.
-	 * Only available if the agent advertises the {@code auth.logout} capability
-	 * ({@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}).
-	 * </p>
+	 * Logs out of the agent ({@code logout}), ending the authenticated state; afterwards the client
+	 * must authenticate again where the agent requires it. Only an agent that advertises
+	 * {@code auth.logout} supports it: check
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}
+	 * first, since the client does not.
 	 * @param logoutRequest the logout request
-	 * @return a Mono emitting the logout response
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_LOGOUT
 	 */
 	public Mono<AcpSchema.LogoutResponse> logout(AcpSchema.LogoutRequest logoutRequest) {
@@ -332,15 +297,11 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Creates a new agent session with the specified working directory.
-	 *
-	 * <p>
-	 * A session represents a conversation context with the agent. All prompts within a
-	 * session share the same working directory and conversation history.
-	 * </p>
-	 * @param newSessionRequest the session creation request with working directory and
-	 * initial context
-	 * @return a Mono emitting the session response containing the session ID
+	 * Creates an ACP session ({@code session/new}) for a working directory, with the MCP servers
+	 * the agent should connect to. The answer carries the session ID every later call for the
+	 * session uses, and optionally the session's modes and config options.
+	 * @param newSessionRequest the working directory, an absolute path, and the MCP servers
+	 * @return a {@code Mono} emitting the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
 	 */
 	public Mono<AcpSchema.NewSessionResponse> newSession(AcpSchema.NewSessionRequest newSessionRequest) {
@@ -350,14 +311,12 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Loads an existing agent session by ID.
-	 *
-	 * <p>
-	 * This allows resuming a previous conversation with the agent, maintaining the full
-	 * history and context.
-	 * </p>
-	 * @param loadSessionRequest the session load request with session ID
-	 * @return a Mono emitting the load response confirming the session was loaded
+	 * Reopens a session the agent kept ({@code session/load}). The agent replays the conversation
+	 * as session updates, which reach the session update consumers before this call completes, then
+	 * answers. Only an agent that advertises {@code loadSession} supports it; the client does not
+	 * check.
+	 * @param loadSessionRequest the session ID, the working directory and the MCP servers
+	 * @return a {@code Mono} emitting the agent's answer once the history has been replayed
 	 * @see AcpSchema#METHOD_SESSION_LOAD
 	 */
 	public Mono<AcpSchema.LoadSessionResponse> loadSession(AcpSchema.LoadSessionRequest loadSessionRequest) {
@@ -367,14 +326,10 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Sets the operational mode for a session (e.g., "code", "plan", "review").
-	 *
-	 * <p>
-	 * Different modes may change how the agent processes prompts and what capabilities it
-	 * exposes.
-	 * </p>
-	 * @param setModeRequest the set mode request with session ID and desired mode
-	 * @return a Mono emitting the response confirming the mode change
+	 * Switches a session to one of the modes the agent offered ({@code session/set_mode}). Modes
+	 * may change how the agent works on prompts and what it asks permission for.
+	 * @param setModeRequest the session ID and the mode ID
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_SET_MODE
 	 */
 	public Mono<AcpSchema.SetSessionModeResponse> setSessionMode(AcpSchema.SetSessionModeRequest setModeRequest) {
@@ -385,14 +340,11 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Lists sessions known to the agent, optionally filtered by working directory.
-	 *
-	 * <p>
-	 * Results may be paginated. Use the {@code nextCursor} from the response to fetch
-	 * subsequent pages.
-	 * </p>
-	 * @param listSessionsRequest the list sessions request with optional cwd filter and cursor
-	 * @return a Mono emitting the list sessions response
+	 * Lists the sessions the agent knows ({@code session/list}), optionally only those of one
+	 * working directory. The answer may be one page: pass its {@code nextCursor} in the next
+	 * request to get the next page.
+	 * @param listSessionsRequest an optional working directory and an optional cursor
+	 * @return a {@code Mono} emitting a page of sessions
 	 * @see AcpSchema#METHOD_SESSION_LIST
 	 */
 	public Mono<AcpSchema.ListSessionsResponse> listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
@@ -403,14 +355,10 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Closes an active session, cancelling any in-flight work.
-	 *
-	 * <p>
-	 * The agent will cancel ongoing operations as if {@code session/cancel} had been
-	 * called, then free resources associated with the session.
-	 * </p>
-	 * @param closeSessionRequest the close session request with session ID
-	 * @return a Mono emitting the close session response
+	 * Closes an active session ({@code session/close}): the agent stops its work as for
+	 * {@code session/cancel}, then frees what the session holds.
+	 * @param closeSessionRequest the session ID
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_CLOSE
 	 */
 	public Mono<AcpSchema.CloseSessionResponse> closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
@@ -421,16 +369,12 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Permanently deletes a stored session.
-	 *
-	 * <p>
-	 * Unlike {@link #closeSession}, which frees resources for an active session, this
-	 * removes the session from the agent's storage entirely so it no longer appears in
-	 * {@code session/list}. Only available if the agent advertises the
-	 * {@code sessionCapabilities.delete} capability.
-	 * </p>
-	 * @param deleteSessionRequest the delete session request with session ID
-	 * @return a Mono emitting the delete session response
+	 * Deletes a stored session ({@code session/delete}). Unlike {@link #closeSession}, which frees
+	 * an active session, it removes the session from the agent's storage, so that it no longer
+	 * appears in {@code session/list}. Only an agent that advertises
+	 * {@code sessionCapabilities.delete} supports it; the client does not check.
+	 * @param deleteSessionRequest the session ID
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_DELETE
 	 */
 	public Mono<AcpSchema.DeleteSessionResponse> deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
@@ -441,15 +385,11 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Resumes an existing session without replaying conversation history.
-	 *
-	 * <p>
-	 * Unlike {@link #loadSession}, this method does not replay previous messages.
-	 * It is useful for reconnecting to a still-running agent or when the client
-	 * manages history replay independently.
-	 * </p>
-	 * @param resumeSessionRequest the resume session request with session ID and cwd
-	 * @return a Mono emitting the resume session response
+	 * Reopens a session without replaying its history ({@code session/resume}), unlike
+	 * {@link #loadSession}. Use it to reconnect to a session the agent still runs, or when the
+	 * client keeps the history itself.
+	 * @param resumeSessionRequest the session ID, the working directory and the MCP servers
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_RESUME
 	 */
 	public Mono<AcpSchema.ResumeSessionResponse> resumeSession(
@@ -461,9 +401,9 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Forks an existing session, creating a new session branched from it.
-	 * @param forkSessionRequest the fork request with source session ID and cwd
-	 * @return a Mono emitting the fork response with the new session ID
+	 * Creates a new session branched from an existing one ({@code session/fork}).
+	 * @param forkSessionRequest the ID of the session to branch from and the working directory
+	 * @return a {@code Mono} emitting the agent's answer, with the new session's ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
 	@UnstableAcpApi
@@ -475,9 +415,13 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Sets a configuration option for a session.
-	 * @param request the config option request with session ID, config ID, and value
-	 * @return a Mono emitting the response with the full config state
+	 * Changes one of a session's config options ({@code session/set_config_option}); make the
+	 * request with {@link AcpSchema.SetSessionConfigOptionRequest#select} or
+	 * {@link AcpSchema.SetSessionConfigOptionRequest#bool}. The answer carries the full list of the
+	 * session's options, which replaces the client's copy. Send a boolean option only to an agent
+	 * that offered it.
+	 * @param request the session ID, the option ID and the new value
+	 * @return a {@code Mono} emitting the agent's answer, with all of the session's options
 	 * @see AcpSchema#METHOD_SESSION_SET_CONFIG_OPTION
 	 */
 	public Mono<AcpSchema.SetSessionConfigOptionResponse> setSessionConfigOption(
@@ -493,11 +437,10 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Lists the providers the agent can route to (UNSTABLE).
-	 *
-	 * <p>Only available if the agent advertises the {@code providers} capability.
-	 * @param request the list providers request
-	 * @return a Mono emitting the list of configurable providers
+	 * Lists the providers the agent can route to ({@code providers/list}). Only an agent that
+	 * advertises {@code providers} supports it.
+	 * @param request the list request
+	 * @return a {@code Mono} emitting the providers
 	 * @see AcpSchema#METHOD_PROVIDERS_LIST
 	 */
 	@UnstableAcpApi
@@ -508,9 +451,10 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Configures a provider's routing (protocol, base URL, headers) (UNSTABLE).
-	 * @param request the set provider request
-	 * @return a Mono emitting the response
+	 * Configures how the agent reaches a provider: protocol, base URL and headers
+	 * ({@code providers/set}).
+	 * @param request the provider ID and its routing
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_PROVIDERS_SET
 	 */
 	@UnstableAcpApi
@@ -521,9 +465,9 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Disables a provider by id (UNSTABLE).
-	 * @param request the disable provider request
-	 * @return a Mono emitting the response
+	 * Disables a provider by ID ({@code providers/disable}).
+	 * @param request the provider ID
+	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
 	 */
 	@UnstableAcpApi
@@ -538,25 +482,24 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Sends a prompt to the agent within a session.
+	 * Sends a prompt to a session ({@code session/prompt}) and returns the agent's answer at the
+	 * end of the turn, with the stop reason. Meanwhile the agent streams the turn as
+	 * {@code session/update} notifications to the session update consumers. A session takes one
+	 * prompt at a time: a Java agent answers a second prompt sent before the first is answered with
+	 * {@code -32600}.
 	 *
-	 * <p>
-	 * The prompt can contain text, images, or other content types. The agent processes
-	 * the prompt and may send streaming updates via session/update notifications before
-	 * returning the final response.
-	 * </p>
-	 * <p>
-	 * The Mono emits only once every session update consumer has finished with every
-	 * notification the agent sent before its prompt response, so what the consumers
-	 * collected for this turn is complete when the stop reason arrives. A consumer that is
-	 * slow delays the response, which still counts against the request timeout. The one
-	 * exception: a consumer that was already running when the prompt was sent, and is
-	 * still running when its response arrives, is not waited for, since it may be the one
-	 * waiting for the prompt. A consumer must therefore not wait for this prompt to
-	 * complete.
-	 * </p>
-	 * @param promptRequest the prompt request with session ID and content
-	 * @return a Mono emitting the prompt response with stop reason
+	 * <p>The answer is delivered only once the session update consumers have finished with every
+	 * notification the agent sent before it, so what they collected for the turn is complete when
+	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
+	 * request timeout. The one exception: a consumer that was already running when the prompt was
+	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
+	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
+	 *
+	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
+	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
+	 * {@code requestTimeout} on the builder for long turns.
+	 * @param promptRequest the session ID and the prompt's content blocks
+	 * @return a {@code Mono} emitting the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
 	 */
 	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest promptRequest) {
@@ -566,24 +509,15 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Cancels ongoing operations for a session.
+	 * Asks the agent to stop a session's prompt turn ({@code session/cancel}). It is a
+	 * notification: the agent does not answer it.
 	 *
-	 * <p>
-	 * This sends a notification to the agent to stop any in-progress work for the
-	 * specified session. Note that this is a notification (fire-and-forget), not a
-	 * request.
-	 * </p>
-	 *
-	 * <p>
-	 * The cancel does not end the prompt turn. The agent may still send
-	 * {@code session/update}s, which reach the session update consumers as usual, and then
-	 * answers the pending {@code prompt} with stop reason {@code cancelled}. Send the next
-	 * prompt on the session once that answer has arrived: until then the agent rejects it
-	 * (ACP v1, prompt turn, Cancellation).
-	 * </p>
-	 * @param cancelNotification the cancel notification with session ID and optional
-	 * reason
-	 * @return a Mono that completes when the notification is sent
+	 * <p>The cancel does not end the turn. The agent may still send {@code session/update}s, which
+	 * reach the session update consumers as usual, and then answers the pending prompt with stop
+	 * reason {@code cancelled}. Send the next prompt on the session once that answer has arrived:
+	 * until then the agent refuses it (ACP v1, prompt turn, Cancellation).
+	 * @param cancelNotification the session ID
+	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 * @see AcpSchema#METHOD_SESSION_CANCEL
 	 */
 	public Mono<Void> cancel(AcpSchema.CancelNotification cancelNotification) {
@@ -597,17 +531,17 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Sends a custom extension request ({@code _}-prefixed method name, ACP v1
-	 * Extensibility) to the agent and reads its result as the given type. An agent that
-	 * does not handle the method answers "Method not found" (-32601), which fails the Mono
-	 * with an {@link com.agentclientprotocol.sdk.spec.AcpError}. The SDK does not check
-	 * capabilities for extension methods: agents advertise them in the {@code _meta} of
-	 * their capabilities ({@link #getAgentCapabilities()}).
+	 * Sends a custom extension request ({@code _}-prefixed method name, ACP v1 Extensibility) to
+	 * the agent and reads its result as the given type. An agent that does not handle the method
+	 * answers "Method not found" ({@code -32601}), which fails the {@code Mono} with
+	 * {@link com.agentclientprotocol.sdk.spec.AcpError}. The SDK checks no capability for extension
+	 * methods: agents advertise them in the {@code _meta} of their capabilities
+	 * ({@link #getAgentCapabilities()}).
 	 * @param <T> the result type
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
 	 * @param resultType the type the result is read as
-	 * @return a Mono emitting the result, or completing empty when the agent answers
+	 * @return a {@code Mono} emitting the result, or completing empty when the agent answers
 	 * {@code "result": null}
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 */
@@ -619,12 +553,11 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Sends a custom extension request to the agent and returns its result as the raw
-	 * JSON value: a {@code Map}, {@code List}, {@code String}, {@code Number} or
-	 * {@code Boolean}.
+	 * Sends a custom extension request to the agent and returns its result as the raw JSON value: a
+	 * {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}.
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
-	 * @return a Mono emitting the result, or completing empty when the agent answers
+	 * @return a {@code Mono} emitting the result, or completing empty when the agent answers
 	 * {@code "result": null}
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 * @see #sendExtRequest(String, Object, TypeRef)
@@ -634,11 +567,11 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
-	 * agent. An agent without a handler for it ignores it.
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the agent. An agent
+	 * without a handler for it ignores it.
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
-	 * @return a Mono that completes when the notification is sent
+	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 */
 	public Mono<Void> sendExtNotification(String method, Object params) {
@@ -652,11 +585,9 @@ public class AcpAsyncClient {
 	// --------------------------
 
 	/**
-	 * Closes the client connection immediately.
-	 *
-	 * <p>
-	 * This closes both the session and the underlying transport.
-	 * </p>
+	 * Closes the client at once: requests waiting for an answer fail, the agent's requests being
+	 * handled are cancelled, session updates not yet handled are dropped, and the transport is
+	 * closed.
 	 */
 	public void close() {
 		logger.debug("Closing ACP client");
@@ -665,12 +596,13 @@ public class AcpAsyncClient {
 	}
 
 	/**
-	 * Gracefully closes the client connection, allowing pending operations to complete.
-	 *
-	 * <p>
-	 * This closes both the session and the underlying transport.
-	 * </p>
-	 * @return a Mono that completes when the connection is closed
+	 * Closes the client gracefully. Requests still waiting for an answer, a prompt included, fail
+	 * at once, and the agent's requests being handled are cancelled and answered {@code -32800}.
+	 * Session updates already received are still handed to the consumers, waiting at most the
+	 * request timeout, and then the transport closes gracefully. For a
+	 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} that closes the
+	 * agent's input first and gives the agent time to exit.
+	 * @return a {@code Mono} that completes when the transport has closed
 	 */
 	public Mono<Void> closeGracefully() {
 		logger.debug("Gracefully closing ACP client");

@@ -31,61 +31,73 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Agent Client Protocol (ACP) Schema based on
- * <a href="https://agentclientprotocol.com/">Agent Client Protocol specification</a>.
+ * The ACP v1 messages as Java records, with the method names and the JSON-RPC 2.0 envelope
+ * that carries them. Each request, response and notification a client and an agent exchange
+ * is a nested type here: {@link PromptRequest} and {@link PromptResponse} for
+ * {@code session/prompt}, {@link SessionNotification} for {@code session/update}, and so on.
+ * Application code builds and reads these records; the client and agent facades take and
+ * return them, and the transports turn them into JSON with an {@link AcpJsonMapper}.
  *
- * This schema defines all request, response, and notification types used in ACP. ACP is a
- * protocol for communication between code editors (clients) and coding agents.
- *
- * <h2>Forward compatibility of discriminated unions</h2>
+ * <h2>How the types are named</h2>
  * <p>
- * A peer on a newer version of the protocol can send a variant this SDK does not know: a
- * {@code sessionUpdate} type, a content block type, a tool call content type, a config
- * option type, a permission outcome, or an elicitation form property type or multi-select
- * item shape. Such a variant never fails the message that
- * carries it. The rule, the same for every union:
- * </p>
+ * Each method has a {@code METHOD_*} constant with its wire name. A request method has a
+ * params record whose name ends in {@code Request} and a result record whose name ends in
+ * {@code Response}: {@link #METHOD_SESSION_PROMPT} has {@link PromptRequest} and
+ * {@link PromptResponse}. A notification has a params record whose name ends in
+ * {@code Notification}. A record's components are its JSON properties (the {@code Unknown*}
+ * records described below also keep a map of the fields they do not know), and {@code meta},
+ * the {@code _meta} property reserved for extensions, is the last component of every record
+ * the schema gives it. The canonical constructor takes every component; a shorter
+ * constructor leaves some optional ones out, usually as {@code null}.
+ *
+ * <h2>Required and optional components</h2>
+ * <p>
+ * A component marked {@code @Nullable} is optional in the schema and is left out of the JSON
+ * when it is {@code null}. Every other component is required and must not be {@code null}.
+ * The SDK checks this for the params of inbound requests and notifications: params without a
+ * required component never reach a handler. A request is answered with {@code -32602}
+ * (Invalid params), and a notification is logged and skipped. The result of a response is
+ * checked the same way: a result without a required component fails the request with
+ * {@code -32603} (Internal error), naming the component.
+ *
+ * <h2>Forward compatibility</h2>
+ * <p>
+ * A peer on a newer protocol version can send a union variant or an enumeration value this
+ * SDK does not know. It never fails the message that carries it:
  * <ul>
- * <li>A union that the schema gives a default variant for a missing discriminator reads
- * an unknown variant as that default, as the Rust SDK does: an MCP server without a known
- * {@code type} is a {@link McpServerStdio}.</li>
+ * <li>A union whose schema names a default variant reads an unknown variant as that default:
+ * an MCP server without a known {@code type} is a {@link McpServerStdio}, and an
+ * authentication method without a known {@code type} is an {@link AuthMethodAgent}.</li>
  * <li>Every other union reads an unknown variant as its {@code Unknown*} record
  * ({@link UnknownSessionUpdate}, {@link UnknownContentBlock},
  * {@link UnknownToolCallContent}, {@link UnknownSessionConfigOption},
  * {@link UnknownPermissionOutcome}, {@link UnknownElicitationPropertySchema},
- * {@link UnknownMultiSelectItems}). The record keeps the discriminator and every other
- * field, and writes them back unchanged, so a proxy forwards what it received. A receiver
- * that does not understand the variant ignores it, as the schema's
- * {@code x-deserialize-skip-invalid-items} asks for list items.</li>
+ * {@link UnknownMultiSelectItems}). The record keeps the discriminator and every other field
+ * and writes them back unchanged, so a proxy forwards what it received and an application
+ * can log or count what it does not understand. A receiver that does not understand the
+ * variant ignores it, as the schema's {@code x-deserialize-skip-invalid-items} asks for list
+ * items.</li>
+ * <li>{@link ToolKind}, whose schema has the catch-all value {@code other}, reads an unknown
+ * kind as {@link ToolKind#OTHER}. It is a Java enum.</li>
+ * <li>Every other enumeration ({@link StopReason}, {@link ToolCallStatus},
+ * {@link PermissionOptionKind}, {@link PlanEntryStatus}, {@link PlanEntryPriority},
+ * {@link Role}, {@link ElicitationAction}) is an open value: a record over the wire string,
+ * with a constant for each value ACP v1 defines. An unknown value is kept and written back
+ * unchanged, and its {@code isKnown()} is {@code false}. Compare open values with
+ * {@code equals}, not {@code ==}, or switch on {@code value()}.</li>
+ * <li>Open strings in the schema stay {@code String}: a config option's {@code category},
+ * whose reserved values are the constants of {@link SessionConfigOptionCategory}, and a
+ * string property's {@code format}.</li>
  * </ul>
  * <p>
- * This follows the Kotlin SDK and the direction of the v2 schema (an {@code Other} variant
- * that preserves the raw payload) rather than dropping the whole notification, which is
- * what the Rust, TypeScript and Python SDKs do for an unknown session update: a dropped
- * notification cannot be logged by the application, forwarded or counted. Because the
- * {@code Unknown*} records write their own discriminator, every union is declared with
- * {@code include = EXISTING_PROPERTY}: each record writes its discriminator as an ordinary
- * property, and the canonical constructors of the known records accept {@code null} for it
- * (it becomes the record's own name) and reject any other value.
- * </p>
- <p>
- * The schema's closed string enums follow the same rule. A value this SDK does not know
- * never fails the message:
- * </p>
- * <ul>
- * <li>{@link ToolKind}, whose schema has a catch-all value ({@code other}, "Other tool
- * types (default)"), reads an unknown kind as {@link ToolKind#OTHER}, as the Rust SDK
- * does ({@code serde(other)}). It stays a Java enum.</li>
- * <li>Every other enum ({@link StopReason}, {@link ToolCallStatus},
- * {@link PermissionOptionKind}, {@link PlanEntryStatus}, {@link PlanEntryPriority},
- * {@link Role}, {@link ElicitationAction}) has no such value, so it is an open value type: a record over the wire
- * string, with a constant per value ACP v1 defines. An unknown value is kept and written
- * back unchanged ({@code isKnown()} is false), as the Kotlin SDK and the v2 schema do;
- * the Rust v1 SDK fails such a message. Compare with {@code equals}, not {@code ==}.</li>
- * <li>Open strings in the schema stay {@code String} (a config option's
- * {@code category}, whose reserved values are the constants of
- * {@link SessionConfigOptionCategory}; a string property's {@code format}).</li>
- * </ul>
+ * Only {@link JSONRPCMessage} is sealed. The union interfaces are not, so a chain of
+ * {@code instanceof} checks over a union is never complete: handle the {@code Unknown*}
+ * record and end with a branch for anything else.
+ * <p>
+ * Each union variant record has its discriminator as a component (for example
+ * {@code TextContent.type}). Pass {@code null} for it, or use a shorter constructor, and it
+ * becomes the variant's own name; any other value is rejected with
+ * {@link IllegalArgumentException}, so a record never claims to be a different variant.
  *
  * @author Mark Pollack
  * @author Christian Tzolov
@@ -150,15 +162,23 @@ public final class AcpSchema {
 		return create.apply(value);
 	}
 
+	/** The JSON-RPC version every message carries in its {@code jsonrpc} member: {@value}. */
 	public static final String JSONRPC_VERSION = "2.0";
 
+	/**
+	 * The ACP protocol version this SDK speaks: {@value}. The client sends it in
+	 * {@link InitializeRequest#protocolVersion()} unless told otherwise, and
+	 * {@link InitializeResponse#ok()} answers with the same version.
+	 */
 	public static final int LATEST_PROTOCOL_VERSION = 1;
 
 	/**
-	 * The answer JSON-RPC 2.0 prescribes for a message that could not be read: -32700
-	 * {@code Parse error} when the text is not JSON, -32600 {@code Invalid Request} when
-	 * it is JSON but no JSON-RPC message. Its id is null, since the id of a message that
-	 * could not be read is unknown; it is written as {@code "id": null}.
+	 * Returns the error response JSON-RPC 2.0 prescribes for a message that could not be read:
+	 * {@code -32700} (Parse error) when the text is not JSON, {@code -32600} (Invalid Request)
+	 * when it is JSON but not a valid JSON-RPC message. The response carries the request's id
+	 * when the text is a request whose id can be read, and otherwise a {@code null} id, written
+	 * as {@code "id": null}. The SDK's transports send it when
+	 * {@link #deserializeJsonRpcMessage} refuses a message; a custom transport can do the same.
 	 * @param jsonMapper the JSON mapper that failed to read the message
 	 * @param jsonText the text that {@link #deserializeJsonRpcMessage} refused
 	 * @return the error response to send to the peer
@@ -220,16 +240,22 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Deserializes a JSON-RPC message from a JSON string into the appropriate message
-	 * type (request, response, or notification).
-	 * @param jsonMapper The JSON mapper to use for deserialization
-	 * @param jsonText The JSON text to deserialize
-	 * @return The deserialized JSON-RPC message
-	 * @throws IOException If deserialization fails
-	 * @throws IllegalArgumentException If the JSON structure doesn't match any known
-	 * message type, or is a request JSON-RPC 2.0 does not allow (section 4: {@code jsonrpc}
-	 * other than "2.0", a method that is not a string, an id that is not a string, number or
-	 * null)
+	 * Reads one JSON-RPC message from its JSON text. An object with a {@code method} is a
+	 * {@link JSONRPCRequest} when it has an {@code id} and a {@link JSONRPCNotification} when it
+	 * has none; an object with an {@code id}, a {@code result} or an {@code error} but no method
+	 * is a {@link JSONRPCResponse}. Params and results stay as the mapper read them (maps, lists
+	 * and plain values); the protocol sessions convert them to the method's record. The SDK's
+	 * transports call this for each message they receive and answer a failure with
+	 * {@link #unreadableMessageResponse}.
+	 * @param jsonMapper the JSON mapper to read with
+	 * @param jsonText the text of one message
+	 * @return the message
+	 * @throws IOException if the text is not JSON or not a JSON object; a JSON-RPC batch (an
+	 * array) is not supported and fails here
+	 * @throws IllegalArgumentException if the text is the JSON {@code null} literal, an object
+	 * with none of {@code method}, {@code id}, {@code result} and {@code error}, or a request or
+	 * notification JSON-RPC 2.0 does not allow: a {@code jsonrpc} other than {@code "2.0"}, a
+	 * method that is not a string, or an id that is not a string, a number or {@code null}
 	 */
 	public static JSONRPCMessage deserializeJsonRpcMessage(AcpJsonMapper jsonMapper, String jsonText)
 			throws IOException {
@@ -275,75 +301,190 @@ public final class AcpSchema {
 	// Method Names (Agent Methods - client calls these)
 	// ---------------------------
 
+	/**
+	 * Client to agent: the first request on a connection, which agrees on the protocol version
+	 * and capabilities ({@link InitializeRequest}, {@link InitializeResponse}).
+	 */
 	public static final String METHOD_INITIALIZE = "initialize";
 
+	/**
+	 * Client to agent: logs in with one of the authentication methods the agent listed at
+	 * {@code initialize} ({@link AuthenticateRequest}, {@link AuthenticateResponse}).
+	 */
 	public static final String METHOD_AUTHENTICATE = "authenticate";
 
+	/**
+	 * Client to agent: logs out, clearing the agent's stored credentials
+	 * ({@link LogoutRequest}, {@link LogoutResponse}).
+	 */
 	public static final String METHOD_LOGOUT = "logout";
 
+	/**
+	 * Client to agent: starts an ACP session and returns its id ({@link NewSessionRequest},
+	 * {@link NewSessionResponse}).
+	 */
 	public static final String METHOD_SESSION_NEW = "session/new";
 
+	/**
+	 * Client to agent: loads an existing ACP session ({@link LoadSessionRequest},
+	 * {@link LoadSessionResponse}).
+	 */
 	public static final String METHOD_SESSION_LOAD = "session/load";
 
+	/**
+	 * Client to agent: sends a user message and runs a prompt turn, answered when the turn
+	 * ends ({@link PromptRequest}, {@link PromptResponse}).
+	 */
 	public static final String METHOD_SESSION_PROMPT = "session/prompt";
 
+	/**
+	 * Client to agent: changes the session's mode ({@link SetSessionModeRequest},
+	 * {@link SetSessionModeResponse}).
+	 */
 	public static final String METHOD_SESSION_SET_MODE = "session/set_mode";
 
+	/**
+	 * Client to agent, a notification: asks the agent to end the session's prompt turn
+	 * ({@link CancelNotification}). The cancelled prompt answers {@link StopReason#CANCELLED}.
+	 */
 	public static final String METHOD_SESSION_CANCEL = "session/cancel";
 
+	/**
+	 * Client to agent: lists existing ACP sessions ({@link ListSessionsRequest},
+	 * {@link ListSessionsResponse}).
+	 */
 	public static final String METHOD_SESSION_LIST = "session/list";
 
+	/**
+	 * Client to agent: closes an active ACP session ({@link CloseSessionRequest},
+	 * {@link CloseSessionResponse}).
+	 */
 	public static final String METHOD_SESSION_CLOSE = "session/close";
 
+	/**
+	 * Client to agent: deletes an ACP session that {@code session/list} returned
+	 * ({@link DeleteSessionRequest}, {@link DeleteSessionResponse}).
+	 */
 	public static final String METHOD_SESSION_DELETE = "session/delete";
 
+	/**
+	 * Client to agent: resumes an existing ACP session ({@link ResumeSessionRequest},
+	 * {@link ResumeSessionResponse}).
+	 */
 	public static final String METHOD_SESSION_RESUME = "session/resume";
 
+	/**
+	 * Client to agent: starts a new ACP session from an existing one
+	 * ({@link ForkSessionRequest}, {@link ForkSessionResponse}).
+	 */
 	@UnstableAcpApi
 	public static final String METHOD_SESSION_FORK = "session/fork";
 
+	/**
+	 * Client to agent: sets a session config option, such as the model
+	 * ({@link SetSessionConfigOptionRequest}, {@link SetSessionConfigOptionResponse}).
+	 */
 	public static final String METHOD_SESSION_SET_CONFIG_OPTION = "session/set_config_option";
 
 	// ---------------------------
 	// Method Names (Client Methods - agent calls these)
 	// ---------------------------
 
+	/**
+	 * Agent to client: asks the user for permission to run a tool call
+	 * ({@link RequestPermissionRequest}, {@link RequestPermissionResponse}).
+	 */
 	public static final String METHOD_SESSION_REQUEST_PERMISSION = "session/request_permission";
 
+	/**
+	 * Agent to client, a notification: streams one session update during a prompt turn
+	 * ({@link SessionNotification}).
+	 */
 	public static final String METHOD_SESSION_UPDATE = "session/update";
 
+	/**
+	 * Agent to client: reads a text file through the client ({@link ReadTextFileRequest},
+	 * {@link ReadTextFileResponse}).
+	 */
 	public static final String METHOD_FS_READ_TEXT_FILE = "fs/read_text_file";
 
+	/**
+	 * Agent to client: writes a text file through the client ({@link WriteTextFileRequest},
+	 * {@link WriteTextFileResponse}).
+	 */
 	public static final String METHOD_FS_WRITE_TEXT_FILE = "fs/write_text_file";
 
+	/**
+	 * Agent to client: creates a terminal and runs a command in it
+	 * ({@link CreateTerminalRequest}, {@link CreateTerminalResponse}).
+	 */
 	public static final String METHOD_TERMINAL_CREATE = "terminal/create";
 
+	/**
+	 * Agent to client: returns a terminal's output so far and its exit status, if it has
+	 * exited ({@link TerminalOutputRequest}, {@link TerminalOutputResponse}).
+	 */
 	public static final String METHOD_TERMINAL_OUTPUT = "terminal/output";
 
+	/**
+	 * Agent to client: releases a terminal and frees its resources
+	 * ({@link ReleaseTerminalRequest}, {@link ReleaseTerminalResponse}).
+	 */
 	public static final String METHOD_TERMINAL_RELEASE = "terminal/release";
 
+	/**
+	 * Agent to client: waits for a terminal's command to exit
+	 * ({@link WaitForTerminalExitRequest}, {@link WaitForTerminalExitResponse}).
+	 */
 	public static final String METHOD_TERMINAL_WAIT_FOR_EXIT = "terminal/wait_for_exit";
 
+	/**
+	 * Agent to client: kills a terminal's command but keeps the terminal
+	 * ({@link KillTerminalCommandRequest}, {@link KillTerminalCommandResponse}).
+	 */
 	public static final String METHOD_TERMINAL_KILL = "terminal/kill";
 
+	/**
+	 * Agent to client: asks the user for structured input, or to visit a URL
+	 * ({@link CreateElicitationRequest}, {@link CreateElicitationResponse}).
+	 */
 	public static final String METHOD_ELICITATION_CREATE = "elicitation/create";
 
+	/**
+	 * Agent to client, a notification: tells the client that a URL elicitation is complete
+	 * ({@link CompleteElicitationNotification}).
+	 */
 	public static final String METHOD_ELICITATION_COMPLETE = "elicitation/complete";
 
 	// ---------------------------
 	// Method Names (protocol level, both sides)
 	// ---------------------------
 
-	/** Cancels a request the sender sent earlier (ACP v1, Cancellation). */
+	/**
+	 * Either direction, a notification: cancels a request the sender sent earlier
+	 * ({@link CancelRequestNotification}). The SDK sends and handles it itself.
+	 */
 	public static final String METHOD_CANCEL_REQUEST = "$/cancel_request";
 
 	// Provider configuration (UNSTABLE)
+	/**
+	 * Client to agent: lists the agent's providers ({@link ListProvidersRequest},
+	 * {@link ListProvidersResponse}).
+	 */
 	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_LIST = "providers/list";
 
+	/**
+	 * Client to agent: sets a provider's configuration ({@link SetProviderRequest},
+	 * {@link SetProviderResponse}).
+	 */
 	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_SET = "providers/set";
 
+	/**
+	 * Client to agent: disables a provider ({@link DisableProviderRequest},
+	 * {@link DisableProviderResponse}).
+	 */
 	@UnstableAcpApi
 	public static final String METHOD_PROVIDERS_DISABLE = "providers/disable";
 
@@ -352,44 +493,80 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * A JSON-RPC request that expects a response.
+	 * A JSON-RPC 2.0 request: a call that expects one {@link JSONRPCResponse} with the same id.
+	 * The protocol sessions build these from the facades' calls and number them; build one
+	 * yourself only to work on the wire, for example in a transport test.
 	 *
-	 * @param jsonrpc The JSON-RPC version (must be "2.0")
-	 * @param id A unique identifier for the request
-	 * @param method The name of the method to be invoked
-	 * @param params Parameters for the method call
+	 * <p>
+	 * When sent, the params are the method's ACP record, such as a {@link PromptRequest} for
+	 * {@code session/prompt}. When read from JSON they are the parsed JSON (maps, lists and plain
+	 * values), which the receiving session converts to that record.
+	 *
+	 * @param jsonrpc the JSON-RPC version, {@value AcpSchema#JSONRPC_VERSION}
+	 * @param id the request id, a string or a number; requests this SDK sends have string ids
+	 * @param method the method name: a {@code METHOD_*} constant, or an extension method whose
+	 * name starts with {@code _}
+	 * @param params the method's params, or {@code null} for none
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCRequest(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("id") @Nullable Object id,
 			@JsonProperty("method") String method, @JsonProperty("params") @Nullable Object params) implements JSONRPCMessage {
+		/**
+		 * Creates a request with the version {@value AcpSchema#JSONRPC_VERSION}. The method comes
+		 * first here, unlike in the canonical constructor.
+		 * @param method the method name
+		 * @param id the request id
+		 * @param params the params, or {@code null}
+		 */
 		public JSONRPCRequest(String method, @Nullable Object id, @Nullable Object params) {
 			this(JSONRPC_VERSION, id, method, params);
 		}
 	}
 
 	/**
-	 * A JSON-RPC notification that does not expect a response.
+	 * A JSON-RPC 2.0 notification: a message that gets no response, such as
+	 * {@code session/update} or {@code session/cancel}. The protocol sessions build these when a
+	 * facade sends a notification; build one yourself only to work on the wire.
 	 *
-	 * @param jsonrpc The JSON-RPC version (must be "2.0")
-	 * @param method The name of the method to be invoked
-	 * @param params Parameters for the method call
+	 * <p>
+	 * When sent, the params are the method's ACP record, such as a {@link SessionNotification}.
+	 * When read from JSON they are the parsed JSON, which the receiving session converts to that
+	 * record.
+	 *
+	 * @param jsonrpc the JSON-RPC version, {@value AcpSchema#JSONRPC_VERSION}
+	 * @param method the method name: a {@code METHOD_*} constant, or an extension method whose
+	 * name starts with {@code _}
+	 * @param params the method's params, or {@code null} for none
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCNotification(@JsonProperty("jsonrpc") String jsonrpc, @JsonProperty("method") String method,
 			@JsonProperty("params") @Nullable Object params) implements JSONRPCMessage {
+		/**
+		 * Creates a notification with the version {@value AcpSchema#JSONRPC_VERSION}.
+		 * @param method the method name
+		 * @param params the params, or {@code null}
+		 */
 		public JSONRPCNotification(String method, @Nullable Object params) {
 			this(JSONRPC_VERSION, method, params);
 		}
 	}
 
 	/**
-	 * A JSON-RPC response to a request.
+	 * A JSON-RPC 2.0 response: the answer to the {@link JSONRPCRequest} with the same id,
+	 * carrying either a result or an error. The protocol sessions match it to the waiting call
+	 * and complete that call with the result, or fail it with an {@link AcpError}.
 	 *
-	 * @param jsonrpc The JSON-RPC version (must be "2.0")
-	 * @param id The request ID this response corresponds to; null, and written as
-	 * {@code "id": null} as JSON-RPC 2.0 requires, when the request could not be read
-	 * @param result The result of the method call (null if error occurred)
-	 * @param error The error information (null if successful)
+	 * <p>
+	 * A response this SDK sends has exactly one of {@code result} and {@code error}. A received
+	 * response with neither reads as a {@code null} result, which completes the call only for a
+	 * response type that implements {@link DefaultOnNull} or an extension method; any other call
+	 * fails.
+	 *
+	 * @param jsonrpc the JSON-RPC version, {@value AcpSchema#JSONRPC_VERSION}
+	 * @param id the id of the request this answers; {@code null}, written as {@code "id": null}
+	 * as JSON-RPC 2.0 requires, when the request could not be read
+	 * @param result the result, or {@code null} when the request failed
+	 * @param error the error, or {@code null} when the request succeeded
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCResponse(@JsonProperty("jsonrpc") String jsonrpc,
@@ -398,22 +575,40 @@ public final class AcpSchema {
 			@JsonProperty("error") @Nullable JSONRPCError error) implements JSONRPCMessage {
 	}
 
+	/**
+	 * The error of a failed JSON-RPC response: a code, a message and optional data. A handler
+	 * fails a request by throwing an {@link AcpProtocolException}, which the SDK sends as this
+	 * record ({@link #from}); a caller whose request failed gets an {@link AcpError} that carries
+	 * it ({@link AcpError#getError()}).
+	 *
+	 * <p>
+	 * The codes are the constants of {@link AcpErrorCodes}: the JSON-RPC 2.0 codes, and the ACP
+	 * ones such as {@code -32000} (authentication required) and {@code -32800} (request
+	 * cancelled).
+	 *
+	 * @param code the error code
+	 * @param message a short description of the error
+	 * @param data more detail, or {@code null}; its shape depends on the error
+	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record JSONRPCError(@JsonProperty("code") int code, @JsonProperty("message") String message,
 			@JsonProperty("data") @Nullable Object data) {
 
 		/**
-		 * The wire form of a protocol exception: its message without the code prefix that
-		 * {@link AcpProtocolException#getMessage()} adds for logs.
+		 * Returns the wire form of a protocol exception: its code, its data, and its message
+		 * without the code prefix that {@link AcpProtocolException#getMessage()} adds for logs.
 		 * @param exception the exception to send
-		 * @return a JSON-RPC error carrying its code, message and data
+		 * @return an error with the exception's code, message and data
 		 */
 		public static JSONRPCError from(AcpProtocolException exception) {
 			return new JSONRPCError(exception.getCode(), exception.getErrorMessage(), exception.getData());
 		}
 
 		/**
-		 * The exception form of an error received from the peer.
+		 * Returns this error as an {@link AcpProtocolException} with the same code, message and
+		 * data, for example so a proxy's handler can throw an error it received and pass it on
+		 * unchanged. The SDK does not use it for the errors it receives: the caller of a failed
+		 * request gets an {@link AcpError}.
 		 * @return a protocol exception carrying this error's code, message and data
 		 */
 		public AcpProtocolException toException() {
@@ -439,10 +634,23 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Base type for all JSON-RPC messages.
+	 * One JSON-RPC 2.0 message: a {@link JSONRPCRequest}, a {@link JSONRPCNotification} or a
+	 * {@link JSONRPCResponse}. Transports move these between client and agent, and the protocol
+	 * sessions turn them into calls of the right handler. Application code meets them only when
+	 * it writes a transport or a test that works on the wire; everywhere else the ACP records
+	 * travel inside them as params and results.
+	 *
+	 * <p>
+	 * The interface is sealed, so these three types are all there are.
+	 * {@link AcpSchema#deserializeJsonRpcMessage} reads one from JSON text.
 	 */
 	public sealed interface JSONRPCMessage permits JSONRPCRequest, JSONRPCNotification, JSONRPCResponse {
 
+		/**
+		 * Returns the JSON-RPC version, {@value AcpSchema#JSONRPC_VERSION} in every message this
+		 * SDK sends.
+		 * @return the {@code jsonrpc} member
+		 */
 		String jsonrpc();
 
 	}
@@ -452,20 +660,59 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Initialize request - establishes connection and negotiates capabilities
+	 * The params of {@code initialize}, the first request on a connection: the protocol version
+	 * the client speaks, what it can do and who it is. {@code AcpAsyncClient} and
+	 * {@code AcpSyncClient} build it in {@code initialize()} from the capabilities and client
+	 * info set on their builder. The agent's
+	 * {@link com.agentclientprotocol.sdk.agent.AcpAgent.InitializeHandler} receives it and
+	 * answers with an {@link InitializeResponse}.
+	 *
+	 * <p>
+	 * The agent records {@code clientCapabilities} as
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities} before its
+	 * initialize handler runs, and checks them before it calls the client's file system,
+	 * terminal and elicitation methods. A {@code null} {@code clientCapabilities} counts as a
+	 * client that offers none of them.
+	 *
+	 * @param protocolVersion the latest protocol version the client supports; this SDK sends
+	 * {@value AcpSchema#LATEST_PROTOCOL_VERSION} unless told otherwise
+	 * @param clientCapabilities what the client offers the agent, or {@code null}
+	 * @param clientInfo the client's name and version, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record InitializeRequest(@JsonProperty("protocolVersion") Integer protocolVersion,
 			@JsonProperty("clientCapabilities") @Nullable ClientCapabilities clientCapabilities,
 			@JsonProperty("clientInfo") @Nullable Implementation clientInfo,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without client info or {@code _meta}.
+		 * @param protocolVersion the latest protocol version the client supports
+		 * @param clientCapabilities what the client offers, or {@code null}
+		 */
 		public InitializeRequest(Integer protocolVersion, @Nullable ClientCapabilities clientCapabilities) {
 			this(protocolVersion, clientCapabilities, null, null);
 		}
 	}
 
 	/**
-	 * Initialize response - returns agent capabilities and auth methods
+	 * The result of {@code initialize}: the protocol version the agent agrees to, what it can do
+	 * and how a client can log in. The agent's initialize handler builds it, most simply with
+	 * {@link #ok()} or {@link #ok(AgentCapabilities)}. The client's {@code initialize()}
+	 * completes with it and records {@code agentCapabilities} as the connection's
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities}.
+	 *
+	 * <p>
+	 * By the protocol, the agent answers with the client's protocol version if it supports it,
+	 * and otherwise with the latest version it supports; a client that does not support the
+	 * answer should disconnect. The SDK enforces neither side of this: the initialize handler
+	 * chooses the version, and the client does not check it.
+	 *
+	 * @param protocolVersion the protocol version for this connection
+	 * @param agentCapabilities what the agent offers, or {@code null}
+	 * @param authMethods the ways a client can authenticate, or {@code null} for none
+	 * @param agentInfo the agent's name and version, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record InitializeResponse(@JsonProperty("protocolVersion") Integer protocolVersion,
@@ -473,24 +720,31 @@ public final class AcpSchema {
 			@JsonProperty("authMethods") @Nullable List<AuthMethod> authMethods,
 			@JsonProperty("agentInfo") @Nullable Implementation agentInfo,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without agent info or {@code _meta}.
+		 * @param protocolVersion the protocol version for this connection
+		 * @param agentCapabilities what the agent offers, or {@code null}
+		 * @param authMethods the ways a client can authenticate, or {@code null}
+		 */
 		public InitializeResponse(Integer protocolVersion, @Nullable AgentCapabilities agentCapabilities,
 				@Nullable List<AuthMethod> authMethods) {
 			this(protocolVersion, agentCapabilities, authMethods, null, null);
 		}
 
 		/**
-		 * Creates a default successful initialization response.
-		 * Uses protocol version 1 and default agent capabilities.
-		 * @return A default InitializeResponse
+		 * Returns a response with protocol version 1 and {@code new AgentCapabilities()}: no
+		 * session loading, no MCP servers over HTTP or SSE, and only text and resource links in
+		 * prompts. Enough for a minimal agent.
+		 * @return a response for protocol version 1 with the default capabilities
 		 */
 		public static InitializeResponse ok() {
 			return new InitializeResponse(1, new AgentCapabilities(), null);
 		}
 
 		/**
-		 * Creates a successful initialization response with the given capabilities.
-		 * @param capabilities The agent capabilities to advertise
-		 * @return An InitializeResponse with the specified capabilities
+		 * Returns a response with protocol version 1 and the given capabilities.
+		 * @param capabilities what the agent offers
+		 * @return a response for protocol version 1 with those capabilities
 		 */
 		public static InitializeResponse ok(AgentCapabilities capabilities) {
 			return new InitializeResponse(1, capabilities, null);
@@ -540,40 +794,88 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Create new session request
+	 * The params of {@code session/new}: asks the agent to start an ACP session in a working
+	 * directory, with the MCP servers it should connect to. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#newSession AcpSyncClient.newSession}
+	 * or the {@code AcpAsyncClient} method of the same name. The agent's
+	 * {@link com.agentclientprotocol.sdk.agent.AcpAgent.NewSessionHandler} receives it and
+	 * answers with a {@link NewSessionResponse} that carries the new session's id.
+	 *
+	 * <p>
+	 * The protocol requires absolute paths for {@code cwd} and {@code additionalDirectories}; the
+	 * SDK does not check them. Pass an empty list, not {@code null}, when there are no MCP
+	 * servers.
+	 *
+	 * @param cwd the session's working directory, an absolute path; relative paths in the
+	 * session resolve against it
+	 * @param mcpServers the MCP servers the agent should connect to, possibly empty
+	 * @param additionalDirectories more workspace roots as absolute paths, or {@code null} for
+	 * none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NewSessionRequest(@JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") List<McpServer> mcpServers,
 			@JsonProperty("additionalDirectories") @Nullable List<String> additionalDirectories,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without additional directories or {@code _meta}.
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, possibly empty
+		 */
 		public NewSessionRequest(String cwd, List<McpServer> mcpServers) {
 			this(cwd, mcpServers, null, null);
 		}
 
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, possibly empty
+		 * @param additionalDirectories more workspace roots, or {@code null}
+		 */
 		public NewSessionRequest(String cwd, List<McpServer> mcpServers, @Nullable List<String> additionalDirectories) {
 			this(cwd, mcpServers, additionalDirectories, null);
 		}
 	}
 
 	/**
-	 * Create new session response
+	 * The result of {@code session/new}: the id of the new ACP session, with its modes and config
+	 * options when the agent has them. The agent's new-session handler builds it and chooses the
+	 * id. The client gets it from {@code newSession(...)} and passes {@link #sessionId()} in every
+	 * later message about that session, starting with {@link PromptRequest}.
 	 *
-	 * @param sessionId the new session's id
-	 * @param modes the session's modes and the current one, if the agent has modes
-	 * @param configOptions the session's config options (model, mode, ...) and their
-	 * current values, if the agent has any
-	 * @param meta reserved metadata
+	 * <p>
+	 * A minimal agent answers {@code new NewSessionResponse(id, null, null)}. An annotated agent
+	 * without a {@link com.agentclientprotocol.sdk.annotation.NewSession @NewSession} method
+	 * answers with a random UUID as the id.
+	 *
+	 * @param sessionId the id of the new ACP session
+	 * @param modes the session's modes and the current one, or {@code null} if the agent has no
+	 * modes
+	 * @param configOptions the session's config options with their current values, or
+	 * {@code null} if the agent has none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NewSessionResponse(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without config options or {@code _meta}.
+		 * @param sessionId the id of the new ACP session
+		 * @param modes the session's modes, or {@code null}
+		 */
 		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes) {
 			this(sessionId, modes, null, null);
 		}
 
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param sessionId the id of the new ACP session
+		 * @param modes the session's modes, or {@code null}
+		 * @param configOptions the session's config options, or {@code null}
+		 */
 		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes,
 				@Nullable List<SessionConfigOption> configOptions) {
 			this(sessionId, modes, configOptions, null);
@@ -621,19 +923,47 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Prompt request - sends user message to agent
+	 * The params of {@code session/prompt}: one user message for an ACP session, which starts a
+	 * prompt turn. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#prompt AcpSyncClient.prompt} or the
+	 * {@code AcpAsyncClient} method of the same name. The agent's prompt handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.PromptHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt} method) receives it with a
+	 * prompt context, streams session updates, and answers with a {@link PromptResponse}.
+	 *
+	 * <p>
+	 * An ACP session has at most one prompt turn at a time. A second prompt on the same session
+	 * is refused with {@code -32600} (Invalid Request) until the first one has been answered,
+	 * even after a {@code session/cancel}. The protocol requires every agent to accept
+	 * {@link TextContent} and {@link ResourceLink} blocks; other block types only when the
+	 * agent's {@link PromptCapabilities} allow them.
+	 *
+	 * <pre>{@code
+	 * AcpSchema.PromptResponse response = client.prompt(new AcpSchema.PromptRequest(sessionId,
+	 *         List.of(new AcpSchema.TextContent("Explain this stack trace"))));
+	 * }</pre>
+	 *
+	 * @param sessionId the ACP session to prompt, from {@link NewSessionResponse#sessionId()}
+	 * @param prompt the content blocks of the user's message
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("prompt") List<ContentBlock> prompt,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to prompt
+		 * @param prompt the content blocks of the user's message
+		 */
 		public PromptRequest(String sessionId, List<ContentBlock> prompt) {
 			this(sessionId, prompt, null);
 		}
 
 		/**
-		 * Returns the text of the first {@link TextContent} block in the prompt, or an empty
-		 * string if no text content is present.
+		 * Returns the text of the first {@link TextContent} block, a shortcut for prompt handlers
+		 * that only read plain text. Other blocks, and any later text blocks, are ignored.
+		 * @return the first text block's text, or an empty string when the prompt has no text block
 		 */
 		public String text() {
 			// Required by the schema, but Jackson does not enforce it: a peer can omit it.
@@ -649,37 +979,45 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Prompt response - indicates why agent stopped
+	 * The result of {@code session/prompt}: why the agent ended the prompt turn. The agent's
+	 * prompt handler returns it after the turn's last session update. The client's
+	 * {@code prompt(...)} completes with it, and only after the client has handled every session
+	 * update the agent sent before it.
+	 *
+	 * <p>
+	 * The stop reason is an open value, so compare it with {@code equals}. A prompt can also end
+	 * with an error instead, which fails the client's call with an {@link AcpError}: for example
+	 * {@code -32800} when the agent's {@code maxPromptDuration} passes. After a
+	 * {@code session/cancel} the agent must answer {@link StopReason#CANCELLED}; if the prompt
+	 * handler of an agent built with this SDK has not answered when the cancel grace period
+	 * passes, the SDK answers that itself (see {@link PromptTimeouts}).
+	 *
+	 * @param stopReason why the turn ended
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptResponse(@JsonProperty("stopReason") StopReason stopReason,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param stopReason why the turn ended
+		 */
 		public PromptResponse(StopReason stopReason) {
 			this(stopReason, null);
 		}
 
 		/**
-		 * Creates a response indicating the agent has finished its turn.
-		 * @return A PromptResponse with END_TURN stop reason
+		 * Returns a response with stop reason {@link StopReason#END_TURN}: the turn ended normally.
+		 * @return a response that ends the turn
 		 */
 		public static PromptResponse endTurn() {
 			return new PromptResponse(StopReason.END_TURN);
 		}
 
 		/**
-		 * Creates a response indicating the agent has finished its turn with a text result.
-		 * Note: The text content should be sent via the context before returning this response.
-		 * @param text The text (for documentation purposes; actual content sent via context)
-		 * @return A PromptResponse with END_TURN stop reason
-		 */
-		public static PromptResponse text(String text) {
-			// Text content should be sent via context.sendMessage() before returning
-			return new PromptResponse(StopReason.END_TURN);
-		}
-
-		/**
-		 * Creates a response indicating the agent refused the request.
-		 * @return A PromptResponse with REFUSAL stop reason
+		 * Returns a response with stop reason {@link StopReason#REFUSAL}: the agent refused to
+		 * continue.
+		 * @return a response that ends the turn as refused
 		 */
 		public static PromptResponse refusal() {
 			return new PromptResponse(StopReason.REFUSAL);
@@ -709,26 +1047,60 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Cancel notification - cancels ongoing operations
+	 * The params of {@code session/cancel}: asks the agent to end the session's current prompt
+	 * turn. A client sends it with {@code cancel(...)} on {@code AcpAsyncClient} or
+	 * {@code AcpSyncClient}. The agent's cancel handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.CancelHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.Cancel @Cancel} method) receives it. It is a
+	 * notification, so it gets no answer of its own.
+	 *
+	 * <p>
+	 * The cancel does not end the turn; the cancelled prompt's answer does. The agent may still
+	 * send session updates, and then answers the prompt with {@link StopReason#CANCELLED}. Until
+	 * that answer, a new prompt on the session is refused. If the prompt handler has not answered
+	 * when the cancel grace period passes (60 seconds by default), the SDK cancels the handler
+	 * and answers {@code cancelled} itself (see {@link PromptTimeouts}). To cancel any other
+	 * request, the SDK uses {@link CancelRequestNotification}.
+	 *
+	 * @param sessionId the ACP session whose prompt turn to cancel
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CancelNotification(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a notification without {@code _meta}.
+		 * @param sessionId the ACP session whose prompt turn to cancel
+		 */
 		public CancelNotification(String sessionId) {
 			this(sessionId, null);
 		}
 	}
 
 	/**
-	 * Cancel request notification ({@code $/cancel_request}) - cancels a request its sender
-	 * sent earlier. The receiver still answers that request, with its result or with the
-	 * error {@code -32800} (Request cancelled).
+	 * The params of {@code $/cancel_request}: cancels one request its sender sent earlier, in
+	 * either direction. The SDK sends it when a caller gives up on a request: the request's
+	 * {@code Mono} is cancelled, its request timeout passes, or a
+	 * {@link RequestCancellation#cancelWhen} trigger fires. The receiving SDK handles it itself
+	 * and cancels the request's handler; no application handler sees it.
+	 *
+	 * <p>
+	 * The receiver still answers the cancelled request: with its result, if the handler finished
+	 * first, and otherwise with the error {@code -32800} (Request cancelled). A
+	 * {@code session/prompt} already cancelled with a {@link CancelNotification} answers
+	 * {@link StopReason#CANCELLED} instead. A {@code $/cancel_request} whose id is missing, or is
+	 * not a string or an integer, is logged and ignored.
+	 *
 	 * @param requestId the id of the request to cancel: a string or an integer
-	 * @param meta extension metadata
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CancelRequestNotification(@JsonProperty("requestId") Object requestId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a notification without {@code _meta}.
+		 * @param requestId the id of the request to cancel
+		 */
 		public CancelRequestNotification(Object requestId) {
 			this(requestId, null);
 		}
@@ -3180,40 +3552,62 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Why the agent ended a prompt turn ({@code PromptResponse.stopReason}). An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * Why the agent ended a prompt turn: the {@link PromptResponse#stopReason()} of every
+	 * answered {@code session/prompt}. Agents answer with one of the constants; clients compare
+	 * the value they receive with {@code equals}, or switch on {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message (see
+	 * {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a known
+	 * wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "end_turn"}
 	 */
 	public record StopReason(@JsonValue String value) {
 
-		/** {@code "end_turn"}. */
+		/** {@code "end_turn"}: the turn ended normally. */
 		public static final StopReason END_TURN = new StopReason("end_turn");
 
-		/** {@code "max_tokens"}. */
+		/** {@code "max_tokens"}: the agent reached its maximum number of tokens. */
 		public static final StopReason MAX_TOKENS = new StopReason("max_tokens");
 
-		/** {@code "max_turn_requests"}. */
+		/**
+		 * {@code "max_turn_requests"}: the agent reached the maximum number of agent requests it
+		 * allows between user turns.
+		 */
 		public static final StopReason MAX_TURN_REQUESTS = new StopReason("max_turn_requests");
 
-		/** {@code "refusal"}. */
+		/**
+		 * {@code "refusal"}: the agent refused to continue. The refused prompt and everything after
+		 * it will not be part of the next prompt, and a client should show this to the user.
+		 */
 		public static final StopReason REFUSAL = new StopReason("refusal");
 
-		/** {@code "cancelled"}. */
+		/**
+		 * {@code "cancelled"}: the client cancelled the turn with {@code session/cancel}. An agent
+		 * must answer with this after a cancel, even when the cancel made its work fail.
+		 */
 		public static final StopReason CANCELLED = new StopReason("cancelled");
 
 		private static final List<StopReason> KNOWN = List.of(END_TURN, MAX_TOKENS, MAX_TURN_REQUESTS, REFUSAL, CANCELLED);
 
+		/**
+		 * Creates a stop reason for a wire value. Prefer {@link #of}, which returns the constant
+		 * for a known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public StopReason {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns the stop reason for a wire value: the constant when ACP v1 defines the value, and
+		 * otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static StopReason of(String value) {
@@ -3221,21 +3615,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<StopReason> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code end_turn}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -3583,16 +3981,35 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Metadata about an implementation (client or agent).
+	 * The name and version of a client or agent, exchanged at {@code initialize}: the client
+	 * sends its own as {@link InitializeRequest#clientInfo()}, and the agent answers with
+	 * {@link InitializeResponse#agentInfo()}. Use it for display, logs and metrics; the protocol
+	 * attaches no behaviour to it.
+	 *
+	 * @param name the name for programs, also shown when there is no title
+	 * @param version the version, such as {@code "1.0.0"}
+	 * @param title a human-readable name for user interfaces, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Implementation(@JsonProperty("name") String name, @JsonProperty("version") String version,
 			@JsonProperty("title") @Nullable String title,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates an implementation without {@code _meta}.
+		 * @param name the name for programs
+		 * @param version the version
+		 * @param title a human-readable name, or {@code null}
+		 */
 		public Implementation(String name, String version, @Nullable String title) {
 			this(name, version, title, null);
 		}
 
+		/**
+		 * Creates an implementation without a title or {@code _meta}.
+		 * @param name the name for programs
+		 * @param version the version
+		 */
 		public Implementation(String name, String version) {
 			this(name, version, null);
 		}

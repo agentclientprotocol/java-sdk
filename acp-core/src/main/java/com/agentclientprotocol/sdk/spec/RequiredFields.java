@@ -12,9 +12,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Finds a required field missing from inbound params. A schema record's component without
- * {@code @Nullable} is one the ACP schema lists as {@code required}; Jackson reads an absent
- * one as null, which a handler would only find when it fails on it. Only the schema's records
+ * Finds a required field missing from inbound params or from a response's result. A schema
+ * record's component without {@code @Nullable} is one the ACP schema lists as
+ * {@code required}; Jackson reads an absent one as null, which a handler or caller would only
+ * find when it fails on it. Only the schema's records
  * ({@link AcpSchema}) are checked: an application's own record, such as an extension method's
  * params, has no schema behind it, and its nullness is its own business.
  */

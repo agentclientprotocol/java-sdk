@@ -11,28 +11,27 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for logout requests.
+ * Marks the {@link AcpAgent} method that answers {@code logout}: the client asks the agent to end
+ * the current login, and the method clears the credentials the agent stored for it. Declare one,
+ * together with an {@link Authenticate} method, when users can log out from the client. Without a
+ * {@code @Logout} method the agent answers {@code logout} with "Method not found"
+ * ({@code -32601}).
  *
- * <p>The annotated method handles the {@code logout} JSON-RPC method, which is
- * called when a client wants to clear stored credentials and terminate the
- * current authenticated session.
+ * <p>ACP lets a client call {@code logout} only when the agent advertised it: return
+ * {@code AgentCapabilities} whose {@code auth} is {@code AgentAuthCapabilities.withLogout()} from
+ * your {@link Initialize} method.
  *
- * <p>The method can have the following parameter (optional):
- * <ul>
- *   <li>{@code LogoutRequest} - the logout request</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code LogoutResponse} - the logout response</li>
- *   <li>{@code Mono<LogoutResponse>} - for async handling</li>
- * </ul>
+ * <p>The method can take a {@code LogoutRequest} and the connection parameters (see
+ * {@link AcpAgent}). It must return a {@code LogoutResponse} (not {@code void}), or a
+ * {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
+ * private final AtomicReference<String> token = new AtomicReference<>();
+ *
  * @Logout
- * public LogoutResponse logout(LogoutRequest req) {
- *     // Clear stored credentials
+ * public LogoutResponse logout(LogoutRequest request) {
+ *     token.set(null);
  *     return new LogoutResponse();
  * }
  * }</pre>
@@ -40,6 +39,7 @@ import java.lang.annotation.Target;
  * @author Mark Pollack
  * @since 1.0.0
  * @see AcpAgent
+ * @see Authenticate
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

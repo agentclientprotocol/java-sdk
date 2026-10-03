@@ -478,6 +478,32 @@ class AcpAgentSessionTest {
 		}
 	}
 
+	/** A client's {@code {}} must not read as file content whose required content is null. */
+	@Test
+	void aResultWithoutARequiredFieldFailsTheRequest() throws Exception {
+		var transportPair = InMemoryTransportPair.create();
+		try {
+			var session = new AcpAgentSession(TIMEOUT, transportPair.agentTransport(), Map.of(), Map.of());
+			allowAgentTransportSubscription();
+			answerEveryRequestWith(transportPair, Map.of());
+
+			Mono<AcpSchema.ReadTextFileResponse> response = session.sendRequest(AcpSchema.METHOD_FS_READ_TEXT_FILE,
+					new AcpSchema.ReadTextFileRequest("s", "/f", null, null),
+					new TypeRef<AcpSchema.ReadTextFileResponse>() {
+					});
+
+			StepVerifier.create(response)
+				.expectErrorSatisfies(error -> assertThat(error)
+					.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+							e -> assertThat(e.getCode()).isEqualTo(-32603))
+					.hasMessageContaining("The response to fs/read_text_file lacks the required field content"))
+				.verify(TIMEOUT);
+		}
+		finally {
+			transportPair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
 	@Test
 	void nullResultForAnExtensionMethodCompletesEmpty() throws Exception {
 		// An extension method's result is free-form, and null is a legal value of it.
@@ -499,11 +525,16 @@ class AcpAgentSessionTest {
 
 	private static void answerEveryRequestWithNullResult(InMemoryTransportPair transportPair)
 			throws InterruptedException {
+		answerEveryRequestWith(transportPair, null);
+	}
+
+	private static void answerEveryRequestWith(InMemoryTransportPair transportPair, Object result)
+			throws InterruptedException {
 		var clientTransport = transportPair.clientTransport();
 		clientTransport.connect(mono -> mono.flatMap(msg -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				return clientTransport
-					.sendMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null))
+					.sendMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null))
 					.then(Mono.<AcpSchema.JSONRPCMessage>empty());
 			}
 			return Mono.<AcpSchema.JSONRPCMessage>empty();

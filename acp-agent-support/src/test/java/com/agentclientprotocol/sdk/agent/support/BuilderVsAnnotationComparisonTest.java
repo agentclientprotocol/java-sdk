@@ -208,7 +208,8 @@ class BuilderVsAnnotationComparisonTest {
 						ctx.writeFile("/test/output.txt", "processed: " + content);
 						writtenContent.set("processed: " + content);
 
-						return PromptResponse.text("Done");
+						ctx.sendMessage("Done");
+						return PromptResponse.endTurn();
 					})
 					.build();
 
@@ -269,7 +270,8 @@ class BuilderVsAnnotationComparisonTest {
 					ctx.writeFile("/test/output.txt", "processed: " + content);
 					writtenContent.set("processed: " + content);
 
-					return PromptResponse.text("Done");
+					ctx.sendMessage("Done");
+					return PromptResponse.endTurn();
 				}
 			}
 
@@ -333,7 +335,8 @@ class BuilderVsAnnotationComparisonTest {
 						var result = ctx.execute("echo", "hello");
 						executedCommand.set("echo hello");
 						exitCode.set(result.exitCode());
-						return PromptResponse.text("Exit code: " + result.exitCode());
+						ctx.sendMessage("Exit code: " + result.exitCode());
+						return PromptResponse.endTurn();
 					})
 					.build();
 
@@ -395,7 +398,8 @@ class BuilderVsAnnotationComparisonTest {
 					var result = ctx.execute("echo", "hello");
 					executedCommand.set("echo hello");
 					exitCode.set(result.exitCode());
-					return PromptResponse.text("Exit code: " + result.exitCode());
+					ctx.sendMessage("Exit code: " + result.exitCode());
+					return PromptResponse.endTurn();
 				}
 			}
 

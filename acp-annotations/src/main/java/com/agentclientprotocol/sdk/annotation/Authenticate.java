@@ -11,31 +11,29 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as the handler for authenticate requests.
+ * Marks the {@link AcpAgent} method that answers {@code authenticate}: the client logs in with one
+ * of the authentication methods the agent listed ({@code authMethods}) in its {@code initialize}
+ * response, and the method checks the login. Declare one when the user must log in before the
+ * agent can work. Without an {@code @Authenticate} method the agent answers {@code authenticate}
+ * with "Method not found" ({@code -32601}).
  *
- * <p>The annotated method handles the {@code authenticate} JSON-RPC method, which a
- * client calls with one of the authentication methods the agent advertised in its
- * initialize response ({@code authMethods}).
+ * <p>The SDK does not track whether a client has logged in. A handler method that needs a login,
+ * such as a {@link NewSession} method, checks for one itself and, when there is none, throws an
+ * {@code AcpProtocolException} with {@code AcpErrorCodes.AUTHENTICATION_REQUIRED}
+ * ({@code -32000}). This method throws the same exception to reject a failed login.
  *
- * <p>The method can have the following parameter (optional):
- * <ul>
- *   <li>{@code AuthenticateRequest} - the authenticate request, carrying the chosen
- *   {@code methodId}</li>
- * </ul>
- *
- * <p>The method should return one of:
- * <ul>
- *   <li>{@code AuthenticateResponse} - the authenticate response</li>
- *   <li>{@code Mono<AuthenticateResponse>} - for async handling</li>
- * </ul>
- * To reject the attempt, throw an {@code AcpProtocolException}, such as one with code
- * {@code AcpErrorCodes.AUTHENTICATION_REQUIRED}.
+ * <p>The method can take an {@code AuthenticateRequest}, which carries the chosen
+ * {@code methodId}, and the connection parameters (see {@link AcpAgent}). It returns an
+ * {@code AuthenticateResponse}, or a {@code Mono} of one.
  *
  * <p>Example usage:
  * <pre>{@code
  * @Authenticate
- * public AuthenticateResponse authenticate(AuthenticateRequest req) {
- *     credentials.login(req.methodId());
+ * public AuthenticateResponse authenticate(AuthenticateRequest request) {
+ *     if (System.getenv("EXAMPLE_API_KEY") == null) {
+ *         throw new AcpProtocolException(AcpErrorCodes.AUTHENTICATION_REQUIRED,
+ *                 "Set EXAMPLE_API_KEY and log in again");
+ *     }
  *     return new AuthenticateResponse();
  * }
  * }</pre>

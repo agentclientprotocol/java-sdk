@@ -6,70 +6,57 @@ package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
 
 /**
- * A synchronous client implementation for the Agent Client Protocol (ACP) that wraps an
- * {@link AcpAsyncClient} to provide blocking operations.
+ * A connected ACP client with blocking calls: the calls of {@link AcpAsyncClient}, each waiting for
+ * the agent's answer, while the handlers registered on {@link AcpClient.SyncSpec} answer the
+ * agent's requests. Get one from {@code AcpClient.sync(transport)...build()}. Use it in plain Java
+ * code; it is {@link AutoCloseable}, so try-with-resources closes the connection.
  *
- * <p>
- * This client implements the ACP specification by delegating to an asynchronous client
- * and blocking on the results. Key features include:
- * <ul>
- * <li>Synchronous, blocking API for simpler integration in non-reactive applications</li>
- * <li>Initialize handshake and capability negotiation</li>
- * <li>Session creation and management</li>
- * <li>Prompt submission with streaming updates</li>
- * <li>Authentication support for agents requiring it</li>
- * </ul>
+ * <p>A client follows ACP's order: {@link #initialize()} first, {@link #authenticate} if the agent
+ * requires it, then {@link #newSession}, {@link #loadSession} or {@link #resumeSession} for a
+ * session ID, then {@link #prompt} as often as needed, one turn at a time per session.
  *
- * <p>
- * The client follows the same lifecycle as its async counterpart:
- * <ol>
- * <li>Initialization - Establishes connection and negotiates protocol version</li>
- * <li>Authentication - Optional authentication step</li>
- * <li>Session Creation - Creates a new agent session with working directory</li>
- * <li>Prompt Interaction - Sends prompts and receives responses</li>
- * <li>Graceful Shutdown - Ensures clean connection termination</li>
- * </ol>
- *
- * <p>
- * This implementation implements {@link AutoCloseable} for resource cleanup and provides
- * both immediate and graceful shutdown options. All operations block until completion or
- * timeout, making it suitable for traditional synchronous programming models.
- *
- * <p>
- * Example usage: <pre>{@code
- * try (AcpSyncClient client = AcpClient.sync(transport).build()) {
- *     // Initialize: sends the capabilities and client info set on the builder
- *     AcpSchema.InitializeResponse initResponse = client.initialize();
- *
- *     // Create session
- *     AcpSchema.NewSessionResponse sessionResponse = client.newSession(
+ * <pre>{@code
+ * try (AcpSyncClient client = AcpClient.sync(transport)
+ *         .requestTimeout(Duration.ofMinutes(5))
+ *         .build()) {
+ *     client.initialize();
+ *     AcpSchema.NewSessionResponse session = client.newSession(
  *         new AcpSchema.NewSessionRequest("/workspace", List.of()));
- *
- *     // Send prompt
- *     AcpSchema.PromptResponse response = client.prompt(
- *         new AcpSchema.PromptRequest(sessionResponse.sessionId(),
- *             List.of(new AcpSchema.TextContent("Fix the bug"))));
- *
+ *     AcpSchema.PromptResponse response = client.prompt(new AcpSchema.PromptRequest(
+ *         session.sessionId(), List.of(new AcpSchema.TextContent("Fix the bug"))));
  *     System.out.println("Stop reason: " + response.stopReason());
  * }
  * }</pre>
+ *
+ * <p>A call blocks until the answer arrives; it has no time limit of its own beyond the builder's
+ * request timeout (30 seconds by default). Failures are thrown:
+ * {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer, whose {@code getCode()} is
+ * the JSON-RPC error code; a {@link RuntimeException} whose cause is a
+ * {@link java.util.concurrent.TimeoutException} when no answer came in time, after the client has
+ * sent the agent a {@code $/cancel_request}; and {@link IllegalArgumentException} for a null
+ * argument. The client does not check the agent's capabilities before a call; see
+ * {@link #getAgentCapabilities()}. Methods may be called from several threads at once, but not from
+ * a thread that must not block, and not from a session update consumer waiting for a prompt in
+ * flight (see {@link #prompt}).
  *
  * @author Mark Pollack
  * @author Christian Tzolov
  * @see AcpClient
  * @see AcpAsyncClient
- * @see AcpSchema
  */
 public class AcpSyncClient implements AutoCloseable {
 
@@ -77,19 +64,19 @@ public class AcpSyncClient implements AutoCloseable {
 
 	private static final long DEFAULT_CLOSE_TIMEOUT_MS = 10_000L;
 
+	private static final Duration CLOSE_TIMEOUT = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
+
 	private final AcpAsyncClient delegate;
 
 	/**
-	 * Creates a synchronous facade over an existing asynchronous client.
+	 * Creates a blocking view of an existing asynchronous client.
 	 *
-	 * <p>
-	 * Both clients share the one session and the one transport connection behind
-	 * {@code delegate}: use this when an application needs both APIs, because a transport
-	 * instance carries exactly one session, and building a second client on an
-	 * already-connected transport fails. Closing either client closes the shared session.
-	 * </p>
-	 * @param delegate the asynchronous client on top of which this synchronous client
-	 * provides a blocking API
+	 * <p>Both clients share the one session and the one transport connection behind
+	 * {@code delegate}. Use this when an application needs both APIs: a transport carries exactly
+	 * one client, and building a second client on a connected transport fails. Closing either
+	 * client closes the shared session.
+	 * @param delegate the asynchronous client to block on
+	 * @throws IllegalArgumentException if {@code delegate} is null
 	 */
 	public AcpSyncClient(AcpAsyncClient delegate) {
 		Assert.notNull(delegate, "Delegate must not be null");
@@ -101,13 +88,8 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Closes the client connection and waits for shutdown to complete.
-	 *
-	 * <p>
-	 * This method blocks until the connection is closed or the timeout is reached.
-	 * For synchronous clients, this ensures resources are fully released when
-	 * try-with-resources completes.
-	 * </p>
+	 * Closes the client gracefully, as {@link #closeGracefully()} does, and waits at most 10
+	 * seconds. If that fails or takes longer, the failure is logged and nothing more is done.
 	 */
 	@Override
 	public void close() {
@@ -116,16 +98,27 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Gracefully closes the client connection with a default timeout.
-	 * @return true if the client closed gracefully, false if it timed out
+	 * Closes the client as {@link AcpAsyncClient#closeGracefully()} does, and waits at most 10
+	 * seconds: requests still waiting for an answer fail at once, session updates already received
+	 * are still handed to the consumers, and then the transport closes gracefully.
+	 * @return {@code true} if the client closed; {@code false} if closing failed or took longer
+	 * than 10 seconds, which is logged
 	 */
 	public boolean closeGracefully() {
 		try {
 			logger.debug("Gracefully closing ACP sync client");
-			this.delegate.closeGracefully().block(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+			this.delegate.closeGracefully()
+				.timeout(CLOSE_TIMEOUT, AcpSchedulers.timeouts())
+				.block();
 		}
 		catch (RuntimeException e) {
-			logger.warn("Client didn't close within timeout of {} ms", DEFAULT_CLOSE_TIMEOUT_MS, e);
+			Throwable cause = Exceptions.unwrap(e);
+			if (cause instanceof TimeoutException) {
+				logger.warn("Client didn't close within timeout of {} ms", DEFAULT_CLOSE_TIMEOUT_MS);
+			}
+			else {
+				logger.warn("Client close failed: {}", cause.toString(), cause);
+			}
 			return false;
 		}
 		return true;
@@ -136,19 +129,19 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Initializes the connection with the agent: the first step in the ACP lifecycle. The
-	 * client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
+	 * Initializes the connection: the first request of the ACP lifecycle, sent once before any
+	 * other. The client sends protocol version {@value AcpSchema#LATEST_PROTOCOL_VERSION} with the
 	 * capabilities and client info set on the builder
-	 * ({@link AcpClient.SyncSpec#clientCapabilities}, {@link AcpClient.SyncSpec#clientInfo});
-	 * the agent answers with its protocol version, capabilities and authentication methods.
+	 * ({@link AcpClient.SyncSpec#clientCapabilities}, {@link AcpClient.SyncSpec#clientInfo}); the
+	 * agent answers with its protocol version, capabilities and authentication methods, and
+	 * {@link #getAgentCapabilities()} returns those capabilities from then on. The client does not
+	 * check the protocol version the agent answers with.
 	 *
-	 * <p>
-	 * The builder is the only place the client's capabilities are set, so what the client
-	 * advertises is also what its handlers honour. Without {@code clientCapabilities(...)}
-	 * the client advertises {@code new ClientCapabilities()}: no file system access and no
-	 * terminal.
-	 * </p>
-	 * @return the initialization response with agent capabilities
+	 * <p>The builder is the only place the client's capabilities are set, so what the client
+	 * advertises is also what its handlers honour (an elicitation mode it did not advertise is
+	 * refused). Without {@code clientCapabilities(...)} the client advertises
+	 * {@code new ClientCapabilities()}: no file system and no terminal.
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_INITIALIZE
 	 * @see #initialize(int, Map)
 	 */
@@ -157,14 +150,14 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Initializes the connection with the agent, like {@link #initialize()}, with a chosen
-	 * protocol version and {@code _meta}. The capabilities and client info still come
-	 * from the builder; this overload exists for {@code _meta} and for testing version
-	 * negotiation, not for advertising capabilities.
+	 * Initializes the connection like {@link #initialize()}, with a chosen protocol version and
+	 * {@code _meta}. The capabilities and client info still come from the builder; this overload
+	 * exists for {@code _meta} and for testing version negotiation, not for advertising
+	 * capabilities.
 	 * @param protocolVersion the protocol version to announce; this SDK speaks
 	 * {@value AcpSchema#LATEST_PROTOCOL_VERSION}
 	 * @param meta the request's {@code _meta}, or {@code null}
-	 * @return the initialization response with agent capabilities
+	 * @return the agent's answer
 	 * @see #initialize()
 	 */
 	public AcpSchema.InitializeResponse initialize(int protocolVersion, @Nullable Map<String, Object> meta) {
@@ -172,12 +165,11 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Returns the capabilities negotiated with the agent during initialization.
-	 *
-	 * <p>
-	 * This method returns null if {@link #initialize} has not been called yet.
-	 * </p>
-	 * @return the negotiated agent capabilities, or null if not initialized
+	 * Returns the agent's capabilities from its {@code initialize} answer. Check them before calls
+	 * that need them, for example {@code supportsLoadSession()} before {@link #loadSession} or
+	 * {@code supportsLogout()} before {@link #logout}: the client sends every call without
+	 * checking.
+	 * @return the agent's capabilities, or {@code null} before an {@code initialize} answer arrived
 	 */
 	public com.agentclientprotocol.sdk.capabilities.@Nullable NegotiatedCapabilities getAgentCapabilities() {
 		return this.delegate.getAgentCapabilities();
@@ -188,15 +180,11 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Authenticates with the agent using the specified authentication method.
-	 *
-	 * <p>
-	 * Authentication is optional and depends on the agent's configuration. The
-	 * authentication methods available are returned in the initialize response.
-	 * </p>
-	 * @param authenticateRequest the authentication request specifying the auth method
-	 * and credentials
-	 * @return the authentication response
+	 * Logs in with one of the authentication methods the agent listed in its {@code initialize}
+	 * answer ({@code authenticate}). Needed only for an agent that requires it; such an agent
+	 * answers other requests with {@code -32000} (authentication required) until then.
+	 * @param authenticateRequest the ID of the chosen authentication method
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE
 	 */
 	public AcpSchema.AuthenticateResponse authenticate(AcpSchema.AuthenticateRequest authenticateRequest) {
@@ -204,9 +192,13 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Logs out of the agent, clearing any stored credentials.
+	 * Logs out of the agent ({@code logout}), ending the authenticated state; afterwards the client
+	 * must authenticate again where the agent requires it. Only an agent that advertises
+	 * {@code auth.logout} supports it: check
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}
+	 * first, since the client does not.
 	 * @param logoutRequest the logout request
-	 * @return the logout response
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_LOGOUT
 	 */
 	public AcpSchema.LogoutResponse logout(AcpSchema.LogoutRequest logoutRequest) {
@@ -218,15 +210,11 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Creates a new agent session with the specified working directory.
-	 *
-	 * <p>
-	 * A session represents a conversation context with the agent. All prompts within a
-	 * session share the same working directory and conversation history.
-	 * </p>
-	 * @param newSessionRequest the session creation request with working directory and
-	 * initial context
-	 * @return the session response containing the session ID
+	 * Creates an ACP session ({@code session/new}) for a working directory, with the MCP servers
+	 * the agent should connect to. The answer carries the session ID every later call for the
+	 * session uses, and optionally the session's modes and config options.
+	 * @param newSessionRequest the working directory, an absolute path, and the MCP servers
+	 * @return the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
 	 */
 	public AcpSchema.NewSessionResponse newSession(AcpSchema.NewSessionRequest newSessionRequest) {
@@ -234,14 +222,12 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Loads an existing agent session by ID.
-	 *
-	 * <p>
-	 * This allows resuming a previous conversation with the agent, maintaining the full
-	 * history and context.
-	 * </p>
-	 * @param loadSessionRequest the session load request with session ID
-	 * @return the load response confirming the session was loaded
+	 * Reopens a session the agent kept ({@code session/load}). The agent replays the conversation
+	 * as session updates, which reach the session update consumers before this call completes, then
+	 * answers. Only an agent that advertises {@code loadSession} supports it; the client does not
+	 * check.
+	 * @param loadSessionRequest the session ID, the working directory and the MCP servers
+	 * @return the agent's answer, once the history has been replayed
 	 * @see AcpSchema#METHOD_SESSION_LOAD
 	 */
 	public AcpSchema.LoadSessionResponse loadSession(AcpSchema.LoadSessionRequest loadSessionRequest) {
@@ -249,14 +235,10 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sets the operational mode for a session (e.g., "code", "plan", "review").
-	 *
-	 * <p>
-	 * Different modes may change how the agent processes prompts and what capabilities it
-	 * exposes.
-	 * </p>
-	 * @param setModeRequest the set mode request with session ID and desired mode
-	 * @return the response confirming the mode change
+	 * Switches a session to one of the modes the agent offered ({@code session/set_mode}). Modes
+	 * may change how the agent works on prompts and what it asks permission for.
+	 * @param setModeRequest the session ID and the mode ID
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_SET_MODE
 	 */
 	public AcpSchema.SetSessionModeResponse setSessionMode(AcpSchema.SetSessionModeRequest setModeRequest) {
@@ -264,9 +246,11 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Lists sessions known to the agent, optionally filtered by working directory.
-	 * @param listSessionsRequest the list sessions request with optional cwd filter and cursor
-	 * @return the list sessions response
+	 * Lists the sessions the agent knows ({@code session/list}), optionally only those of one
+	 * working directory. The answer may be one page: pass its {@code nextCursor} in the next
+	 * request to get the next page.
+	 * @param listSessionsRequest an optional working directory and an optional cursor
+	 * @return a page of sessions
 	 * @see AcpSchema#METHOD_SESSION_LIST
 	 */
 	public AcpSchema.ListSessionsResponse listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
@@ -274,9 +258,10 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Closes an active session, cancelling any in-flight work.
-	 * @param closeSessionRequest the close session request with session ID
-	 * @return the close session response
+	 * Closes an active session ({@code session/close}): the agent stops its work as for
+	 * {@code session/cancel}, then frees what the session holds.
+	 * @param closeSessionRequest the session ID
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_CLOSE
 	 */
 	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
@@ -284,9 +269,12 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Permanently deletes a stored session.
-	 * @param deleteSessionRequest the delete session request with session ID
-	 * @return the delete session response
+	 * Deletes a stored session ({@code session/delete}). Unlike {@link #closeSession}, which frees
+	 * an active session, it removes the session from the agent's storage, so that it no longer
+	 * appears in {@code session/list}. Only an agent that advertises
+	 * {@code sessionCapabilities.delete} supports it; the client does not check.
+	 * @param deleteSessionRequest the session ID
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_DELETE
 	 */
 	public AcpSchema.DeleteSessionResponse deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
@@ -294,9 +282,11 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Resumes an existing session without replaying conversation history.
-	 * @param resumeSessionRequest the resume session request with session ID and cwd
-	 * @return the resume session response
+	 * Reopens a session without replaying its history ({@code session/resume}), unlike
+	 * {@link #loadSession}. Use it to reconnect to a session the agent still runs, or when the
+	 * client keeps the history itself.
+	 * @param resumeSessionRequest the session ID, the working directory and the MCP servers
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_RESUME
 	 */
 	public AcpSchema.ResumeSessionResponse resumeSession(AcpSchema.ResumeSessionRequest resumeSessionRequest) {
@@ -304,9 +294,9 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Forks an existing session, creating a new session branched from it.
-	 * @param forkSessionRequest the fork request with source session ID and cwd
-	 * @return the fork response with the new session ID
+	 * Creates a new session branched from an existing one ({@code session/fork}).
+	 * @param forkSessionRequest the ID of the session to branch from and the working directory
+	 * @return the agent's answer, with the new session's ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
 	@UnstableAcpApi
@@ -315,9 +305,13 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sets a configuration option for a session.
-	 * @param request the config option request with session ID, config ID, and value
-	 * @return the response with the full config state
+	 * Changes one of a session's config options ({@code session/set_config_option}); make the
+	 * request with {@link AcpSchema.SetSessionConfigOptionRequest#select} or
+	 * {@link AcpSchema.SetSessionConfigOptionRequest#bool}. The answer carries the full list of the
+	 * session's options, which replaces the client's copy. Send a boolean option only to an agent
+	 * that offered it.
+	 * @param request the session ID, the option ID and the new value
+	 * @return the agent's answer, with all of the session's options
 	 * @see AcpSchema#METHOD_SESSION_SET_CONFIG_OPTION
 	 */
 	public AcpSchema.SetSessionConfigOptionResponse setSessionConfigOption(
@@ -330,9 +324,10 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Lists the providers the agent can route to (UNSTABLE).
-	 * @param request the list providers request
-	 * @return the list of configurable providers
+	 * Lists the providers the agent can route to ({@code providers/list}). Only an agent that
+	 * advertises {@code providers} supports it.
+	 * @param request the list request
+	 * @return the providers
 	 * @see AcpSchema#METHOD_PROVIDERS_LIST
 	 */
 	@UnstableAcpApi
@@ -341,9 +336,10 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Configures a provider's routing (UNSTABLE).
-	 * @param request the set provider request
-	 * @return the response
+	 * Configures how the agent reaches a provider: protocol, base URL and headers
+	 * ({@code providers/set}).
+	 * @param request the provider ID and its routing
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_PROVIDERS_SET
 	 */
 	@UnstableAcpApi
@@ -352,9 +348,9 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Disables a provider by id (UNSTABLE).
-	 * @param request the disable provider request
-	 * @return the response
+	 * Disables a provider by ID ({@code providers/disable}).
+	 * @param request the provider ID
+	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_PROVIDERS_DISABLE
 	 */
 	@UnstableAcpApi
@@ -367,25 +363,24 @@ public class AcpSyncClient implements AutoCloseable {
 	// --------------------------
 
 	/**
-	 * Sends a prompt to the agent within a session.
+	 * Sends a prompt to a session ({@code session/prompt}) and returns the agent's answer at the
+	 * end of the turn, with the stop reason. Meanwhile the agent streams the turn as
+	 * {@code session/update} notifications to the session update consumers. A session takes one
+	 * prompt at a time: a Java agent answers a second prompt sent before the first is answered with
+	 * {@code -32600}.
 	 *
-	 * <p>
-	 * The prompt can contain text, images, or other content types. The agent processes
-	 * the prompt and may send streaming updates via session/update notifications before
-	 * returning the final response.
-	 * </p>
-	 * <p>
-	 * This method returns only once every session update consumer has finished with every
-	 * notification the agent sent before its prompt response, so what the consumers
-	 * collected for this turn is complete when the stop reason arrives. A consumer that is
-	 * slow delays the response, which still counts against the request timeout. The one
-	 * exception: a consumer that was already running when the prompt was sent, and is
-	 * still running when its response arrives, is not waited for, since it may be the one
-	 * waiting for the prompt. A consumer must therefore not wait for this prompt to
-	 * complete.
-	 * </p>
-	 * @param promptRequest the prompt request with session ID and content
-	 * @return the prompt response with stop reason
+	 * <p>The answer is delivered only once the session update consumers have finished with every
+	 * notification the agent sent before it, so what they collected for the turn is complete when
+	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
+	 * request timeout. The one exception: a consumer that was already running when the prompt was
+	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
+	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
+	 *
+	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
+	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
+	 * {@code requestTimeout} on the builder for long turns.
+	 * @param promptRequest the session ID and the prompt's content blocks
+	 * @return the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
 	 */
 	public AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest promptRequest) {
@@ -393,23 +388,17 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Cancels ongoing operations for a session.
+	 * Asks the agent to stop a session's prompt turn ({@code session/cancel}). It is a
+	 * notification: the agent does not answer it.
 	 *
-	 * <p>
-	 * This sends a notification to the agent to stop any in-progress work for the
-	 * specified session. Note that this is a notification (fire-and-forget), not a
-	 * request.
-	 * </p>
+	 * <p>The cancel does not end the turn. The agent may still send {@code session/update}s, which
+	 * reach the session update consumers as usual, and then answers the pending prompt with stop
+	 * reason {@code cancelled}. Send the next prompt on the session once that answer has arrived:
+	 * until then the agent refuses it (ACP v1, prompt turn, Cancellation).
 	 *
-	 * <p>
-	 * The cancel does not end the prompt turn. The agent may still send
-	 * {@code session/update}s, which reach the session update consumers as usual, and then
-	 * answers the pending {@code prompt} with stop reason {@code cancelled}. Send the next
-	 * prompt on the session once that answer has arrived: until then the agent rejects it
-	 * (ACP v1, prompt turn, Cancellation).
-	 * </p>
-	 * @param cancelNotification the cancel notification with session ID and optional
-	 * reason
+	 * <p>Returns once the notification has been handed to the transport, so it can be called from
+	 * another thread while {@link #prompt} blocks.
+	 * @param cancelNotification the session ID
 	 * @see AcpSchema#METHOD_SESSION_CANCEL
 	 */
 	public void cancel(AcpSchema.CancelNotification cancelNotification) {
@@ -417,13 +406,14 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sends a custom extension request ({@code _}-prefixed method name) to the agent and
-	 * blocks for its result, read as the given type.
+	 * Sends a custom extension request ({@code _}-prefixed method name) to the agent and blocks for
+	 * its result, read as the given type. An agent that does not handle the method answers "Method
+	 * not found" ({@code -32601}), thrown as {@link com.agentclientprotocol.sdk.spec.AcpError}.
 	 * @param <T> the result type
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
 	 * @param resultType the type the result is read as
-	 * @return the result, or null when the agent answers {@code "result": null}
+	 * @return the result, or {@code null} when the agent answers {@code "result": null}
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 * @see AcpAsyncClient#sendExtRequest(String, Object, TypeRef)
 	 */
@@ -432,11 +422,11 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sends a custom extension request to the agent and blocks for its result, as the
-	 * raw JSON value.
+	 * Sends a custom extension request to the agent and blocks for its result, as the raw JSON
+	 * value: a {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}.
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
-	 * @return the result, or null when the agent answers {@code "result": null}
+	 * @return the result, or {@code null} when the agent answers {@code "result": null}
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}
 	 * @see AcpAsyncClient#sendExtRequest(String, Object)
 	 */
@@ -445,8 +435,9 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
-	 * Sends a custom extension notification ({@code _}-prefixed method name) to the
-	 * agent.
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the agent and
+	 * returns once it has been handed to the transport. An agent without a handler for it ignores
+	 * it.
 	 * @param method the method name, which must start with {@code _}
 	 * @param params the params, any value the JSON mapper can write
 	 * @throws IllegalArgumentException if the method name does not start with {@code _}

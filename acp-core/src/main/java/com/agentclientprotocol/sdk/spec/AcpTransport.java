@@ -11,31 +11,25 @@ import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * Defines the asynchronous transport layer for the Agent Client Protocol (ACP).
+ * Moves ACP's JSON-RPC messages between this side of a connection and its peer. A transport
+ * carries one connection: it writes the messages the SDK sends and hands the SDK every
+ * message that arrives. An application chooses an implementation and passes it to a client or
+ * agent builder; after that it calls the transport at most to close it or to wait for its end.
  *
- * <p>
- * The AcpTransport interface provides the foundation for implementing custom transport
- * mechanisms in the Agent Client Protocol. It handles the bidirectional communication
- * between the client and agent components, supporting asynchronous message exchange using
- * JSON-RPC format.
- * </p>
+ * <p>Two interfaces extend it, one per side: {@link AcpClientTransport} for a client and
+ * {@link AcpAgentTransport} for an agent. The protocol session that the builder puts on top of
+ * the transport owns everything else JSON-RPC needs: request ids, pending responses, timeouts
+ * and handler dispatch.
  *
- * <p>
- * Implementations of this interface are responsible for:
- * </p>
- * <ul>
- * <li>Managing the lifecycle of the transport connection</li>
- * <li>Handling incoming messages and errors from the peer</li>
- * <li>Sending outbound messages to the peer</li>
- * </ul>
- *
- * <p>
- * The transport layer is designed to be protocol-agnostic, allowing for various
- * implementations such as STDIO, HTTP, SSE, or custom protocols.
- * </p>
+ * <p>Implementations must accept {@link #sendMessage} from several threads at once: the
+ * session answers the peer's requests on the thread that reads them while user threads send
+ * their own requests and notifications. {@link #unmarshalFrom} must report a value that does
+ * not fit the requested type with an {@link IllegalArgumentException}, which
+ * {@link #unmarshalParams} turns into an Invalid params error.
  *
  * @author Mark Pollack
  * @author Christian Tzolov
@@ -43,55 +37,64 @@ import reactor.core.publisher.Mono;
 public interface AcpTransport {
 
 	/**
-	 * Closes the transport connection and releases any associated resources.
-	 *
-	 * <p>
-	 * This method ensures proper cleanup of resources when the transport is no longer
-	 * needed. It should handle the graceful shutdown of any active connections.
-	 * </p>
+	 * Closes the transport without reporting the outcome; {@link #closeGracefully()} is the
+	 * variant to wait on. The interface's default subscribes to {@link #closeGracefully()}
+	 * and returns when that subscription returns: at once when the implementation closes
+	 * asynchronously, and only after the close when it does the work on the subscribing
+	 * thread. A failed close is logged at WARN by this interface's logger.
 	 */
 	default void close() {
-		this.closeGracefully().subscribe();
+		this.closeGracefully()
+			.subscribe(ignored -> {
+			}, error -> LoggerFactory.getLogger(AcpTransport.class)
+				.warn("Closing the transport failed: {}", error.toString(), error));
 	}
 
 	/**
-	 * Closes the transport connection and releases any associated resources
-	 * asynchronously.
-	 * @return a {@link Mono<Void>} that completes when the connection has been closed.
+	 * Closes the transport: stops reading from and writing to the peer, and releases the
+	 * threads, streams or network connections it holds. What it waits for differs per
+	 * implementation; the stdio client, for example, gives the agent process time to exit.
+	 * The shipped transports can be closed more than once, with this method and
+	 * {@link #close()} in either order: only the first call closes.
+	 * @return a Mono that completes when the transport is closed
 	 */
 	Mono<Void> closeGracefully();
 
 	/**
-	 * Sends a message to the peer asynchronously.
-	 *
-	 * <p>
-	 * This method handles the transmission of messages to the peer in an asynchronous
-	 * manner. Messages are sent in JSON-RPC format as specified by the ACP protocol.
-	 * </p>
-	 * @param message the {@link JSONRPCMessage} to be sent to the peer
-	 * @return a {@link Mono<Void>} that completes when the message has been sent
+	 * Sends one JSON-RPC message, a request, response or notification, to the peer. When the
+	 * returned Mono completes depends on the implementation: once the message is queued for
+	 * writing (stdio, WebSocket), or once the peer has accepted it (Streamable HTTP, which
+	 * posts it and waits for the HTTP answer).
+	 * @param message the message to send
+	 * @return a Mono that completes when the message has been handed on, or errors when it
+	 * cannot be sent
 	 */
 	Mono<Void> sendMessage(JSONRPCMessage message);
 
 	/**
-	 * Unmarshals the given data into an object of the specified type.
-	 * @param <T> the type of the object to unmarshal
-	 * @param data the data to unmarshal
-	 * @param typeRef the type reference for the object to unmarshal
-	 * @return the unmarshalled object
+	 * Converts a value read from JSON, such as a message's params or a response's result, to
+	 * the given type with this transport's JSON mapper.
+	 * @param <T> the type to convert to
+	 * @param data the value as read from JSON, usually a map
+	 * @param typeRef the type to convert to
+	 * @return the value as that type
+	 * @throws IllegalArgumentException if the value does not fit the type
 	 */
 	<T> T unmarshalFrom(Object data, TypeRef<T> typeRef);
 
 	/**
-	 * Reads the params of an inbound request or notification as the method's type. Params
-	 * the type cannot be read from (a value of the wrong JSON type, a required field
-	 * missing) are a JSON-RPC 2.0 -32602 Invalid params error (section 5.1), not an
-	 * internal error.
+	 * Reads the params of an inbound request or notification as the method's params type, and
+	 * checks that the {@link AcpSchema} records in them carry every field the ACP schema
+	 * requires. Params of the wrong shape are the peer's mistake, not an internal error: they
+	 * fail with JSON-RPC error -32602 (Invalid params), which the session sends back when they
+	 * belong to a request. An application's own params types, such as an extension method's,
+	 * are converted but not checked.
 	 * @param <T> the params type
 	 * @param params the params as received
 	 * @param typeRef the method's params type
 	 * @return the params as that type
-	 * @throws AcpProtocolException with code -32602 when they cannot be read as it
+	 * @throws AcpProtocolException if the params cannot be converted to the type or a required
+	 * field is missing; its code is {@link AcpErrorCodes#INVALID_PARAMS}
 	 */
 	default <T> T unmarshalParams(Object params, TypeRef<T> typeRef) {
 		T value;
@@ -118,8 +121,10 @@ public interface AcpTransport {
 	}
 
 	/**
-	 * Returns the list of protocol versions supported by this transport.
-	 * @return list of supported protocol versions
+	 * Returns the ACP protocol versions this transport supports. The SDK does not read it when
+	 * it negotiates a version: a client sends the version its {@code initialize} call names.
+	 * The interface's default returns only {@link AcpSchema#LATEST_PROTOCOL_VERSION}.
+	 * @return the supported protocol versions
 	 */
 	default List<Integer> protocolVersions() {
 		return List.of(AcpSchema.LATEST_PROTOCOL_VERSION);

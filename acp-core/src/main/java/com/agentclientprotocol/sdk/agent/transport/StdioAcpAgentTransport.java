@@ -41,61 +41,70 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Implementation of the ACP Stdio transport for agents that communicates with clients
- * using standard input/output streams. Messages are exchanged as newline-delimited JSON-RPC
- * messages over stdin/stdout, with errors and debug information sent to stderr.
+ * The agent side of the stdio transport: serves the one client that started this agent
+ * process, reading ACP messages as lines of JSON from standard input and writing them to
+ * standard output. Use it in an agent's {@code main} when a client such as an editor launches
+ * the agent; to serve clients over the network, use the {@code acp-streamable-http-jetty}
+ * module's {@code StreamableHttpAcpAgentTransport} instead. Pass it to
+ * {@link com.agentclientprotocol.sdk.agent.AcpAgent#sync(AcpAgentTransport)
+ * AcpAgent.sync(transport)} or
+ * {@link com.agentclientprotocol.sdk.agent.AcpAgent#async(AcpAgentTransport)
+ * AcpAgent.async(transport)}, or to the builder of an annotated agent
+ * ({@code AcpAgentSupport}), and run the agent:
  *
- * <p>
- * This is the agent-side counterpart to {@code StdioAcpClientTransport}. While the client
- * spawns an agent process and connects to its stdin/stdout, the agent transport reads from
- * the process's System.in and writes to System.out.
- * </p>
+ * <pre>{@code
+ * AcpSyncAgent agent = AcpAgent.sync(new StdioAcpAgentTransport())
+ *     .initializeHandler(request -> AcpSchema.InitializeResponse.ok())
+ *     .newSessionHandler(request ->
+ *         new AcpSchema.NewSessionResponse(UUID.randomUUID().toString(), null, null))
+ *     .promptHandler((request, context) -> {
+ *         context.sendMessage("Hello");
+ *         return AcpSchema.PromptResponse.endTurn();
+ *     })
+ *     .build();
+ * agent.run(); // returns once the client has closed standard input and every reply is written
+ * }</pre>
  *
- * <p>
- * Key features:
- * <ul>
- * <li>Thread-safe message processing with dedicated schedulers</li>
- * <li>Proper resource management and graceful shutdown</li>
- * <li>Backpressure support via Reactor Sinks</li>
- * </ul>
+ * <p>Standard output carries the protocol, so the agent must log to standard error: a single
+ * log line on standard output corrupts the stream. A line on standard input that is not a
+ * JSON-RPC message is reported to the exception handler, answered with a JSON-RPC error and
+ * skipped. The transport is thread-safe: messages may be sent from any thread, and are written
+ * one at a time. It reads and writes on two daemon threads of its own
+ * ({@code acp-agent-inbound} and {@code acp-agent-outbound}), so an agent's {@code main} must
+ * wait for {@link #awaitTermination()}, as {@code AcpSyncAgent.run()} does.
  *
- * <p>
- * <b>The end of standard input.</b> A client that closes the agent's standard input will
- * send nothing more, but may still read standard output until it ends (a script that writes
- * its requests and closes the pipe does). So the end of standard input is not a
- * cancellation: every request already received is still handled and answered, and the
- * notifications its handler sends are written, in the order they are sent. Requests the
- * agent sends to the client can no longer be answered: one waiting when the input ends fails
- * at once with a JSON-RPC error ({@code -32603}), and one sent after it fails
- * with an {@link AcpConnectionException}. Once every request received has been answered,
- * standard output is closed and {@link #awaitTermination()} completes. The drain is bounded:
- * a request still unanswered after the drain timeout ({@link #DEFAULT_DRAIN_TIMEOUT} unless
- * given) is answered with {@code -32800} (request cancelled) and the transport terminates
- * without waiting for it; its handler's late answer is dropped.
- * </p>
+ * <p><b>The end of standard input.</b> A client that closes the agent's standard input sends
+ * nothing more, but may still read standard output until it ends (a script that writes its
+ * requests and closes the pipe does). So the end of standard input is not a cancellation:
+ * every request already received is still answered, and the notifications its handler sends
+ * are written, in the order they are sent. Requests the agent sends to the client can no
+ * longer be answered: one still waiting fails at once with a JSON-RPC error ({@code -32603}),
+ * and one sent later fails with an {@link AcpConnectionException}. Once every request received
+ * has been answered, standard output is closed and {@link #awaitTermination()} completes, so a
+ * {@code main} waiting on it returns. The drain is bounded: a request still unanswered after
+ * the drain timeout ({@link #DEFAULT_DRAIN_TIMEOUT} unless given) is answered with
+ * {@code -32800} (request cancelled), the transport terminates without waiting for it, and its
+ * handler's late answer is dropped.
  *
- * <p>
- * <b>Closing does not release {@code System.in}.</b> The transport reads standard input on
- * its own thread ({@code acp-agent-inbound}), and a read of {@code System.in} cannot be
- * interrupted. Closing the transport stops it handing on messages, but a reader blocked in
- * a read stays blocked, holding {@code System.in}'s lock, until the next line arrives or
- * standard input ends; it then reads that line, discards it and ends. The transport never
- * closes {@code System.in} itself, which belongs to the process. In an agent process that
- * is harmless: the process owns its standard input and exits with it. In a process whose
- * standard input belongs to someone else it is not: under Maven Surefire, for instance,
- * standard input carries the test fork's command stream, and a reader left on it takes
- * those bytes and can stall the fork's exit. Embedders and tests should therefore use the
+ * <p><b>Closing does not release {@code System.in}.</b> The transport reads standard input on
+ * its {@code acp-agent-inbound} thread, and a read of {@code System.in} cannot be interrupted.
+ * Closing the transport stops it handing messages on, but a reader blocked in a read stays
+ * blocked, holding {@code System.in}'s lock, until the next line arrives or standard input
+ * ends; it then discards that line and ends. The transport never closes {@code System.in},
+ * which belongs to the process. In an agent process that is harmless: the process owns its
+ * standard input and exits with it. Elsewhere it is not: under Maven Surefire, for instance,
+ * standard input carries the test fork's commands, and a reader left on it takes those bytes
+ * and can stall the fork's exit. Embedders and tests should therefore use the
  * {@linkplain #StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream) constructor
- * taking explicit streams}, or the in-memory transport of {@code acp-test}, and keep the
- * {@code System.in} constructors for an agent process's {@code main}. A test suite that
- * cannot avoid them (an application whose configuration builds this transport by
- * default) can install an empty standard input before any test runs, for instance with
- * {@code System.setIn(new ByteArrayInputStream(new byte[0]))} in a JUnit
- * {@code LauncherSessionListener}: the transport takes {@code System.in} when it is
- * constructed, so its reader then sees the end of the stream and ends (and, as at any end
- * of input, the transport closes the output stream it was given), while Surefire keeps its
- * own reference to the real standard input.
- * </p>
+ * that takes explicit streams}, or the in-memory transport of the {@code acp-test} module, and
+ * keep the {@code System.in} constructors for an agent's {@code main}. A test suite that cannot
+ * avoid them (an application whose configuration builds this transport by default) can
+ * install an empty standard input before any test runs, for instance with
+ * {@code System.setIn(new java.io.ByteArrayInputStream(new byte[0]))} in a JUnit launcher
+ * session listener. The transport takes {@code System.in} when it is constructed, so its
+ * reader then sees the end of input at once and ends (and, as at any end of input, the
+ * transport closes the output stream it was given), while Surefire keeps its own reference to
+ * the real standard input.
  *
  * @author Mark Pollack
  */
@@ -105,8 +114,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 
 	/**
 	 * How long, by default, the requests received before standard input ended may take to be
-	 * answered: 60 seconds, as long as {@code PromptTimeouts.DEFAULT_CANCEL_GRACE_PERIOD}
-	 * gives a cancelled prompt.
+	 * answered: 60 seconds, as long as
+	 * {@link com.agentclientprotocol.sdk.spec.PromptTimeouts#DEFAULT_CANCEL_GRACE_PERIOD} gives
+	 * a cancelled prompt. Pass another value to the four-argument constructor.
 	 */
 	public static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(60);
 
@@ -156,9 +166,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	/**
-	 * Creates a new StdioAcpAgentTransport with the default JsonMapper using
-	 * System.in and System.out for communication. For an agent process's {@code main}:
-	 * closing the transport does not release {@code System.in} (see the class
+	 * Creates a transport on {@code System.in} and {@code System.out}, with the JSON mapper
+	 * found on the classpath ({@link AcpJsonMapper#createDefault()}), for an agent process's
+	 * {@code main}. Closing it does not release {@code System.in} (see the class
 	 * documentation); embedders and tests pass explicit streams instead.
 	 */
 	public StdioAcpAgentTransport() {
@@ -166,11 +176,12 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	/**
-	 * Creates a new StdioAcpAgentTransport with the specified JsonMapper using
-	 * System.in and System.out for communication. For an agent process's {@code main}:
-	 * closing the transport does not release {@code System.in} (see the class
-	 * documentation); embedders and tests pass explicit streams instead.
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
+	 * Creates a transport on {@code System.in} and {@code System.out}, with the given JSON
+	 * mapper, for an agent process's {@code main}. Closing it does not release
+	 * {@code System.in} (see the class documentation); embedders and tests pass explicit
+	 * streams instead.
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @throws IllegalArgumentException if {@code jsonMapper} is null
 	 */
 	@SuppressWarnings("SystemOut") // the stdio transport is the one owner of System.out
 	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper) {
@@ -178,24 +189,28 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	/**
-	 * Creates a new StdioAcpAgentTransport with the specified JsonMapper and streams.
-	 * This constructor allows for custom streams (useful for testing).
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
-	 * @param inputStream The input stream to read messages from (client → agent)
-	 * @param outputStream The output stream to write messages to (agent → client)
+	 * Creates a transport on the given streams, with the default drain timeout, for an agent
+	 * embedded in another program or under test.
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param inputStream the stream the client's messages are read from
+	 * @param outputStream the stream the agent's messages are written to; closed once the
+	 * input has ended and every request has been answered
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream) {
 		this(jsonMapper, inputStream, outputStream, DEFAULT_DRAIN_TIMEOUT);
 	}
 
 	/**
-	 * Creates a new StdioAcpAgentTransport with the specified JsonMapper, streams, and drain
-	 * timeout.
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
-	 * @param inputStream The input stream to read messages from (client → agent)
-	 * @param outputStream The output stream to write messages to (agent → client)
-	 * @param drainTimeout how long the requests received before the input ends may take to be
-	 * answered; positive
+	 * Creates a transport on the given streams with its own drain timeout: how long the
+	 * requests received before the input ends may take to be answered.
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param inputStream the stream the client's messages are read from
+	 * @param outputStream the stream the agent's messages are written to; closed once the
+	 * input has ended and every request has been answered
+	 * @param drainTimeout the drain timeout; positive
+	 * @throws IllegalArgumentException if an argument is null or {@code drainTimeout} is not
+	 * positive
 	 */
 	public StdioAcpAgentTransport(AcpJsonMapper jsonMapper, InputStream inputStream, OutputStream outputStream,
 			Duration drainTimeout) {
@@ -228,6 +243,12 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 				}), "agent-outbound");
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>Starts the thread that reads the input stream and the thread that writes the output
+	 * stream, when the returned Mono is subscribed. A second call fails with an
+	 * {@link IllegalStateException}, even when the Mono of the first was never subscribed.
+	 */
 	@Override
 	public Mono<Void> start(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
 		if (!isStarted.compareAndSet(false, true)) {
@@ -474,7 +495,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 					outboundScheduler.dispose();
 				}
 			})
-			.subscribe();
+			// Logged above unless closing; not dropped to Reactor's ERROR hook.
+			.subscribe(ignored -> {
+			}, error -> logger.debug("Outbound processing ended: {}", error.toString()));
 	}
 
 	/**
@@ -519,8 +542,12 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	/**
-	 * Sends a message to the client. A request sent once the client's input has ended fails
-	 * with an {@link AcpConnectionException}: no answer can come.
+	 * {@inheritDoc}
+	 * <p>Waits until the transport has started, then queues the message for the writer
+	 * thread. A request sent once standard input has ended fails with an
+	 * {@link AcpConnectionException}, since no answer can come; responses and notifications
+	 * are still written until the transport terminates. Once the transport is closed,
+	 * messages are dropped and the Mono still completes.
 	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
@@ -535,13 +562,14 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	}
 
 	/**
-	 * Closes the transport: nothing more is handed on or written, standard output is
-	 * closed once the agent's requests to the client are settled, and
-	 * {@link #awaitTermination()} completes. The input stream is not closed, and a read of
-	 * it already in progress is not ended: on {@code System.in}, which cannot be
-	 * interrupted, the reader thread stays blocked until the next line or the end of
-	 * standard input, then discards what it read and ends (see the class documentation).
-	 * {@link #close()} does the same without waiting.
+	 * {@inheritDoc}
+	 * <p>Stops handing on the client's messages and writing the agent's (messages still queued
+	 * are dropped), stops the transport's threads and completes {@link #awaitTermination()}.
+	 * It closes the output stream only if standard input has already ended. It never closes
+	 * the input stream, and does not end a read already in progress: on {@code System.in},
+	 * which cannot be interrupted, the reader thread stays blocked until the next line or the
+	 * end of standard input, then discards what it read and ends (see the class
+	 * documentation). {@link #close()} does the same.
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
@@ -563,15 +591,20 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 		}));
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>The default logs each error at ERROR. Call it before {@link #start}.
+	 */
 	@Override
 	public void setExceptionHandler(Consumer<Throwable> handler) {
 		this.exceptionHandler = handler;
 	}
 
 	/**
-	 * Completes when the transport terminates: after it is closed, or after standard input
-	 * has ended and every request received before has been answered and written (or the
-	 * drain timeout has passed), with standard output closed.
+	 * {@inheritDoc}
+	 * <p>It completes after the transport is closed, or after standard input has ended and
+	 * every request received before has been answered and written (or the drain timeout has
+	 * passed) and standard output has been closed.
 	 * @return a Mono that completes when the transport terminates
 	 */
 	@Override
