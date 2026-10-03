@@ -45,6 +45,24 @@ class AcpClientTransportAutoConfigurationTests {
 	}
 
 	@Test
+	void websocketTypeWithoutUriFailsWithAClearMessage() {
+		this.runner.withPropertyValues("spring.acp.client.transport.type=websocket").run(context -> {
+			assertThat(context).hasFailed();
+			assertThat(context.getStartupFailure()).rootCause()
+				.hasMessageContaining("requires spring.acp.client.transport.websocket.uri");
+		});
+	}
+
+	@Test
+	void stdioTypeWithoutCommandFailsWithAClearMessage() {
+		this.runner.withPropertyValues("spring.acp.client.transport.type=stdio").run(context -> {
+			assertThat(context).hasFailed();
+			assertThat(context.getStartupFailure()).rootCause()
+				.hasMessageContaining("requires spring.acp.client.transport.stdio.command");
+		});
+	}
+
+	@Test
 	void transportBeanHasNoDestroyMethod() {
 		// The client lifecycle closes the transport; an inferred close() would close it
 		// again.

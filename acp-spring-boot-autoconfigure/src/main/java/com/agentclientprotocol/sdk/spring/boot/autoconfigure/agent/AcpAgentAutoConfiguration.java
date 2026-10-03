@@ -9,6 +9,7 @@ import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,7 @@ public class AcpAgentAutoConfiguration {
 			Object agentBean = findAgentBean(applicationContext);
 			AcpAgentSupport agentSupport = agentSupportBuilder(agentBean, properties, interceptors).transport(transport)
 				.build();
-			ConfigurableApplicationContext contextToClose = (properties.isShutdownOnTransportEnd()
+			@Nullable ConfigurableApplicationContext contextToClose = (properties.isShutdownOnTransportEnd()
 					&& applicationContext instanceof ConfigurableApplicationContext configurable) ? configurable : null;
 			return new AcpAgentLifecycle(agentSupport, transport, contextToClose);
 		}
@@ -99,14 +100,14 @@ public class AcpAgentAutoConfiguration {
 
 		private final AcpAgentTransport transport;
 
-		private final ConfigurableApplicationContext contextToClose;
+		private final @Nullable ConfigurableApplicationContext contextToClose;
 
 		private volatile boolean running = false;
 
 		private volatile boolean stopping = false;
 
 		AcpAgentLifecycle(AcpAgentSupport agentSupport, AcpAgentTransport transport,
-				ConfigurableApplicationContext contextToClose) {
+				@Nullable ConfigurableApplicationContext contextToClose) {
 			this.agentSupport = agentSupport;
 			this.transport = transport;
 			this.contextToClose = contextToClose;

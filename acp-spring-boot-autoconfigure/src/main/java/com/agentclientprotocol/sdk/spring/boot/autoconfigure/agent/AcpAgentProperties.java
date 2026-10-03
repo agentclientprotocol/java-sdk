@@ -4,6 +4,8 @@ import java.time.Duration;
 
 import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
 
+import org.jspecify.annotations.Nullable;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
@@ -56,15 +58,15 @@ public class AcpAgentProperties {
 
 	public static class AgentTransportProperties {
 
-		private TransportType type;
+		private @Nullable TransportType type;
 
 		private AgentHttpProperties http = new AgentHttpProperties();
 
-		public TransportType getType() {
+		public @Nullable TransportType getType() {
 			return type;
 		}
 
-		public void setType(TransportType type) {
+		public void setType(@Nullable TransportType type) {
 			this.type = type;
 		}
 
@@ -100,43 +102,43 @@ public class AcpAgentProperties {
 		/**
 		 * Largest accepted inbound message (POST body or WebSocket text message).
 		 */
-		private DataSize maxPostBodySize;
+		private @Nullable DataSize maxPostBodySize;
 
 		/**
 		 * Interval between SSE keep-alive comments; zero disables them.
 		 */
-		private Duration keepAliveInterval;
+		private @Nullable Duration keepAliveInterval;
 
 		/**
 		 * Events retained per outbound stream while no subscriber is attached.
 		 */
-		private Integer mailboxCapacity;
+		private @Nullable Integer mailboxCapacity;
 
 		/**
 		 * Events queued for one attached SSE subscriber before it is closed.
 		 */
-		private Integer maxPendingSseEvents;
+		private @Nullable Integer maxPendingSseEvents;
 
 		/**
 		 * Frames queued for one WebSocket connection before it is closed.
 		 */
-		private Integer maxWebSocketPendingFrames;
+		private @Nullable Integer maxWebSocketPendingFrames;
 
 		/**
 		 * Session streams a connection may open before the session is known.
 		 */
-		private Integer maxProvisionalSessions;
+		private @Nullable Integer maxProvisionalSessions;
 
 		/**
 		 * HTTP/2 streams one client connection may hold open. Standalone listener only.
 		 */
-		private Integer maxConcurrentStreamsPerConnection;
+		private @Nullable Integer maxConcurrentStreamsPerConnection;
 
 		/**
 		 * How long closing the endpoint waits for its connections to close gracefully
 		 * before closing the rest at once.
 		 */
-		private Duration shutdownTimeout;
+		private @Nullable Duration shutdownTimeout;
 
 		public int getPort() {
 			return port;
@@ -154,67 +156,67 @@ public class AcpAgentProperties {
 			this.path = path;
 		}
 
-		public DataSize getMaxPostBodySize() {
+		public @Nullable DataSize getMaxPostBodySize() {
 			return maxPostBodySize;
 		}
 
-		public void setMaxPostBodySize(DataSize maxPostBodySize) {
+		public void setMaxPostBodySize(@Nullable DataSize maxPostBodySize) {
 			this.maxPostBodySize = maxPostBodySize;
 		}
 
-		public Duration getKeepAliveInterval() {
+		public @Nullable Duration getKeepAliveInterval() {
 			return keepAliveInterval;
 		}
 
-		public void setKeepAliveInterval(Duration keepAliveInterval) {
+		public void setKeepAliveInterval(@Nullable Duration keepAliveInterval) {
 			this.keepAliveInterval = keepAliveInterval;
 		}
 
-		public Integer getMailboxCapacity() {
+		public @Nullable Integer getMailboxCapacity() {
 			return mailboxCapacity;
 		}
 
-		public void setMailboxCapacity(Integer mailboxCapacity) {
+		public void setMailboxCapacity(@Nullable Integer mailboxCapacity) {
 			this.mailboxCapacity = mailboxCapacity;
 		}
 
-		public Integer getMaxPendingSseEvents() {
+		public @Nullable Integer getMaxPendingSseEvents() {
 			return maxPendingSseEvents;
 		}
 
-		public void setMaxPendingSseEvents(Integer maxPendingSseEvents) {
+		public void setMaxPendingSseEvents(@Nullable Integer maxPendingSseEvents) {
 			this.maxPendingSseEvents = maxPendingSseEvents;
 		}
 
-		public Integer getMaxWebSocketPendingFrames() {
+		public @Nullable Integer getMaxWebSocketPendingFrames() {
 			return maxWebSocketPendingFrames;
 		}
 
-		public void setMaxWebSocketPendingFrames(Integer maxWebSocketPendingFrames) {
+		public void setMaxWebSocketPendingFrames(@Nullable Integer maxWebSocketPendingFrames) {
 			this.maxWebSocketPendingFrames = maxWebSocketPendingFrames;
 		}
 
-		public Integer getMaxProvisionalSessions() {
+		public @Nullable Integer getMaxProvisionalSessions() {
 			return maxProvisionalSessions;
 		}
 
-		public void setMaxProvisionalSessions(Integer maxProvisionalSessions) {
+		public void setMaxProvisionalSessions(@Nullable Integer maxProvisionalSessions) {
 			this.maxProvisionalSessions = maxProvisionalSessions;
 		}
 
-		public Integer getMaxConcurrentStreamsPerConnection() {
+		public @Nullable Integer getMaxConcurrentStreamsPerConnection() {
 			return maxConcurrentStreamsPerConnection;
 		}
 
-		public void setMaxConcurrentStreamsPerConnection(Integer maxConcurrentStreamsPerConnection) {
+		public void setMaxConcurrentStreamsPerConnection(@Nullable Integer maxConcurrentStreamsPerConnection) {
 			this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
 		}
 
-		public Duration getShutdownTimeout() {
+		public @Nullable Duration getShutdownTimeout() {
 			return shutdownTimeout;
 		}
 
-		public void setShutdownTimeout(Duration shutdownTimeout) {
+		public void setShutdownTimeout(@Nullable Duration shutdownTimeout) {
 			this.shutdownTimeout = shutdownTimeout;
 		}
 

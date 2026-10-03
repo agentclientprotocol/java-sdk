@@ -9,6 +9,8 @@ import java.util.Map;
 
 import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
 
+import org.jspecify.annotations.Nullable;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "spring.acp.client")
@@ -46,7 +48,7 @@ public class AcpClientProperties {
 
 	public static class TransportProperties {
 
-		private TransportType type;
+		private @Nullable TransportType type;
 
 		private WebSocketProperties websocket = new WebSocketProperties();
 
@@ -54,11 +56,11 @@ public class AcpClientProperties {
 
 		private HttpProperties http = new HttpProperties();
 
-		public TransportType getType() {
+		public @Nullable TransportType getType() {
 			return type;
 		}
 
-		public void setType(TransportType type) {
+		public void setType(@Nullable TransportType type) {
 			this.type = type;
 		}
 
@@ -96,13 +98,13 @@ public class AcpClientProperties {
 		/**
 		 * Endpoint of the agent (e.g. http://localhost:8080/acp).
 		 */
-		private URI uri;
+		private @Nullable URI uri;
 
-		public URI getUri() {
+		public @Nullable URI getUri() {
 			return uri;
 		}
 
-		public void setUri(URI uri) {
+		public void setUri(@Nullable URI uri) {
 			this.uri = uri;
 		}
 
@@ -110,15 +112,15 @@ public class AcpClientProperties {
 
 	public static class WebSocketProperties {
 
-		private URI uri;
+		private @Nullable URI uri;
 
 		private Duration connectTimeout = Duration.ofSeconds(10);
 
-		public URI getUri() {
+		public @Nullable URI getUri() {
 			return uri;
 		}
 
-		public void setUri(URI uri) {
+		public void setUri(@Nullable URI uri) {
 			this.uri = uri;
 		}
 
@@ -134,17 +136,17 @@ public class AcpClientProperties {
 
 	public static class StdioProperties {
 
-		private String command;
+		private @Nullable String command;
 
 		private List<String> args = new ArrayList<>();
 
 		private Map<String, String> env = new LinkedHashMap<>();
 
-		public String getCommand() {
+		public @Nullable String getCommand() {
 			return command;
 		}
 
-		public void setCommand(String command) {
+		public void setCommand(@Nullable String command) {
 			this.command = command;
 		}
 

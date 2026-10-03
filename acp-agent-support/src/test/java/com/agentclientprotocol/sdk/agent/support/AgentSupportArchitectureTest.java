@@ -61,6 +61,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 		importOptions = ImportOption.DoNotIncludeTests.class)
 class AgentSupportArchitectureTest {
 
+
+	@ArchTest
+	static final ArchRule isFrameworkNeutral = noClasses().should()
+		.dependOnClassesThat(resideInAnyPackage("org.springframework..", "io.quarkus..", "io.micronaut..",
+				"com.agentclientprotocol.sdk.spring..", "com.agentclientprotocol.sdk.integration..")
+			.as("a framework or a framework integration"))
+		.because("framework integrations build on the SDK, never the reverse");
 	@ArchTest
 	static void importsThisModuleAndNothingElse(JavaClasses classes) {
 		assertThat(classes.contain(ThisModule.ANCHOR)).as("this module's classes are imported").isTrue();

@@ -8,7 +8,9 @@ import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
+import org.jspecify.annotations.Nullable;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -100,28 +102,33 @@ public class AcpClientTransportAutoConfiguration {
 
 	private static AcpClientTransport createWebSocketTransport(AcpClientProperties properties) {
 		var ws = properties.getTransport().getWebsocket();
-		return new WebSocketAcpClientTransport(ws.getUri(),
-				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault())
+		return new WebSocketAcpClientTransport(required(ws.getUri(), "websocket", "websocket.uri"),
+				AcpJsonMapper.createDefault())
 			.connectTimeout(ws.getConnectTimeout());
 	}
 
 	private static AcpClientTransport createHttpTransport(AcpClientProperties properties) {
-		URI uri = properties.getTransport().getHttp().getUri();
-		if (uri == null) {
-			throw new IllegalStateException(
-					"spring.acp.client.transport.type=http requires spring.acp.client.transport.http.uri");
-		}
-		return new StreamableHttpAcpClientTransport(uri,
-				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault());
+		URI uri = required(properties.getTransport().getHttp().getUri(), "http", "http.uri");
+		return new StreamableHttpAcpClientTransport(uri, AcpJsonMapper.createDefault());
 	}
 
 	private static AcpClientTransport createStdioTransport(AcpClientProperties properties) {
 		var stdio = properties.getTransport().getStdio();
-		var builder = AgentParameters.builder(stdio.getCommand()).args(stdio.getArgs());
+		var builder = AgentParameters.builder(required(stdio.getCommand(), "stdio", "stdio.command"))
+			.args(stdio.getArgs());
 		if (!stdio.getEnv().isEmpty()) {
 			builder.env(stdio.getEnv());
 		}
 		return new StdioAcpClientTransport(builder.build());
+	}
+
+	/** An explicit transport type without the property it needs fails with a message naming both. */
+	private static <T> T required(@Nullable T value, String type, String property) {
+		if (value == null) {
+			throw new IllegalStateException("spring.acp.client.transport.type=" + type
+					+ " requires spring.acp.client.transport." + property);
+		}
+		return value;
 	}
 
 }
