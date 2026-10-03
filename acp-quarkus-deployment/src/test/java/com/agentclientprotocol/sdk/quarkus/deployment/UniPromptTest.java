@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A {@code Uni<String>} from {@code @Prompt} is read as the {@code String} the handler
- * could have returned directly.
+ * could have returned directly: the text is sent to the client and the turn ends.
  */
 class UniPromptTest {
 
@@ -37,10 +37,7 @@ class UniPromptTest {
 		String sessionId = client.newSession(InMemoryAgentTransport.newSession()).sessionId();
 		AcpSchema.PromptResponse response = client.prompt(InMemoryAgentTransport.prompt(sessionId, "hi"));
 		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
-		// On main a String reply ends the turn without sending its text. TODO tighten when
-		// the fix3 branch lands (the @Prompt String return sends the text): expect the
-		// message "a Uni reply to hi".
-		assertThat(transport.messages).doesNotContain("never");
+		assertThat(transport.messages).containsExactly("a Uni reply to hi");
 	}
 
 	@AcpAgent

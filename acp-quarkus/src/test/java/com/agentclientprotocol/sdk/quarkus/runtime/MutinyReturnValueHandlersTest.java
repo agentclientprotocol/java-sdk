@@ -47,8 +47,10 @@ class MutinyReturnValueHandlersTest {
 
 	@Test
 	void uniStringAndVoidFromPromptAreReadAsTheSdkReadsThem() throws Exception {
-		assertThat(uni.handleReturnValue(Uni.createFrom().item("hi"), returnType("uni"), context("session/prompt")))
-			.isInstanceOf(AcpSchema.PromptResponse.class);
+		SyncPromptContext prompt = mock(SyncPromptContext.class);
+		assertThat(uni.handleReturnValue(Uni.createFrom().item("hi"), returnType("uni"), promptContext(prompt)))
+			.isEqualTo(AcpSchema.PromptResponse.endTurn());
+		verify(prompt).sendMessage("hi");
 		assertThat(uni.handleReturnValue(Uni.createFrom().voidItem(), returnType("uni"), context("session/prompt")))
 			.isEqualTo(AcpSchema.PromptResponse.endTurn());
 		assertThat(uni.handleReturnValue(Uni.createFrom().voidItem(), returnType("uni"), context("session/new")))

@@ -16,8 +16,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Lets a handler return a Mutiny {@link Uni}: its item is the handler's result, read as
  * the SDK reads the same value returned directly. A {@code Uni<String>} from
- * {@code @Prompt} is the reply text, and a {@code Uni<Void>} from {@code @Prompt} ends the
- * turn.
+ * {@code @Prompt} sends the text to the client and ends the turn, and a {@code Uni<Void>}
+ * from {@code @Prompt} ends the turn.
  * <p>
  * The annotation runtime dispatches on a sync agent, so the handler's thread waits for
  * the item, as it does for a {@code Mono}; the prompt and request timeouts bound the wait.
