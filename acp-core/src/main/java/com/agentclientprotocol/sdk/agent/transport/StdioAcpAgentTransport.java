@@ -546,8 +546,8 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 	 * <p>Waits until the transport has started, then queues the message for the writer
 	 * thread. A request sent once standard input has ended fails with an
 	 * {@link AcpConnectionException}, since no answer can come; responses and notifications
-	 * are still written until the transport terminates. Once the transport is closed,
-	 * messages are dropped and the Mono still completes.
+	 * are still written until the transport terminates. Once the transport is closed, the
+	 * Mono fails with an {@link AcpConnectionException}.
 	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
@@ -556,7 +556,13 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 					&& !this.awaitingClient.sent(request.id())) {
 				return Mono.error(new AcpConnectionException(CLIENT_INPUT_ENDED));
 			}
-			OutboundSinks.emit(outboundSink, message);
+			try {
+				OutboundSinks.emit(outboundSink, message);
+			}
+			catch (Sinks.EmissionException e) {
+				return Mono.error(OutboundSinks.isClosed(e) ? new AcpConnectionException("The transport is closed", e)
+						: new AcpConnectionException("The message could not be queued: " + e.getReason(), e));
+			}
 			return Mono.empty();
 		}));
 	}

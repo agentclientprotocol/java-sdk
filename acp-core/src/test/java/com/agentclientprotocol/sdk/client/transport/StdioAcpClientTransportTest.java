@@ -246,4 +246,20 @@ class StdioAcpClientTransportTest {
 		}
 	}
 
+	/** A message sent once the transport is closed fails; it used to be dropped silently. */
+	@Test
+	void aMessageSentAfterCloseFails() {
+		String javaBin = java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString();
+		StdioAcpClientTransport transport = new StdioAcpClientTransport(
+				AgentParameters.builder(javaBin).arg("-version").build(), AcpJsonMapper.createDefault());
+		transport.connect(message -> reactor.core.publisher.Mono.empty()).block(java.time.Duration.ofSeconds(30));
+		transport.closeGracefully().block(java.time.Duration.ofSeconds(30));
+
+		org.assertj.core.api.Assertions
+			.assertThatThrownBy(() -> transport
+				.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "session/cancel", null))
+				.block(java.time.Duration.ofSeconds(5)))
+			.isInstanceOf(com.agentclientprotocol.sdk.error.AcpConnectionException.class);
+	}
+
 }

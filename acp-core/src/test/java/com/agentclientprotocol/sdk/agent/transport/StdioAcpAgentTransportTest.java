@@ -490,4 +490,19 @@ class StdioAcpAgentTransportTest {
 
 	}
 
+	/** A message sent once the transport is closed fails; it used to be dropped silently. */
+	@Test
+	void aMessageSentAfterCloseFails() {
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper, new java.io.PipedInputStream(),
+				new ByteArrayOutputStream());
+		transport.start(msg -> msg).block(TIMEOUT);
+		transport.closeGracefully().block(TIMEOUT);
+
+		org.assertj.core.api.Assertions
+			.assertThatThrownBy(() -> transport
+				.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "session/update", null))
+				.block(TIMEOUT))
+			.isInstanceOf(com.agentclientprotocol.sdk.error.AcpConnectionException.class);
+	}
+
 }

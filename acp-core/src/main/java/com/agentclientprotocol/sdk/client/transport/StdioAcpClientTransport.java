@@ -403,11 +403,17 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	 * <p>The message is queued when this method is called, not when the returned Mono is
 	 * subscribed, and the Mono completes at once; the writer thread writes it as one line. A
 	 * message sent before {@link #connect} is written once the process starts. Once the
-	 * transport is closed, messages are dropped and the Mono still completes.
+	 * transport is closed, the Mono fails with an {@link AcpConnectionException}.
 	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
-		OutboundSinks.emit(this.outboundSink, message);
+		try {
+			OutboundSinks.emit(this.outboundSink, message);
+		}
+		catch (Sinks.EmissionException e) {
+			return Mono.error(OutboundSinks.isClosed(e) ? new AcpConnectionException("The transport is closed", e)
+					: new AcpConnectionException("The message could not be queued: " + e.getReason(), e));
+		}
 		return Mono.empty();
 	}
 

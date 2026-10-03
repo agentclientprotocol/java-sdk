@@ -726,6 +726,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A message sent after a transport closed fails instead of being dropped.**
+  `StdioAcpClientTransport`, `StdioAcpAgentTransport` and `WebSocketAcpClientTransport` dropped a
+  message sent once they were closed and completed its `Mono`, so a request then waited out its
+  timeout; `OutboundSinks.emit` documented a failure it never raised (Reactor's `emitNext` drops a
+  value on a terminated sink). `sendMessage` now fails with `AcpConnectionException` ("The
+  transport is closed"), as `StreamableHttpAcpClientTransport` already did, and `OutboundSinks.emit`
+  throws `Sinks.EmissionException` with `FAIL_TERMINATED` as documented.
+
 - **`WebSocketAcpClientTransport` shuts down its own HTTP client's threads on close.** A transport
   built without an `HttpClient` creates one with a cached thread pool, which was never shut down,
   so its threads lingered for about a minute after close. Closing the transport now shuts that

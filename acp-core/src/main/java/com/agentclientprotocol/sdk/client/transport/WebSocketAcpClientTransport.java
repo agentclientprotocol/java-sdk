@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
@@ -243,13 +244,22 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * {@inheritDoc}
 	 * <p>Waits until the connection is open, then queues the message for the writer thread;
 	 * the Mono completes once it is queued. A frame that cannot be sent is reported to the
-	 * exception handler, not to the Mono. Once the transport is closed, messages are dropped
-	 * and the Mono still completes.
+	 * exception handler, not to the Mono. Once the transport is closed, the Mono fails with an
+	 * {@link AcpConnectionException}.
 	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		return connectionReady.asMono().then(Mono.defer(() -> {
-			OutboundSinks.emit(outboundSink, message);
+			if (isClosing.get()) {
+				return Mono.error(new AcpConnectionException("The transport is closed"));
+			}
+			try {
+				OutboundSinks.emit(outboundSink, message);
+			}
+			catch (Sinks.EmissionException e) {
+				return Mono.error(OutboundSinks.isClosed(e) ? new AcpConnectionException("The transport is closed", e)
+						: new AcpConnectionException("The message could not be queued: " + e.getReason(), e));
+			}
 			return Mono.empty();
 		}));
 	}

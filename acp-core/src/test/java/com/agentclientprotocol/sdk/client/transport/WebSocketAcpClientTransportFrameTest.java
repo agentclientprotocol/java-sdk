@@ -407,4 +407,16 @@ class WebSocketAcpClientTransportFrameTest {
 
 	}
 
+	/** A message sent once the transport is closed fails; it used to be dropped silently. */
+	@Test
+	void aMessageSentAfterCloseFails() {
+		connect();
+		transport.closeGracefully().block(TIMEOUT);
+
+		assertThatThrownBy(() -> transport
+			.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "session/cancel", null))
+			.block(TIMEOUT)).isInstanceOf(com.agentclientprotocol.sdk.error.AcpConnectionException.class);
+		assertThat(webSocket.sent).isEmpty();
+	}
+
 }

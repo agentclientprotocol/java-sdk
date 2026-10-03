@@ -38,10 +38,32 @@ public final class OutboundSinks {
 	 * @param message the message
 	 * @param <T> the message type
 	 * @throws Sinks.EmissionException if the sink still refuses the message after retrying,
-	 * or is terminated
+	 * or is terminated ({@code FAIL_TERMINATED}: the transport is closed) or cancelled
 	 */
 	public static <T> void emit(Sinks.Many<T> sink, T message) {
-		sink.emitNext(message, Sinks.EmitFailureHandler.busyLooping(BUSY_LOOP));
+		// Not emitNext: on a terminated sink it drops the value silently instead of failing.
+		long deadline = System.nanoTime() + BUSY_LOOP.toNanos();
+		while (true) {
+			Sinks.EmitResult result = sink.tryEmitNext(message);
+			if (result.isSuccess()) {
+				return;
+			}
+			if (result != Sinks.EmitResult.FAIL_NON_SERIALIZED || System.nanoTime() >= deadline) {
+				throw new Sinks.EmissionException(result, "Could not emit the message: " + result);
+			}
+			Thread.onSpinWait();
+		}
+	}
+
+	/**
+	 * Whether an emission failed because the sink is terminated or cancelled: the transport
+	 * was closed.
+	 * @param failure the failure {@link #emit} threw
+	 * @return {@code true} if the sink no longer accepts messages
+	 */
+	public static boolean isClosed(Sinks.EmissionException failure) {
+		return failure.getReason() == Sinks.EmitResult.FAIL_TERMINATED
+				|| failure.getReason() == Sinks.EmitResult.FAIL_CANCELLED;
 	}
 
 	/**
