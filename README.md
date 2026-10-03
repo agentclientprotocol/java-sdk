@@ -86,6 +86,15 @@ Jackson 2 (-200), and an application's own supplier (default 0) wins over both. 
 the system property `acp.json.mapper.supplier` to the supplier's class name, for example
 `com.agentclientprotocol.sdk.json.JacksonAcpJsonMapperSupplier`.
 
+**Supported Jackson versions.** `acp-json-jackson2` needs Jackson **2.18.1 or later** and
+`acp-json-jackson3` needs Jackson **3.0.0 or later**, for jackson-core and jackson-databind alike;
+the SDK is built and released against the versions in its POM (Jackson 2.22.3 and 3.1.7).
+Frameworks manage their own Jackson version: Quarkus 3.40 (Jackson 2.21.7) and Spring Boot 4.1
+(Jackson 3.1.7) are within these floors. Creating a mapper checks the versions on the classpath and
+fails at once with an `IllegalStateException` that names the version found and the one required,
+instead of a `NoSuchMethodError` on the first message. Keep the Jackson artifacts on one version,
+for example by importing `com.fasterxml.jackson:jackson-bom` (or `tools.jackson:jackson-bom`).
+
 For annotation-based agent development:
 ```xml
 <dependency>

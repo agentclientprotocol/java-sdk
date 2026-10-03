@@ -26,7 +26,8 @@ import org.slf4j.LoggerFactory;
  * Jackson 2 implementation of {@link AcpJsonMapper}, shipped in {@code acp-json-jackson2}.
  * Wraps a Jackson {@link ObjectMapper} but keeps the SDK decoupled from Jackson at the API
  * level. It keeps the package it had when it lived in {@code acp-core}, so code that
- * constructs it compiles unchanged.
+ * constructs it compiles unchanged. It needs Jackson 2.18.1 or later (jackson-core and
+ * jackson-databind), which it checks when it is created.
  *
  * @author Mark Pollack
  */
@@ -93,8 +94,11 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	 * Constructs a new JacksonAcpJsonMapper with the given ObjectMapper.
 	 * @param objectMapper the ObjectMapper to use. Must not be null.
 	 * @throws IllegalArgumentException if the provided ObjectMapper is null.
+	 * @throws IllegalStateException if the Jackson 2 on the classpath is older than the supported
+	 * floor (see the type comment)
 	 */
 	public JacksonAcpJsonMapper(ObjectMapper objectMapper) {
+		JacksonVersions.requireSupported();
 		if (objectMapper == null) {
 			throw new IllegalArgumentException("ObjectMapper must not be null");
 		}

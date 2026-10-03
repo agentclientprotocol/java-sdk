@@ -28,7 +28,8 @@ import tools.jackson.databind.type.LogicalType;
 /**
  * Jackson 3 ({@code tools.jackson}) implementation of {@link AcpJsonMapper}, shipped in
  * {@code acp-json-jackson3}. Wraps a Jackson {@link JsonMapper} but keeps the SDK
- * decoupled from Jackson at the API level.
+ * decoupled from Jackson at the API level. It needs Jackson 3.0.0 or later (jackson-core and
+ * jackson-databind), which it checks when it is created.
  *
  * <p>
  * The schema records carry Jackson 2 annotations ({@code com.fasterxml.jackson.annotation}),
@@ -131,8 +132,11 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	 * Constructs a new Jackson3AcpJsonMapper with the given JsonMapper, used as is.
 	 * @param jsonMapper the JsonMapper to use. Must not be null.
 	 * @throws IllegalArgumentException if the provided JsonMapper is null.
+	 * @throws IllegalStateException if the Jackson 3 on the classpath is older than the supported
+	 * floor (see the type comment)
 	 */
 	public Jackson3AcpJsonMapper(JsonMapper jsonMapper) {
+		Jackson3Versions.requireSupported();
 		if (jsonMapper == null) {
 			throw new IllegalArgumentException("JsonMapper must not be null");
 		}

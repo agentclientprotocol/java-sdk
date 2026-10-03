@@ -305,6 +305,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A supported Jackson floor, checked at startup: Jackson 2.18.1 or later for
+  `acp-json-jackson2`, Jackson 3.0.0 or later for `acp-json-jackson3`.** Frameworks manage their
+  own Jackson version, and the SDK stated none: an older Jackson (Vert.x 4.5's jackson-core 2.16.1
+  under jackson-databind 2.22.3, for example) failed much later with a `NoSuchMethodError` while
+  reading a message. Each mapper supplier (`JacksonAcpJsonMapperSupplier`,
+  `Jackson3AcpJsonMapperSupplier`) and mapper constructor now checks the jackson-core and
+  jackson-databind on the classpath and fails with an `IllegalStateException` naming the version
+  found and the version required. The floors are the oldest releases the SDK's tests pass with
+  (2.18.0 drops unknown values of the open enumerations, and 2.17 the unknown fields the SDK keeps
+  for forward compatibility). Quarkus 3.40 (Jackson 2.21.7) and Spring Boot 4.1 (Jackson 3.1.7) are
+  within them. Migration: none for a
+  consistent Jackson at or above the floor; otherwise align the Jackson artifacts on one version,
+  for example by importing the `jackson-bom`.
+
 - **Breaking: `StdioAcpClientTransport.awaitForExit()` is renamed `awaitProcessExit()`**, so it does
   not sit beside `awaitTermination()` (which completes when the transport ends, not the process).
   Interrupted, it now throws `CancellationException` and keeps the thread's interrupt flag; it used

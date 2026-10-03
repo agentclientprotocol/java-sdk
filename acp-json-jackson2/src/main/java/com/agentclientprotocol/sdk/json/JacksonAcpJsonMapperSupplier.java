@@ -23,6 +23,8 @@ public class JacksonAcpJsonMapperSupplier implements AcpJsonMapperSupplier {
 
 	@Override
 	public AcpJsonMapper get() {
+		// Before building the ObjectMapper: an unsupported Jackson may fail inside it.
+		JacksonVersions.requireSupported();
 		return new JacksonAcpJsonMapper(JacksonAcpJsonMapper.defaultObjectMapper());
 	}
 
