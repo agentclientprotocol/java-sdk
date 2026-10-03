@@ -46,7 +46,11 @@ class EchoAgentTest {
 			})
 			.build();
 		try {
-			client.initialize();
+			AcpSchema.InitializeResponse init = client.initialize();
+			// agentInfo comes from @AcpAgent(name, version) on the bean's class
+			assertThat(init.agentInfo()).isNotNull();
+			assertThat(init.agentInfo().name()).isEqualTo("micronaut-echo-agent");
+			assertThat(init.agentInfo().version()).isEqualTo("1.0.0");
 			String sessionId = client.newSession(new AcpSchema.NewSessionRequest("/tmp", List.of())).sessionId();
 			client.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent("there"))));
 			long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();

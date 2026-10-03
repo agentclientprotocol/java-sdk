@@ -36,7 +36,12 @@
       "client": [
         "TIMEOUT"
       ]
+    },
+    "requiredPatterns": {
+      "client": [
+        "STEP init\\.initialize PASS .*agentInfo=\\{\"name\":\"micronaut-echo-agent\",\"version\":\"1\\.0\\.0\""
+      ]
     }
   },
-  "comment": "Hand-written, not generated: the acp-micronaut sample agent (an annotated @AcpAgent bean served by acp-micronaut, programs/micronaut) against the TypeScript client, over the catalogue steps a plain echo agent answers. stdio.eof-exit checks that the Micronaut application exits when its input ends."
+  "comment": "Hand-written, not generated: the acp-micronaut sample agent (an annotated @AcpAgent bean served by acp-micronaut, programs/micronaut) against the TypeScript client, over the catalogue steps a plain echo agent answers. stdio.eof-exit checks that the Micronaut application exits when its input ends. The initialize step requires the agentInfo the agent's @AcpAgent annotation declares."
 }

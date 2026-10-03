@@ -56,7 +56,9 @@ public final class Application {
   than one, startup fails and names them all. An application without one, such as a client, starts
   no agent.
 - **Handlers.** The handler methods, their parameters and return types are those of
-  `acp-agent-support`. One bean instance serves every session, and over HTTP every connection, so
+  `acp-agent-support`. The `initialize` answer is derived from the class's annotations
+  (`agentInfo` from `@AcpAgent`, a capability for each declared handler), also when Micronaut
+  AOP advice makes the bean a generated subclass, which is then invoked so its advice runs. One bean instance serves every session, and over HTTP every connection, so
   keep per-session state keyed by session id. Handlers may also return a Reactive Streams
   `Publisher` (a `Flux` included). Its first element is the response.
 - **Extension beans.** Beans of type `AcpInterceptor`, `ArgumentResolver` and

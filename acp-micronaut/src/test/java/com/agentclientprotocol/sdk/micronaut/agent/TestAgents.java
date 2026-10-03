@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.ExtRequest;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
@@ -92,6 +93,12 @@ final class TestAgents {
 		@SetSessionMode
 		Mono<AcpSchema.SetSessionModeResponse> setMode(AcpSchema.SetSessionModeRequest request) {
 			return Mono.just(new AcpSchema.SetSessionModeResponse());
+		}
+
+		/** Declared so that initialize advertises sessionCapabilities.close (devex derivation). */
+		@CloseSession
+		AcpSchema.CloseSessionResponse close(AcpSchema.CloseSessionRequest request) {
+			return new AcpSchema.CloseSessionResponse();
 		}
 
 		@ExtRequest("_test/empty")

@@ -70,10 +70,15 @@ class AcpAgentRuntimeTest {
 	@Test
 	void servesTheAgentBeanWithItsDependenciesInterceptorsAndResolvers() {
 		assertThat(init.protocolVersion()).isEqualTo(1);
-		// Today's defaults. TIGHTEN when devex lands: the capabilities derived from the
-		// declared handlers, and agentInfo from @AcpAgent(name, version).
-		assertThat(init.agentInfo()).isNull();
-		assertThat(init.agentCapabilities().loadSession()).isFalse();
+		// Derived from the bean's annotations: agentInfo from @AcpAgent(name, version), and a
+		// capability for each declared handler that needs one (@CloseSession here, no @LoadSession).
+		assertThat(init.agentInfo()).isNotNull();
+		assertThat(init.agentInfo().name()).isEqualTo("micronaut-test-agent");
+		assertThat(init.agentInfo().version()).isEqualTo("1.2.3");
+		assertThat(init.agentCapabilities().sessionCapabilities()).isNotNull();
+		assertThat(init.agentCapabilities().sessionCapabilities().close()).isNotNull();
+		assertThat(init.agentCapabilities().sessionCapabilities().list()).isNull();
+		assertThat(init.agentCapabilities().loadSession()).isNotEqualTo(Boolean.TRUE);
 
 		// @NewSession returns a Flux: a Publisher of one response
 		String sessionId = acp.newSession(new AcpSchema.NewSessionRequest("/tmp", List.of())).sessionId();
@@ -89,7 +94,7 @@ class AcpAgentRuntimeTest {
 		// @SetSessionMode returns a Mono
 		assertThat(acp.setSessionMode(new AcpSchema.SetSessionModeRequest(sessionId, "any"))).isNotNull();
 
-		// The SDK's default initialize handler (no @Initialize declared) is not intercepted.
+		// The SDK's own initialize answer (no @Initialize declared) is not intercepted.
 		assertThat(interceptor.methods).contains("session/new", "session/prompt", "session/set_mode");
 		assertThat(runtime.isRunning()).isTrue();
 		assertThat(runtime.port()).isEmpty();
