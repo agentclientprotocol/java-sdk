@@ -291,6 +291,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: the agent builders reject a null handler and a second handler for the same
+  method.** The typed setters of `AcpAgent.AsyncAgentBuilder` and `AcpAgent.SyncAgentBuilder`
+  accepted `null` (every request for that method was then answered `-32603`), and registering a
+  method again silently replaced its handler. A null handler now fails with
+  `IllegalArgumentException` at the setter, and a second registration of the same ACP method (or
+  extension method) fails with `IllegalStateException` naming the setter, for example "A handler for
+  session/prompt is already registered; promptHandler was called twice on this builder". Migration:
+  register each handler once; to choose between handlers, decide before calling the setter.
+
 - **`askPermission` and `askChoice` ask about a tool call the client knows; new
   `askPermission(String action, ToolKind kind)`** on `PromptContext` and `SyncPromptContext`. The
   permission request named a tool call ID that was never announced (clients that look it up in their

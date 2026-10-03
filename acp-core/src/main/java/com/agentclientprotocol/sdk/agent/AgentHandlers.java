@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.json.TypeRef;
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import reactor.core.publisher.Mono;
 
 /**
@@ -63,11 +64,15 @@ final class AgentHandlers {
 	private final Map<String, Notification<?>> notifications = new LinkedHashMap<>();
 
 	<T> void request(String method, TypeRef<T> requestType, RequestHandler<T> handler) {
-		requests.put(method, new Request<>(method, requestType, handler));
+		if (requests.putIfAbsent(method, new Request<>(method, requestType, handler)) != null) {
+			throw alreadyRegistered(method, "extRequestHandler");
+		}
 	}
 
 	<T> void notification(String method, TypeRef<T> notificationType, Function<T, Mono<Void>> handler) {
-		notifications.put(method, new Notification<>(method, notificationType, handler));
+		if (notifications.putIfAbsent(method, new Notification<>(method, notificationType, handler)) != null) {
+			throw alreadyRegistered(method, "extNotificationHandler");
+		}
 	}
 
 	/** A copy, to which a built agent's defaults are added without changing the builder's. */
@@ -82,6 +87,33 @@ final class AgentHandlers {
 	java.util.Set<String> requestMethods() {
 		return java.util.Set.copyOf(requests.keySet());
 	}
+
+	/** A second handler for a method: a mistake, which would silently replace the first. */
+	private static IllegalStateException alreadyRegistered(String method, String extensionSetter) {
+		String setter = SETTERS.getOrDefault(method, extensionSetter + "(\"" + method + "\", ...)");
+		return new IllegalStateException("A handler for " + method + " is already registered; " + setter
+				+ " was called twice on this builder");
+	}
+
+	/** The builder setter that registers each ACP method's handler, for error messages. */
+	private static final Map<String, String> SETTERS = Map.ofEntries(
+			Map.entry(AcpSchema.METHOD_INITIALIZE, "initializeHandler"),
+			Map.entry(AcpSchema.METHOD_AUTHENTICATE, "authenticateHandler"),
+			Map.entry(AcpSchema.METHOD_LOGOUT, "logoutHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_NEW, "newSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_LOAD, "loadSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_PROMPT, "promptHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_SET_MODE, "setSessionModeHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_LIST, "listSessionsHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_CLOSE, "closeSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_DELETE, "deleteSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_RESUME, "resumeSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_FORK, "forkSessionHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, "setSessionConfigOptionHandler"),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_LIST, "listProvidersHandler"),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_SET, "setProviderHandler"),
+			Map.entry(AcpSchema.METHOD_PROVIDERS_DISABLE, "disableProviderHandler"),
+			Map.entry(AcpSchema.METHOD_SESSION_CANCEL, "cancelHandler"));
 
 	/** A snapshot: registrations made after it do not reach an agent already built. */
 	List<Request<?>> requests() {

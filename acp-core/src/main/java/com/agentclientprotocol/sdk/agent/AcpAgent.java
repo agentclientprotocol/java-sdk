@@ -646,8 +646,9 @@ public interface AcpAgent {
 	 * block: a handler that waits there holds up the whole connection. Return a {@code Mono} that
 	 * completes later instead.
 	 *
-	 * <p>Each setter registers the handler for one ACP method, and registering a method again
-	 * replaces its handler. A request handler's {@code Mono} must emit the response: a failed
+	 * <p>Each setter registers the handler for one ACP method. A null handler fails with
+	 * {@link IllegalArgumentException}, and registering a method a second time fails with
+	 * {@link IllegalStateException} naming the setter. A request handler's {@code Mono} must emit the response: a failed
 	 * {@code Mono} is sent to the client as an error answer (an
 	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with its own code, anything
 	 * else as {@code -32603}), and an empty one is answered {@code -32603}. A builder is not
@@ -743,6 +744,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder initializeHandler(InitializeHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -756,6 +758,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder authenticateHandler(AuthenticateHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_AUTHENTICATE, new TypeRef<AcpSchema.AuthenticateRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -768,6 +771,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder logoutHandler(LogoutHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_LOGOUT, new TypeRef<AcpSchema.LogoutRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -780,6 +784,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder newSessionHandler(NewSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_NEW, new TypeRef<AcpSchema.NewSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -792,6 +797,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder loadSessionHandler(LoadSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_LOAD, new TypeRef<AcpSchema.LoadSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -806,6 +812,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder promptHandler(PromptHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_PROMPT, new TypeRef<AcpSchema.PromptRequest>() {
 			}, (request, agent) -> handler.handle(request, new DefaultPromptContext(agent, request.sessionId())));
 		}
@@ -817,6 +824,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder setSessionModeHandler(SetSessionModeHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_SET_MODE, new TypeRef<AcpSchema.SetSessionModeRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -828,6 +836,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder listSessionsHandler(ListSessionsHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_LIST, new TypeRef<AcpSchema.ListSessionsRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -841,6 +850,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder closeSessionHandler(CloseSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_CLOSE, new TypeRef<AcpSchema.CloseSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -852,6 +862,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder deleteSessionHandler(DeleteSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_DELETE, new TypeRef<AcpSchema.DeleteSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -863,6 +874,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder resumeSessionHandler(ResumeSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_RESUME, new TypeRef<AcpSchema.ResumeSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -875,6 +887,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder forkSessionHandler(ForkSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_FORK, new TypeRef<AcpSchema.ForkSessionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -891,6 +904,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder setSessionConfigOptionHandler(SetSessionConfigOptionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, new TypeRef<AcpSchema.SetSessionConfigOptionRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -903,6 +917,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder listProvidersHandler(ListProvidersHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_PROVIDERS_LIST, new TypeRef<AcpSchema.ListProvidersRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -915,6 +930,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder setProviderHandler(SetProviderHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_PROVIDERS_SET, new TypeRef<AcpSchema.SetProviderRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -926,6 +942,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public AsyncAgentBuilder disableProviderHandler(DisableProviderHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			return request(AcpSchema.METHOD_PROVIDERS_DISABLE, new TypeRef<AcpSchema.DisableProviderRequest>() {
 			}, (request, agent) -> handler.handle(request));
 		}
@@ -940,6 +957,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public AsyncAgentBuilder cancelHandler(CancelHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			handlers.notification(AcpSchema.METHOD_SESSION_CANCEL, new TypeRef<AcpSchema.CancelNotification>() {
 			}, handler::handle);
 			return this;
@@ -1058,8 +1076,8 @@ public interface AcpAgent {
 	 * thread, so it may block. Handlers for different requests run at the same time on different
 	 * threads, so state they share must be thread-safe. The builder turns each handler into its
 	 * asynchronous counterpart on an {@link AsyncAgentBuilder} and builds the agent from it, so the
-	 * rules described there apply: registering a method again replaces its handler, and a handler
-	 * that throws is answered with an error. A request handler that returns {@code null} is
+	 * rules described there apply: a null handler or a second handler for a method fails at the
+	 * setter, and a handler that throws is answered with an error. A request handler that returns {@code null} is
 	 * answered {@code -32603} (internal error). A builder is not thread-safe; configure it on one
 	 * thread.
 	 *
@@ -1157,6 +1175,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder initializeHandler(SyncInitializeHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.initializeHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1170,6 +1189,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder authenticateHandler(SyncAuthenticateHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.authenticateHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1182,6 +1202,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder logoutHandler(SyncLogoutHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.logoutHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1194,6 +1215,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder newSessionHandler(SyncNewSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.newSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1206,6 +1228,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder loadSessionHandler(SyncLoadSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.loadSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1221,6 +1244,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder promptHandler(SyncPromptHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.promptHandler((request, context) -> onSyncHandlerThread(
 					() -> handler.handle(request, new DefaultSyncPromptContext(context))));
 			return this;
@@ -1233,6 +1257,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder setSessionModeHandler(SyncSetSessionModeHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.setSessionModeHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1244,6 +1269,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder listSessionsHandler(SyncListSessionsHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.listSessionsHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1257,6 +1283,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder closeSessionHandler(SyncCloseSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.closeSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1268,6 +1295,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder deleteSessionHandler(SyncDeleteSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.deleteSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1279,6 +1307,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder resumeSessionHandler(SyncResumeSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.resumeSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1291,6 +1320,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder forkSessionHandler(SyncForkSessionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.forkSessionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1307,6 +1337,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder setSessionConfigOptionHandler(SyncSetSessionConfigOptionHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.setSessionConfigOptionHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1319,6 +1350,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder listProvidersHandler(SyncListProvidersHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.listProvidersHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1331,6 +1363,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder setProviderHandler(SyncSetProviderHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.setProviderHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1342,6 +1375,7 @@ public interface AcpAgent {
 		 */
 		@UnstableAcpApi
 		public SyncAgentBuilder disableProviderHandler(SyncDisableProviderHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.disableProviderHandler(request -> onSyncHandlerThread(() -> handler.handle(request)));
 			return this;
 		}
@@ -1357,6 +1391,7 @@ public interface AcpAgent {
 		 * @return this builder
 		 */
 		public SyncAgentBuilder cancelHandler(SyncCancelHandler handler) {
+			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.cancelHandler(notification -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(notification)))
 				.subscribeOn(SYNC_HANDLER_SCHEDULER));
 			return this;
