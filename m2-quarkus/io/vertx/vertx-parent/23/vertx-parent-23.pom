@@ -1,0 +1,431 @@
+<?xml version="1.0"?>
+<!--
+  ~ Copyright (c) 2011-2014 The original author or authors
+  ~
+  ~  All rights reserved. This program and the accompanying materials
+  ~  are made available under the terms of the Eclipse Public License v1.0
+  ~  and Apache License v2.0 which accompanies this distribution.
+  ~
+  ~      The Eclipse Public License is available at
+  ~      http://www.eclipse.org/legal/epl-v10.html
+  ~
+  ~      The Apache License v2.0 is available at
+  ~      http://www.opensource.org/licenses/apache2.0.php
+  ~
+  ~  You may elect to redistribute this code under either of these licenses.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.vertx</groupId>
+  <artifactId>vertx-parent</artifactId>
+  <version>23</version>
+  <packaging>pom</packaging>
+
+  <name>Vert.x Parent pom</name>
+  <url>https://github.com/vert-x3/vertx-parent</url>
+  <description>Vert.x Parent pom</description>
+
+  <scm>
+    <connection>scm:git:git@github.com:vert-x3/vertx-parent.git</connection>
+    <developerConnection>scm:git:git@github.com:vert-x3/vertx-parent.git</developerConnection>
+    <url>git@github.com:vert-x3/vertx-parent.git</url>
+  </scm>
+
+  <organization>
+    <name>Eclipse</name>
+  </organization>
+
+  <developers>
+    <developer>
+      <id>vertx.io</id>
+      <name>Eclipse Vert.x Project Contributors</name>
+      <url>https://vertx.io/</url>
+      <organization>Eclipse Vert.x</organization>
+      <organizationUrl>https://vertx.io/</organizationUrl>
+    </developer>
+  </developers>
+
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+    <license>
+      <name>Eclipse Public License - v 1.0</name>
+      <url>http://www.eclipse.org/legal/epl-v10.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>vertx-snapshots-repository</id>
+      <name>Vert.x Snapshots Repository</name>
+      <url>${vertx.snapshotRepository}</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+  <repositories>
+    <repository>
+      <id>vertx-snapshots-repository</id>
+      <name>Vert.x Snapshots Repository</name>
+      <url>${vertx.snapshotRepository}</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Compiler plugin -->
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+
+    <!-- Plugin versions -->
+    <maven.compiler.plugin.version>3.14.0</maven.compiler.plugin.version>
+    <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+    <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+    <maven.resource.plugin.version>3.3.1</maven.resource.plugin.version>
+    <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
+    <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+    <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
+    <maven.clean.plugin.version>3.4.1</maven.clean.plugin.version>
+    <maven.deploy.plugin.version>3.1.4</maven.deploy.plugin.version>
+    <maven.install.plugin.version>3.1.4</maven.install.plugin.version>
+    <maven.assembly.plugin.version>3.7.1</maven.assembly.plugin.version>
+    <maven.site.plugin.version>3.21.0</maven.site.plugin.version>
+    <maven.surefire.plugin.version>3.5.3</maven.surefire.plugin.version>
+    <maven.surefire.report.plugin.version>3.5.3</maven.surefire.report.plugin.version>
+    <maven.failsafe.plugin.version>3.5.3</maven.failsafe.plugin.version>
+    <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
+    <!-- Last version JDK 1.8 compatible -->
+    <maven.asciidoctor.plugin.version>2.2.6</maven.asciidoctor.plugin.version>
+    <maven.build.helper.maven.plugin.version>3.6.0</maven.build.helper.maven.plugin.version>
+    <maven.cyclonedx.plugin.version>2.9.1</maven.cyclonedx.plugin.version>
+    <maven.central.publishing.maven.plugin.version>0.11.0</maven.central.publishing.maven.plugin.version>
+
+    <!-- Override to use a different asciidoc source directory -->
+    <asciidoc.dir>${project.basedir}/src/main/asciidoc</asciidoc.dir>
+
+    <!-- Execution skip -->
+    <skipEnforcer>false</skipEnforcer>
+
+    <!-- Specify a path to a valid manifest to merge it with default entries -->
+    <jar.manifest></jar.manifest>
+
+    <!-- Default Netty leak detector configuration -->
+    <io.netty.leakDetection.level>DISABLED</io.netty.leakDetection.level>
+    <io.netty.leakDetection.targetRecords>4</io.netty.leakDetection.targetRecords>
+    <io.netty.leakDetection.samplingInterval>128</io.netty.leakDetection.samplingInterval>
+
+    <!-- Dist management -->
+    <vertx.snapshotRepository>https://central.sonatype.com/repository/maven-snapshots/</vertx.snapshotRepository>
+
+    <!-- Sonatype central -->
+    <sonatype.central.serverId>central</sonatype.central.serverId>
+    <sonatype.central.url>https://central.sonatype.com</sonatype.central.url>
+  </properties>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven.compiler.plugin.version}</version>
+          <configuration>
+            <optimize>true</optimize>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>${maven.source.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>${maven.assembly.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.asciidoctor</groupId>
+          <artifactId>asciidoctor-maven-plugin</artifactId>
+          <version>${maven.asciidoctor.plugin.version}</version>
+          <configuration>
+            <sourceDirectory>${asciidoc.dir}</sourceDirectory>
+            <outputDirectory>${project.build.directory}/docs/${project.artifactId}</outputDirectory>
+            <preserveDirectories>true</preserveDirectories>
+            <relativeBaseDir>true</relativeBaseDir>
+            <backend>html</backend>
+            <doctype>book</doctype>
+            <attributes>
+              <source-highlighter>coderay</source-highlighter>
+            </attributes>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${maven.jar.plugin.version}</version>
+          <executions>
+            <execution>
+              <id>default-jar</id>
+              <configuration>
+                <archive>
+                  <manifest>
+                    <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                    <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                  </manifest>
+                  <!-- Generate a jar INDEX.LIST -->
+                  <index>true</index>
+                  <!-- Provide opportunity to merge entries from a custom file -->
+                  <manifestFile>${jar.manifest}</manifestFile>
+                  <manifestEntries>
+                    <!-- Add the Maven coordinates in the manifest -->
+                    <Maven-Group-Id>${project.groupId}</Maven-Group-Id>
+                    <Maven-Artifact-Id>${project.artifactId}</Maven-Artifact-Id>
+                    <Maven-Version>${project.version}</Maven-Version>
+                  </manifestEntries>
+                </archive>
+                <!-- Remove examples and docoverride -->
+                <excludes>
+                  <exclude>/docoverride/**</exclude>
+                  <exclude>/examples/**</exclude>
+                </excludes>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven.surefire.plugin.version}</version>
+          <configuration>
+            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+            <systemPropertyVariables>
+              <io.netty.leakDetection.level>${io.netty.leakDetection.level}</io.netty.leakDetection.level>
+              <io.netty.leakDetection.targetRecords>${io.netty.leakDetection.targetRecords}
+              </io.netty.leakDetection.targetRecords>
+              <io.netty.leakDetection.samplingInterval>${io.netty.leakDetection.samplingInterval}
+              </io.netty.leakDetection.samplingInterval>
+            </systemPropertyVariables>
+            <!--
+            Memory: Needs to be small enough to run in a EC2 1.7GB small instance the late replacement.
+            -->
+            <argLine>-server -Xmx1200M</argLine>
+            <forkCount>1</forkCount>
+            <reuseForks>true</reuseForks>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-report-plugin</artifactId>
+          <version>${maven.surefire.report.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>${maven.site.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>${maven.javadoc.plugin.version}</version>
+          <!-- Remove impl and keep only io/vertx files (no examples or docoverride) -->
+          <configuration>
+            <sourceFileExcludes>
+              <sourceFileExclude>**/package-info.java</sourceFileExclude>
+              <sourceFileExclude>**/impl/**</sourceFileExclude>
+            </sourceFileExcludes>
+            <sourceFileIncludes>
+              <sourceFileInclude>io/vertx/**/*.java</sourceFileInclude>
+            </sourceFileIncludes>
+            <doclint>none</doclint>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-gpg-plugin</artifactId>
+          <version>${maven.gpg.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven.resource.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven.dependency.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>${maven.install.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>${maven.deploy.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>${maven.clean.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>${maven.enforcer.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>build-helper-maven-plugin</artifactId>
+          <version>${maven.build.helper.maven.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.cyclonedx</groupId>
+          <artifactId>cyclonedx-maven-plugin</artifactId>
+          <version>${maven.cyclonedx.plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+              <goal>test-jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-test-jar</id>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-javadoc-jar</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>enforce-no-vertx-snapshots</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <skip>${skipEnforcer}</skip>
+                  <rules>
+                    <requireJavaVersion>
+                      <message>Vert.x must be released with Java 1.8!</message>
+                      <version>[1.8,1.9)</version>
+                    </requireJavaVersion>
+                    <requireReleaseDeps>
+                      <message>No Vert.x Snapshots Allowed during a release!</message>
+                      <includes>
+                        <include>io.vertx:*</include>
+                      </includes>
+                    </requireReleaseDeps>
+                  </rules>
+                  <fail>true</fail>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.cyclonedx</groupId>
+            <artifactId>cyclonedx-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals>
+                  <goal>makeBom</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${maven.central.publishing.maven.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>${sonatype.central.serverId}</publishingServerId>
+              <centralBaseUrl>${sonatype.central.url}</centralBaseUrl>
+              <autoPublish>false</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>java-9</id>
+      <activation>
+        <jdk>[1.9,)</jdk>
+      </activation>
+      <properties>
+        <!-- Must compile with -release flag on JDK 9+ to avoid bytecode incompatibilities
+             such as: https://github.com/eclipse-vertx/vertx-sql-client/issues/736 -->
+        <maven.compiler.release>8</maven.compiler.release>
+      </properties>
+    </profile>
+  </profiles>
+
+</project>

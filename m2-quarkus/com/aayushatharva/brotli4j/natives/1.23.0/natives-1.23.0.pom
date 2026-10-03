@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2020-2025, Aayush Atharva
+
+  Brotli4j licenses this file to you under the
+  Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.aayushatharva.brotli4j</groupId>
+        <artifactId>brotli4j-parent</artifactId>
+        <version>1.23.0</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>natives</artifactId>
+    <name>Brotli4j</name>
+    <packaging>pom</packaging>
+    <modules>
+        <module>linux-x86_64</module>
+        <module>linux-aarch64</module>
+        <module>linux-armv7</module>
+        <module>linux-s390x</module>
+        <module>linux-ppc64le</module>
+        <module>linux-riscv64</module>
+        <module>windows-x86_64</module>
+        <module>windows-aarch64</module>
+        <module>osx-x86_64</module>
+        <module>osx-aarch64</module>
+    </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.aayushatharva.brotli4j</groupId>
+            <artifactId>service</artifactId>
+            <version>${project.parent.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>linux-x86_64</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-x86_64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>linux-s390x</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>s390x</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-s390x</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>linux-ppc64le</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>ppc64le</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-ppc64le</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>linux-aarch64</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-aarch64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>linux-armv7</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>armv</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-armv7</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>linux-riscv64</id>
+            <activation>
+                <os>
+                    <family>Linux</family>
+                    <arch>riscv64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>linux-riscv64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>windows-x86_64</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>windows-x86_64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>windows-aarch64</id>
+            <activation>
+                <os>
+                    <family>Windows</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>windows-aarch64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>osx-x86_64</id>
+            <activation>
+                <os>
+                    <family>Mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <modules>
+                <module>osx-x86_64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>osx-aarch64</id>
+            <activation>
+                <os>
+                    <family>Mac</family>
+                    <arch>aarch64</arch> <!-- Cross-compile for aarch64 using cmake -->
+                </os>
+            </activation>
+            <modules>
+                <module>osx-aarch64</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>release</id>
+            <modules>
+                <module>linux-x86_64</module>
+                <module>linux-aarch64</module>
+                <module>linux-armv7</module>
+                <module>linux-s390x</module>
+                <module>linux-ppc64le</module>
+                <module>linux-riscv64</module>
+                <module>windows-x86_64</module>
+                <module>windows-aarch64</module>
+                <module>osx-x86_64</module>
+                <module>osx-aarch64</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

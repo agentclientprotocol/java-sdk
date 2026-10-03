@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ~ JBoss, Home of Professional Open Source
+~ Copyright 2014 Red Hat Inc. and/or its affiliates and other contributors
+~ as indicated by the @authors tag. All rights reserved.
+~ See the copyright.txt in the distribution for a
+~ full listing of individual contributors.
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~ http://www.apache.org/licenses/LICENSE-2.0
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.aesh</groupId>
+    <artifactId>aesh-all</artifactId>
+    <packaging>pom</packaging>
+    <version>3.18.2</version>
+    <name>Æsh All</name>
+    <description>Æsh (Another Extendable SHell) All</description>
+    <url>https://aeshell.github.io</url>
+    <scm>
+        <connection>scm:git:git://github.com/aeshell/aesh.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/aeshell/aesh.git</developerConnection>
+        <url>https://github.com/aeshell/aesh/tree/master</url>
+    </scm>
+
+    <modules>
+        <module>bom</module>
+        <module>aesh</module>
+        <module>aesh-processor</module>
+        <module>aesh-charts</module>
+        <module>aesh-tamboui</module>
+        <module>aesh-builtins</module>
+    </modules>
+
+    <!-- Licenses -->
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
+    <properties>
+      <!-- maven-compiler-plugin -->
+      <maven.compiler.release>8</maven.compiler.release>
+      <readline.version>3.18.1</readline.version>
+      <tamboui.version>0.5.0</tamboui.version>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+      <!-- Code formatting -->
+      <version.formatter.plugin>2.29.0</version.formatter.plugin>
+      <version.impsort.plugin>1.13.0</version.impsort.plugin>
+      <format.skip>false</format.skip>
+
+      <!-- Maven plugin versions -->
+      <version.compiler.plugin>3.16.0</version.compiler.plugin>
+      <version.surefire.plugin>3.6.0</version.surefire.plugin>
+      <version.jar.plugin>3.5.1</version.jar.plugin>
+      <version.source.plugin>3.3.1</version.source.plugin>
+      <version.javadoc.plugin>3.12.0</version.javadoc.plugin>
+      <version.shade.plugin>3.6.2</version.shade.plugin>
+      <version.enforcer.plugin>3.6.3</version.enforcer.plugin>
+      <version.gpg.plugin>3.2.8</version.gpg.plugin>
+      <version.central-publishing.plugin>0.11.0</version.central-publishing.plugin>
+      <version.clean.plugin>3.4.0</version.clean.plugin>
+      <version.resources.plugin>3.5.0</version.resources.plugin>
+      <version.install.plugin>3.2.0</version.install.plugin>
+      <version.deploy.plugin>3.2.0</version.deploy.plugin>
+      <version.site.plugin>3.22.0</version.site.plugin>
+    </properties>
+
+    <developers>
+        <developer>
+            <name>Jean-Francois Denise</name>
+            <email>jdenise@redhat.com</email>
+            <organization>Red Hat</organization>
+            <organizationUrl>https://www.redhat.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Ståle Pedersen</name>
+            <email>spederse@redhat.com</email>
+            <organization>Red Hat</organization>
+            <organizationUrl>https://www.redhat.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <distributionManagement>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://central.sonatype.com</url>
+        </repository>
+    </distributionManagement>
+
+    <build>
+      <pluginManagement>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${version.javadoc.plugin}</version>
+            <configuration>
+              <doclint>none</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>${version.enforcer.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <version>${version.jar.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${version.source.plugin}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${version.gpg.plugin}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <signer>bc</signer>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${version.central-publishing.plugin}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>${version.shade.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${version.compiler.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${version.surefire.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-clean-plugin</artifactId>
+            <version>${version.clean.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>${version.resources.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-install-plugin</artifactId>
+            <version>${version.install.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-deploy-plugin</artifactId>
+            <version>${version.deploy.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-site-plugin</artifactId>
+            <version>${version.site.plugin}</version>
+          </plugin>
+          <plugin>
+            <groupId>net.revelc.code.formatter</groupId>
+            <artifactId>formatter-maven-plugin</artifactId>
+            <version>${version.formatter.plugin}</version>
+            <configuration>
+              <cachedir>.cache/formatter-maven-plugin-${version.formatter.plugin}</cachedir>
+              <configFile>${maven.multiModuleProjectDirectory}/config/eclipse-format.xml</configFile>
+              <lineEnding>LF</lineEnding>
+              <skip>${format.skip}</skip>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>net.revelc.code</groupId>
+            <artifactId>impsort-maven-plugin</artifactId>
+            <version>${version.impsort.plugin}</version>
+            <configuration>
+              <cachedir>.cache/impsort-maven-plugin-${version.impsort.plugin}</cachedir>
+              <groups>java.,javax.,jakarta.,org.,com.</groups>
+              <staticGroups>*</staticGroups>
+              <skip>${format.skip}</skip>
+              <removeUnused>true</removeUnused>
+            </configuration>
+          </plugin>
+        </plugins>
+      </pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+        </plugin>
+      </plugins>
+    </build>
+
+    <profiles>
+      <profile>
+        <id>release</id>
+        <build>
+          <plugins>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-gpg-plugin</artifactId>
+            </plugin>
+            <plugin>
+              <groupId>org.sonatype.central</groupId>
+              <artifactId>central-publishing-maven-plugin</artifactId>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+      <profile>
+        <id>format</id>
+        <activation>
+          <activeByDefault>true</activeByDefault>
+          <property>
+            <name>!no-format</name>
+          </property>
+        </activation>
+        <build>
+          <plugins>
+            <plugin>
+              <groupId>net.revelc.code.formatter</groupId>
+              <artifactId>formatter-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <phase>process-sources</phase>
+                  <goals>
+                    <goal>format</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>net.revelc.code</groupId>
+              <artifactId>impsort-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>sort-imports</id>
+                  <goals>
+                    <goal>sort</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+      <profile>
+        <id>validate</id>
+        <activation>
+          <property>
+            <name>no-format</name>
+          </property>
+        </activation>
+        <build>
+          <plugins>
+            <plugin>
+              <groupId>net.revelc.code.formatter</groupId>
+              <artifactId>formatter-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <phase>process-sources</phase>
+                  <goals>
+                    <goal>validate</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>net.revelc.code</groupId>
+              <artifactId>impsort-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>check-imports</id>
+                  <goals>
+                    <goal>check</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+          </plugins>
+        </build>
+      </profile>
+      <profile>
+        <id>benchmark</id>
+        <modules>
+          <module>benchmark</module>
+        </modules>
+      </profile>
+      <profile>
+        <id>examples</id>
+        <modules>
+          <module>examples</module>
+        </modules>
+      </profile>
+
+    </profiles>
+
+</project>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.smallrye.reactive</groupId>
+        <artifactId>mutiny-project</artifactId>
+        <version>3.3.0</version>
+    </parent>
+
+    <artifactId>mutiny</artifactId>
+    <name>SmallRye Mutiny - Core library</name>
+    <description>Intuitive Event-Driven Reactive Programming Library for Java</description>
+
+    <properties>
+        <revapi.skip>false</revapi.skip>
+        <bnd-bundle-name>io.smallrye.mutiny</bnd-bundle-name>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.smallrye.common</groupId>
+            <artifactId>smallrye-common-annotation</artifactId>
+            <version>${smallrye-common-annotation.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jctools</groupId>
+            <artifactId>jctools-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.reactivex.rxjava3</groupId>
+            <artifactId>rxjava</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.smallrye.reactive</groupId>
+            <artifactId>mutiny-zero-flow-adapters</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.smallrye.reactive</groupId>
+            <artifactId>mutiny-test-utils</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+			<plugin>
+			    <groupId>biz.aQute.bnd</groupId>
+			    <artifactId>bnd-maven-plugin</artifactId>
+			    <version>${bnd-maven-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>bnd-process</id>
+						<goals>
+							<goal>bnd-process</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<bnd><![CDATA[
+						Bundle-Name:            Bundle ${project.groupId} : ${project.artifactId}
+						Bundle-SymbolicName:    ${bnd-bundle-name}
+						Export-Package: 		${bnd-bundle-name}.*
+						Bundle-Version:         ${version}
+						-noimportjava:          true;
+						-nouses:                true;
+						]]>
+					</bnd>
+				</configuration>
+			</plugin>
+		   <plugin>
+		        <groupId>org.apache.maven.plugins</groupId>
+		        <artifactId>maven-jar-plugin</artifactId>
+		        <configuration>
+		        	<archive>
+		             	<manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+		          	</archive>
+		        </configuration>
+		    </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Global settings, might be replaced in profiles (e.g., parallel-tests, etc) -->
+                            <properties>
+                                <configurationParameters>
+                                    junit.jupiter.extensions.autodetection.enabled=true
+                                    junit.jupiter.testinstance.lifecycle.default = per_class
+                                    junit.jupiter.testclass.order.default = org.junit.jupiter.api.ClassOrderer$Random
+                                </configurationParameters>
+                            </properties>
+                            <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} @{jacocoArgLine}</argLine>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <sourceFileIncludes>
+                        <sourceFileInclude>io/smallrye/mutiny/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/groups/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/helpers/spies/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/helpers/test/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/infrastructure/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/operators/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/operators/multi/processors/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/operators/multi/split/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/subscription/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/tuples/*.java</sourceFileInclude>
+                        <sourceFileInclude>io/smallrye/mutiny/unchecked/*.java</sourceFileInclude>
+                    </sourceFileIncludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.revapi</groupId>
+                <artifactId>revapi-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>parallel-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <properties>
+                                <configurationParameters>
+                                    junit.jupiter.extensions.autodetection.enabled=true
+                                    junit.jupiter.testinstance.lifecycle.default = per_class
+                                    junit.jupiter.testclass.order.default = org.junit.jupiter.api.ClassOrderer$Random
+                                    junit.jupiter.execution.parallel.enabled = true
+                                    junit.jupiter.execution.parallel.mode.default = same_thread
+                                    junit.jupiter.execution.parallel.mode.classes.default = concurrent
+                                </configurationParameters>
+                            </properties>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

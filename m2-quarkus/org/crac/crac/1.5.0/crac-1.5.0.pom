@@ -1,0 +1,160 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.crac</groupId>
+  <artifactId>crac</artifactId>
+  <version>1.5.0</version>
+  <packaging>jar</packaging>
+
+  <name>crac</name>
+  <description>A wrapper for OpenJDK CRaC API to build and run on any JDK</description>
+  <url>https://github.com/crac/org.crac</url>
+
+  <licenses>
+    <license>
+      <name>BSD-2-Clause</name>
+      <url>https://opensource.org/licenses/BSD-2-Clause</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>antonkozlov</id>
+      <name>Anton Kozlov</name>
+      <url>https://github.com/AntonKozlov</url>
+      <email>akozlov@azul.com</email>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/CRaC/org.crac.git</connection>
+    <developerConnection>scm:git:git://github.com/CRaC/org.crac.git</developerConnection>
+    <url>http://github.com/CRaC/org.crac/tree/master</url>
+    <tag>1.5.0</tag>
+  </scm>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
+
+  <properties>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <maven.compiler.source>1.8</maven.compiler.source>
+  </properties>
+
+  <dependencies>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>3.0.1</version>
+        <configuration>
+          <tagNameFormat>@{project.version}</tagNameFormat>
+          <scmCommentPrefix>[release]</scmCommentPrefix>
+          <pushChanges>false</pushChanges>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <version>6.4.0</version>
+        <extensions>true</extensions>
+        <executions>
+          <execution>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <bnd><![CDATA[
+              -noextraheaders: true
+              -noimportjava: true
+              Bundle-Name: org.crac
+              Bundle-SymbolicName: org.crac
+              Import-Package: javax.crac;resolution:=optional, jdk.crac;resolution:=optional, jdk.crac.management;resolution:=optional, *
+              package-version=${versionmask;===;${Bundle-Version}}
+              Export-Package: *;version="${package-version}";-noimport:=true
+              -jpms-module-info: org.crac;version="${package-version}"
+              ]]></bnd>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+	<plugins>
+	  <plugin>
+	    <groupId>org.apache.maven.plugins</groupId>
+	    <artifactId>maven-source-plugin</artifactId>
+	    <version>2.2.1</version>
+	    <executions>
+	      <execution>
+		<id>attach-sources</id>
+		<goals>
+		  <goal>jar-no-fork</goal>
+		</goals>
+	      </execution>
+	    </executions>
+	  </plugin>
+	  <plugin>
+	    <groupId>org.apache.maven.plugins</groupId>
+	    <artifactId>maven-javadoc-plugin</artifactId>
+	    <version>2.9.1</version>
+	    <executions>
+	      <execution>
+		<id>attach-javadocs</id>
+		<goals>
+		  <goal>jar</goal>
+		</goals>
+	      </execution>
+	    </executions>
+	  </plugin>
+	  <plugin>
+	    <groupId>org.apache.maven.plugins</groupId>
+	    <artifactId>maven-gpg-plugin</artifactId>
+	    <version>1.5</version>
+	    <executions>
+	      <execution>
+		<id>sign-artifacts</id>
+		<phase>verify</phase>
+		<goals>
+		  <goal>sign</goal>
+		</goals>
+		<configuration>
+		  <keyname>${gpg.keyname}</keyname>
+		  <passphraseServerId>${gpg.keyname}</passphraseServerId>
+		</configuration>
+	      </execution>
+	    </executions>
+	  </plugin>
+	  <plugin>
+	    <groupId>org.sonatype.plugins</groupId>
+	    <artifactId>nexus-staging-maven-plugin</artifactId>
+	    <version>1.6.7</version>
+	    <extensions>true</extensions>
+	    <configuration>
+	      <serverId>ossrh</serverId>
+	      <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+	      <autoReleaseAfterClose>false</autoReleaseAfterClose>
+	    </configuration>
+	  </plugin>
+	</plugins>
+      </build>
+    </profile>
+  </profiles>
+
+</project>

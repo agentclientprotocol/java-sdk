@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <artifactId>mutiny-zero-parent</artifactId>
+        <groupId>io.smallrye.reactive</groupId>
+        <version>1.2.1</version>
+    </parent>
+
+    <artifactId>mutiny-zero-flow-adapters</artifactId>
+    <name>SmallRye Mutiny Zero JDK Flow / Reactive Streams Adapters</name>
+    <packaging>jar</packaging>
+    <description>Adapters from/to JDK Flow and Reactive Streams</description>
+
+	<properties>
+	    <bnd-bundle-name>io.smallrye.mutiny.zero.flow.adapters</bnd-bundle-name>
+	</properties>
+	
+    <dependencies>
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+			    <groupId>biz.aQute.bnd</groupId>
+			    <artifactId>bnd-maven-plugin</artifactId>
+			    <version>${bnd-maven-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>bnd-process</id>
+						<goals>
+							<goal>bnd-process</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<bnd><![CDATA[
+						Bundle-Name:            Bundle ${project.groupId} : ${project.artifactId}
+						Bundle-SymbolicName:    ${bnd-bundle-name}
+						Export-Package: 		mutiny.zero.flow.*;-noimport:=true
+						Bundle-Version:         ${version}
+						-noimportjava:          true;
+						-nouses:                true;
+						]]>
+					</bnd>
+				</configuration>
+			</plugin>
+		   <plugin>
+		        <groupId>org.apache.maven.plugins</groupId>
+		        <artifactId>maven-jar-plugin</artifactId>
+		        <configuration>
+		        	<archive>
+		             	<manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+		          	</archive>
+		        </configuration>
+		    </plugin>
+		</plugins>
+	</build>
+</project>

@@ -1,0 +1,1126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2017, 2022 Contributors to the Eclipse Foundation
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.eclipse.microprofile</groupId>
+    <artifactId>microprofile-parent</artifactId>
+    <version>2.12</version>
+
+    <packaging>pom</packaging>
+    <name>MicroProfile Parent POM</name>
+    <description>MicroProfile Parent POM</description>
+    <url>http://microprofile.io</url>
+
+    <properties>
+        <!-- Cross plugins settings -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Compiler -->
+        <java.version>1.8</java.version>
+        <java.release>8</java.release>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+
+        <!-- Dependencies - Jakarta -->
+        <version.jakarta.annotation>2.0.0</version.jakarta.annotation>
+        <version.jakarta.cdi>3.0.0</version.jakarta.cdi>
+        <version.jakarta.ws-rs>3.0.0</version.jakarta.ws-rs>
+        <version.jakarta.jsonp>2.0.0</version.jakarta.jsonp>
+        <version.jakarta.jsonb>2.0.0</version.jakarta.jsonb>
+
+        <!-- Plugins -->
+        <version.microprofile.build-tools>1.2</version.microprofile.build-tools>
+        <version.plugin.compiler>3.13.0</version.plugin.compiler>
+        <version.plugin.resources>3.3.1</version.plugin.resources>
+        <version.plugin.jar>3.4.1</version.plugin.jar>
+        <version.plugin.dependency>3.7.0</version.plugin.dependency>
+        <version.plugin.source>3.3.1</version.plugin.source>
+        <version.plugin.javadoc>3.7.0</version.plugin.javadoc>
+        <version.plugin.helper>3.6.0</version.plugin.helper>
+        <version.plugin.impsort>1.10.0</version.plugin.impsort>
+        <version.plugin.formatter>2.24.1</version.plugin.formatter>
+        <version.plugin.checkstyle>3.4.0</version.plugin.checkstyle>
+        <version.plugin.rat>0.16.1</version.plugin.rat>
+        <version.plugin.bnd>7.0.0</version.plugin.bnd>
+
+        <!-- Asciidoctor support versions -->
+        <asciidoctor.maven.plugin.version>2.2.6</asciidoctor.maven.plugin.version>
+        <asciidoctorj.pdf.version>2.3.17</asciidoctorj.pdf.version>
+        <version.plugin.copy.rename>1.0.1</version.plugin.copy.rename>
+        <version.plugin.release>3.0.1</version.plugin.release>
+        <version.plugin.gpg>3.2.4</version.plugin.gpg>
+        <version.plugin.publishing>0.8.0</version.plugin.publishing>
+        <!--SBOM generation -->
+        <version.plugin.cyclonedx>2.8.0</version.plugin.cyclonedx>
+
+        <!-- General Properties -->
+        <skipChecks>false</skipChecks>
+        <skipDocs>false</skipDocs>
+
+        <!-- Licenses -->
+        <spec.license>al-2.0</spec.license>
+        <tck.license>al-2.0</tck.license>
+
+        <!-- Release -->
+        <release.arguments />
+        <release.revision>Draft</release.revision>
+    </properties>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <organization>
+        <name>Eclipse Foundation</name>
+        <url>http://www.eclipse.org/</url>
+    </organization>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/eclipse/microprofile-parent/issues</url>
+    </issueManagement>
+
+    <developers>
+        <developer>
+            <id>radcortez</id>
+            <name>Roberto Cortez</name>
+            <url>https://radcortez.com</url>
+            <organization>Red Hat Inc.</organization>
+            <organizationUrl>https://redhat.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/eclipse/microprofile-parent.git</connection>
+        <developerConnection>scm:git:git@github.com:eclipse/microprofile-parent.git</developerConnection>
+        <url>https://github.com/eclipse/microprofile-parent</url>
+        <tag>2.12</tag>
+    </scm>
+
+    <distributionManagement>
+        <repository>
+            <id>central</id>
+            <url>https://central.sonatype.org/publish/publish-maven/</url>
+        </repository>
+        <snapshotRepository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <uniqueVersion>true</uniqueVersion>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>jakarta.annotation</groupId>
+                <artifactId>jakarta.annotation-api</artifactId>
+                <version>${version.jakarta.annotation}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${version.jakarta.cdi}</version>
+                <scope>provided</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>jakarta.el</groupId>
+                        <artifactId>jakarta.el-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>jakarta.ejb</groupId>
+                        <artifactId>jakarta.ejb-api</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>jakarta.ws.rs</groupId>
+                <artifactId>jakarta.ws.rs-api</artifactId>
+                <version>${version.jakarta.ws-rs}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>jakarta.json</groupId>
+                <artifactId>jakarta.json-api</artifactId>
+                <version>${version.jakarta.jsonp}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>jakarta.json.bind</groupId>
+                <artifactId>jakarta.json.bind-api</artifactId>
+                <version>${version.jakarta.jsonb}</version>
+                <scope>provided</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${version.plugin.compiler}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${version.plugin.resources}</version>
+                    <executions>
+                        <execution>
+                            <id>copy-readme</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>copy-resources</goal>
+                            </goals>
+                            <configuration>
+                                <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                                <overwrite>true</overwrite>
+                                <resources>
+                                    <resource>
+                                        <directory>${project.basedir}</directory>
+                                        <include>README.adoc</include>
+                                        <filtering>true</filtering>
+                                    </resource>
+                                </resources>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${version.plugin.jar}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${version.plugin.dependency}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>${version.plugin.source}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>${version.plugin.javadoc}</version>
+                    <configuration>
+                        <attach>true</attach>
+                        <doclint>none</doclint>
+                        <doctitle>${project.name}</doctitle>
+                        <windowtitle>${project.name}</windowtitle>
+                        <header><![CDATA[<br>${project.name} v${project.version}]]></header>
+                        <bottom>
+                            <![CDATA[
+                            Copyright &#169; ${inceptionYear} &#x2013; {currentYear} {organizationName}. All rights reserved.
+                            <br>
+                            Use is subject to <a href="{@docRoot}/licenses/${spec.license}.html" target="_top">license terms</a>.
+                        ]]>
+                        </bottom>
+                    </configuration>
+                </plugin>
+
+                <!-- Quality -->
+                <plugin>
+                    <groupId>org.apache.rat</groupId>
+                    <artifactId>apache-rat-plugin</artifactId>
+                    <version>${version.plugin.rat}</version>
+                    <configuration>
+                        <skip>${skipChecks}</skip>
+                        <consoleOutput>true</consoleOutput>
+                        <includes>
+                            <include>pom.xml</include>
+                            <include>src/**</include>
+                        </includes>
+                        <excludes>
+                            <exclude>src/main/resources/**</exclude>
+                            <exclude>src/test/resources/**</exclude>
+                            <exclude>src/main/javadoc/**</exclude>
+                            <exclude>src/main/asciidoc/license*</exclude>
+                            <exclude>**/LICENSE*</exclude>
+                            <exclude>**/*.svg</exclude>
+                            <exclude>**/*.json</exclude>
+                        </excludes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>rat-check</id>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>net.revelc.code</groupId>
+                    <artifactId>impsort-maven-plugin</artifactId>
+                    <version>${version.plugin.impsort}</version>
+                    <configuration>
+                        <skip>${skipChecks}</skip>
+                        <groups>java.,javax.,org.,com.</groups>
+                        <staticGroups>*</staticGroups>
+                        <removeUnused>true</removeUnused>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>sort-imports</id>
+                            <goals>
+                                <goal>sort</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>net.revelc.code.formatter</groupId>
+                    <artifactId>formatter-maven-plugin</artifactId>
+                    <version>${version.plugin.formatter}</version>
+                    <configuration>
+                        <skip>${skipChecks}</skip>
+                        <configFile>formatter.xml</configFile>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <phase>process-sources</phase>
+                            <goals>
+                                <goal>format</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.eclipse.microprofile</groupId>
+                            <artifactId>build-tools</artifactId>
+                            <version>${version.microprofile.build-tools}</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>${version.plugin.checkstyle}</version>
+                    <configuration>
+                        <skip>${skipChecks}</skip>
+                        <inputEncoding>UTF-8</inputEncoding>
+                        <sourceDirectories>
+                            <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                            <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
+                        </sourceDirectories>
+                        <failOnViolation>false</failOnViolation>
+                        <failsOnError>false</failsOnError>
+                        <linkXRef>true</linkXRef>
+                        <consoleOutput>true</consoleOutput>
+                        <logViolationsToConsole>true</logViolationsToConsole>
+                        <checkstyleRules>
+                            <module name="Checker">
+                                <module name="LineLength">
+                                    <property name="max" value="150" />
+                                    <!--suppress UnresolvedMavenProperty -->
+                                    <property name="ignorePattern" value="@version|@see" />
+                                </module>
+                                <module name="FileLength">
+                                    <property name="max" value="3500" />
+                                    <property name="fileExtensions" value="java" />
+                                </module>
+                                <module name="FileTabCharacter" />
+                                <module name="SuppressWarningsFilter" />
+                                <module name="TreeWalker">
+                                    <module name="SuppressWarningsHolder" />
+                                    <module name="ConstantName">
+                                        <property name="format" value="^(([A-Z][A-Z0-9]*(_[A-Z0-9]+)*))$" />
+                                    </module>
+                                    <module name="LocalVariableName" />
+                                    <module name="MethodName">
+                                        <property name="format" value="^_?[a-z][a-zA-Z0-9_]*$" />
+                                    </module>
+                                    <module name="PackageName" />
+                                    <module name="LocalFinalVariableName" />
+                                    <module name="ParameterName" />
+                                    <module name="StaticVariableName" />
+
+                                    <module name="TypeName">
+                                        <property name="format" value="^_?[A-Z][a-zA-Z0-9]*$|packageinfo" />
+                                    </module>
+                                    <module name="AvoidStarImport">
+                                        <property name="excludes" value="java.io,java.net,java.util,javax.enterprise.inject.spi" />
+                                    </module>
+                                    <module name="IllegalImport" />
+                                    <module name="RedundantImport" />
+                                    <module name="UnusedImports" />
+                                    <module name="MethodLength">
+                                        <property name="max" value="250" />
+                                    </module>
+                                    <module name="ParameterNumber">
+                                        <property name="max" value="11" />
+                                    </module>
+                                    <module name="EmptyBlock">
+                                        <property name="option" value="text" />
+                                    </module>
+                                    <module name="NeedBraces" />
+                                    <module name="LeftCurly">
+                                        <property name="option" value="EOL" />
+                                    </module>
+                                    <module name="RightCurly" />
+                                    <module name="EmptyStatement" />
+                                    <module name="EqualsHashCode" />
+                                    <module name="DefaultComesLast" />
+                                    <module name="MissingSwitchDefault" />
+                                    <module name="FallThrough" />
+                                    <module name="MultipleVariableDeclarations" />
+                                    <module name="com.puppycrawl.tools.checkstyle.checks.design.DesignForExtensionCheck">
+                                        <property name="severity" value="ignore" />
+                                    </module>
+                                    <module name="HideUtilityClassConstructor" />
+                                    <module name="com.puppycrawl.tools.checkstyle.checks.design.VisibilityModifierCheck">
+                                        <property name="packageAllowed" value="false" />
+                                        <property name="protectedAllowed" value="true" />
+                                        <property name="publicMemberPattern" value="^serialVersionUID" />
+                                        <property name="severity" value="warning" />
+                                    </module>
+                                    <module name="UpperEll" />
+                                </module>
+                            </module>
+                        </checkstyleRules>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>verify-style</id>
+                            <phase>process-test-classes</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Build -->
+                <plugin>
+                    <groupId>biz.aQute.bnd</groupId>
+                    <artifactId>bnd-maven-plugin</artifactId>
+                    <version>${version.plugin.bnd}</version> 
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>bnd-process</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>biz.aQute.bnd</groupId>
+                    <artifactId>bnd-baseline-maven-plugin</artifactId>
+                    <version>${version.plugin.bnd}</version>
+                    <configuration>
+                        <includeDistributionManagement>false</includeDistributionManagement>
+                        <releaseversions>true</releaseversions>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>baseline</id>
+                            <goals>
+                                <goal>baseline</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <!-- Docs -->
+                <plugin>
+                    <groupId>org.asciidoctor</groupId>
+                    <artifactId>asciidoctor-maven-plugin</artifactId>
+                    <version>${asciidoctor.maven.plugin.version}</version>
+                    <configuration>
+                        <sourceDocumentName>${project.artifactId}.asciidoc</sourceDocumentName>
+                        <attributes>
+                            <sourceHighlighter>coderay</sourceHighlighter>
+                            <revnumber>${project.version}</revnumber>
+                            <revremark>${release.revision}</revremark>
+                            <!--suppress UnresolvedMavenProperty - Generated by build-helper-maven-plugin -->
+                            <revdate>${release.timestamp}</revdate>
+                        </attributes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>generate-pdf</id>
+                            <phase>generate-resources</phase>
+                            <goals>
+                                <goal>process-asciidoc</goal>
+                            </goals>
+                            <configuration>
+                                <outputFile>${project.build.directory}/generated-docs/${project.build.finalName}.pdf</outputFile>
+                                <backend>pdf</backend>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>generate-html</id>
+                            <phase>generate-resources</phase>
+                            <goals>
+                                <goal>process-asciidoc</goal>
+                            </goals>
+                            <configuration>
+                                <outputFile>${project.build.directory}/generated-docs/${project.build.finalName}.html</outputFile>
+                                <backend>html5</backend>
+                            </configuration>
+                        </execution>
+                    </executions>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.asciidoctor</groupId>
+                            <artifactId>asciidoctorj-pdf</artifactId>
+                            <version>${asciidoctorj.pdf.version}</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+
+                <!-- Release -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>${version.plugin.release}</version>
+                    <configuration>
+                        <autoVersionSubmodules>true</autoVersionSubmodules>
+                        <tagNameFormat>@{project.version}</tagNameFormat>
+                        <preparationGoals>verify</preparationGoals>
+                        <localCheckout>true</localCheckout>
+                        <arguments>${release.arguments} -Prelease -Drelease.revision=${release.revision}</arguments>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>${version.plugin.helper}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>${version.plugin.gpg}</version>
+                    <configuration>
+                        <gpgArguments>
+                            <arg>--pinentry-mode</arg>
+                            <arg>loopback</arg>
+                        </gpgArguments>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>quality-checks</id>
+            <activation>
+                <property>
+                    <name>skipChecks</name>
+                    <value>!true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.rat</groupId>
+                        <artifactId>apache-rat-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>net.revelc.code.formatter</groupId>
+                        <artifactId>formatter-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>net.revelc.code</groupId>
+                        <artifactId>impsort-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>bnd</id>
+            <activation>
+                <file>
+                    <exists>bnd.bnd</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>biz.aQute.bnd</groupId>
+                        <artifactId>bnd-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <configuration>
+                            <archive>
+                                <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                            </archive>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>biz.aQute.bnd</groupId>
+                        <artifactId>bnd-baseline-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>jar-test</id>
+            <activation>
+                <file>
+                    <exists>src/test/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <version>${version.plugin.jar}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-test-jar</id>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                                <configuration>
+                                    <skipIfEmpty>true</skipIfEmpty>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>sources</id>
+            <activation>
+                <file>
+                    <exists>src/main/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>sources-test</id>
+            <activation>
+                <file>
+                    <exists>src/test/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources-test</id>
+                                <goals>
+                                    <goal>test-jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>licenses</id>
+            <activation>
+                <property>
+                    <name>skipDocs</name>
+                    <value>!true</value>
+                </property>
+                <file>
+                    <exists>src/main/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>generate-timestamp</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>timestamp-property</goal>
+                                </goals>
+                                <configuration>
+                                    <locale>en,US</locale>
+                                    <name>currentYear</name>
+                                    <pattern>yyyy</pattern>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- javadoc resourcesArtifact does not support filtering -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>unpack-licenses</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>unpack</goal>
+                                </goals>
+                                <configuration>
+                                    <artifactItems>
+                                        <artifactItem>
+                                            <groupId>org.eclipse.microprofile</groupId>
+                                            <artifactId>build-tools</artifactId>
+                                            <version>${version.microprofile.build-tools}</version>
+                                            <overWrite>true</overWrite>
+                                            <outputDirectory>${project.build.directory}</outputDirectory>
+                                            <includes>licenses/*</includes>
+                                        </artifactItem>
+                                    </artifactItems>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>javadocs</id>
+            <activation>
+                <property>
+                    <name>skipDocs</name>
+                    <value>!true</value>
+                </property>
+                <file>
+                    <exists>src/main/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-licenses-main-javadocs</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/apidocs/licenses</outputDirectory>
+                                    <overwrite>true</overwrite>
+                                    <resources>
+                                        <resource>
+                                            <include>**/${spec.license}*</include>
+                                            <directory>${project.build.directory}/licenses</directory>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>javadocs-test</id>
+            <activation>
+                <property>
+                    <name>skipDocs</name>
+                    <value>!true</value>
+                </property>
+                <file>
+                    <exists>src/test/java</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-licenses-test-javadocs</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/testapidocs/licenses</outputDirectory>
+                                    <overwrite>true</overwrite>
+                                    <resources>
+                                        <resource>
+                                            <include>**/${spec.license}*</include>
+                                            <directory>${project.build.directory}/licenses</directory>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-test-javadocs</id>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>asciidoc</id>
+            <activation>
+                <file>
+                    <exists>src/main/asciidoc</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.asciidoctor</groupId>
+                        <artifactId>asciidoctor-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>generate-timestamp</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>timestamp-property</goal>
+                                </goals>
+                                <configuration>
+                                    <locale>en,US</locale>
+                                    <name>release.timestamp</name>
+                                    <pattern>MMMM dd, yyyy</pattern>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>generate-year</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>timestamp-property</goal>
+                                </goals>
+                                <configuration>
+                                    <locale>en,US</locale>
+                                    <name>currentYear</name>
+                                    <pattern>yyyy</pattern>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>attach-artifacts</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>attach-artifact</goal>
+                                </goals>
+                                <configuration>
+                                    <artifacts>
+                                        <artifact>
+                                            <file>${project.build.directory}/generated-docs/${project.build.finalName}.pdf</file>
+                                            <type>pdf</type>
+                                        </artifact>
+                                        <artifact>
+                                            <file>${project.build.directory}/generated-docs/${project.build.finalName}.html</file>
+                                            <type>html</type>
+                                        </artifact>
+                                    </artifacts>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Add a tck empty marked file, so this is only executed in the TCK module -->
+        <profile>
+            <id>tck-licenses</id>
+            <activation>
+                <property>
+                    <name>release.revision</name>
+                    <value>Final</value>
+                </property>
+                <file>
+                    <exists>src/main/resources/META-INF/tck</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <!-- Copy License to main javadocs -->
+                            <execution>
+                                <id>copy-licenses-main-javadocs</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/apidocs/licenses</outputDirectory>
+                                    <overwrite>true</overwrite>
+                                    <resources>
+                                        <resource>
+                                            <include>**/${tck.license}*</include>
+                                            <directory>${project.build.directory}/licenses</directory>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                            <!-- Copy License to test javadocs -->
+                            <execution>
+                                <id>copy-licenses-test-javadocs</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/testapidocs/licenses</outputDirectory>
+                                    <overwrite>true</overwrite>
+                                    <resources>
+                                        <resource>
+                                            <include>**/${tck.license}*</include>
+                                            <directory>${project.build.directory}/licenses</directory>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Replace License with EF -->
+                    <plugin>
+                        <groupId>com.coderplus.maven.plugins</groupId>
+                        <artifactId>copy-rename-maven-plugin</artifactId>
+                        <version>${version.plugin.copy.rename}</version>
+                        <executions>
+                            <!-- Copy and Rename License to main jar -->
+                            <execution>
+                                <id>copy-license-main</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy</goal>
+                                </goals>
+                                <configuration>
+                                    <sourceFile>${project.build.directory}/licenses/${tck.license}</sourceFile>
+                                    <destinationFile>${project.build.directory}/classes/META-INF/LICENSE</destinationFile>
+                                </configuration>
+                            </execution>
+                            <!-- Copy and Rename License to test jar -->
+                            <execution>
+                                <id>copy-license-test</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>copy</goal>
+                                </goals>
+                                <configuration>
+                                    <sourceFile>${project.build.directory}/licenses/${tck.license}</sourceFile>
+                                    <destinationFile>${project.build.directory}/test-classes/META-INF/LICENSE</destinationFile>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/NOTICE</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                    <!-- To override tck license -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <configuration>
+                            <bottom>
+                                <![CDATA[
+                            Copyright &#169; ${inceptionYear} &#x2013; {currentYear} {organizationName}. All rights reserved.
+                            <br>
+                            Use is subject to <a href="{@docRoot}/licenses/${tck.license}.html" target="_top">license terms</a>.
+                        ]]>
+                            </bottom>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${version.plugin.publishing}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>ef-license</id>
+            <activation>
+                <property>
+                    <name>release.revision</name>
+                    <value>Final</value>
+                </property>
+            </activation>
+            <properties>
+                <spec.license>efsl-1.1</spec.license>
+                <tck.license>eftckl-1.1</tck.license>
+            </properties>
+        </profile>
+        
+        <profile>
+            <id>java-release</id>
+            <activation>
+                <jdk>[9,)</jdk>
+            </activation>
+            <properties>
+                <maven.compiler.release>${java.release}</maven.compiler.release>
+            </properties>
+        </profile>
+
+        <!--SBOM-->
+        <profile>
+            <!-- Generates SBOM. Skip with '-DskipSBOM'.-->
+                <id>sbom</id>
+                <activation>
+                  <property>
+                    <name>!skipSBOM</name>
+                  </property>
+                </activation>
+                <build>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.cyclonedx</groupId>
+                            <artifactId>cyclonedx-maven-plugin</artifactId>
+                            <version>${version.plugin.cyclonedx}</version>
+                            <configuration>
+                                <schemaVersion>1.4</schemaVersion>
+                                <projectType>library</projectType>
+                            </configuration>
+                            <executions>
+                                <execution>
+                                    <phase>package</phase>
+                                    <goals>
+                                        <goal>makeAggregateBom</goal>
+                                    </goals>
+                                </execution>
+                            </executions>
+                        </plugin>
+                    </plugins>
+                </build>
+            </profile>
+    </profiles>
+
+    <modules>
+        <module>tck-bom</module>
+    </modules>
+</project>

@@ -1,0 +1,805 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright (c) 2010-2026 Sonatype, Inc. and others.
+    All rights reserved. This program and the accompanying materials
+    are made available under the terms of the Eclipse Public License 2.0
+    which accompanies this distribution, and is available at
+    https://www.eclipse.org/legal/epl-2.0/
+
+    SPDX-License-Identifier: EPL-2.0
+
+    Contributors:
+      Stuart McCulloch (Sonatype, Inc.) - initial API and implementation
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.eclipse.sisu</groupId>
+  <artifactId>sisu-inject</artifactId>
+  <version>1.0.1</version>
+  <packaging>pom</packaging>
+
+  <name>${project.groupId}:${project.artifactId}</name>
+  <description>Eclipse Sisu: JSR330-based container, Plexus-JSR330 adapter and supporting Maven Mojos</description>
+
+  <url>https://eclipse.dev/sisu/</url>
+  <inceptionYear>2010</inceptionYear>
+  <organization>
+    <name>The Eclipse Foundation</name>
+    <url>http://www.eclipse.org/</url>
+  </organization>
+  <licenses>
+    <license>
+      <name>Eclipse Public License, Version 2.0</name>
+      <url>https://www.eclipse.org/legal/epl-v20.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>mcculls</id>
+      <name>Stuart McCulloch</name>
+    </developer>
+    <developer>
+      <id>cstamas</id>
+      <name>Tamas Cservenak</name>
+    </developer>
+    <developer>
+      <id>kwin</id>
+      <name>Konrad Windszus</name>
+    </developer>
+  </developers>
+
+  <mailingLists>
+    <mailingList>
+      <name>Sisu Developers List</name>
+      <subscribe>sisu-dev-subscribe@eclipse.org</subscribe>
+      <unsubscribe>sisu-dev-unsubscribe@eclipse.org</unsubscribe>
+      <post>sisu-dev@eclipse.org</post>
+      <archive>https://www.eclipse.org/lists/sisu-dev</archive>
+    </mailingList>
+    <mailingList>
+      <name>Sisu Users List</name>
+      <subscribe>sisu-users-subscribe@eclipse.org</subscribe>
+      <unsubscribe>sisu-users-unsubscribe@eclipse.org</unsubscribe>
+      <post>sisu-users@eclipse.org</post>
+      <archive>https://www.eclipse.org/lists/sisu-users</archive>
+    </mailingList>
+  </mailingLists>
+
+  <modules>
+    <module>org.eclipse.sisu.inject</module>
+    <module>org.eclipse.sisu.plexus</module>
+    <module>org.eclipse.sisu.mojos</module>
+    <module>org.eclipse.sisu.inject.extender</module>
+    <module>org.eclipse.sisu.plexus.extender</module>
+  </modules>
+
+  <scm>
+    <connection>scm:git:git://github.com/eclipse-sisu/sisu-project.git</connection>
+    <developerConnection>scm:git:git@github.com:eclipse-sisu/sisu-project.git</developerConnection>
+    <tag>releases/1.0.1</tag>
+    <url>https://github.com/eclipse-sisu/sisu-project/tree/main</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/eclipse-sisu/sisu-project/issues</url>
+  </issueManagement>
+  <ciManagement>
+    <system>GitHub Actions</system>
+    <url>https://github.com/eclipse-sisu/sisu-project/actions/workflows/build.yml?query=branch%3Amain</url>
+  </ciManagement>
+
+  <distributionManagement>
+    <repository>
+      <id>sonatype-central-portal</id>
+      <name>Sonatype Central Portal</name>
+      <url>https://repo.maven.apache.org/maven2/</url>
+    </repository>
+    <snapshotRepository>
+      <id>sonatype-central-portal</id>
+      <name>Sonatype Central Portal</name>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    </snapshotRepository>
+    <site>
+      <id>sisu.site-deploy</id>
+      <url>scm:git:ssh://git@github.com/eclipse-sisu/sisu-website.git</url>
+    </site>
+  </distributionManagement>
+
+  <properties>
+    <maven.compiler.release>8</maven.compiler.release>
+    <!-- Set to same version as release target for consistency -->
+    <maven.compiler.source>${maven.compiler.release}</maven.compiler.source>
+    <maven.compiler.target>${maven.compiler.release}</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.build.outputTimestamp>2026-06-24T10:10:57Z</project.build.outputTimestamp>
+
+    <!-- Source headers -->
+    <sisu.licenseHeader>https://raw.githubusercontent.com/eclipse-sisu/sisu-project/main/license-header-epl2.txt</sisu.licenseHeader>
+    <sisu.licenseYear>${project.inceptionYear}-2026</sisu.licenseYear>
+
+    <!-- Versions -->
+    <mavenRuntimeVersion>3.3.1</mavenRuntimeVersion>
+    <mavenBuildVersion>3.9.16</mavenBuildVersion>
+    <javaBuildVersion>17</javaBuildVersion>
+    <mavenPluginToolsVersion>3.15.2</mavenPluginToolsVersion>
+    <asmVersion>9.10.1</asmVersion>
+    <slf4jVersion>1.7.36</slf4jVersion>
+    <guiceVersion>4.2.3</guiceVersion>
+    <!-- define empty, as jacoco is only conditionally executed (https://www.eclemma.org/jacoco/trunk/doc/prepare-agent-mojo.html) -->
+    <argLine />
+    <njordVersion>0.9.8</njordVersion>
+    <!-- Spotless versions -->
+    <spotlessMavenPluginVersion>3.7.0</spotlessMavenPluginVersion>
+    <spotlessPalantirJavaFormatVersion>2.86.0</spotlessPalantirJavaFormatVersion>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+
+      <!--
+       | Internal modules (reactor)
+      -->
+      <dependency>
+        <groupId>org.eclipse.sisu</groupId>
+        <artifactId>org.eclipse.sisu.inject</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.sisu</groupId>
+        <artifactId>org.eclipse.sisu.plexus</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.sisu</groupId>
+        <artifactId>sisu-maven-plugin</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!--
+       | Sisu is compatible with Guice 3.0+
+      -->
+      <dependency>
+        <groupId>com.google.inject</groupId>
+        <artifactId>guice</artifactId>
+        <version>${guiceVersion}</version>
+        <classifier>classes</classifier>
+      </dependency>
+      <dependency>
+        <groupId>com.google.inject.extensions</groupId>
+        <artifactId>guice-servlet</artifactId>
+        <version>${guiceVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.inject.extensions</groupId>
+        <artifactId>guice-assistedinject</artifactId>
+        <version>${guiceVersion}</version>
+      </dependency>
+
+      <!-- To get rid of CVE warnings (is provided anyway) -->
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>33.6.0-jre</version>
+      </dependency>
+
+      <!-- To support latest Java versions -->
+      <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm</artifactId>
+        <version>${asmVersion}</version>
+      </dependency>
+
+      <!--
+       | Plexus classloading/utilities
+      -->
+      <dependency>
+        <groupId>org.codehaus.plexus</groupId>
+        <artifactId>plexus-component-annotations</artifactId>
+        <version>2.2.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.plexus</groupId>
+        <artifactId>plexus-classworlds</artifactId>
+        <version>2.12.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.plexus</groupId>
+        <artifactId>plexus-utils</artifactId>
+        <version>3.6.1</version>
+      </dependency>
+
+      <!--
+       | Optional support dependencies
+      -->
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>${slf4jVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-nop</artifactId>
+        <version>${slf4jVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>${slf4jVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>osgi.core</artifactId>
+        <version>5.0.0</version>
+      </dependency>
+      <dependency>
+        <groupId>javax.annotation</groupId>
+        <artifactId>javax.annotation-api</artifactId>
+        <version>1.3.2</version>
+      </dependency>
+      <dependency>
+        <groupId>javax.enterprise</groupId>
+        <artifactId>cdi-api</artifactId>
+        <version>1.2</version>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.el</groupId>
+            <artifactId>javax.el-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.interceptor</groupId>
+            <artifactId>javax.interceptor-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>javax.servlet</groupId>
+        <artifactId>servlet-api</artifactId>
+        <version>2.5</version>
+      </dependency>
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <!-- older version not supported by junit-vintage runner -->
+        <version>4.13.2</version>
+      </dependency>
+      <dependency>
+        <groupId>org.testng</groupId>
+        <artifactId>testng</artifactId>
+        <!-- is not transitive dep; we just use annotations -->
+        <version>6.14.3</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>org.apache.felix.framework</artifactId>
+        <version>7.0.5</version>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.plexus</groupId>
+        <artifactId>plexus-build-api</artifactId>
+        <version>1.2.0</version>
+      </dependency>
+
+      <!--
+       | org.eclipse.sisu.mojos specific
+      -->
+      <dependency>
+        <groupId>org.apache.maven.plugin-tools</groupId>
+        <artifactId>maven-plugin-annotations</artifactId>
+        <version>${mavenPluginToolsVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven.shared</groupId>
+        <artifactId>maven-common-artifact-filters</artifactId>
+        <version>3.4.0</version>
+      </dependency>
+
+      <!--
+       | Testing
+      -->
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>5.14.4</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>3.6.3</version>
+          <configuration>
+            <rules>
+              <enforceBytecodeVersion>
+                <maxJdkVersion>${maven.compiler.target}</maxJdkVersion>
+                <excludes>
+                  <!-- Used in tests only -->
+                  <exclude>org.junit.jupiter:junit-jupiter-api</exclude>
+                  <exclude>org.junit.platform:junit-platform-commons</exclude>
+                  <exclude>org.apache.felix:org.apache.felix.framework</exclude>
+                </excludes>
+              </enforceBytecodeVersion>
+              <requireMavenVersion>
+                <version>${mavenBuildVersion}</version>
+              </requireMavenVersion>
+              <requireJavaVersion>
+                <version>${javaBuildVersion}</version>
+              </requireJavaVersion>
+            </rules>
+          </configuration>
+          <executions>
+            <execution>
+              <id>enforce-versions</id>
+              <goals>
+                <goal>enforce</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.15.0</version>
+          <configuration>
+            <proc>none</proc>
+            <showDeprecation>true</showDeprecation>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-plugin-plugin</artifactId>
+          <version>${mavenPluginToolsVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-plugin-report-plugin</artifactId>
+          <version>${mavenPluginToolsVersion}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.5.6</version>
+          <configuration>
+            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>3.5.6</version>
+        </plugin>
+        <plugin>
+          <groupId>biz.aQute.bnd</groupId>
+          <artifactId>bnd-maven-plugin</artifactId>
+          <version>7.3.0</version>
+          <configuration>
+            <bnd><![CDATA[
+Bundle-Copyright: Copyright (c) 2010-present Sonatype, Inc. and others
+Bundle-DocURL: http://www.eclipse.org/sisu/
+-noextraheaders: true
+-snapshot: SNAPSHOT
+            ]]></bnd>
+          </configuration>
+          <executions>
+            <execution>
+              <id>bnd-process</id>
+              <goals>
+                <goal>bnd-process</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.5.0</version>
+          <executions>
+            <execution>
+              <id>default-jar</id>
+              <configuration>
+                <archive>
+                  <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                </archive>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.6.2</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>3.1.4</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>3.1.4</version>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>0.8.15</version>
+          <configuration>
+            <excludes>
+              <exclude>Incomplete*</exclude>
+            </excludes>
+            <append>true</append>
+          </configuration>
+          <executions>
+            <execution>
+              <id>jacoco-prepare</id>
+              <goals>
+                <goal>prepare-agent</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>jacoco-report</id>
+              <goals>
+                <goal>report</goal>
+              </goals>
+              <phase>verify</phase>
+              <configuration>
+                <title>${project.name}</title>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>3.3.1</version>
+          <configuration>
+            <autoVersionSubmodules>true</autoVersionSubmodules>
+            <mavenExecutorId>forked-path</mavenExecutorId>
+            <useReleaseProfile>false</useReleaseProfile>
+            <arguments>-Psisu-release -Dtest=none -Dnjord.autoPublish</arguments>
+            <localCheckout>true</localCheckout>
+            <pushChanges>false</pushChanges>
+            <scmCommentPrefix>|</scmCommentPrefix>
+            <goals>deploy</goals>
+            <signTag>true</signTag>
+            <tagNameFormat>releases/@{project.version}</tagNameFormat>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <version>3.22.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-scm-publish-plugin</artifactId>
+          <version>3.3.0</version>
+          <configuration>
+            <scmBranch>gh-pages</scmBranch>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-invoker-plugin</artifactId>
+          <version>3.10.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.4.0</version>
+          <executions>
+            <execution>
+              <id>attach-sources</id>
+              <goals>
+                <goal>jar-no-fork</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.12.0</version>
+          <configuration>
+            <overview>${basedir}/overview.html</overview>
+            <excludePackageNames>*.internal,*.asm</excludePackageNames>
+            <additionalJOption>-Xdoclint:all,-missing</additionalJOption>
+            <detectOfflineLinks>false</detectOfflineLinks>
+            <quiet>true</quiet>
+            <notimestamp>true</notimestamp>
+          </configuration>
+          <executions>
+            <execution>
+              <id>attach-javadocs</id>
+              <goals>
+                <goal>jar</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-gpg-plugin</artifactId>
+          <version>3.2.8</version>
+          <configuration>
+            <useAgent>true</useAgent>
+          </configuration>
+          <executions>
+            <execution>
+              <id>sign-artifacts</id>
+              <goals>
+                <goal>sign</goal>
+              </goals>
+              <phase>verify</phase>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-project-info-reports-plugin</artifactId>
+          <version>3.9.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.eclipse.sisu</groupId>
+          <artifactId>sisu-maven-plugin</artifactId>
+          <version>1.0.0</version>
+          <executions>
+            <execution>
+              <id>index-project</id>
+              <goals>
+                <goal>main-index</goal>
+                <goal>test-index</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>com.diffplug.spotless</groupId>
+          <artifactId>spotless-maven-plugin</artifactId>
+          <version>${spotlessMavenPluginVersion}</version>
+          <configuration>
+            <java>
+              <!-- orders of used formatters are important MPOM-376 -->
+              <!-- eg. palantir override importOrder, so should be first -->
+              <palantirJavaFormat>
+                <!-- Declare version so that spotless does not choose a version based on JDK version -->
+                <version>${spotlessPalantirJavaFormatVersion}</version>
+              </palantirJavaFormat>
+              <removeUnusedImports />
+            </java>
+            <!-- accept all endings to support validations on top of source archives -->
+            <lineEndings>PRESERVE</lineEndings>
+            <pom>
+              <sortPom>
+                <expandEmptyElements>false</expandEmptyElements>
+                <!-- https://issues.apache.org/jira/browse/MRELEASE-1111 -->
+                <spaceBeforeCloseEmptyElement>true</spaceBeforeCloseEmptyElement>
+                <quiet>true</quiet>
+              </sortPom>
+            </pom>
+            <upToDateChecking>
+              <enabled>true</enabled>
+            </upToDateChecking>
+          </configuration>
+        </plugin>
+        <!--
+        Plugin is set to work in "aggregate" mode, so invoke it from root directory of checkout combined with -N:
+        mvn -N license:check to check or mvn -N license:format to format sources. Using it manually for now.
+        -->
+        <plugin>
+          <groupId>com.mycila</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>5.0.0</version>
+          <configuration>
+            <aggregate>true</aggregate>
+            <strictCheck>true</strictCheck>
+            <useDefaultExcludes>false</useDefaultExcludes>
+            <licenseSets>
+              <licenseSet>
+                <header>${sisu.licenseHeader}</header>
+                <includes>
+                  <include>**/pom.xml</include>
+                  <include>**/*.xml</include>
+                  <include>**/*.xsd</include>
+                  <include>**/*.xjb</include>
+                  <include>**/*.mdo</include>
+                  <include>**/*.properties</include>
+                  <include>**/*.java</include>
+                  <include>**/*.groovy</include>
+                  <include>**/*.scala</include>
+                  <include>**/*.aj</include>
+                  <include>**/*.js</include>
+                  <include>**/*.css</include>
+                </includes>
+                <excludes>
+                  <exclude>.mvn/**</exclude>
+                  <exclude>bin/**</exclude>
+                  <exclude>docs/**</exclude>
+                  <exclude>leftovers/**</exclude>
+                  <exclude>**/target/**</exclude>
+                  <exclude>**/conf/**</exclude>
+                  <exclude>**/.*</exclude>
+                  <exclude>**/pkg/**</exclude>
+                  <exclude>**/.idea/**</exclude>
+                  <exclude>**/release.properties</exclude>
+                  <exclude>**/pom.xml.releaseBackup</exclude>
+                  <exclude>release.sh</exclude>
+                  <exclude>**/src/test/**</exclude>
+                </excludes>
+              </licenseSet>
+            </licenseSets>
+            <properties>
+              <year>${sisu.licenseYear}</year>
+            </properties>
+            <mapping>
+              <scala>JAVADOC_STYLE</scala>
+              <xjb>XML_STYLE</xjb>
+              <mdo>XML_STYLE</mdo>
+            </mapping>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>eu.maveniverse.maven.plugins</groupId>
+          <artifactId>njord</artifactId>
+          <version>${njordVersion}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+      </plugin>
+    </plugins>
+    <extensions>
+      <extension>
+        <groupId>eu.maveniverse.maven.njord</groupId>
+        <artifactId>extension3</artifactId>
+        <version>${njordVersion}</version>
+      </extension>
+    </extensions>
+  </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <reportSets>
+          <reportSet>
+            <id>aggregate</id>
+            <reports>
+              <report>aggregate</report>
+            </reports>
+            <configuration>
+              <groups>
+                <group>
+                  <title>Sisu Container</title>
+                  <packages>org.eclipse.sisu*:org.sonatype.inject</packages>
+                </group>
+                <group>
+                  <title>Plexus API</title>
+                  <packages>org.codehaus.plexus*:org.eclipse.sisu.plexus</packages>
+                </group>
+              </groups>
+            </configuration>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <profiles>
+    <profile>
+      <id>spotless-check</id>
+      <activation>
+        <property>
+          <name>env.CI</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.diffplug.spotless</groupId>
+            <artifactId>spotless-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>spotless-check</id>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+                <phase>process-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>spotless-apply</id>
+      <activation>
+        <property>
+          <name>!env.CI</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.diffplug.spotless</groupId>
+            <artifactId>spotless-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>spotless-apply</id>
+                <goals>
+                  <goal>apply</goal>
+                </goals>
+                <phase>process-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>sisu-release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!-- not all submodules have tests yet, but those additional executions don't do any harm -->
+    <profile>
+      <id>code-coverage</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

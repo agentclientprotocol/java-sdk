@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.smallrye</groupId>
+        <artifactId>smallrye-build-parent</artifactId>
+        <version>49</version>
+    </parent>
+
+    <groupId>io.smallrye.reactive</groupId>
+    <artifactId>mutiny-zero-parent</artifactId>
+    <name>SmallRye Mutiny Zero Parent</name>
+    <version>1.2.1</version>
+    <description>Mutiny Zero Parent Module</description>
+
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>mutiny-zero</module>
+        <module>mutiny-zero-flow-adapters</module>
+        <module>mutiny-zero-vertx-publishers</module>
+        <module>mutiny-zero-reactive-streams-junit5-tck</module>
+    </modules>
+
+    <inceptionYear>2021</inceptionYear>
+    <organization>
+        <name>SmallRye</name>
+        <url>https://wwww.smallrye.io</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/smallrye/smallrye-mutiny-zero/issues</url>
+    </issueManagement>
+
+    <developers>
+        <developer>
+            <id>jponge</id>
+            <name>Julien Ponge</name>
+            <email>julien[AT]ponge[DOT]org</email>
+            <url>https://github.com/jponge</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git@github.com:smallrye/smallrye-mutiny-zero.git</connection>
+        <developerConnection>scm:git:git@github.com:smallrye/smallrye-mutiny-zero.git</developerConnection>
+        <url>https://github.com/smallrye/smallrye-mutiny-zero</url>
+        <tag>1.2.1</tag>
+    </scm>
+
+    <properties>
+        <reactive-streams.version>1.0.4</reactive-streams.version>
+        <jspecify.version>1.0.0</jspecify.version>
+
+        <mutiny.version>3.2.0</mutiny.version>
+        <vertx.version>5.0.12</vertx.version>
+
+        <awaitility.version>4.3.0</awaitility.version>
+        <assertj-core.version>3.27.7</assertj-core.version>
+
+        <junit-jupiter.version>6.1.0</junit-jupiter.version>
+        <testng.version>7.12.0</testng.version>
+        <testng-junit5-engine.version>1.1.0</testng-junit5-engine.version>
+        <logback-classic.version>1.5.32</logback-classic.version>
+
+        <revapi-maven-plugin.version>0.15.1</revapi-maven-plugin.version>
+        <revapi-java.version>0.28.4</revapi-java.version>
+        <revapi-reporter-json.version>0.5.1</revapi-reporter-json.version>
+        <revapi-reporter-text.version>0.15.1</revapi-reporter-text.version>
+
+        <maven.compiler.release>17</maven.compiler.release>
+		<bnd-maven-plugin.version>7.2.3</bnd-maven-plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+
+            <dependency>
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${jspecify.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.reactivestreams</groupId>
+                <artifactId>reactive-streams</artifactId>
+                <version>${reactive-streams.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.smallrye.reactive</groupId>
+                <artifactId>mutiny</artifactId>
+                <version>${mutiny.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.reactivestreams</groupId>
+                <artifactId>reactive-streams-tck</artifactId>
+                <version>${reactive-streams.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.reactivestreams</groupId>
+                <artifactId>reactive-streams-tck-flow</artifactId>
+                <version>${reactive-streams.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj-core.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${awaitility.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit-jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <!-- Because IntelliJ has bugs and won't run tests from the IDE -->
+                <groupId>org.junit.vintage</groupId>
+                <artifactId>junit-vintage-engine</artifactId>
+                <version>${junit-jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- TestNG running in JUnit5 -->
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>${testng.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.support</groupId>
+                <artifactId>testng-engine</artifactId>
+                <version>${testng-junit5-engine.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback-classic.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Disable TestNG -->
+                            <testNGArtifactName>none:none</testNGArtifactName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <configuration>
+                    <attach>true</attach>
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.revapi</groupId>
+                <artifactId>revapi-maven-plugin</artifactId>
+                <version>${revapi-maven-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.revapi</groupId>
+                        <artifactId>revapi-java</artifactId>
+                        <version>${revapi-java.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.revapi</groupId>
+                        <artifactId>revapi-reporter-json</artifactId>
+                        <version>${revapi-reporter-json.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.revapi</groupId>
+                        <artifactId>revapi-reporter-text</artifactId>
+                        <version>${revapi-reporter-text.version}</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>check-compatibility</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <failSeverity>breaking</failSeverity>
+                            <checkDependencies>false</checkDependencies>
+                            <analysisConfigurationFiles>
+                                <file>${project.basedir}/revapi.json</file>
+                            </analysisConfigurationFiles>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <activation>
+                <jdk>[11,)</jdk>
+            </activation>
+            <id>java-11+</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <!-- wonderful reliability of javadoc used with modules breaking on non exposed packages -->
+                            <source>11</source>
+                            <release>11</release>
+                            <detectJavaApiLink>false</detectJavaApiLink>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

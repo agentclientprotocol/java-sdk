@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.smallrye</groupId>
+        <artifactId>smallrye-parent</artifactId>
+        <version>49</version>
+    </parent>
+
+    <groupId>io.smallrye.common</groupId>
+    <artifactId>smallrye-common-parent</artifactId>
+    <version>2.19.0</version>
+
+    <packaging>pom</packaging>
+    <name>SmallRye Common: Parent</name>
+    <url>http://smallrye.io</url>
+    <description>Common utilities for SmallRye</description>
+    <properties>
+        <!-- Plugins -->
+        <version.bridger>1.8</version.bridger>
+        <version.sundrio>0.300.0</version.sundrio>
+        <version.jandex>3.6.0</version.jandex>
+		<bnd-maven-plugin.version>7.3.0</bnd-maven-plugin.version>
+
+        <!-- Dependencies -->
+        <version.classfile.api>25.1</version.classfile.api>
+        <version.graalvm>25.0.3</version.graalvm>
+        <version.vertx4>4.5.28</version.vertx4>
+        <version.vertx5>5.1.0</version.vertx5>
+        <version.maven-resolver>1.9.22</version.maven-resolver>
+        <version.org.jboss.logging>3.6.0.Final</version.org.jboss.logging>
+
+        <!-- Sonar settings -->
+        <sonar.projectName>SmallRye Common</sonar.projectName>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <module-services-plugin.version>1.3</module-services-plugin.version>
+    </properties>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/smallrye/smallrye-common/issues</url>
+    </issueManagement>
+
+    <scm>
+        <connection>scm:git:git@github.com:smallrye/smallrye-common.git</connection>
+        <developerConnection>scm:git:git@github.com:smallrye/smallrye-common.git</developerConnection>
+        <url>https://github.com/smallrye/smallrye-common/</url>
+        <tag>2.19.0</tag>
+    </scm>
+
+    <developers>
+        <developer>
+            <id>smallrye-common-team</id>
+            <name>SmallRye Common Team</name>
+            <organization>smallrye-common</organization>
+            <organizationUrl>https://smallrye.io/</organizationUrl>
+        </developer>
+    </developers>
+
+    <modules>
+        <!-- Submodule list. Keep alphabetical. Also, add submodules to README.md. -->
+        <module>annotation</module>
+        <module>classloader</module>
+        <module>constraint</module>
+        <module>cpu</module>
+        <module>expression</module>
+        <module>function</module>
+        <module>io</module>
+        <module>net</module>
+        <module>os</module>
+        <module>process</module>
+        <module>ref</module>
+        <module>resource</module>
+        <module>search</module>
+        <module>version</module>
+        <module>vertx4-context</module>
+        <module>vertx5-context</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- External build dependencies -->
+            <dependency>
+                <groupId>org.graalvm.sdk</groupId>
+                <artifactId>nativeimage</artifactId>
+                <version>${version.graalvm}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <!-- External test dependencies -->
+            <dependency>
+                <groupId>io.github.dmlloyd</groupId>
+                <artifactId>jdk-classfile-backport</artifactId>
+                <version>${version.classfile.api}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Internal module dependencies -->
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-annotation</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-constraint</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-expression</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-function</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-io</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-net</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-os</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-search</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.smallrye.common</groupId>
+                <artifactId>smallrye-common-vertx-context</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>io.smallrye</groupId>
+                    <artifactId>jandex-maven-plugin</artifactId>
+                    <version>${version.jandex}</version>
+                    <executions>
+                        <execution>
+                            <id>make-index</id>
+                            <goals>
+                                <goal>jandex</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.jboss.bridger</groupId>
+                    <artifactId>bridger</artifactId>
+                    <version>${version.bridger}</version>
+                    <executions>
+                        <execution>
+                            <id>bridger</id>
+                            <phase>process-classes</phase>
+                            <goals>
+                                <goal>transform</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <configuration>
+                        <failOnWarnings>true</failOnWarnings>
+                        <doclint>all</doclint>
+                        <sourceFileExcludes>
+                            <sourceFileExclude>**/*_$$logger.java</sourceFileExclude>
+                            <sourceFileExclude>**/*_$$bundle.java</sourceFileExclude>
+                        </sourceFileExcludes>
+                        <!-- work around problem when the generated sources are included -->
+                        <sourcepath>${project.build.sourceDirectory}</sourcepath>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>io.github.dmlloyd.maven</groupId>
+                    <artifactId>module-services-plugin</artifactId>
+                    <version>${module-services-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>generate-services</id>
+                            <goals>
+                                <goal>generate</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>net.revelc.code</groupId>
+                    <artifactId>impsort-maven-plugin</artifactId>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.github.javaparser</groupId>
+                            <artifactId>javaparser-core</artifactId>
+                            <version>3.28.0</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <rules>
+                      <requireJavaVersion>
+                        <version>22</version>
+                      </requireJavaVersion>
+                    </rules>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.sundr</groupId>
+                <artifactId>sundr-maven-plugin</artifactId>
+                <version>${version.sundrio}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate-bom</goal>
+                        </goals>
+                        <configuration>
+                            <boms>
+                                <bom>
+                                    <artifactId>smallrye-common-bom</artifactId>
+                                    <name>Smallrye Common: BOM</name>
+                                    <description>Centralized dependencyManagement for the SmallRye Common Project</description>
+                                    <properties>
+                                        <skipStagingRepositoryClose>true</skipStagingRepositoryClose>
+                                        <sonar.skip>true</sonar.skip>
+                                    </properties>
+                                </bom>
+                            </boms>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

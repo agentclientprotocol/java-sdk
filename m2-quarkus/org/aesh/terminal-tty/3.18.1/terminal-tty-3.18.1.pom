@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+~ JBoss, Home of Professional Open Source
+~ Copyright 2014 Red Hat Inc. and/or its affiliates and other contributors
+~ as indicated by the @authors tag. All rights reserved.
+~ See the copyright.txt in the distribution for a
+~ full listing of individual contributors.
+~
+~ Licensed under the Apache License, Version 2.0 (the "License");
+~ you may not use this file except in compliance with the License.
+~ You may obtain a copy of the License at
+~ http://www.apache.org/licenses/LICENSE-2.0
+~ Unless required by applicable law or agreed to in writing, software
+~ distributed under the License is distributed on an "AS IS" BASIS,
+~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+~ See the License for the specific language governing permissions and
+~ limitations under the License.
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <!-- Parent -->
+    <parent>
+        <groupId>org.aesh</groupId>
+        <artifactId>readline-all</artifactId>
+        <version>3.18.1</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>terminal-tty</artifactId>
+    <packaging>jar</packaging>
+    <name>Aesh Terminal TTY</name>
+    <description>Aesh (Another Extendable SHell) Terminal TTY - Local terminal implementation</description>
+    <scm>
+        <connection>scm:git:git://github.com/aeshell/aesh-readline.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/aeshell/aesh-readline.git</developerConnection>
+        <url>https://github.com/aeshell/aesh-readline/tree/master</url>
+    </scm>
+
+    <!-- Licenses -->
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
+    <properties>
+        <javaModuleName>org.aesh.terminal.tty</javaModuleName>
+    </properties>
+
+    <developers>
+        <developer>
+            <name>Jean-Francois Denise</name>
+            <email>jdenise@redhat.com</email>
+            <organization>Red Hat</organization>
+            <organizationUrl>http://www.redhat.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Stale Pedersen</name>
+            <email>spederse@redhat.com</email>
+            <organization>Red Hat</organization>
+            <organizationUrl>http://www.redhat.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.aesh</groupId>
+            <artifactId>terminal-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <trimStackTrace>false</trimStackTrace>
+                    <includes>
+                        <include>**/*TestCase.java</include>
+                        <include>**/*Test.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                        </manifest>
+                        <manifestEntries>
+                            <Automatic-Module-Name>${javaModuleName}</Automatic-Module-Name>
+                            <Multi-Release>true</Multi-Release>
+                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                        </manifestEntries>
+                        <index>true</index>
+                    </archive>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>native-windows</id>
+            <!-- Auto-activate only on Windows CI runners: the DLL must be rebuilt
+                 from current sources so tests exercise the real JNI bindings.
+                 Local Windows dev builds without a C compiler are unaffected
+                 (profile stays manual via -Pnative-windows). -->
+            <activation>
+                <os><family>windows</family></os>
+                <property><name>env.GITHUB_ACTIONS</name></property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>compile-native-dll</id>
+                                <phase>process-classes</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target xmlns:if="ant:if" xmlns:unless="ant:unless">
+                                        <mkdir dir="${project.build.outputDirectory}/native/windows-x86_64"/>
+                                        <!-- Try MSVC (cl) first -->
+                                        <exec executable="cl" dir="${project.build.directory}"
+                                              resultproperty="cl.result"
+                                              failonerror="false" failifexecutionfails="false">
+                                            <arg value="/LD"/>
+                                            <arg value="/O2"/>
+                                            <arg value="/I${env.JAVA_HOME}\include"/>
+                                            <arg value="/I${env.JAVA_HOME}\include\win32"/>
+                                            <arg value="/Fe:${project.build.outputDirectory}\native\windows-x86_64\aesh-console.dll"/>
+                                            <arg value="${project.basedir}\src\main\native\WinConsoleNative.c"/>
+                                            <arg value="kernel32.lib"/>
+                                        </exec>
+                                        <!-- Fall back to MinGW gcc if cl is not available -->
+                                        <condition property="cl.failed">
+                                            <not><equals arg1="${cl.result}" arg2="0"/></not>
+                                        </condition>
+                                        <exec executable="gcc" dir="${project.build.directory}"
+                                              failonerror="false" failifexecutionfails="false"
+                                              resultproperty="gcc.hardening.result"
+                                              if:set="cl.failed">
+                                            <arg value="-shared"/>
+                                            <arg value="-O2"/>
+                                            <arg value="-Wl,--nxcompat"/>
+                                            <arg value="-I${env.JAVA_HOME}\include"/>
+                                            <arg value="-I${env.JAVA_HOME}\include\win32"/>
+                                            <arg value="-o"/>
+                                            <arg value="${project.build.outputDirectory}\native\windows-x86_64\aesh-console.dll"/>
+                                            <arg value="${project.basedir}\src\main\native\WinConsoleNative.c"/>
+                                            <arg value="-lkernel32"/>
+                                        </exec>
+                                        <condition property="gcc.hardening.failed">
+                                            <not><equals arg1="${gcc.hardening.result}" arg2="0"/></not>
+                                        </condition>
+                                        <exec executable="gcc" dir="${project.build.directory}"
+                                              failonerror="true" failifexecutionfails="true"
+                                              if:set="gcc.hardening.failed">
+                                            <arg value="-shared"/>
+                                            <arg value="-O2"/>
+                                            <arg value="-I${env.JAVA_HOME}\include"/>
+                                            <arg value="-I${env.JAVA_HOME}\include\win32"/>
+                                            <arg value="-o"/>
+                                            <arg value="${project.build.outputDirectory}\native\windows-x86_64\aesh-console.dll"/>
+                                            <arg value="${project.basedir}\src\main\native\WinConsoleNative.c"/>
+                                            <arg value="-lkernel32"/>
+                                        </exec>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>cross-windows</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>cross-compile-native-dll</id>
+                                <phase>process-classes</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target xmlns:if="ant:if" xmlns:unless="ant:unless">
+                                        <mkdir dir="${project.build.outputDirectory}/native/windows-x86_64"/>
+                                        <exec executable="x86_64-w64-mingw32-ld" dir="${project.basedir}/src/main/native"
+                                              outputproperty="cross.ld.help" failonerror="true">
+                                            <arg value="--help"/>
+                                        </exec>
+                                        <condition property="cross.ld.nxcompat.supported">
+                                            <contains string="${cross.ld.help}" substring="--nxcompat"/>
+                                        </condition>
+                                        <exec executable="x86_64-w64-mingw32-gcc" dir="${project.basedir}/src/main/native"
+                                              failonerror="true" failifexecutionfails="true"
+                                              if:set="cross.ld.nxcompat.supported">
+                                            <arg value="-shared"/>
+                                            <arg value="-O2"/>
+                                            <arg value="-Wl,--nxcompat"/>
+                                            <arg value="-I${env.JAVA_HOME}/include"/>
+                                            <arg value="-I${project.basedir}/src/main/native/win32"/>
+                                            <arg value="-o"/>
+                                            <arg value="${project.build.outputDirectory}/native/windows-x86_64/aesh-console.dll"/>
+                                            <arg value="WinConsoleNative.c"/>
+                                            <arg value="-lkernel32"/>
+                                        </exec>
+                                        <exec executable="x86_64-w64-mingw32-gcc" dir="${project.basedir}/src/main/native"
+                                              failonerror="true" failifexecutionfails="true"
+                                              unless:set="cross.ld.nxcompat.supported">
+                                            <arg value="-shared"/>
+                                            <arg value="-O2"/>
+                                            <arg value="-I${env.JAVA_HOME}/include"/>
+                                            <arg value="-I${project.basedir}/src/main/native/win32"/>
+                                            <arg value="-o"/>
+                                            <arg value="${project.build.outputDirectory}/native/windows-x86_64/aesh-console.dll"/>
+                                            <arg value="WinConsoleNative.c"/>
+                                            <arg value="-lkernel32"/>
+                                        </exec>
+                                        <available file="${project.build.outputDirectory}/native/windows-x86_64/aesh-console.dll"
+                                                  property="cross.dll.exists"/>
+                                        <fail message="Cross-compile did not produce aesh-console.dll" unless:set="cross.dll.exists"/>
+                                        <!-- Copy the compiled DLL back to src/main/resources so it can be committed -->
+                                        <mkdir dir="${project.basedir}/src/main/resources/native/windows-x86_64"/>
+                                        <copy file="${project.build.outputDirectory}/native/windows-x86_64/aesh-console.dll"
+                                              todir="${project.basedir}/src/main/resources/native/windows-x86_64"
+                                              overwrite="true"
+                                              if:set="cross.dll.exists"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Multi-release JAR: compile FFM variant when building with Java 22+ -->
+        <profile>
+            <id>java22-ffm</id>
+            <activation>
+                <jdk>[22,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>compile-java-22</id>
+                                <phase>compile</phase>
+                                <goals><goal>compile</goal></goals>
+                                <configuration>
+                                    <release>22</release>
+                                    <compileSourceRoots>
+                                        <compileSourceRoot>${project.basedir}/src/main/java22</compileSourceRoot>
+                                    </compileSourceRoots>
+                                    <multiReleaseOutput>true</multiReleaseOutput>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                        </configuration>
+                    </plugin>
+                    <!-- Copy MRJAR Java 22+ classes to test-classes so surefire can
+                         find them. MUST NOT copy to target/classes — that would put
+                         Java 22 bytecode in the base path of the released JAR,
+                         breaking JDK 17 users (#211). -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-mrjar-for-test</id>
+                                <phase>process-test-classes</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target>
+                                        <copy todir="${project.build.testOutputDirectory}" overwrite="true"
+                                              failonerror="false">
+                                            <fileset dir="${project.build.outputDirectory}/META-INF/versions/22"
+                                                     erroronmissingdir="false"/>
+                                        </copy>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Native-image test compilation: validates GraalVM metadata -->
+         <profile>
+            <id>native</id>
+            <activation>
+                <property>
+                    <name>env.GRAALVM_HOME</name>
+                </property>
+            </activation>
+            <properties>
+                <!-- Set to true to delete FFM classes before native-image build.
+                     Required for GraalVM < 25 which does not support FFM downcalls.
+                     On GraalVM 25+, set to false (-Dnative.delete.ffm=false) to
+                     enable the FFM terminal provider (FfmPty) in native images
+                     for better performance (poll-based read, no stty spawning). -->
+                <native.delete.ffm>true</native.delete.ffm>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <!-- JUnit 5.x ONLY — 6.x is incompatible with native-maven-plugin 1.1.3 -->
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                    <version>5.14.4</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <!-- JUnit 5.x ONLY — 6.x is incompatible with native-maven-plugin 1.1.3 -->
+                    <groupId>org.junit.platform</groupId>
+                    <artifactId>junit-platform-launcher</artifactId>
+                    <version>1.14.4</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <!-- Delete FFM classes from test-classes for GraalVM < 25 which
+                         does not support FFM downcall registration. Without these
+                         classes, FfmTerminalProvider fails with ClassNotFoundException
+                         and falls through to ExecPtyTerminalProvider (POSIX) or
+                         JNI WinConsoleNative (Windows).
+                         On GraalVM 25+, pass -Dnative.delete.ffm=false to keep FFM
+                         classes and use the FFM terminal provider in native images. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>delete-ffm-for-native</id>
+                                <phase>process-test-classes</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <skip>${native.delete.ffm.skip}</skip>
+                                    <target if="${native.delete.ffm}">
+                                        <echo>Deleting FFM classes for GraalVM &lt; 25 compatibility (pass -Dnative.delete.ffm=false on GraalVM 25+)</echo>
+                                        <delete failonerror="false">
+                                            <fileset dir="${project.build.testOutputDirectory}/org/aesh/terminal/tty/impl"
+                                                     erroronmissingdir="false">
+                                                <include name="FfmPty.class"/>
+                                                <include name="FfmPty$*.class"/>
+                                                <include name="LibC.class"/>
+                                                <include name="PosixConstants.class"/>
+                                                <include name="WinConsoleNative.class"/>
+                                            </fileset>
+                                        </delete>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <!-- 1.1.6 is broken: missing org.apache.maven.shared.utils.logging.MessageUtils -->
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>1.1.13</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>test-native</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <phase>test</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <quickBuild>true</quickBuild>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>
