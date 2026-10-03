@@ -73,7 +73,9 @@ class ArchitectureTest {
 	@ArchTest
 	static final ArchRule isFrameworkNeutral = noClasses().should()
 		.dependOnClassesThat(resideInAnyPackage("org.springframework..", "io.quarkus..", "io.micronaut..",
+				"io.vertx..", "io.smallrye..", "jakarta.enterprise..", "jakarta.inject..",
 				"com.agentclientprotocol.sdk.spring..", "com.agentclientprotocol.sdk.micronaut..",
+				"com.agentclientprotocol.sdk.quarkus..",
 				"com.agentclientprotocol.sdk.integration..")
 			.as("a framework or a framework integration"))
 		.because("framework integrations build on the SDK, never the reverse");

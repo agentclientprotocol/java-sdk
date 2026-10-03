@@ -25,6 +25,11 @@ import reactor.core.publisher.Mono;
  * One ACP connection upgraded to WebSocket on the Quarkus HTTP server: its agent runtime,
  * the initialize-first rule, and a bounded count of frames waiting to be written. The
  * Vert.x counterpart of the SDK's Jetty WebSocket connection, with the same behaviour.
+ * <p>
+ * A copy for 0.80.0: after it, a container-neutral WebSocket connection over
+ * {@code RemoteAcpConnection} (a sender interface each container adapts, planned for a
+ * Jetty-free servlet module) replaces both this class and the Jetty one.
+ * </p>
  *
  * @author Mark Pollack
  */
