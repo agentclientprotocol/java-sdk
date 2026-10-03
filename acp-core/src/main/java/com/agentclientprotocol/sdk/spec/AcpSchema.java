@@ -819,6 +819,15 @@ public final class AcpSchema {
 			@JsonProperty("additionalDirectories") @Nullable List<String> additionalDirectories,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		/**
+		 * Creates a request for a working directory, with no MCP servers, additional directories
+		 * or {@code _meta}.
+		 * @param cwd the working directory, an absolute path
+		 */
+		public NewSessionRequest(String cwd) {
+			this(cwd, List.of(), null, null);
+		}
+
+		/**
 		 * Creates a request without additional directories or {@code _meta}.
 		 * @param cwd the working directory, an absolute path
 		 * @param mcpServers the MCP servers, possibly empty
@@ -845,7 +854,7 @@ public final class AcpSchema {
 	 * later message about that session, starting with {@link PromptRequest}.
 	 *
 	 * <p>
-	 * A minimal agent answers {@code new NewSessionResponse(id, null, null)}. An annotated agent
+	 * A minimal agent answers {@code new NewSessionResponse(id)}. An annotated agent
 	 * without a {@link com.agentclientprotocol.sdk.annotation.NewSession @NewSession} method
 	 * answers with a random UUID as the id.
 	 *
@@ -861,6 +870,15 @@ public final class AcpSchema {
 			@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response with only the session id: no modes, config options or
+		 * {@code _meta}.
+		 * @param sessionId the id of the new ACP session
+		 */
+		public NewSessionResponse(String sessionId) {
+			this(sessionId, null, null, null);
+		}
+
 		/**
 		 * Creates a response without config options or {@code _meta}.
 		 * @param sessionId the id of the new ACP session
@@ -958,6 +976,17 @@ public final class AcpSchema {
 		 */
 		public PromptRequest(String sessionId, List<ContentBlock> prompt) {
 			this(sessionId, prompt, null);
+		}
+
+		/**
+		 * Creates a prompt of one text block, the common case:
+		 * {@code client.prompt(PromptRequest.text(sessionId, "Fix the failing test"))}.
+		 * @param sessionId the ACP session to prompt
+		 * @param text the user's message
+		 * @return a request whose prompt is one {@link TextContent} block
+		 */
+		public static PromptRequest text(String sessionId, String text) {
+			return new PromptRequest(sessionId, List.of(new TextContent(text)));
 		}
 
 		/**
