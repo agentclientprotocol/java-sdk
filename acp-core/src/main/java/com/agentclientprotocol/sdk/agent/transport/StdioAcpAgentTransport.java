@@ -495,7 +495,9 @@ public class StdioAcpAgentTransport implements AcpAgentTransport {
 					outboundScheduler.dispose();
 				}
 			})
-			.subscribe();
+			// Logged above unless closing; not dropped to Reactor's ERROR hook.
+			.subscribe(ignored -> {
+			}, error -> logger.debug("Outbound processing ended: {}", error.toString()));
 	}
 
 	/**

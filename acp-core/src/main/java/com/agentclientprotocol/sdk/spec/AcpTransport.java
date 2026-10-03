@@ -11,6 +11,7 @@ import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
@@ -40,10 +41,13 @@ public interface AcpTransport {
 	 * variant to wait on. The interface's default subscribes to {@link #closeGracefully()}
 	 * and returns when that subscription returns: at once when the implementation closes
 	 * asynchronously, and only after the close when it does the work on the subscribing
-	 * thread.
+	 * thread. A failed close is logged at WARN by this interface's logger.
 	 */
 	default void close() {
-		this.closeGracefully().subscribe();
+		this.closeGracefully()
+			.subscribe(ignored -> {
+			}, error -> LoggerFactory.getLogger(AcpTransport.class)
+				.warn("Closing the transport failed: {}", error.toString(), error));
 	}
 
 	/**

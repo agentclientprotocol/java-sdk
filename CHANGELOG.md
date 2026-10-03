@@ -522,6 +522,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A failed close is logged as the failure it is.** `AcpSyncClient.closeGracefully()` logged
+  "Client didn't close within timeout of 10000 ms" for any failure, also one that happened at once;
+  it now logs that only when the timeout passes, and otherwise `Client close failed: <cause>` with
+  the cause (it still returns false). `AcpTransport.close()`'s default subscribed to
+  `closeGracefully()` without an error consumer, so a failure reached Reactor's "Operator called
+  default onErrorDropped" at ERROR; it is now logged at WARN by `AcpTransport`'s logger. The
+  transports' and the client session's internal pipelines that subscribed without an error
+  consumer now log their error (at WARN, or at DEBUG where it was already logged or reported), and
+  a stdio client's standard-error handler that throws is logged instead of being dropped.
+
 - **Every transport can be closed more than once, with `close()` and `closeGracefully()` in
   either order.** `WebSocketAcpClientTransport.closeGracefully()` sent a second WebSocket close
   frame on a second call, which failed with `IOException: Output closed`, so a second
