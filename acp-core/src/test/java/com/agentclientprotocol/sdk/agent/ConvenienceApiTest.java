@@ -764,7 +764,7 @@ class ConvenienceApiTest {
 		// execute() has no timeout (neither Command nor terminal/wait_for_exit has one), so a
 		// timedOut flag could never be set; the result carries what the client reports.
 		assertThat(CommandResult.class.getRecordComponents()).extracting(RecordComponent::getName)
-			.containsExactly("output", "exitCode", "signal");
+			.containsExactly("output", "exitCode", "signal", "truncated");
 	}
 
 }

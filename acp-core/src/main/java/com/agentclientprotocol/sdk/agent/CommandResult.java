@@ -16,9 +16,8 @@ import org.jspecify.annotations.Nullable;
  * {@code terminal/wait_for_exit}, then the output from {@code terminal/output}, read after the
  * command ended. A process ends with an exit code or with a signal, so one of the two is normally
  * {@code null}. The output is what the client kept: past the command's output limit the client
- * drops output from the start, and this record does not say whether it did (the {@code truncated}
- * flag of the client's answer is not carried over). Whether standard error is part of the output is
- * up to the client.
+ * drops output from the start, and {@link #truncated()} says whether it did. Whether standard error
+ * is part of the output is up to the client.
  *
  * <pre>{@code
  * CommandResult result = context.execute("make", "build");
@@ -32,6 +31,8 @@ import org.jspecify.annotations.Nullable;
  * @param output the terminal output the client returned
  * @param exitCode the exit code, or {@code null} if a signal ended the process
  * @param signal the signal that ended the process, or {@code null} if it exited
+ * @param truncated whether the client cut the output to the command's output limit, so that
+ * {@code output} lacks its beginning
  * @author Mark Pollack
  * @since 0.9.2
  * @see SyncPromptContext#execute(String...)
@@ -40,16 +41,28 @@ import org.jspecify.annotations.Nullable;
 public record CommandResult(
 		String output,
 		@Nullable Integer exitCode,
-		@Nullable String signal
+		@Nullable String signal,
+		boolean truncated
 ) {
 
 	/**
-	 * Creates a result for a process that exited with the given code, with no signal.
+	 * Creates a result whose output is complete (not truncated).
+	 * @param output the terminal output
+	 * @param exitCode the exit code, or {@code null} if a signal ended the process
+	 * @param signal the signal that ended the process, or {@code null} if it exited
+	 */
+	public CommandResult(String output, @Nullable Integer exitCode, @Nullable String signal) {
+		this(output, exitCode, signal, false);
+	}
+
+	/**
+	 * Creates a result for a process that exited with the given code, with no signal and complete
+	 * output.
 	 * @param output the terminal output
 	 * @param exitCode the exit code
 	 */
 	public CommandResult(String output, int exitCode) {
-		this(output, exitCode, null);
+		this(output, exitCode, null, false);
 	}
 
 	/**

@@ -717,6 +717,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`CommandResult` carries the terminal output's `truncated` flag** (new last record component
+  `truncated`, accessor `truncated()`). `execute` dropped the flag of the client's
+  `terminal/output` answer, so a caller could not tell output cut to the command's output limit
+  from complete output. Breaking only for code calling the canonical constructor
+  `new CommandResult(output, exitCode, signal)`, which still exists as a convenience constructor
+  (complete output); the new canonical form is
+  `new CommandResult(output, exitCode, signal, truncated)`.
+
 - **`SyncPromptContext.tryReadFile` no longer swallows the cancelling interrupt.** It returned
   empty for every failure, including the interrupt the SDK uses to cancel a sync handler, and the
   interrupt flag was lost, so a cancelled handler carried on as if the file were missing. It now

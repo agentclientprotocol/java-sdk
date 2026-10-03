@@ -317,6 +317,37 @@ class PromptContextHelpersTest {
 		agent.closeGracefully().block(TIMEOUT);
 	}
 
+	/** {@code execute} carries the {@code truncated} flag of the client's terminal output. */
+	@Test
+	void executeCarriesTheTruncatedFlag() {
+		AtomicReference<CommandResult> result = new AtomicReference<>();
+		AcpSyncAgent agent = AcpAgent.sync(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("s1", null, null))
+			.promptHandler((request, context) -> {
+				result.set(context.execute("make", "build"));
+				return PromptResponse.endTurn();
+			})
+			.build();
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(new ClientCapabilities(null, true))
+			.createTerminalHandler(req -> Mono.just(new CreateTerminalResponse("term-t")))
+			.waitForTerminalExitHandler(req -> Mono.just(new AcpSchema.WaitForTerminalExitResponse(0, null)))
+			.terminalOutputHandler(req -> Mono.just(new AcpSchema.TerminalOutputResponse("...tail", true, null)))
+			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.build();
+		agent.start();
+		connect(client);
+		client.prompt(prompt()).block(TIMEOUT);
+
+		assertThat(result.get().output()).isEqualTo("...tail");
+		assertThat(result.get().truncated()).isTrue();
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
 	private AcpAsyncClient terminalClient(CountDownLatch created, CountDownLatch released) {
 		return AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
