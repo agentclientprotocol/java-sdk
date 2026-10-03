@@ -37,36 +37,49 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Implementation of the ACP Stdio transport that communicates with an agent process using
- * standard input/output streams. Messages are exchanged as newline-delimited JSON-RPC
- * messages over stdin/stdout, with errors and debug information sent to stderr.
+ * The client side of the stdio transport: starts the agent as a child process and exchanges
+ * ACP messages with it as lines of JSON on the process's standard input and output. Use it
+ * when the client launches the agent itself, as editors and command-line tools do; to reach an
+ * agent that is already running, use {@link StreamableHttpAcpClientTransport} or
+ * {@link WebSocketAcpClientTransport}. Describe the process with {@link AgentParameters} and
+ * pass the transport to {@code AcpClient.sync(transport)} or {@code AcpClient.async(transport)}:
  *
- * <p>
- * This is a full-featured transport with:
- * <ul>
- * <li>Thread-safe message processing with dedicated schedulers</li>
- * <li>Proper resource management and graceful shutdown</li>
- * <li>Error stream handling</li>
- * <li>Backpressure support via Reactor Sinks</li>
- * </ul>
+ * <pre>{@code
+ * AgentParameters params = AgentParameters.builder("my-agent").arg("--acp").build();
+ * try (AcpSyncClient client = AcpClient.sync(new StdioAcpClientTransport(params)).build()) {
+ *     client.initialize();
+ * }
+ * }</pre>
  *
- * <p>
- * Each line the agent writes to its standard error is logged at INFO as
- * {@code agent: <line>} on the logger {@value #AGENT_STDERR_LOGGER}, so it stays visible by
- * default. Set that logger's level to WARN to hide it, or pass a handler of your own to
- * {@link #setStdErrorHandler}.
- * </p>
+ * <p>The process starts when {@link #connect} runs, which building the client does, so a
+ * command that cannot be started fails the build. One transport starts one process for one
+ * client: a second {@code connect} is refused. The process runs in the client's working
+ * directory and inherits the client's whole environment, with the variables of
+ * {@link AgentParameters#getEnv()} added, so the agent can read every secret in that
+ * environment. A line on the agent's standard output that is not a JSON-RPC message is
+ * reported to the exception handler, answered with a JSON-RPC error and skipped.
  *
- * <p>
- * {@link #closeGracefully()} ends the agent process in steps. It closes the agent's standard
- * input and waits up to {@value #END_OF_INPUT_WAIT_MILLIS} ms for the agent to exit by itself,
- * as an ACP stdio agent does at the end of its input (an agent built with this SDK answers what
- * it received, then exits 0). An agent still running then is sent SIGTERM ({@link
- * Process#destroy()}; on POSIX systems it exits 143 unless it handles the signal) and given
- * five more seconds, and is then killed (exit 137). The end is logged once, at INFO, however
- * often the transport is closed: {@code closeGracefully()} followed by {@code close()}, as
- * try-with-resources does, does not stop the agent twice.
- * </p>
+ * <p>Each line the agent writes to standard error is logged at INFO as {@code agent: <line>} on
+ * the logger {@value #AGENT_STDERR_LOGGER}, so it stays visible by default. Set that logger's
+ * level to WARN to hide it, or pass a handler of your own to {@link #setStdErrorHandler}.
+ *
+ * <p>{@link #closeGracefully()} lets the agent exit by itself. It closes the agent's standard
+ * input and waits up to {@value #END_OF_INPUT_WAIT_MILLIS} ms for the process to exit, as an
+ * ACP stdio agent does when its input ends; an agent built with this SDK answers what it
+ * received, flushes and exits 0. A process still running then is sent SIGTERM
+ * ({@link Process#destroy()}), and killed ({@link Process#destroyForcibly()}) if it has not
+ * exited five seconds later. On POSIX systems, a logged exit code of 143 therefore means that
+ * the agent ignored the end of its input. The process is stopped, and its end logged, once
+ * however often the transport is closed: {@code closeGracefully()} followed by
+ * {@code close()}, as try-with-resources does, is safe. The steps run on the thread that
+ * subscribes to {@code closeGracefully()}, or that calls {@code close()}, and can hold it for
+ * about seven seconds.
+ *
+ * <p>The transport is thread-safe: messages may be sent from any thread, and one writer thread
+ * writes them one at a time, in the order they were queued. It uses three daemon threads of
+ * its own ({@code acp-client-inbound}, {@code acp-client-outbound} and
+ * {@code acp-client-error}), so it does not keep the JVM alive, but the agent process runs
+ * until the transport is closed or the process ends by itself.
  *
  * @author Mark Pollack
  * @author Christian Tzolov (MCP Java SDK)
@@ -78,7 +91,7 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * The name of the logger that receives the agent's standard error, one INFO event per
-	 * line: {@value}. Configure its level to turn the agent's output down or off.
+	 * line: {@value}. Set its level to WARN or OFF to hide the agent's output.
 	 */
 	public static final String AGENT_STDERR_LOGGER = "com.agentclientprotocol.sdk.client.transport.agent-stderr";
 
@@ -127,7 +140,8 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * How long {@link #closeGracefully()} waits, after closing the agent's standard input, for
-	 * the agent to exit by itself before it sends SIGTERM: {@value} ms.
+	 * the agent process to exit by itself before it sends SIGTERM: {@value} ms. An agent that
+	 * needs longer to answer what it received is ended by SIGTERM before it is done.
 	 */
 	public static final long END_OF_INPUT_WAIT_MILLIS = 2_000;
 
@@ -146,17 +160,22 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	private Consumer<String> stdErrorHandler = line -> agentStderr.info("agent: {}", line);
 
 	/**
-	 * Creates a new StdioAcpClientTransport with the specified parameters using the default JsonMapper.
-	 * @param params The parameters for configuring the agent process
+	 * Creates a transport that will start the agent process described by {@code params}, with
+	 * the JSON mapper found on the classpath ({@link AcpJsonMapper#createDefault()}). Nothing
+	 * starts until {@link #connect}.
+	 * @param params the command, arguments and environment of the agent process
+	 * @throws IllegalArgumentException if {@code params} is null
 	 */
 	public StdioAcpClientTransport(AgentParameters params) {
 		this(params, AcpJsonMapper.createDefault());
 	}
 
 	/**
-	 * Creates a new StdioAcpClientTransport with the specified parameters and JsonMapper.
-	 * @param params The parameters for configuring the agent process
-	 * @param jsonMapper The JsonMapper to use for JSON serialization/deserialization
+	 * Creates a transport that will start the agent process described by {@code params}, with
+	 * the given JSON mapper. Nothing starts until {@link #connect}.
+	 * @param params the command, arguments and environment of the agent process
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public StdioAcpClientTransport(AgentParameters params, AcpJsonMapper jsonMapper) {
 		Assert.notNull(params, "The params can not be null");
@@ -193,11 +212,17 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Starts the agent process and initializes the message processing streams. This
-	 * method sets up the process with the configured command, arguments, and environment,
-	 * then starts the inbound, outbound, and error processing threads.
-	 * @throws RuntimeException if the process fails to start or if the process streams
-	 * are null
+	 * {@inheritDoc}
+	 * <p>Starts the agent process with the command, arguments and environment of the
+	 * {@link AgentParameters}, and the threads that read its standard output and standard error
+	 * and write its standard input. The work runs on the thread that subscribes to the returned
+	 * Mono, when it subscribes. Messages sent before are kept and written once the process
+	 * runs. What the handler returns is not written: the client session sends its answers
+	 * itself.
+	 * @param handler receives each message the agent writes
+	 * @return a Mono that completes once the process has started; it errors with an
+	 * {@link IllegalStateException} if this transport was connected before, and with a
+	 * {@link RuntimeException} if the process cannot be started
 	 */
 	@Override
 	public Mono<Void> connect(Function<Mono<JSONRPCMessage>, Mono<JSONRPCMessage>> handler) {
@@ -244,23 +269,35 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Creates and returns a new ProcessBuilder instance. Protected to allow overriding in
-	 * tests.
-	 * @return A new ProcessBuilder instance
+	 * Returns the {@link ProcessBuilder} that {@link #connect} starts the agent process with,
+	 * after setting its command and adding {@link AgentParameters#getEnv()} to its environment.
+	 * A subclass may override it to configure what {@code AgentParameters} cannot, such as the
+	 * working directory. It must leave standard input, output and error as pipes, which the
+	 * transport reads and writes.
+	 * @return a new process builder
 	 */
 	protected ProcessBuilder getProcessBuilder() {
 		return new ProcessBuilder();
 	}
 
 	/**
-	 * Sets the handler for the lines the agent process writes to its standard error,
-	 * replacing the default, which logs each line at INFO on {@value #AGENT_STDERR_LOGGER}.
-	 * @param errorHandler a consumer that receives each line, without its line terminator
+	 * Replaces the handler for the lines the agent process writes to its standard error. The
+	 * default logs each line at INFO on {@value #AGENT_STDERR_LOGGER}. Call it before
+	 * {@link #connect}. The handler runs on the transport's {@code acp-client-error} thread, one
+	 * line at a time; standard error is not read while it runs, so a handler that blocks can
+	 * stall an agent that writes a lot to standard error.
+	 * @param errorHandler receives each line, without its line terminator; not null
 	 */
 	public void setStdErrorHandler(Consumer<String> errorHandler) {
 		this.stdErrorHandler = errorHandler;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>The default logs each error at ERROR. The end of the agent process is not reported
+	 * here but by {@link #awaitTermination()}.
+	 * @throws IllegalArgumentException if {@code handler} is null
+	 */
 	@Override
 	public void setExceptionHandler(Consumer<Throwable> handler) {
 		Assert.notNull(handler, "The handler can not be null");
@@ -268,9 +305,10 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Waits for the agent process to exit.
+	 * Blocks until the agent process exits. It does not stop the process; close the transport
+	 * for that.
 	 * @throws IllegalStateException if {@link #connect} has not started the process
-	 * @throws RuntimeException if the process is interrupted while waiting
+	 * @throws RuntimeException if the calling thread is interrupted while it waits
 	 */
 	public void awaitForExit() {
 		Process process = this.process;
@@ -354,6 +392,13 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		});
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>The message is queued when this method is called, not when the returned Mono is
+	 * subscribed, and the Mono completes at once; the writer thread writes it as one line. A
+	 * message sent before {@link #connect} is written once the process starts. Once the
+	 * transport is closed, messages are dropped and the Mono still completes.
+	 */
 	@Override
 	public Mono<Void> sendMessage(JSONRPCMessage message) {
 		OutboundSinks.emit(this.outboundSink, message);
@@ -503,6 +548,14 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		}
 	}
 
+	/**
+	 * Applies {@code outboundConsumer} to the stream of messages queued by
+	 * {@link #sendMessage} and subscribes to the result; when that stream completes or fails,
+	 * the transport stops writing. {@link #connect} calls it with the function that writes
+	 * each message to the agent's standard input on the writer thread. A subclass that
+	 * overrides it must apply the function, or nothing is written.
+	 * @param outboundConsumer turns the queued messages into the messages written
+	 */
 	protected void handleOutbound(Function<Flux<JSONRPCMessage>, Flux<JSONRPCMessage>> outboundConsumer) {
 		outboundConsumer.apply(outboundSink.asFlux()).doOnComplete(() -> {
 			isClosing = true;
@@ -518,11 +571,15 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Gracefully closes the transport: closes the agent's standard input, waits up to
-	 * {@value #END_OF_INPUT_WAIT_MILLIS} ms for the agent to exit by itself, then sends it
-	 * SIGTERM and, five seconds later, kills it; then disposes of the schedulers. Closing an
-	 * already closed transport does nothing more.
-	 * @return A Mono that completes when the transport is closed
+	 * {@inheritDoc}
+	 * <p>Lets the agent exit by itself, in this order: stops delivering and writing messages,
+	 * closes the agent's standard input, waits up to {@value #END_OF_INPUT_WAIT_MILLIS} ms for
+	 * the process to exit, sends SIGTERM, and after five more seconds kills it; then stops the
+	 * transport's threads and completes {@link #awaitTermination()}. The steps run on the
+	 * subscribing thread. Only the first close stops the process; a later one completes at
+	 * once.
+	 * @return a Mono that completes when the process has exited, or been killed, and the
+	 * transport is closed
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
@@ -608,9 +665,11 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
-	 * Completes when the transport is closed; errors with an {@link AcpConnectionException}
-	 * naming the exit code (and, on POSIX systems, the signal) when the agent process ends
-	 * on its own, once its standard output has been read to the end.
+	 * {@inheritDoc}
+	 * <p>It completes when the transport is closed locally. It errors with an
+	 * {@link AcpConnectionException} when the agent process ends by itself, once its standard
+	 * output has been read to the end; the message names the exit code (and, on POSIX systems,
+	 * the signal), or says that the agent closed its standard output without exiting.
 	 * @return a Mono that terminates when the transport does
 	 */
 	@Override
@@ -618,6 +677,12 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 		return this.terminationSink.asMono();
 	}
 
+	/**
+	 * Returns the sink that carries the lines the agent writes to its standard error. The
+	 * transport subscribes to it when it connects, and the sink accepts a single subscriber,
+	 * so read the lines with {@link #setStdErrorHandler} instead of subscribing here.
+	 * @return the standard-error sink
+	 */
 	public Sinks.Many<String> getErrorSink() {
 		return this.errorSink;
 	}

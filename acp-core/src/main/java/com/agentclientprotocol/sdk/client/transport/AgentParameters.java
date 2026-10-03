@@ -17,7 +17,27 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.agentclientprotocol.sdk.util.Assert;
 
 /**
- * Agent parameters for stdio client - configuration for launching an ACP agent process.
+ * The command, arguments and environment variables that {@link StdioAcpClientTransport} starts
+ * an agent process with. Build one with {@link #builder(String)} and pass it to the
+ * transport's constructor:
+ *
+ * <pre>{@code
+ * AgentParameters params = AgentParameters.builder("gemini")
+ *     .arg("--experimental-acp")
+ *     .addEnvVar("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"))
+ *     .build();
+ * }</pre>
+ *
+ * <p>{@link #getEnv()} starts with a few variables copied from the client's environment when
+ * the parameters are built (HOME, LOGNAME, PATH, SHELL, TERM and USER; on Windows PATH,
+ * SYSTEMROOT, TEMP, USERPROFILE and a few more), and the variables added on the builder
+ * replace them.
+ * The transport does not limit the agent to these: it adds them to the whole environment the
+ * process inherits from the client.
+ *
+ * <p>The parameters are not a snapshot: {@link #getArgs()} and {@link #getEnv()} return the
+ * collections themselves, and an argument added with {@link Builder#arg(String)} after
+ * {@link Builder#build()} also appears in parameters already built from that builder.
  *
  * @author Mark Pollack
  * @author Christian Tzolov (MCP Java SDK)
@@ -52,22 +72,48 @@ public class AgentParameters {
 		this.env.putAll(env);
 	}
 
+	/**
+	 * Returns the program to start: a path, or a name the operating system looks up on the
+	 * PATH.
+	 * @return the command
+	 */
 	public String getCommand() {
 		return this.command;
 	}
 
+	/**
+	 * Returns the arguments passed to the command, in order.
+	 * @return the arguments; the list itself, not a copy
+	 */
 	public List<String> getArgs() {
 		return this.args;
 	}
 
+	/**
+	 * Returns the environment variables set for the agent process: the defaults copied from
+	 * the client's environment, replaced where the builder added a variable of the same name.
+	 * The transport adds them to the environment the process inherits.
+	 * @return the variables, by name; the map itself, not a copy
+	 */
 	public Map<String, String> getEnv() {
 		return this.env;
 	}
 
+	/**
+	 * Returns a builder for parameters that start {@code command}.
+	 * @param command the program to start: a path, or a name looked up on the PATH
+	 * @return a new builder
+	 * @throws IllegalArgumentException if {@code command} is null
+	 */
 	public static Builder builder(String command) {
 		return new Builder(command);
 	}
 
+	/**
+	 * Builds {@link AgentParameters}. Get one from {@link AgentParameters#builder(String)}.
+	 * Arguments keep the order they are added in; an environment variable added again
+	 * replaces the earlier value.
+	 */
 	public static class Builder {
 
 		private final String command;
@@ -76,29 +122,59 @@ public class AgentParameters {
 
 		private final Map<String, String> env = new HashMap<>();
 
+		/**
+		 * Creates a builder for parameters that start {@code command}; the same as
+		 * {@link AgentParameters#builder(String)}.
+		 * @param command the program to start
+		 * @throws IllegalArgumentException if {@code command} is null
+		 */
 		public Builder(String command) {
 			Assert.notNull(command, "The command can not be null");
 			this.command = command;
 		}
 
+		/**
+		 * Replaces the arguments with these.
+		 * @param args the arguments, in order
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code args} is null
+		 */
 		public Builder args(String... args) {
 			Assert.notNull(args, "The args can not be null");
 			this.args = new ArrayList<>(Arrays.asList(args));
 			return this;
 		}
 
+		/**
+		 * Replaces the arguments with a copy of these.
+		 * @param args the arguments, in order
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code args} is null
+		 */
 		public Builder args(List<String> args) {
 			Assert.notNull(args, "The args can not be null");
 			this.args = new ArrayList<>(args);
 			return this;
 		}
 
+		/**
+		 * Adds one argument after those already set.
+		 * @param arg the argument
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code arg} is null
+		 */
 		public Builder arg(String arg) {
 			Assert.notNull(arg, "The arg can not be null");
 			this.args.add(arg);
 			return this;
 		}
 
+		/**
+		 * Adds these environment variables, replacing any of the same name added before. An
+		 * empty map adds nothing.
+		 * @param env the variables, by name
+		 * @return this builder
+		 */
 		public Builder env(Map<String, String> env) {
 			if (env != null && !env.isEmpty()) {
 				this.env.putAll(env);
@@ -106,6 +182,13 @@ public class AgentParameters {
 			return this;
 		}
 
+		/**
+		 * Adds one environment variable, replacing one of the same name added before.
+		 * @param key the variable's name
+		 * @param value the variable's value
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code key} or {@code value} is null
+		 */
 		public Builder addEnvVar(String key, String value) {
 			Assert.notNull(key, "The key can not be null");
 			Assert.notNull(value, "The value can not be null");
@@ -113,6 +196,11 @@ public class AgentParameters {
 			return this;
 		}
 
+		/**
+		 * Returns the parameters, with the default environment variables read from the
+		 * client's environment now.
+		 * @return the parameters
+		 */
 		public AgentParameters build() {
 			return new AgentParameters(command, args, env);
 		}
