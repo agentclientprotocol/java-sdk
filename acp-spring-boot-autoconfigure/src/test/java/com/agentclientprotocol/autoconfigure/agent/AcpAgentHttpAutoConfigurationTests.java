@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.agentclientprotocol.autoconfigure.client.AcpClientAutoConfiguration;
+import com.agentclientprotocol.autoconfigure.client.AcpClientTransportAutoConfiguration;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
@@ -70,6 +72,27 @@ class AcpAgentHttpAutoConfigurationTests {
 				assertRoundTrip(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault()));
 				URI webSocket = URI.create("ws://localhost:" + port + "/acp");
 				assertRoundTrip(new WebSocketAcpClientTransport(webSocket, AcpJsonMapper.createDefault()));
+			});
+	}
+
+	@Test
+	void autoConfiguredHttpClientTalksToTheAgent() {
+		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0")
+			.run(agentContext -> {
+				int port = agentContext.getBean(StreamableHttpAcpAgentTransport.class).getPort();
+				new ApplicationContextRunner()
+					.withConfiguration(AutoConfigurations.of(AcpClientTransportAutoConfiguration.class,
+							AcpClientAutoConfiguration.class))
+					.withPropertyValues("spring.acp.client.transport.http.uri=http://localhost:" + port + "/acp")
+					.run(clientContext -> {
+						AcpSyncClient client = clientContext.getBean(AcpSyncClient.class);
+						client.initialize();
+						NewSessionResponse session = client.newSession(new NewSessionRequest("/workspace", List.of()));
+						PromptResponse response = client
+							.prompt(new PromptRequest(session.sessionId(), List.of(new TextContent("hello"))));
+						assertThat(response.stopReason()).isEqualTo(StopReason.END_TURN);
+					});
 			});
 	}
 

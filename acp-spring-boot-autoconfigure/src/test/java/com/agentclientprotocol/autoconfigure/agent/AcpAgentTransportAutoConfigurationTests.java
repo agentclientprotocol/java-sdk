@@ -1,11 +1,13 @@
 package com.agentclientprotocol.autoconfigure.agent;
 
 import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 
 import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +19,25 @@ class AcpAgentTransportAutoConfigurationTests {
 	private final ApplicationContextRunner runner = new ApplicationContextRunner()
 		.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class))
 		.withBean(TestAgent.class);
+
+	@Test
+	void httpTypeWithoutHttpModuleFailsWithAClearMessage() {
+		this.runner.withClassLoader(new FilteredClassLoader(StreamableHttpAcpServlet.class))
+			.withPropertyValues("spring.acp.agent.transport.type=http")
+			.run(context -> {
+				assertThat(context).hasFailed();
+				assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("acp-streamable-http-jetty");
+			});
+	}
+
+	@Test
+	void stdioTransportBeanHasNoDestroyMethod() {
+		// The agent lifecycle closes the transport; an inferred close() would close it
+		// again.
+		this.runner.run(context -> assertThat(
+				context.getBeanFactory().getBeanDefinition("acpAgentTransport").getDestroyMethodName())
+			.isEmpty());
+	}
 
 	@Test
 	void noTransportInClientOnlyApplication() {

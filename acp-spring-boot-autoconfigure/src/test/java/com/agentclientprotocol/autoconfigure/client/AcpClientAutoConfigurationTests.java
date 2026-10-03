@@ -19,6 +19,7 @@ import reactor.core.publisher.Mono;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -122,6 +123,19 @@ class AcpClientAutoConfigurationTests {
 		finally {
 			agent.closeGracefully();
 		}
+	}
+
+	@Test
+	void contextCloseClosesTheClientOnce() {
+		CountingClientTransport transport = new CountingClientTransport(
+				InMemoryTransportPair.create().clientTransport());
+		// The transport bean's own destroy method is off: count only the closes that come
+		// through the clients.
+		this.runner
+			.withBean("acpClientTransport", AcpClientTransport.class, () -> transport,
+					definition -> ((AbstractBeanDefinition) definition).setDestroyMethodName(""))
+			.run(context -> assertThat(context).hasSingleBean(AcpSyncClient.class));
+		assertThat(transport.closes).hasValue(1);
 	}
 
 	@Test
@@ -249,6 +263,8 @@ class AcpClientAutoConfigurationTests {
 
 		final AtomicInteger connects = new AtomicInteger();
 
+		final AtomicInteger closes = new AtomicInteger();
+
 		private final AcpClientTransport delegate;
 
 		CountingClientTransport(AcpClientTransport delegate) {
@@ -273,6 +289,7 @@ class AcpClientAutoConfigurationTests {
 
 		@Override
 		public Mono<Void> closeGracefully() {
+			this.closes.incrementAndGet();
 			return this.delegate.closeGracefully();
 		}
 

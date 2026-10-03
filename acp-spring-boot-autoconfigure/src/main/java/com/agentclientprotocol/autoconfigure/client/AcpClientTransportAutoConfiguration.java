@@ -1,9 +1,12 @@
 package com.agentclientprotocol.autoconfigure.client;
 
+import java.net.URI;
+
 import com.agentclientprotocol.autoconfigure.TransportType;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
@@ -26,7 +29,7 @@ public class AcpClientTransportAutoConfiguration {
 			matchIfMissing = false)
 	static class ExplicitWebSocketTransportConfiguration {
 
-		@Bean
+		@Bean(destroyMethod = "")
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createWebSocketTransport(properties);
 		}
@@ -39,9 +42,22 @@ public class AcpClientTransportAutoConfiguration {
 			matchIfMissing = false)
 	static class ExplicitStdioTransportConfiguration {
 
-		@Bean
+		@Bean(destroyMethod = "")
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createStdioTransport(properties);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnMissingBean(AcpClientTransport.class)
+	@ConditionalOnProperty(prefix = "spring.acp.client.transport", name = "type", havingValue = "http",
+			matchIfMissing = false)
+	static class ExplicitHttpTransportConfiguration {
+
+		@Bean(destroyMethod = "")
+		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
+			return createHttpTransport(properties);
 		}
 
 	}
@@ -51,9 +67,21 @@ public class AcpClientTransportAutoConfiguration {
 	@ConditionalOnProperty(prefix = "spring.acp.client.transport.websocket", name = "uri")
 	static class AutoDetectWebSocketTransportConfiguration {
 
-		@Bean
+		@Bean(destroyMethod = "")
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createWebSocketTransport(properties);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnMissingBean(AcpClientTransport.class)
+	@ConditionalOnProperty(prefix = "spring.acp.client.transport.http", name = "uri")
+	static class AutoDetectHttpTransportConfiguration {
+
+		@Bean(destroyMethod = "")
+		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
+			return createHttpTransport(properties);
 		}
 
 	}
@@ -63,7 +91,7 @@ public class AcpClientTransportAutoConfiguration {
 	@ConditionalOnProperty(prefix = "spring.acp.client.transport.stdio", name = "command")
 	static class AutoDetectStdioTransportConfiguration {
 
-		@Bean
+		@Bean(destroyMethod = "")
 		AcpClientTransport acpClientTransport(AcpClientProperties properties) {
 			return createStdioTransport(properties);
 		}
@@ -75,6 +103,16 @@ public class AcpClientTransportAutoConfiguration {
 		return new WebSocketAcpClientTransport(ws.getUri(),
 				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault())
 			.connectTimeout(ws.getConnectTimeout());
+	}
+
+	private static AcpClientTransport createHttpTransport(AcpClientProperties properties) {
+		URI uri = properties.getTransport().getHttp().getUri();
+		if (uri == null) {
+			throw new IllegalStateException(
+					"spring.acp.client.transport.type=http requires spring.acp.client.transport.http.uri");
+		}
+		return new StreamableHttpAcpClientTransport(uri,
+				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault());
 	}
 
 	private static AcpClientTransport createStdioTransport(AcpClientProperties properties) {

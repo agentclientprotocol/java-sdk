@@ -1,6 +1,7 @@
 package com.agentclientprotocol.autoconfigure.client;
 
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
@@ -17,6 +18,41 @@ class AcpClientTransportAutoConfigurationTests {
 
 	private final ApplicationContextRunner runner = new ApplicationContextRunner()
 		.withConfiguration(AutoConfigurations.of(AcpClientTransportAutoConfiguration.class));
+
+	@Test
+	void httpTransportAutoDetectedFromUri() {
+		this.runner.withPropertyValues("spring.acp.client.transport.http.uri=http://localhost:8080/acp")
+			.run(context -> assertThat(context.getBean(AcpClientTransport.class))
+				.isInstanceOf(StreamableHttpAcpClientTransport.class));
+	}
+
+	@Test
+	void httpTransportWithExplicitType() {
+		this.runner
+			.withPropertyValues("spring.acp.client.transport.type=http",
+					"spring.acp.client.transport.http.uri=http://localhost:8080/acp")
+			.run(context -> assertThat(context.getBean(AcpClientTransport.class))
+				.isInstanceOf(StreamableHttpAcpClientTransport.class));
+	}
+
+	@Test
+	void httpTypeWithoutUriFailsWithAClearMessage() {
+		this.runner.withPropertyValues("spring.acp.client.transport.type=http").run(context -> {
+			assertThat(context).hasFailed();
+			assertThat(context.getStartupFailure()).rootCause()
+				.hasMessageContaining("requires spring.acp.client.transport.http.uri");
+		});
+	}
+
+	@Test
+	void transportBeanHasNoDestroyMethod() {
+		// The client lifecycle closes the transport; an inferred close() would close it
+		// again.
+		this.runner.withPropertyValues("spring.acp.client.transport.http.uri=http://localhost:8080/acp")
+			.run(context -> assertThat(
+					context.getBeanFactory().getBeanDefinition("acpClientTransport").getDestroyMethodName())
+				.isEmpty());
+	}
 
 	@Test
 	void noTransportWithoutProperties() {

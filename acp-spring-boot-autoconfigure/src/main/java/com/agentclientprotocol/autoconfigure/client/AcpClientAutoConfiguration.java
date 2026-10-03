@@ -26,7 +26,11 @@ public class AcpClientAutoConfiguration {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpClientAutoConfiguration.class);
 
-	@Bean
+	// destroyMethod = "": AcpClientLifecycle closes the client (and with it the
+	// transport)
+	// once; Spring's inferred close() on these beans and the transport bean closed it
+	// three times.
+	@Bean(destroyMethod = "")
 	@ConditionalOnMissingBean
 	AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientProperties properties,
 			ObjectProvider<AcpClientCustomizer> customizers) {
@@ -53,7 +57,7 @@ public class AcpClientAutoConfiguration {
 	 * connection. Building it from the transport instead would call {@code connect()} a
 	 * second time on the same transport instance, which the SDK refuses.
 	 */
-	@Bean
+	@Bean(destroyMethod = "")
 	@ConditionalOnMissingBean
 	AcpSyncClient acpSyncClient(AcpAsyncClient asyncClient) {
 		return new AcpSyncClient(asyncClient);

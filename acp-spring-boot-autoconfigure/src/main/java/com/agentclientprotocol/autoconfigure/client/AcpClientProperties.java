@@ -52,6 +52,8 @@ public class AcpClientProperties {
 
 		private StdioProperties stdio = new StdioProperties();
 
+		private HttpProperties http = new HttpProperties();
+
 		public TransportType getType() {
 			return type;
 		}
@@ -74,6 +76,34 @@ public class AcpClientProperties {
 
 		public void setStdio(StdioProperties stdio) {
 			this.stdio = stdio;
+		}
+
+		public HttpProperties getHttp() {
+			return http;
+		}
+
+		public void setHttp(HttpProperties http) {
+			this.http = http;
+		}
+
+	}
+
+	/**
+	 * Streamable HTTP client transport, for an agent served over HTTP.
+	 */
+	public static class HttpProperties {
+
+		/**
+		 * Endpoint of the agent (e.g. http://localhost:8080/acp).
+		 */
+		private URI uri;
+
+		public URI getUri() {
+			return uri;
+		}
+
+		public void setUri(URI uri) {
+			this.uri = uri;
 		}
 
 	}
