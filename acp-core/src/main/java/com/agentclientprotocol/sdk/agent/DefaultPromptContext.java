@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.agent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -28,6 +29,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ToolKind;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WaitForTerminalExitRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WriteTextFileRequest;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
@@ -42,6 +45,8 @@ import reactor.core.publisher.Mono;
  * @since 0.9.1
  */
 class DefaultPromptContext implements PromptContext {
+
+	private static final Logger logger = LoggerFactory.getLogger(DefaultPromptContext.class);
 
 	private final AcpAsyncAgent agent;
 
@@ -234,15 +239,25 @@ class DefaultPromptContext implements PromptContext {
 			.flatMap(createResp -> {
 				String terminalId = createResp.terminalId();
 				ReleaseTerminalRequest releaseReq = new ReleaseTerminalRequest(sessionId, terminalId);
+				// ACP: the agent MUST release every terminal it created (terminals.mdx), so the
+				// terminal is released exactly once whether the command ends, a step fails, or the
+				// caller cancels (the prompt was cancelled or timed out).
+				AtomicBoolean releaseSent = new AtomicBoolean();
+				Mono<Void> release = Mono.defer(() -> releaseSent.compareAndSet(false, true)
+						? releaseTerminal(releaseReq).then() : Mono.empty());
 
 				return waitForTerminalExit(new WaitForTerminalExitRequest(sessionId, terminalId))
 						.flatMap(exitResp -> getTerminalOutput(new TerminalOutputRequest(sessionId, terminalId))
 								.map(outputResp -> new CommandResult(outputResp.output(), exitResp.exitCode(),
 										exitResp.signal())))
 						// Release terminal after getting result, then return result
-						.flatMap(result -> releaseTerminal(releaseReq).thenReturn(result))
+						.flatMap(result -> release.thenReturn(result))
 						// On error, still release terminal before propagating error
-						.onErrorResume(error -> releaseTerminal(releaseReq).then(Mono.error(error)));
+						.onErrorResume(error -> release.then(Mono.error(error)))
+						// Cancelled: nobody waits for the release any more, so send it on its own
+						.doOnCancel(() -> release.subscribe(v -> {
+						}, error -> logger.warn("Could not release terminal {} of a cancelled command: {}",
+								terminalId, error.getMessage())));
 			});
 	}
 

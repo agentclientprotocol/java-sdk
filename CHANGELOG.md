@@ -681,6 +681,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`PromptContext.execute`/`SyncPromptContext.execute` release the terminal when cancelled.** ACP
+  says the agent MUST release every terminal it creates (`terminals.mdx`). `execute` released it
+  when the command ended and when a step failed, but not when the prompt was cancelled
+  (`session/cancel` grace period, `maxPromptDuration`, `$/cancel_request`) while it waited in
+  `terminal/wait_for_exit`: the client kept the terminal. It now sends `terminal/release` exactly
+  once on every path.
+
 - **Annotated agents work as framework-proxied beans and with inherited handlers.**
   `AcpAgentSupport` read `@AcpAgent` and the handler methods from the bean's own class only. A
   proxy that Spring (CGLIB), Quarkus (ArC) or Micronaut (AOP) generates for the bean is an
