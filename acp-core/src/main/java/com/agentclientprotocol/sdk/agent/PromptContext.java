@@ -172,6 +172,39 @@ public interface PromptContext {
 	@Nullable NegotiatedCapabilities getClientCapabilities();
 
 	// ========================================================================
+	// Cancellation
+	// ========================================================================
+
+	/**
+	 * Whether this prompt has been cancelled: by {@code session/cancel} for its session, by
+	 * {@code $/cancel_request} for its request, or by the agent itself (the cancel grace
+	 * period or the maximum prompt duration passed, or the connection closed). Once true, it
+	 * stays true.
+	 *
+	 * <p>
+	 * After {@code session/cancel}, stop the prompt's work, send any last updates, and answer
+	 * with stop reason {@code cancelled} ({@link AcpSchema.PromptResponse#cancelled()}), within
+	 * the cancel grace period ({@code cancelGracePeriod}, 60 seconds by default); once it passes
+	 * the agent answers {@code cancelled} itself and cancels the handler. After
+	 * {@code $/cancel_request} the agent has already answered (error {@code -32800}, or
+	 * {@code cancelled} if the session was cancelled too), so what the handler returns is
+	 * discarded: just stop.
+	 * </p>
+	 * @return whether the prompt has been cancelled
+	 * @see #whenCancelled()
+	 */
+	boolean isCancelled();
+
+	/**
+	 * Completes, empty, when this prompt is cancelled (see {@link #isCancelled()}), at once if
+	 * it already has been; it never errors, and never completes for a prompt that is not
+	 * cancelled. Compose it into the handler's {@code Mono}, for example
+	 * {@code work.takeUntilOther(context.whenCancelled())}, to stop on a cancel.
+	 * @return a Mono completing when the prompt is cancelled
+	 */
+	Mono<Void> whenCancelled();
+
+	// ========================================================================
 	// Convenience API
 	// ========================================================================
 

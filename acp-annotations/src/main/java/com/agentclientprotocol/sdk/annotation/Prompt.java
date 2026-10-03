@@ -34,6 +34,16 @@ import java.lang.annotation.Target;
  *   <li>{@code Mono<PromptResponse>} - for async handling</li>
  * </ul>
  *
+ * <p><b>Cancellation.</b> The context tells the method that its prompt was cancelled, by
+ * {@code session/cancel} or by {@code $/cancel_request}: a sync method polls
+ * {@code SyncPromptContext.isCancelled()} (or registers {@code onCancel(Runnable)}), a
+ * method returning {@code Mono} composes {@code PromptContext.whenCancelled()}. After
+ * {@code session/cancel} it stops, sends any last updates, and returns
+ * {@code PromptResponse.cancelled()} within the cancel grace period (60 seconds by default,
+ * {@code AcpAgentSupport.Builder#cancelGracePeriod}); once that passes the agent answers
+ * {@code cancelled} itself and interrupts the method's thread. After {@code $/cancel_request}
+ * the agent has already answered, so the method just stops.
+ *
  * <p>Example usage:
  * <pre>{@code
  * @Prompt

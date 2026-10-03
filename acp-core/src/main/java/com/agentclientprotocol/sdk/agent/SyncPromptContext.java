@@ -175,6 +175,44 @@ public interface SyncPromptContext {
 	PromptContext async();
 
 	// ========================================================================
+	// Cancellation
+	// ========================================================================
+
+	/**
+	 * Whether this prompt has been cancelled: by {@code session/cancel} for its session, by
+	 * {@code $/cancel_request} for its request, or by the agent itself (the cancel grace
+	 * period or the maximum prompt duration passed, or the connection closed). Once true, it
+	 * stays true. A long-running handler polls it between steps:
+	 * <pre>{@code
+	 * for (Step step : plan) {
+	 *     if (context.isCancelled()) {
+	 *         return PromptResponse.cancelled();
+	 *     }
+	 *     step.run(context);
+	 * }
+	 * }</pre>
+	 *
+	 * <p>
+	 * After {@code session/cancel}, answer with stop reason {@code cancelled} within the cancel
+	 * grace period ({@code cancelGracePeriod}, 60 seconds by default); once it passes the agent
+	 * answers {@code cancelled} itself and interrupts the handler's thread. After
+	 * {@code $/cancel_request} the agent has already answered and interrupted the thread, so
+	 * what the handler returns is discarded: just stop.
+	 * </p>
+	 * @return whether the prompt has been cancelled
+	 */
+	boolean isCancelled();
+
+	/**
+	 * Runs {@code action} once when this prompt is cancelled (see {@link #isCancelled()}), at
+	 * once on the calling thread if it already has been, for work the handler cannot poll,
+	 * such as a subprocess or an HTTP call to abort. The action runs on whichever thread
+	 * delivers the cancel, so it must be quick and must not block.
+	 * @param action what to run on cancel
+	 */
+	void onCancel(Runnable action);
+
+	// ========================================================================
 	// Convenience API
 	// ========================================================================
 

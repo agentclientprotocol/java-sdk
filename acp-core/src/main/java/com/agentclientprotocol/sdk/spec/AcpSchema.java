@@ -684,6 +684,15 @@ public final class AcpSchema {
 		public static PromptResponse refusal() {
 			return new PromptResponse(StopReason.REFUSAL);
 		}
+
+		/**
+		 * Creates the response to a cancelled prompt, which ACP requires once the client sent
+		 * {@code session/cancel} (ACP v1, prompt turn, Cancellation).
+		 * @return A PromptResponse with CANCELLED stop reason
+		 */
+		public static PromptResponse cancelled() {
+			return new PromptResponse(StopReason.CANCELLED);
+		}
 	}
 
 	/**

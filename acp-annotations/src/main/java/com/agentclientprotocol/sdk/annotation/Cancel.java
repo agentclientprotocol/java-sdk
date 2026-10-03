@@ -26,6 +26,11 @@ import java.lang.annotation.Target;
  * agent builder), the agent answers the prompt {@code cancelled} itself and interrupts the
  * method's thread.
  *
+ * <p>A {@link Prompt} method does not need this handler to learn of the cancel: it polls
+ * {@code SyncPromptContext.isCancelled()}, or composes {@code PromptContext.whenCancelled()},
+ * which also see a {@code $/cancel_request} for the prompt's request. Use this handler for
+ * work outside the prompt method, such as cancelling a job the prompt started elsewhere.
+ *
  * <p>The method can have the following parameters (all optional):
  * <ul>
  *   <li>{@code CancelNotification} - the cancel notification containing the sessionId</li>
