@@ -57,7 +57,9 @@ class HttpAgentTest {
 			})
 			.build();
 		try {
-			assertThat(client.initialize().protocolVersion()).isEqualTo(AcpSchema.LATEST_PROTOCOL_VERSION);
+			AcpSchema.InitializeResponse initialized = client.initialize();
+			assertThat(initialized.protocolVersion()).isEqualTo(AcpSchema.LATEST_PROTOCOL_VERSION);
+			GreeterAgentAdvertisement.assertAdvertised(initialized);
 			String sessionId = client.newSession(new AcpSchema.NewSessionRequest("/tmp", List.of())).sessionId();
 			AcpSchema.PromptResponse response = client
 				.prompt(new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent("http"))));

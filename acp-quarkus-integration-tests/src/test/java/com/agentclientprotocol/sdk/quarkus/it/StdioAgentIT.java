@@ -52,6 +52,7 @@ class StdioAgentIT {
 
 		AcpSchema.InitializeResponse initialized = client.initialize();
 		assertThat(initialized.protocolVersion()).isEqualTo(AcpSchema.LATEST_PROTOCOL_VERSION);
+		GreeterAgentAdvertisement.assertAdvertised(initialized);
 
 		String sessionId = client.newSession(new AcpSchema.NewSessionRequest(tempDir.toString(), List.of()))
 			.sessionId();

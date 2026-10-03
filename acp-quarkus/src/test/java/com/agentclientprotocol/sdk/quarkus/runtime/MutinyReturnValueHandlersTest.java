@@ -88,6 +88,45 @@ class MutinyReturnValueHandlersTest {
 	}
 
 	@Test
+	void aCancelledPromptCancelsTheUniAndEndsTheTurnCancelled() throws Exception {
+		SyncPromptContext prompt = cancelledPrompt();
+		assertThat(uni.handleReturnValue(Uni.createFrom().nothing(), returnType("uni"), promptContext(prompt)))
+			.isEqualTo(AcpSchema.PromptResponse.cancelled());
+	}
+
+	@Test
+	void aCancelledPromptCancelsTheMultiAndEndsTheTurnCancelled() throws Exception {
+		SyncPromptContext prompt = cancelledPrompt();
+		assertThat(multi.handleReturnValue(Multi.createFrom().nothing(), returnType("multi"), promptContext(prompt)))
+			.isEqualTo(AcpSchema.PromptResponse.cancelled());
+	}
+
+	@Test
+	void aFailedMultiFailsThePrompt() throws Exception {
+		Multi<Object> failed = Multi.createFrom().failure(new IllegalStateException("boom"));
+		assertThatThrownBy(() -> multi.handleReturnValue(failed, returnType("multi"),
+				promptContext(mock(SyncPromptContext.class))))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessage("boom");
+		Multi<Object> checked = Multi.createFrom().failure(new java.io.IOException("io"));
+		assertThatThrownBy(() -> multi.handleReturnValue(checked, returnType("multi"),
+				promptContext(mock(SyncPromptContext.class))))
+			.isInstanceOf(ReturnValueHandlingException.class)
+			.hasRootCauseMessage("io");
+	}
+
+	/** A prompt already cancelled: onCancel runs its action at once, as the SDK's does. */
+	private static SyncPromptContext cancelledPrompt() {
+		SyncPromptContext prompt = mock(SyncPromptContext.class);
+		when(prompt.isCancelled()).thenReturn(true);
+		org.mockito.Mockito.doAnswer(invocation -> {
+			invocation.<Runnable>getArgument(0).run();
+			return null;
+		}).when(prompt).onCancel(any());
+		return prompt;
+	}
+
+	@Test
 	void nullMultiEndsTheTurn() throws Exception {
 		assertThat(multi.handleReturnValue(null, returnType("multi"), promptContext(mock(SyncPromptContext.class))))
 			.isEqualTo(AcpSchema.PromptResponse.endTurn());
