@@ -68,10 +68,11 @@ import reactor.core.scheduler.Schedulers;
  * <p>The agent calls back into the client for files ({@code fs/*}), terminals ({@code terminal/*}),
  * permission and elicitation. Register a handler for each one you support, and advertise the
  * matching capabilities with {@code clientCapabilities(...)}: the builder does not derive them from
- * the handlers. A request without a handler is answered {@code -32601} (method not found). Requests
- * are handled as they arrive, not queued behind session updates. Asynchronous handlers are called
- * on the transport's thread and must not block; synchronous handlers run on
- * {@link #SYNC_HANDLER_SCHEDULER}. A handler that fails is answered with an error: an
+ * the handlers. A request without a handler is answered {@code -32601} (method not found). A
+ * request reaches its handler once the session updates the agent sent before it have been handled
+ * (see below); handlers do not wait for each other. Asynchronous handlers are called on the thread
+ * that delivered the request or finished the last of those updates, and must not block;
+ * synchronous handlers run on {@link #SYNC_HANDLER_SCHEDULER}. A handler that fails is answered with an error: an
  * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
  * error).
  *
@@ -80,7 +81,11 @@ import reactor.core.scheduler.Schedulers;
  * <p>{@code session/update} notifications go to the session update consumers one at a time, in the
  * order the agent sent them. A response completes its caller only after every notification received
  * before it has been handled, so when {@code prompt} returns, the turn's updates have all been
- * handled. A consumer must therefore not wait for a prompt in flight to complete.
+ * handled. In the same way, a request from the agent reaches its handler only after the updates the
+ * agent sent before it, so a permission request comes after the {@code tool_call} update that
+ * announced the tool call. A consumer must therefore not wait for a prompt in flight to complete.
+ * The one exception: a consumer that is itself waiting for an answer to a request it sent does not
+ * hold back the agent's requests or that answer.
  *
  * <h2>Timeouts and cancellation</h2>
  *
@@ -697,7 +702,8 @@ public interface AcpClient {
 	 * {@link AcpClient#sync(AcpClientTransport)}.
 	 *
 	 * <p>Handlers and session update consumers run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}, not
-	 * on the transport's thread, so they may block. Requests are handled as they arrive, so several
+	 * on the transport's thread, so they may block. A request is handed to its handler once the
+	 * session updates before it have been handled, without waiting for other handlers, so several
 	 * handlers can run at the same time and state they share must be thread-safe. A request handler
 	 * that returns {@code null} is answered {@code -32603}. The builder turns each handler into its
 	 * asynchronous counterpart on an {@link AsyncSpec}, so the rules described there apply; the raw

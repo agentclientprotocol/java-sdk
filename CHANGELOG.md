@@ -681,6 +681,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A request from the agent reaches its client handler only after the session updates sent
+  before it.** Requests were handled as they arrived, outside the ordered notification drain, so a
+  `session/request_permission` could reach its handler while the session update consumers had not
+  yet seen the `tool_call` update the agent sent just before it, and the client could not look the
+  tool call up. A request now takes its place in the drain like a response: it is dispatched once
+  the notifications before it have been handled (handlers still run concurrently with each other
+  and with later updates). To keep a consumer that waits for an answer of its own from deadlocking,
+  held requests are dispatched at once while the running consumer waits for a response. A
+  `$/cancel_request` for a request still held answers it `-32800` without calling its handler.
+  Model checked with Lincheck (`InboundOrderLincheckTest`).
+
 - **`PromptContext.execute`/`SyncPromptContext.execute` release the terminal when cancelled.** ACP
   says the agent MUST release every terminal it creates (`terminals.mdx`). `execute` released it
   when the command ended and when a step failed, but not when the prompt was cancelled

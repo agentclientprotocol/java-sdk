@@ -41,4 +41,15 @@ interface ResponseOrder {
 	 */
 	<R> Mono<R> after(long sentAt, R response);
 
+	/**
+	 * Records that a request sent at {@code sentAt} is waiting for its response, so that what
+	 * the peer asks meanwhile is not held behind a handler that may be the one waiting.
+	 * @param sentAt the {@link #position} when the request was sent
+	 * @return run once the request no longer waits (answered, failed or cancelled)
+	 */
+	default Runnable awaiting(long sentAt) {
+		return () -> {
+		};
+	}
+
 }

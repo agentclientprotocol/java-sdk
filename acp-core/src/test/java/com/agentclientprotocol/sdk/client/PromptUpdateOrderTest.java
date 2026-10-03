@@ -159,6 +159,117 @@ class PromptUpdateOrderTest {
 		}
 	}
 
+	/**
+	 * The agent announces a tool call with a {@code tool_call} update, then asks permission for
+	 * it: the permission handler runs only after the session update consumer handled the
+	 * announcement, so a client can look the tool call up when it asks the user.
+	 */
+	@Test
+	void anAgentRequestReachesItsHandlerAfterTheUpdatesSentBeforeIt() {
+		this.agent = AcpAgent.sync(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(request -> InitializeResponse.ok())
+			.newSessionHandler(request -> new NewSessionResponse(SESSION, null, null))
+			.promptHandler((request, context) -> {
+				context.sendUpdate(SESSION, new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
+						AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null));
+				context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
+						new AcpSchema.ToolCallUpdate("call-1", "Edit file", AcpSchema.ToolKind.EDIT,
+								AcpSchema.ToolCallStatus.PENDING),
+						List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE))));
+				return PromptResponse.endTurn();
+			})
+			.build();
+		this.agent.start();
+
+		List<String> announced = new CopyOnWriteArrayList<>();
+		List<Boolean> knownWhenAsked = new CopyOnWriteArrayList<>();
+		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> {
+				sleep(300);
+				if (notification.update() instanceof AcpSchema.ToolCall toolCall) {
+					announced.add(toolCall.toolCallId());
+				}
+			})
+			.requestPermissionHandler(request -> {
+				knownWhenAsked.add(announced.contains(request.toolCall().toolCallId()));
+				return new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected("allow"));
+			})
+			.build();
+		try {
+			client.initialize();
+			client.newSession(new NewSessionRequest("/workspace", List.of()));
+
+			client.prompt(prompt());
+
+			assertThat(knownWhenAsked).containsExactly(true);
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	/**
+	 * A consumer that waits for a prompt of its own, during which the agent asks the client
+	 * something: the agent's request is not held behind the consumer that waits for it.
+	 */
+	@Test
+	void aConsumerWaitingForAPromptDoesNotHoldTheAgentsRequestsOfThatPrompt() {
+		this.agent = AcpAgent.sync(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(request -> InitializeResponse.ok())
+			.newSessionHandler(request -> new NewSessionResponse(SESSION, null, null))
+			.promptHandler((request, context) -> {
+				String text = ((TextContent) request.prompt().get(0)).text();
+				if ("first".equals(text)) {
+					context.sendMessage("trigger");
+				}
+				else {
+					context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
+							new AcpSchema.ToolCallUpdate("call-2", "Edit", AcpSchema.ToolKind.EDIT,
+									AcpSchema.ToolCallStatus.PENDING),
+							List.of(new AcpSchema.PermissionOption("allow", "Allow",
+									AcpSchema.PermissionOptionKind.ALLOW_ONCE))));
+				}
+				return PromptResponse.endTurn();
+			})
+			.build();
+		this.agent.start();
+
+		AtomicReference<AcpSyncClient> self = new AtomicReference<>();
+		List<String> nested = new CopyOnWriteArrayList<>();
+		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> {
+				if (nested.isEmpty()) {
+					nested.add("asking");
+					// The agent answers only after the client answered its permission request.
+					nested.add(self.get()
+						.prompt(new PromptRequest(SESSION + "-2", List.of(new TextContent("second"))))
+						.stopReason()
+						.toString());
+				}
+			})
+			.requestPermissionHandler(
+					request -> new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected("allow")))
+			.build();
+		self.set(client);
+		try {
+			client.initialize();
+			client.newSession(new NewSessionRequest("/workspace", List.of()));
+
+			long start = System.nanoTime();
+			client.prompt(new PromptRequest(SESSION, List.of(new TextContent("first"))));
+
+			assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(TIMEOUT.dividedBy(2));
+			assertThat(nested).containsExactly("asking", "end_turn");
+		}
+		finally {
+			client.close();
+		}
+	}
+
 	private static void sleep(long millis) {
 		try {
 			Thread.sleep(millis);

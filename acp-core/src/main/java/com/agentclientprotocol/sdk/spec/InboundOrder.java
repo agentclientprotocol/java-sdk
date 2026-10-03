@@ -4,10 +4,12 @@
 
 package com.agentclientprotocol.sdk.spec;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -28,7 +30,16 @@ import reactor.core.publisher.Sinks;
  * </p>
  *
  * <p>
- * The inbound thread offers notifications and responses, one at a time; one subscriber
+ * A request from the peer takes its place the same way: it is dispatched to its handler only
+ * once the notifications that arrived before it have been handled, so a permission request
+ * reaches its handler after the {@code tool_call} update announcing it. The same escape keeps
+ * it from deadlocking: while the handler running now waits for a response to a request it
+ * sent, held requests are dispatched at once, since answering one may be what that response
+ * waits for. Dispatching does not wait for the request's handler to finish.
+ * </p>
+ *
+ * <p>
+ * The inbound thread offers notifications, responses and requests, one at a time; one subscriber
  * drains them; a closing thread completes the queue. A response still held when the drain
  * ends (the session was closed without waiting for it) is released then.
  * </p>
@@ -45,8 +56,17 @@ final class InboundOrder<T> implements ResponseOrder {
 	/** The number of the notification whose handler is running, or 0 when none is. */
 	private volatile long handling;
 
-	/** The responses queued behind notifications and not yet released. */
+	/** The responses and requests queued behind notifications and not yet released. */
 	private final Set<Release> held = ConcurrentHashMap.newKeySet();
+
+	/** The requests from the peer queued behind notifications and not yet dispatched. */
+	private final Set<Release> heldRequests = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * The requests this side sent that wait for a response, each with the number of the
+	 * handler that was running when it was sent (0 for none).
+	 */
+	private final Map<Object, Long> awaiting = new ConcurrentHashMap<>();
 
 	/**
 	 * The drain: delivers each notification, waiting for its delivery to complete before the
@@ -102,7 +122,7 @@ final class InboundOrder<T> implements ResponseOrder {
 			completion.run();
 			return;
 		}
-		Release release = new Release(this.held, completion);
+		Release release = new Release(this.held, null, completion);
 		this.held.add(release);
 		if (this.queue.offer(release).isFailure()) {
 			// The queue is closing: nothing more is delivered in order.
@@ -110,7 +130,42 @@ final class InboundOrder<T> implements ResponseOrder {
 		}
 	}
 
-	/** Releases every response still held: the drain will not reach them. */
+	/**
+	 * Runs {@code dispatch} once every notification that arrived before it has been handled,
+	 * or at once when the handler running now waits for a response (see the type comment).
+	 * Called on the inbound thread when a request arrives.
+	 */
+	void inOrder(Runnable dispatch) {
+		Release release = new Release(this.held, this.heldRequests, dispatch);
+		this.held.add(release);
+		this.heldRequests.add(release);
+		if (runningHandlerAwaits() || this.queue.offer(release).isFailure()) {
+			// A waiting handler must not hold it; a closing queue delivers nothing more in order.
+			release.run();
+		}
+	}
+
+	@Override
+	public Runnable awaiting(long sentAt) {
+		Object key = new Object();
+		long running = this.handling;
+		this.awaiting.put(key, running);
+		if (running != 0) {
+			// This handler may now wait for the response, which may need a held request answered.
+			for (Release request : this.heldRequests) {
+				request.run();
+			}
+		}
+		return () -> this.awaiting.remove(key);
+	}
+
+	/** Whether the handler running now sent a request that still waits for its response. */
+	private boolean runningHandlerAwaits() {
+		long running = this.handling;
+		return running != 0 && this.awaiting.containsValue(running);
+	}
+
+	/** Releases every response and request still held: the drain will not reach them. */
 	void releaseHeld() {
 		for (Release release : this.held) {
 			release.run();
@@ -140,14 +195,22 @@ final class InboundOrder<T> implements ResponseOrder {
 
 		private final Runnable completion;
 
-		Release(Set<Release> held, Runnable completion) {
+		/** The second set a held request is in, or null for a response. */
+		private final @Nullable Set<Release> alsoIn;
+
+		Release(Set<Release> held, @Nullable Set<Release> alsoIn, Runnable completion) {
 			this.held = held;
+			this.alsoIn = alsoIn;
 			this.completion = completion;
 		}
 
 		@Override
 		public void run() {
 			if (this.held.remove(this)) {
+				Set<Release> other = this.alsoIn;
+				if (other != null) {
+					other.remove(this);
+				}
 				this.completion.run();
 			}
 		}
