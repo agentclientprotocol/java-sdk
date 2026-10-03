@@ -126,6 +126,15 @@ class VertxWebSocketConnectionTest {
 	}
 
 	@Test
+	void socketErrorsCloseTheConnectionButAPeerGoneAwayIsLeftToTheCloseHandler() {
+		VertxWebSocketConnection connection = connect(StreamableHttpAcpAgentTransportOptions.defaults());
+		AcpWebSocketRoute.socketFailed(connection, new io.vertx.core.http.HttpClosedException("gone"));
+		verify(socket, never()).close(org.mockito.ArgumentMatchers.anyShort(), anyString());
+		AcpWebSocketRoute.socketFailed(connection, new IllegalStateException("frame too big"));
+		verify(socket).close(eq(VertxWebSocketConnection.SERVER_ERROR), anyString());
+	}
+
+	@Test
 	void upgradeIsRecognisedAndPathsJoin() {
 		HttpServerRequest upgrade = mock(HttpServerRequest.class);
 		when(upgrade.getHeader(io.vertx.core.http.HttpHeaders.UPGRADE)).thenReturn("WebSocket");
