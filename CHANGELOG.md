@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Quarkus extension: `acp-quarkus` (with `acp-quarkus-deployment`).** One `@AcpAgent` class
+  becomes a singleton bean (found at build time; a second one fails the build) and is served over
+  stdio, or over Streamable HTTP and WebSocket on the Quarkus HTTP server
+  (`quarkus.acp.agent.transport.type=http`): the SDK's servlet on `quarkus-undertow` plus a Vert.x
+  WebSocket route on the same path, no second server. Stdio builds keep standard output for the
+  protocol (console log on stderr, no banner, no HTTP listener) and exit when input ends. Handlers
+  may return Mutiny `Uni`, and `@Prompt` may stream a `Multi`. `AcpSyncClient`/`AcpAsyncClient`
+  beans come from `quarkus.acp.client.*` with `AcpClientCustomizer` beans. Configuration mirrors the
+  Spring Boot starter's (`quarkus.acp.*`; the HTTP port is `quarkus.http.port`). JVM mode only.
+  Built on Quarkus 3.40.1, whose BOM is imported only by these modules. See `acp-quarkus/README.md`.
+  Cross-SDK: `quarkus-typescript-http` and `quarkus-typescript-ws` run the TypeScript client
+  against a Quarkus-hosted agent.
+
 - **`$/cancel_request` (ACP v1, Cancellation), both directions.** Client and agent sessions alike:
   - **Cancelling a request you sent:** dispose (cancel) the subscription to its `Mono` before the
     response arrives, directly or through `timeout(...)`, `take...`, or the SDK's own request
