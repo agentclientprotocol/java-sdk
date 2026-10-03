@@ -131,7 +131,7 @@ class CleanShutdownIT {
 		Thread agentThread = new Thread(() -> {
 			agent.start();
 			agentStarted.countDown();
-			agent.await(); // Should block until transport closes
+			agent.awaitTermination(); // Should block until transport closes
 			awaitReturned.set(true);
 		});
 		agentThread.setDaemon(true);

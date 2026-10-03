@@ -126,6 +126,17 @@ public class AcpSyncClient implements AutoCloseable {
 		return true;
 	}
 
+	/**
+	 * Returns the asynchronous client this client blocks on: the same session and transport
+	 * connection, with calls that return {@code Mono}s, for code that needs both APIs, such as
+	 * cancelling one request with {@link com.agentclientprotocol.sdk.spec.RequestCancellation}, or
+	 * closing at once with {@link AcpAsyncClient#close()}.
+	 * @return the asynchronous client
+	 */
+	public AcpAsyncClient async() {
+		return this.delegate;
+	}
+
 	// --------------------------
 	// Initialization
 	// --------------------------

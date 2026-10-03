@@ -156,7 +156,7 @@ import org.slf4j.LoggerFactory;
  * @author Mark Pollack
  * @since 1.0.0
  */
-public class AcpAgentSupport {
+public class AcpAgentSupport implements AutoCloseable {
 
 	private static final Logger log = LoggerFactory.getLogger(AcpAgentSupport.class);
 
@@ -238,15 +238,17 @@ public class AcpAgentSupport {
 	 */
 	public void run() {
 		start();
-		agent.await();
+		agent.awaitTermination();
 	}
 
 	/**
-	 * Close the agent gracefully.
+	 * Closes the agent as {@link AcpSyncAgent#close()} does: gracefully, waiting at most 10
+	 * seconds, then at once if that failed or took longer. Try-with-resources calls it.
 	 */
+	@Override
 	public void close() {
 		log.info("Closing annotation-based ACP agent");
-		agent.closeGracefully();
+		agent.close();
 	}
 
 	/**

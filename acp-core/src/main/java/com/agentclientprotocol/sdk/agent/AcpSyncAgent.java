@@ -10,6 +10,8 @@ import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.SyncCalls;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A running ACP agent with blocking calls: the agent {@link AcpAsyncAgent} describes, wrapped so
@@ -49,9 +51,14 @@ import org.jspecify.annotations.Nullable;
  * @see AcpAsyncAgent
  * @see AcpAgent
  */
-public class AcpSyncAgent {
+public class AcpSyncAgent implements AutoCloseable {
+
+	private static final Logger logger = LoggerFactory.getLogger(AcpSyncAgent.class);
 
 	private static final Duration DEFAULT_BLOCK_TIMEOUT = Duration.ofMinutes(5);
+
+	/** The longest {@link #close()} waits for a graceful close before closing at once. */
+	private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
 
 	private final AcpAsyncAgent asyncAgent;
 
@@ -70,7 +77,7 @@ public class AcpSyncAgent {
 	/**
 	 * Wraps an asynchronous agent with blocking calls that wait at most the given time.
 	 * @param asyncAgent the agent to wrap; must not be null
-	 * @param blockTimeout the most each blocking call waits, except {@link #await()} and
+	 * @param blockTimeout the most each blocking call waits, except {@link #awaitTermination()} and
 	 * {@link #run()}, which wait without limit
 	 */
 	public AcpSyncAgent(AcpAsyncAgent asyncAgent, Duration blockTimeout) {
@@ -80,8 +87,8 @@ public class AcpSyncAgent {
 
 	/**
 	 * Starts the agent, as {@link AcpAsyncAgent#start()} does, and returns without waiting for the
-	 * client. Call {@link #await()} afterwards, or use {@link #run()}, to block until the transport
-	 * has ended.
+	 * client. Call {@link #awaitTermination()} afterwards, or use {@link #run()}, to block until the
+	 * transport has ended.
 	 * @throws IllegalStateException if the transport refuses to start, for example because it was
 	 * started before
 	 */
@@ -97,16 +104,16 @@ public class AcpSyncAgent {
 	 *
 	 * <pre>{@code
 	 * agent.start();
-	 * agent.await();
+	 * agent.awaitTermination();
 	 * }</pre>
 	 */
-	public void await() {
+	public void awaitTermination() {
 		SyncCalls.block(asyncAgent.awaitTermination());
 	}
 
 	/**
 	 * Starts the agent and blocks until its transport has ended: {@link #start()}, then
-	 * {@link #await()}.
+	 * {@link #awaitTermination()}.
 	 *
 	 * <pre>{@code
 	 * public static void main(String[] args) {
@@ -127,7 +134,7 @@ public class AcpSyncAgent {
 	 */
 	public void run() {
 		start();
-		await();
+		awaitTermination();
 	}
 
 	/**
@@ -328,10 +335,21 @@ public class AcpSyncAgent {
 	}
 
 	/**
-	 * Shuts the agent down and closes the transport at once, as {@link AcpAsyncAgent#close()} does.
+	 * Closes the agent the way try-with-resources expects: gracefully, as {@link #closeGracefully()}
+	 * does, waiting at most 10 seconds (or the block timeout, if shorter), then at once, as
+	 * {@link AcpAsyncAgent#close()} does, if that failed or took longer. To close at once without
+	 * waiting, call {@code async().close()}.
 	 */
+	@Override
 	public void close() {
-		asyncAgent.close();
+		Duration bound = this.blockTimeout.compareTo(CLOSE_TIMEOUT) < 0 ? this.blockTimeout : CLOSE_TIMEOUT;
+		try {
+			SyncCalls.block(asyncAgent.closeGracefully(), bound);
+		}
+		catch (RuntimeException e) {
+			logger.warn("The agent did not close gracefully, closing it now: {}", e.toString());
+			asyncAgent.close();
+		}
 	}
 
 }

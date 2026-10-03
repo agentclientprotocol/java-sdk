@@ -300,6 +300,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: sync lifecycle names line up.** `AcpSyncAgent.await()` is renamed
+  `awaitTermination()`, matching `AcpAsyncAgent` and the transports. `AcpSyncAgent` and
+  `AcpAgentSupport` implement `AutoCloseable`, and their `close()` now means what it means on
+  `AcpSyncClient`: close gracefully, waiting at most 10 seconds, then close at once if that failed
+  or took longer (`AcpSyncAgent.close()` used to close at once; `AcpAgentSupport.close()` used to
+  wait up to the 5-minute block timeout and never force). New `AcpSyncClient.async()` returns the
+  `AcpAsyncClient` it blocks on. Migration: replace `agent.await()` with
+  `agent.awaitTermination()`; for the old immediate close, call `agent.async().close()`; use
+  try-with-resources on the sync agent and the annotated agent.
+
 - **Breaking: `PromptContext.sendUpdate(update)` and `SyncPromptContext.sendUpdate(update)` replace
   the two-argument `sendUpdate(sessionId, update)`.** The context belongs to one prompt's session,
   so the session ID was redundant (and a wrong one sent the update to another session). Migration:
