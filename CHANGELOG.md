@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Prompt handlers see their prompt's cancellation.** `SyncPromptContext.isCancelled()` and
+  `onCancel(Runnable)`, and `PromptContext.isCancelled()` and `whenCancelled()` (a `Mono<Void>`
+  that completes on cancel), signal a cancel by `session/cancel` for the prompt's session or by
+  `$/cancel_request` for its request, and also when the agent cancels the handler itself (the
+  cancel grace period or `maxPromptDuration` passed, or the connection closed). An annotated
+  `@Prompt` method reads it from the context it takes, with no `@Cancel` handler or shared state;
+  a builder prompt handler likewise. After `session/cancel` the handler still answers `cancelled`
+  within the cancel grace period; after `$/cancel_request` the agent has already answered, so the
+  handler just stops. New `PromptResponse.cancelled()`.
+  **Breaking** for code implementing `PromptContext` or `SyncPromptContext` itself (test doubles):
+  implement the new methods.
+
 - **`$/cancel_request` (ACP v1, Cancellation), both directions.** Client and agent sessions alike:
   - **Cancelling a request you sent:** dispose (cancel) the subscription to its `Mono` before the
     response arrives, directly or through `timeout(...)`, `take...`, or the SDK's own request

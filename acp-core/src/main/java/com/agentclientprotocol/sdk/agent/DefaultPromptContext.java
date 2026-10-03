@@ -47,6 +47,8 @@ class DefaultPromptContext implements PromptContext {
 
 	private final String sessionId;
 
+	private final PromptCancellations.Signal cancellation;
+
 	/**
 	 * Creates a new prompt context wrapping the given agent.
 	 * @param agent The agent to delegate to
@@ -55,6 +57,8 @@ class DefaultPromptContext implements PromptContext {
 	DefaultPromptContext(AcpAsyncAgent agent, String sessionId) {
 		this.agent = agent;
 		this.sessionId = sessionId;
+		this.cancellation = (agent instanceof DefaultAcpAsyncAgent running) ? running.promptSignal(sessionId)
+				: new PromptCancellations.Signal();
 	}
 
 	// ========================================================================
@@ -121,6 +125,20 @@ class DefaultPromptContext implements PromptContext {
 	@Override
 	public @Nullable NegotiatedCapabilities getClientCapabilities() {
 		return agent.getClientCapabilities();
+	}
+
+	// ========================================================================
+	// Cancellation
+	// ========================================================================
+
+	@Override
+	public boolean isCancelled() {
+		return cancellation.isCancelled();
+	}
+
+	@Override
+	public Mono<Void> whenCancelled() {
+		return cancellation.whenCancelled();
 	}
 
 	// ========================================================================

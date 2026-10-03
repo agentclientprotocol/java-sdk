@@ -62,6 +62,9 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	 */
 	private final AtomicReference<@Nullable NegotiatedCapabilities> clientCapabilities = new AtomicReference<>();
 
+	/** The cancellation signals of the prompts running, which their contexts read. */
+	private final PromptCancellations promptCancellations = new PromptCancellations();
+
 	DefaultAcpAsyncAgent(AcpAgentTransport transport, Duration requestTimeout, PromptTimeouts promptTimeouts,
 			AgentHandlers handlers) {
 		this.transport = transport;
@@ -83,6 +86,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			for (AgentHandlers.Notification<?> registration : notificationHandlers) {
 				notifications.put(registration.method(), sessionHandler(registration));
 			}
+			notifications.put(AcpSchema.METHOD_SESSION_CANCEL,
+					signalCancel(notifications.get(AcpSchema.METHOD_SESSION_CANCEL)));
 			this.session = new AcpAgentSession(requestTimeout, transport, requests, notifications, promptTimeouts);
 			logger.info("ACP async agent started");
 		});
@@ -93,8 +98,55 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		return params -> {
 			T request = transport.unmarshalParams(params, registration.requestType());
 			recordClientCapabilities(request);
+			if (request instanceof AcpSchema.PromptRequest prompt) {
+				return handlePrompt(registration, request, prompt.sessionId());
+			}
 			return registration.handler().handle(request, this).cast(Object.class);
 		};
+	}
+
+	/**
+	 * Calls a prompt handler with its cancellation signal started, so its context sees it,
+	 * and signals it when the handler's subscription is cancelled: by {@code $/cancel_request},
+	 * a prompt deadline, or the session closing. {@code session/cancel} signals it through
+	 * {@link #signalCancel}.
+	 */
+	private <T> Mono<Object> handlePrompt(AgentHandlers.Request<T> registration, T request, String sessionId) {
+		PromptCancellations.Signal signal = promptCancellations.start(sessionId);
+		Mono<?> handled;
+		try {
+			handled = registration.handler().handle(request, this);
+		}
+		catch (RuntimeException | Error ex) {
+			promptCancellations.end(sessionId, signal);
+			throw ex;
+		}
+		return handled.cast(Object.class)
+			.doOnCancel(signal::cancel)
+			.doFinally(ignored -> promptCancellations.end(sessionId, signal));
+	}
+
+	/**
+	 * Handles {@code session/cancel}: signals the session's running prompt, then calls the
+	 * registered cancel handler, if any.
+	 */
+	private AcpAgentSession.NotificationHandler signalCancel(AcpAgentSession.@Nullable NotificationHandler registered) {
+		return params -> {
+			AcpSchema.CancelNotification cancel = transport.unmarshalParams(params,
+					new TypeRef<AcpSchema.CancelNotification>() {
+					});
+			promptCancellations.cancel(cancel.sessionId());
+			return (registered != null) ? registered.handle(params) : Mono.empty();
+		};
+	}
+
+	/**
+	 * The cancellation signal of the prompt running on {@code sessionId}; one that never
+	 * fires when there is none (a context built outside a running prompt).
+	 */
+	PromptCancellations.Signal promptSignal(String sessionId) {
+		PromptCancellations.Signal signal = promptCancellations.current(sessionId);
+		return (signal != null) ? signal : new PromptCancellations.Signal();
 	}
 
 	private <T> AcpAgentSession.NotificationHandler sessionHandler(AgentHandlers.Notification<T> registration) {
