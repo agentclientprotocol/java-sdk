@@ -130,7 +130,7 @@ Run time:
 
 | Property | Default | |
 |---|---|---|
-| `quarkus.acp.agent.request-timeout` | `60s` | agent requests to the client |
+| `quarkus.acp.agent.request-timeout` | SDK default | agent requests to the client |
 | `quarkus.acp.agent.cancel-grace-period` | SDK default | |
 | `quarkus.acp.agent.max-prompt-duration` | none | |
 | `quarkus.acp.agent.shutdown-on-transport-end` | `true` | stdio: exit when input ends |
@@ -141,12 +141,12 @@ Run time:
 | `quarkus.acp.agent.transport.http.max-web-socket-pending-frames` | 1024 | |
 | `quarkus.acp.agent.transport.http.max-provisional-sessions` | 64 | |
 | `quarkus.acp.agent.transport.http.shutdown-timeout` | 5s | |
-| `quarkus.acp.client.request-timeout` | `30s` | |
+| `quarkus.acp.client.request-timeout` | SDK default | |
 | `quarkus.acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`; unset: WebSocket if `websocket.uri`, else HTTP if `http.uri`, else stdio if `stdio.command` |
 | `quarkus.acp.client.transport.stdio.command`, `.args`, `.env.<NAME>` | | the agent process |
 | `quarkus.acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | |
 | `quarkus.acp.client.transport.http.uri` | | |
-| `quarkus.acp.client.capabilities.read-text-file`, `.write-text-file`, `.terminal` | `false` | advertise only what you serve |
+| `quarkus.acp.client.capabilities.read-text-file`, `.write-text-file`, `.terminal`, `.elicitation-form`, `.elicitation-url`, `.boolean-config-options` | `false` | advertise only what a customizer registers handlers for |
 
 Compared with the Spring Boot starter's `spring.acp.*`: the HTTP port is `quarkus.http.port`, and the
 listener's `max-concurrent-streams-per-connection` is `quarkus.http.limits.max-concurrent-streams`.

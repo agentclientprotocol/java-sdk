@@ -87,7 +87,7 @@ class HostsAndProducersTest {
 	void clientProducersBuildCustomizeAndCloseTheClient() {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
-		when(config.client().requestTimeout()).thenReturn(Duration.ofSeconds(1));
+		when(config.client().requestTimeout()).thenReturn(Optional.of(Duration.ofSeconds(1)));
 		when(config.client().capabilities().readTextFile()).thenReturn(true);
 		when(config.client().transport().type()).thenReturn(Optional.of(ClientTransportType.HTTP));
 		when(config.client().transport().http().uri()).thenReturn(Optional.of(java.net.URI.create("http://localhost:9/acp")));
@@ -100,6 +100,33 @@ class HostsAndProducersTest {
 		assertThat(customized).containsExactly("first", "second");
 		assertThat(producers.acpSyncClient(client)).isNotNull();
 		producers.close(client);
+	}
+
+	@Test
+	void capabilitiesFollowTheConfiguration() {
+		AcpRuntimeConfig.Capabilities none = mock(AcpRuntimeConfig.Capabilities.class);
+		AcpSchema.ClientCapabilities nothing = AcpClientProducers.capabilities(none);
+		assertThat(nothing.fs().readTextFile()).isFalse();
+		assertThat(nothing.terminal()).isFalse();
+		assertThat(nothing.elicitation()).isNull();
+		assertThat(nothing.session()).isNull();
+
+		AcpRuntimeConfig.Capabilities all = mock(AcpRuntimeConfig.Capabilities.class);
+		when(all.readTextFile()).thenReturn(true);
+		when(all.writeTextFile()).thenReturn(true);
+		when(all.terminal()).thenReturn(true);
+		when(all.elicitationForm()).thenReturn(true);
+		when(all.booleanConfigOptions()).thenReturn(true);
+		AcpSchema.ClientCapabilities everything = AcpClientProducers.capabilities(all);
+		assertThat(everything.fs().writeTextFile()).isTrue();
+		assertThat(everything.terminal()).isTrue();
+		assertThat(everything.elicitation().form()).isNotNull();
+		assertThat(everything.elicitation().url()).isNull();
+		assertThat(everything.session()).isEqualTo(AcpSchema.ClientSessionCapabilities.withBooleanConfigOptions());
+
+		when(all.elicitationForm()).thenReturn(false);
+		when(all.elicitationUrl()).thenReturn(true);
+		assertThat(AcpClientProducers.capabilities(all).elicitation().url()).isNotNull();
 	}
 
 	@AcpAgent

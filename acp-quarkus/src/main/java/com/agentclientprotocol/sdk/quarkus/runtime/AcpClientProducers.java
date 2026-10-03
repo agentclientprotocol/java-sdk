@@ -67,13 +67,10 @@ public class AcpClientProducers {
 	@Singleton
 	@DefaultBean
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, @All List<AcpClientCustomizer> customizers) {
-		AcpRuntimeConfig.Capabilities capabilities = config.client().capabilities();
 		AcpClient.AsyncSpec spec = AcpClient.async(transport)
-			.requestTimeout(config.client().requestTimeout())
-			.clientCapabilities(new AcpSchema.ClientCapabilities(
-					new AcpSchema.FileSystemCapability(capabilities.readTextFile(), capabilities.writeTextFile()),
-					capabilities.terminal()))
+			.clientCapabilities(capabilities(config.client().capabilities()))
 			.sessionUpdateConsumer(AcpClientProducers::logSessionUpdate);
+		config.client().requestTimeout().ifPresent(spec::requestTimeout);
 		customizers.forEach(customizer -> customizer.customize(spec));
 		return spec.build();
 	}
@@ -90,8 +87,28 @@ public class AcpClientProducers {
 		return new AcpSyncClient(client);
 	}
 
+	/**
+	 * The capabilities to advertise, from the configuration.
+	 * @param capabilities the configured capabilities
+	 * @return the client capabilities
+	 */
+	static AcpSchema.ClientCapabilities capabilities(AcpRuntimeConfig.Capabilities capabilities) {
+		AcpSchema.ElicitationCapabilities elicitation = null;
+		if (capabilities.elicitationForm() || capabilities.elicitationUrl()) {
+			elicitation = new AcpSchema.ElicitationCapabilities(
+					capabilities.elicitationForm() ? new AcpSchema.ElicitationFormCapabilities() : null,
+					capabilities.elicitationUrl() ? new AcpSchema.ElicitationUrlCapabilities() : null, null);
+		}
+		return new AcpSchema.ClientCapabilities(
+				new AcpSchema.FileSystemCapability(capabilities.readTextFile(), capabilities.writeTextFile()),
+				capabilities.terminal(),
+				capabilities.booleanConfigOptions() ? AcpSchema.ClientSessionCapabilities.withBooleanConfigOptions()
+						: null,
+				null, elicitation, null);
+	}
+
 	void close(@Disposes AcpAsyncClient client) {
-		Duration timeout = config.client().requestTimeout().plusSeconds(5);
+		Duration timeout = config.client().requestTimeout().orElse(Duration.ofSeconds(30)).plusSeconds(5);
 		try {
 			client.closeGracefully().block(timeout);
 		}

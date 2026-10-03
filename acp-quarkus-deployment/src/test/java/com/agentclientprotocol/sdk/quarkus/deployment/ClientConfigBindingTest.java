@@ -41,7 +41,10 @@ class ClientConfigBindingTest {
 		.overrideConfigKey("quarkus.acp.client.transport.http.uri", "http://localhost:9/acp")
 		.overrideConfigKey("quarkus.acp.client.capabilities.read-text-file", "true")
 		.overrideConfigKey("quarkus.acp.client.capabilities.write-text-file", "true")
-		.overrideConfigKey("quarkus.acp.client.capabilities.terminal", "true");
+		.overrideConfigKey("quarkus.acp.client.capabilities.terminal", "true")
+		.overrideConfigKey("quarkus.acp.client.capabilities.elicitation-form", "true")
+		.overrideConfigKey("quarkus.acp.client.capabilities.elicitation-url", "true")
+		.overrideConfigKey("quarkus.acp.client.capabilities.boolean-config-options", "true");
 
 	@Inject
 	AcpRuntimeConfig config;
@@ -52,7 +55,7 @@ class ClientConfigBindingTest {
 	@Test
 	void everyClientSettingBinds() {
 		AcpRuntimeConfig.Client client = config.client();
-		assertThat(client.requestTimeout()).isEqualTo(Duration.ofSeconds(9));
+		assertThat(client.requestTimeout()).contains(Duration.ofSeconds(9));
 		assertThat(client.transport().type()).contains(ClientTransportType.STDIO);
 		assertThat(client.transport().stdio().command()).contains("my-agent");
 		assertThat(client.transport().stdio().args()).contains(List.of("--acp", "--verbose"));
@@ -63,6 +66,9 @@ class ClientConfigBindingTest {
 		assertThat(client.capabilities().readTextFile()).isTrue();
 		assertThat(client.capabilities().writeTextFile()).isTrue();
 		assertThat(client.capabilities().terminal()).isTrue();
+		assertThat(client.capabilities().elicitationForm()).isTrue();
+		assertThat(client.capabilities().elicitationUrl()).isTrue();
+		assertThat(client.capabilities().booleanConfigOptions()).isTrue();
 	}
 
 	@Test

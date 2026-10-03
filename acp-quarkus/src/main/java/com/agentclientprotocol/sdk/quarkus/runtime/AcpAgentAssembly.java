@@ -71,9 +71,8 @@ public class AcpAgentAssembly {
 	private <T> AcpAgentSupport.Builder builder(Class<T> type) {
 		T bean = Arc.container().select(type, Any.Literal.INSTANCE).get();
 		AcpRuntimeConfig.Agent agent = config.agent();
-		AcpAgentSupport.Builder builder = AcpAgentSupport.builder()
-			.agent(type, () -> bean)
-			.requestTimeout(agent.requestTimeout());
+		AcpAgentSupport.Builder builder = AcpAgentSupport.builder().agent(type, () -> bean);
+		agent.requestTimeout().ifPresent(builder::requestTimeout);
 		agent.cancelGracePeriod().ifPresent(builder::cancelGracePeriod);
 		agent.maxPromptDuration().ifPresent(builder::maxPromptDuration);
 		interceptors.forEach(builder::interceptor);
