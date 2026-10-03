@@ -315,8 +315,10 @@ public interface SyncPromptContext {
 
 	/**
 	 * Reads a whole text file through the client like {@link #readFile(String)}, but returns empty
-	 * instead of throwing. Any failure gives empty: a missing capability, an error answer, a
-	 * timeout, and also an interrupt of the handler's thread.
+	 * instead of throwing. A failure gives empty: a missing capability, an error answer, a timeout.
+	 * Cancellation does not: when the SDK cancels the handler while it waits, this throws
+	 * {@link java.util.concurrent.CancellationException} with the thread's interrupt flag set, as
+	 * the other calls do, so the handler stops.
 	 * @param path the absolute path of the file
 	 * @return the file content, or empty if it could not be read
 	 */

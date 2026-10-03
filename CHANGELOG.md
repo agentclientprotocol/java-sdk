@@ -695,6 +695,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`SyncPromptContext.tryReadFile` no longer swallows the cancelling interrupt.** It returned
+  empty for every failure, including the interrupt the SDK uses to cancel a sync handler, and the
+  interrupt flag was lost, so a cancelled handler carried on as if the file were missing. It now
+  throws `CancellationException` (interrupt flag set) when the handler is cancelled while it waits,
+  as the other calls do; any other failure still gives empty.
+
 - **`askChoice` fails clearly when the client answers with an option it was not offered.** It
   parsed the chosen option ID as an index, so an unexpected answer failed with
   `NumberFormatException` or `ArrayIndexOutOfBoundsException`. It now fails with an

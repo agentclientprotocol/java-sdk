@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.agent;
 
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -153,7 +154,11 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 		try {
 			return Optional.of(readFile(path));
 		}
-		catch (Exception e) {
+		catch (CancellationException e) {
+			// The SDK cancels the handler by interrupting it: that is not a missing file.
+			throw e;
+		}
+		catch (RuntimeException e) {
 			return Optional.empty();
 		}
 	}

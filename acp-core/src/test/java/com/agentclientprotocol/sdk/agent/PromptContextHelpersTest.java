@@ -209,6 +209,62 @@ class PromptContextHelpersTest {
 		agent.closeGracefully().block(TIMEOUT);
 	}
 
+	/**
+	 * {@code tryReadFile} gives empty for a file it cannot read, but not for the interrupt the SDK
+	 * uses to cancel a sync handler: that propagates, with the thread's interrupt flag still set,
+	 * so a cancelled handler stops instead of carrying on as if the file were missing.
+	 */
+	@Test
+	void tryReadFileDoesNotSwallowTheCancellingInterrupt() throws Exception {
+		CountDownLatch reading = new CountDownLatch(1);
+		CountDownLatch done = new CountDownLatch(1);
+		AtomicReference<String> outcome = new AtomicReference<>();
+
+		AcpSyncAgent agent = AcpAgent.sync(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> InitializeResponse.ok())
+			.newSessionHandler(req -> new NewSessionResponse("s1", null, null))
+			.promptHandler((request, context) -> {
+				try {
+					var content = context.tryReadFile("/slow");
+					outcome.set("returned " + content + ", interrupted=" + Thread.currentThread().isInterrupted());
+				}
+				catch (RuntimeException e) {
+					outcome.set(e.getClass().getSimpleName() + ", interrupted=" + Thread.currentThread().isInterrupted());
+					throw e;
+				}
+				finally {
+					done.countDown();
+				}
+				return PromptResponse.endTurn();
+			})
+			.build();
+
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(new ClientCapabilities(new AcpSchema.FileSystemCapability(true, false), null))
+			.readTextFileHandler(req -> {
+				reading.countDown();
+				return Mono.never();
+			})
+			.build();
+
+		agent.start();
+		connect(client);
+
+		Disposable turn = client.prompt(prompt()).subscribe(r -> {
+		}, e -> {
+		});
+		assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
+		turn.dispose();
+
+		assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+		assertThat(outcome.get()).isEqualTo("CancellationException, interrupted=true");
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully();
+	}
+
 	private AcpAsyncClient terminalClient(CountDownLatch created, CountDownLatch released) {
 		return AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
