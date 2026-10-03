@@ -638,6 +638,12 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
+                            <!-- Modules that are never published. A module's own skipPublishing
+                                 would not do: the bundle is uploaded by the last module of the
+                                 reactor, so skipping there skips the whole release. -->
+                            <excludeArtifacts>
+                                <excludeArtifact>acp-micronaut-sample</excludeArtifact>
+                            </excludeArtifacts>
                         </configuration>
                     </plugin>
 

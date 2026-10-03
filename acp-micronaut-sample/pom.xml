@@ -22,6 +22,9 @@
              branches. -->
         <jacoco.minimum.line>0.82</jacoco.minimum.line>
         <jacoco.minimum.branch>0.00</jacoco.minimum.branch>
+        <!-- Never deployed: the snapshot workflow's plain deploy skips it here, and the release
+             bundle leaves it out (excludeArtifacts in the parent's release profile). -->
+        <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
     <!-- The Micronaut platform BOM is imported here, in the Micronaut modules only, never in

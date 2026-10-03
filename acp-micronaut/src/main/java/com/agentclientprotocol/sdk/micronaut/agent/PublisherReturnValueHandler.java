@@ -18,6 +18,8 @@ import reactor.core.publisher.Mono;
  * Like that handler, it waits for the element on the handler's thread, since
  * {@code AcpAgentSupport} serves handlers through the sync agent.
  */
+// TODO(devex rebase): remove this class and its registration in AcpAgentRuntime.builder() once
+// acp-agent-support handles Publisher and CompletionStage returns itself.
 public final class PublisherReturnValueHandler implements ReturnValueHandler {
 
 	@Override

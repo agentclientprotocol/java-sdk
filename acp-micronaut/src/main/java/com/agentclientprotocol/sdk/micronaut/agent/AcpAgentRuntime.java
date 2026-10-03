@@ -237,6 +237,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		interceptors.forEach(builder::interceptor);
 		argumentResolvers.forEach(builder::argumentResolver);
 		returnValueHandlers.forEach(builder::returnValueHandler);
+		// TODO(devex rebase): drop when acp-agent-support handles Publisher returns.
 		builder.returnValueHandler(new PublisherReturnValueHandler());
 		return builder;
 	}
