@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`AgentParameters.Builder.inheritEnvironment(boolean)`: start a stdio agent without the
+  client's environment.** The "safe" default variables of `AgentParameters` (HOME, PATH, USER and
+  the like) had no effect: `StdioAcpClientTransport` added them to the whole environment the
+  process inherits, so every secret in the client's environment reached the agent. Inheriting stays
+  the default and is now documented as such. With `inheritEnvironment(false)` the process starts
+  from an empty environment and gets only `getEnv()`: the safe defaults and the variables added on
+  the builder (`addEnvVar("GEMINI_API_KEY", ...)` for a key the agent needs).
+  `AgentParameters.isInheritEnvironment()` reports the choice.
+
 - **Annotated handlers may return a `CompletionStage` or a single-value `Publisher`**, besides
   the value itself and a `Mono`, with the same meaning: the runtime waits for the value on the
   handler's thread. A `@Prompt` method's `Mono<String>` (or `CompletionStage<String>`) now sends

@@ -54,10 +54,11 @@ import reactor.core.scheduler.Schedulers;
  * <p>The process starts when {@link #connect} runs, which building the client does, so a
  * command that cannot be started fails the build. One transport starts one process for one
  * client: a second {@code connect} is refused. The process runs in the client's working
- * directory and inherits the client's whole environment, with the variables of
+ * directory and, by default, inherits the client's whole environment, with the variables of
  * {@link AgentParameters#getEnv()} added, so the agent can read every secret in that
- * environment. A line on the agent's standard output that is not a JSON-RPC message is
- * reported to the exception handler, answered with a JSON-RPC error and skipped.
+ * environment; parameters built with {@code inheritEnvironment(false)} give it only
+ * {@link AgentParameters#getEnv()}. A line on the agent's standard output that is not a JSON-RPC
+ * message is reported to the exception handler, answered with a JSON-RPC error and skipped.
  *
  * <p>Each line the agent writes to standard error is logged at INFO as {@code agent: <line>} on
  * the logger {@value #AGENT_STDERR_LOGGER}, so it stays visible by default. Set that logger's
@@ -247,6 +248,9 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 				ProcessBuilder processBuilder = this.getProcessBuilder();
 				processBuilder.command(fullCommand);
+				if (!params.isInheritEnvironment()) {
+					processBuilder.environment().clear();
+				}
 				processBuilder.environment().putAll(params.getEnv());
 
 				// Start the process
@@ -270,7 +274,8 @@ public class StdioAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * Returns the {@link ProcessBuilder} that {@link #connect} starts the agent process with,
-	 * after setting its command and adding {@link AgentParameters#getEnv()} to its environment.
+	 * after setting its command and adding {@link AgentParameters#getEnv()} to its environment
+	 * (which it first clears when the parameters do not inherit the client's environment).
 	 * A subclass may override it to configure what {@code AgentParameters} cannot, such as the
 	 * working directory. It must leave standard input, output and error as pipes, which the
 	 * transport reads and writes.

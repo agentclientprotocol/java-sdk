@@ -28,12 +28,14 @@ import com.agentclientprotocol.sdk.util.Assert;
  *     .build();
  * }</pre>
  *
- * <p>{@link #getEnv()} starts with a few variables copied from the client's environment when
- * the parameters are built (HOME, LOGNAME, PATH, SHELL, TERM and USER; on Windows PATH,
- * SYSTEMROOT, TEMP, USERPROFILE and a few more), and the variables added on the builder
- * replace them.
- * The transport does not limit the agent to these: it adds them to the whole environment the
- * process inherits from the client.
+ * <p>By default the agent process inherits the client's whole environment, with {@link #getEnv()}
+ * added, so the agent can read every secret in it. {@link #getEnv()} starts with a few variables
+ * copied from the client's environment when the parameters are built (HOME, LOGNAME, PATH, SHELL,
+ * TERM and USER; on Windows PATH, SYSTEMROOT, TEMP, USERPROFILE and a few more), and the
+ * variables added on the builder replace them. To give the agent only those, call
+ * {@link Builder#inheritEnvironment(boolean) inheritEnvironment(false)}: the process then starts
+ * from an empty environment, and an agent that needs a key, for example an API key, must be given
+ * it with {@link Builder#addEnvVar(String, String)}.
  *
  * <p>The parameters are not a snapshot: {@link #getArgs()} and {@link #getEnv()} return the
  * collections themselves, and an argument added with {@link Builder#arg(String)} after
@@ -62,7 +64,10 @@ public class AgentParameters {
 	@JsonProperty("env")
 	private final Map<String, String> env;
 
-	private AgentParameters(String command, List<String> args, Map<String, String> env) {
+	@JsonProperty("inheritEnvironment")
+	private final boolean inheritEnvironment;
+
+	private AgentParameters(String command, List<String> args, Map<String, String> env, boolean inheritEnvironment) {
 		Assert.notNull(command, "The command can not be null");
 		Assert.notNull(args, "The args can not be null");
 
@@ -70,6 +75,7 @@ public class AgentParameters {
 		this.args = args;
 		this.env = new HashMap<>(getDefaultEnvironment());
 		this.env.putAll(env);
+		this.inheritEnvironment = inheritEnvironment;
 	}
 
 	/**
@@ -92,11 +98,21 @@ public class AgentParameters {
 	/**
 	 * Returns the environment variables set for the agent process: the defaults copied from
 	 * the client's environment, replaced where the builder added a variable of the same name.
-	 * The transport adds them to the environment the process inherits.
+	 * The transport adds them to the environment the process inherits, or, without inheriting
+	 * ({@link #isInheritEnvironment()}), gives the process only these.
 	 * @return the variables, by name; the map itself, not a copy
 	 */
 	public Map<String, String> getEnv() {
 		return this.env;
+	}
+
+	/**
+	 * Returns whether the agent process inherits the client's whole environment, with
+	 * {@link #getEnv()} added (the default), or gets only {@link #getEnv()}.
+	 * @return {@code true} if the process inherits the client's environment
+	 */
+	public boolean isInheritEnvironment() {
+		return this.inheritEnvironment;
 	}
 
 	/**
@@ -121,6 +137,8 @@ public class AgentParameters {
 		private List<String> args = new ArrayList<>();
 
 		private final Map<String, String> env = new HashMap<>();
+
+		private boolean inheritEnvironment = true;
 
 		/**
 		 * Creates a builder for parameters that start {@code command}; the same as
@@ -197,12 +215,26 @@ public class AgentParameters {
 		}
 
 		/**
+		 * Sets whether the agent process inherits the client's whole environment. Default:
+		 * {@code true}, the process gets the client's environment with the variables of
+		 * {@link AgentParameters#getEnv()} added, every secret in it included. With
+		 * {@code false} the process gets only {@link AgentParameters#getEnv()}: the safe defaults
+		 * (HOME, PATH, USER and the like) and the variables added on this builder.
+		 * @param inheritEnvironment {@code false} to start the agent from the safe defaults only
+		 * @return this builder
+		 */
+		public Builder inheritEnvironment(boolean inheritEnvironment) {
+			this.inheritEnvironment = inheritEnvironment;
+			return this;
+		}
+
+		/**
 		 * Returns the parameters, with the default environment variables read from the
 		 * client's environment now.
 		 * @return the parameters
 		 */
 		public AgentParameters build() {
-			return new AgentParameters(command, args, env);
+			return new AgentParameters(command, args, env, inheritEnvironment);
 		}
 
 	}
