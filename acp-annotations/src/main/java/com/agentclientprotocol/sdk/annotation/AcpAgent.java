@@ -34,6 +34,12 @@ import java.lang.annotation.Target;
  *   turn</li>
  * </ul>
  *
+ * <p><b>Discovery.</b> Handler methods are found on the class and its superclasses, so handlers
+ * can live on an abstract base class, and a subclass that a framework generates for a bean
+ * (a Spring CGLIB, Quarkus ArC or Micronaut AOP proxy, which carries no annotations) is found
+ * through the annotated class it extends and invoked on the proxy, so its interceptors run. An
+ * annotated override replaces the method it overrides.
+ *
  * <p><b>Advertising.</b> The agent's {@code initialize} response is derived from the class:
  * each handler annotation advertises the capability its method needs ({@link LoadSession} sets
  * {@code loadSession}, {@link ListSessions} sets {@code sessionCapabilities.list},
