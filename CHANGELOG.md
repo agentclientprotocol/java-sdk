@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Typed values in `@SetSessionConfigOption` methods.** New parameter annotations `@ConfigId`
+  (the option id, a `String`) and `@ConfigValue` (the new value, typed by the parameter: `String`
+  for a select option, `boolean`/`Boolean` for a boolean option, `Object` for either), resolved by
+  the new `ConfigOptionResolver`. A value of the other kind than the parameter's is answered
+  `-32602` (invalid params) without calling the method. The SDK still does not reject an id or a
+  value the session never offered; that needs per-session option tracking and is the method's to
+  check.
 - **Spring Boot autoconfiguration and starter, now part of the SDK.** The former
   `spring-ai-community/acp-autoconfig` project moves into this repository, with its history, as two modules
   released with the SDK:
