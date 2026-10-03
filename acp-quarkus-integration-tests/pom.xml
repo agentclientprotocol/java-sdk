@@ -18,8 +18,9 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
-        <jacoco.minimum.line>0.00</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.00</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 72.73%, branch 75.00%, less 2 points (parent pom, JaCoCo). The sample application; StdioAgentIT drives it out of process, which is not counted. -->
+        <jacoco.minimum.line>0.70</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.73</jacoco.minimum.branch>
     </properties>
 
     <dependencyManagement>

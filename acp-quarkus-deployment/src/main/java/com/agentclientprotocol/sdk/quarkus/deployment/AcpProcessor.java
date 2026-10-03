@@ -95,13 +95,11 @@ class AcpProcessor {
 		}
 	}
 
+	/** The {@code @AcpAgent} class as a bean the runtime reads, and the agent bean kept. */
 	@BuildStep
 	@Record(ExecutionTime.STATIC_INIT)
-	void agentBeans(Optional<AcpAgentBuildItem> agent, AcpBuildTimeConfig config, AcpRecorder recorder,
-			BuildProducer<AdditionalBeanBuildItem> beans, BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
-			BuildProducer<UnremovableBeanBuildItem> unremovable,
-			BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfig,
-			BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfig) {
+	void agentClass(Optional<AcpAgentBuildItem> agent, AcpRecorder recorder,
+			BuildProducer<SyntheticBeanBuildItem> syntheticBeans, BuildProducer<UnremovableBeanBuildItem> unremovable) {
 		if (agent.isEmpty()) {
 			return;
 		}
@@ -111,6 +109,17 @@ class AcpProcessor {
 			.supplier(recorder.agentClass(agentClass))
 			.done());
 		unremovable.produce(UnremovableBeanBuildItem.beanClassNames(agentClass));
+	}
+
+	/** The host for the configured transport, and the Quarkus defaults it needs. */
+	@BuildStep
+	void agentHost(Optional<AcpAgentBuildItem> agent, AcpBuildTimeConfig config,
+			BuildProducer<AdditionalBeanBuildItem> beans,
+			BuildProducer<StaticInitConfigBuilderBuildItem> staticInitConfig,
+			BuildProducer<RunTimeConfigBuilderBuildItem> runTimeConfig) {
+		if (agent.isEmpty()) {
+			return;
+		}
 		beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpAgentAssembly.class));
 		if (config.agent().transport().type() == AgentTransportType.STDIO) {
 			beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpStdioAgentHost.class));

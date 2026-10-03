@@ -15,8 +15,9 @@
     <description>Build-time half of the ACP Quarkus extension: finds the @AcpAgent bean in the index and wires its transport</description>
 
     <properties>
-        <jacoco.minimum.line>0.00</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.00</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 98.18%, branch 94.44%, less 2 points (parent pom, JaCoCo). -->
+        <jacoco.minimum.line>0.96</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.92</jacoco.minimum.branch>
     </properties>
 
     <dependencyManagement>
