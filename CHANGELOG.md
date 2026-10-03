@@ -221,6 +221,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Annotation misuse fails when the agent is registered or built, not at the first request.**
+  `AcpAgentSupport` now rejects, with a message naming the class, the method and the fix:
+  - at registration (`create(..)`/`agent(..)`, `IllegalArgumentException`): two methods with the
+    same handler annotation (one of them used to win silently), one method with two handler
+    annotations, and a `@SessionId`, `@ConfigId` or `@ConfigValue` parameter on an `@ExtRequest`
+    or `@ExtNotification` method (it used to receive the extension's params, so every call failed
+    `-32602`);
+  - at `build()`/`buildFactory()` (`IllegalStateException`): a parameter no argument resolver
+    supplies, the request type of another method, `@SessionId` on a method without a session, a
+    `PromptContext`/`SyncPromptContext` outside `@Prompt`, `@ConfigId`/`@ConfigValue` outside
+    `@SetSessionConfigOption`, a request handler declared `void` (other than `@Prompt`), a return
+    type no return value handler accepts, a return type that cannot give the method's response
+    (including a `Mono` of another type), and a `void` `@ExtRequest`.
+  Each of these used to fail every call with `-32603` or `-32602`. Parameters and return types a
+  custom `ArgumentResolver` or `ReturnValueHandler` supports are not checked. Private and static
+  handler methods remain supported.
+  **Migration:** a build that now fails names the method to fix.
+
 - **`AcpError.getMessage()` no longer ends with `[code=N]`.** It is the peer's message, followed
   by the detail its data carries, so `e.getCode() + " " + e.getMessage()` names the code once.
   `toString()` (what stack traces show) still includes `[code=N]`. Code that parsed the code out of

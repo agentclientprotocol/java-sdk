@@ -63,6 +63,8 @@ import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionConfigOption
 import com.agentclientprotocol.sdk.agent.support.resolver.SetSessionModeRequestResolver;
 import com.agentclientprotocol.sdk.annotation.Authenticate;
 import com.agentclientprotocol.sdk.annotation.Cancel;
+import com.agentclientprotocol.sdk.annotation.ConfigId;
+import com.agentclientprotocol.sdk.annotation.ConfigValue;
 import com.agentclientprotocol.sdk.annotation.CloseSession;
 import com.agentclientprotocol.sdk.annotation.DeleteSession;
 import com.agentclientprotocol.sdk.annotation.DisableProvider;
@@ -79,6 +81,7 @@ import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.ResumeSession;
 import com.agentclientprotocol.sdk.annotation.SetProvider;
 import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
+import com.agentclientprotocol.sdk.annotation.SessionId;
 import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
@@ -670,6 +673,8 @@ public class AcpAgentSupport {
 				.addHandlers(customReturnValueHandlers)
 				.addHandlers(defaultReturnValueHandlers());
 			Map<String, AcpHandlerMethod> handlers = Map.copyOf(this.handlers);
+			HandlerSignatures.check(handlers, HANDLER_ANNOTATIONS, argumentResolvers, customArgumentResolvers,
+					returnValueHandlers, customReturnValueHandlers);
 			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
 					HANDLER_ANNOTATIONS);
 			return new Definition(handlers, advertisement, argumentResolvers, returnValueHandlers,
@@ -724,25 +729,43 @@ public class AcpAgentSupport {
 		}
 
 		/**
-		 * Registers {@code method} for each handler annotation it carries.
-		 * @return whether it carries any
+		 * Registers {@code method} for the handler annotation it carries.
+		 * @return whether it carries one
+		 * @throws IllegalArgumentException if it carries more than one, or another method
+		 * already handles its ACP method
 		 */
 		private boolean discoverHandler(Method method, Object agentInstance) {
-			boolean handler = false;
-			for (Map.Entry<Class<? extends Annotation>, String> entry : HANDLER_ANNOTATIONS.entrySet()) {
-				if (method.isAnnotationPresent(entry.getKey())) {
-					handlers.put(entry.getValue(), new AcpHandlerMethod(agentInstance, method, entry.getValue()));
-					log.debug("Discovered @{} handler: {}", entry.getKey().getSimpleName(), method.getName());
-					handler = true;
+			Map<String, String> marks = new LinkedHashMap<>();
+			HANDLER_ANNOTATIONS.forEach((annotation, acpMethod) -> {
+				if (method.isAnnotationPresent(annotation)) {
+					marks.put(acpMethod, "@" + annotation.getSimpleName());
 				}
-			}
+			});
 			String extensionMethod = extensionMethod(method);
 			if (extensionMethod != null) {
-				handlers.put(extensionMethod, new AcpHandlerMethod(agentInstance, method, extensionMethod));
-				log.debug("Discovered extension handler for {}: {}", extensionMethod, method.getName());
-				handler = true;
+				marks.put(extensionMethod, method.isAnnotationPresent(ExtNotification.class) ? "@ExtNotification"
+						: "@ExtRequest");
 			}
-			return handler;
+			if (marks.isEmpty()) {
+				return false;
+			}
+			if (marks.size() > 1) {
+				throw new IllegalArgumentException(describe(method) + " is annotated " + String.join(" and ", marks.values())
+						+ "; a method handles one ACP method, so split it into one method per annotation");
+			}
+			Map.Entry<String, String> mark = marks.entrySet().iterator().next();
+			AcpHandlerMethod existing = handlers.get(mark.getKey());
+			if (existing != null) {
+				throw new IllegalArgumentException(describe(existing.getMethod()) + " and " + describe(method)
+						+ " are both " + mark.getValue() + " methods; keep one " + mark.getValue() + " method");
+			}
+			handlers.put(mark.getKey(), new AcpHandlerMethod(agentInstance, method, mark.getKey()));
+			log.debug("Discovered {} handler: {}", mark.getValue(), method.getName());
+			return true;
+		}
+
+		private static String describe(Method method) {
+			return method.getDeclaringClass().getName() + "." + method.getName();
 		}
 
 		/** A method's name and parameter types, which an override shares. */
@@ -775,6 +798,7 @@ public class AcpAgentSupport {
 				return null;
 			}
 			ExtensionMethods.requireExtension(name);
+			rejectSessionParameters(method);
 			long paramsParameters = Arrays.stream(method.getParameterTypes())
 				.filter(type -> !ExtensionParamsResolver.isConnectionType(type))
 				.count();
@@ -784,6 +808,25 @@ public class AcpAgentSupport {
 						+ ", besides NegotiatedCapabilities, AcpSyncAgent or AcpAsyncAgent");
 			}
 			return name;
+		}
+
+		/**
+		 * Rejects an extension handler's {@code @SessionId}, {@code @ConfigId} or
+		 * {@code @ConfigValue} parameter: an extension method has no session, and the
+		 * parameter would otherwise be taken for the params.
+		 */
+		private static void rejectSessionParameters(Method method) {
+			for (java.lang.reflect.Parameter parameter : method.getParameters()) {
+				List.of(SessionId.class, ConfigId.class, ConfigValue.class)
+					.stream()
+					.filter(parameter::isAnnotationPresent)
+					.findFirst()
+					.ifPresent(annotation -> {
+						throw new IllegalArgumentException("Extension handler " + describe(method) + " has a @"
+								+ annotation.getSimpleName() + " parameter, but an extension method has no session;"
+								+ " read what it needs from its params instead");
+					});
+			}
 		}
 
 		private static List<ArgumentResolver> defaultResolvers() {

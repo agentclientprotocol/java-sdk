@@ -28,11 +28,12 @@ import java.lang.annotation.Target;
  * subclass that a framework generates for a bean (a Spring CGLIB, Quarkus ArC or Micronaut AOP
  * proxy, which carries no annotations) is found through the annotated class it extends and
  * invoked on the proxy, so its interceptors run. An annotated override replaces the method it
- * overrides. Declare at most one method for each
- * annotation: with two, one of them is used and the other is ignored without an error. With no
- * {@link Initialize} method the agent answers {@code initialize} with the response derived from
- * its annotations (see Capabilities below); with no {@link NewSession} method it answers {@code session/new}
- * with a random UUID as the session id. Any other request without a handler method is answered
+ * overrides. Declare one method for each annotation, and one annotation on each method: two
+ * methods for one annotation, or two handler annotations on one method, are rejected with an
+ * {@code IllegalArgumentException} naming them. With no {@link Initialize} method the agent
+ * answers {@code initialize} with the response derived from its annotations (see Capabilities
+ * below); with no {@link NewSession} method it answers {@code session/new} with a random UUID as
+ * the session id. Any other request without a handler method is answered
  * "Method not found" ({@code -32601}).
  *
  * <p><b>Capabilities.</b> ACP lets a client call an optional method, such as {@code session/load}
@@ -59,15 +60,20 @@ import java.lang.annotation.Target;
  *   updates (such as a {@code ConfigOptionUpdate}) and requests to the client outside a prompt
  *   turn</li>
  * </ul>
- * A parameter that a call cannot fill, such as the request type of another method, or a
- * {@link SessionId} parameter on a method without a session, is not rejected up front: every call
- * of that method fails with an internal error ({@code -32603}).
+ * A parameter that a call cannot fill is rejected when the agent is built
+ * ({@code build()} or {@code buildFactory()} throws an {@code IllegalStateException} naming the
+ * class, the method and the fix): a type no argument resolver supplies, the request type of
+ * another method, a {@link SessionId} parameter on a method without a session (extension methods
+ * included), a prompt context outside a {@link Prompt} method, or a {@link ConfigId} or
+ * {@link ConfigValue} parameter outside a {@link SetSessionConfigOption} method. A parameter a
+ * custom argument resolver supplies is the application's to check.
  *
  * <p><b>Return values.</b> A request handler returns its method's response, or a {@code Mono} of
- * it, which the runtime waits for. A request must get a result, so a request handler that returns
- * {@code null}, an empty {@code Mono} or another method's response, or is declared {@code void}, is
- * answered with an internal error ({@code -32603}). Of the request handlers, only a {@link Prompt}
- * method may be {@code void}. A notification handler ({@link Cancel}) returns {@code void}.
+ * it, which the runtime waits for. A request must get a result, so a request handler declared
+ * {@code void}, or declared to return another type than its response, is rejected when the agent
+ * is built, and one that returns {@code null} or an empty {@code Mono} is answered with an
+ * internal error ({@code -32603}). Of the request handlers, only a {@link Prompt} method may be
+ * {@code void}. A notification handler ({@link Cancel}) returns {@code void}.
  *
  * <p><b>Errors.</b> To answer a request with an error, throw an {@code AcpProtocolException} (from
  * {@code acp-core}) with a code from {@code AcpErrorCodes}: the client receives its code, message
