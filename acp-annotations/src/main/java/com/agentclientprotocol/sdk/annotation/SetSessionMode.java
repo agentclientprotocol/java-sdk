@@ -14,9 +14,10 @@ import java.lang.annotation.Target;
  * Marks the {@link AcpAgent} method that answers {@code session/set_mode}: the client switches a
  * session to another of the modes the agent offered, such as "ask" or "code", and the method makes
  * the session work in it. Declare one when the agent returns modes ({@code SessionModeState}) from
- * its {@link NewSession}, {@link LoadSession} or {@link ResumeSession} method. Without a
- * {@code @SetSessionMode} method the agent answers {@code session/set_mode} with "Method not found"
- * ({@code -32601}).
+ * its {@link NewSession}, {@link LoadSession} or {@link ResumeSession} method; the agent must then
+ * also have a {@link NewSession} method, since the default {@code session/new} offers none
+ * (building the agent fails otherwise). Without a {@code @SetSessionMode} method the agent answers
+ * {@code session/set_mode} with "Method not found" ({@code -32601}).
  *
  * <p>ACP requires the mode id to be one of the {@code availableModes} the agent offered; the SDK
  * does not check it. When the agent changes a session's mode itself, it tells the client with a

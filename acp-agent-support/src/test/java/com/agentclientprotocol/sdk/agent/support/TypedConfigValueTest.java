@@ -41,6 +41,11 @@ class TypedConfigValueTest {
 
 		final Map<String, Object> received = new ConcurrentHashMap<>();
 
+		@com.agentclientprotocol.sdk.annotation.NewSession
+		com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse newSession() {
+			return new com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse("s1", null, null);
+		}
+
 		@SetSessionConfigOption
 		SetSessionConfigOptionResponse set(@SessionId String session, @ConfigId String id, @ConfigValue String value) {
 			received.put(session + "/" + id, value);
@@ -54,6 +59,11 @@ class TypedConfigValueTest {
 
 		final Map<String, Object> received = new ConcurrentHashMap<>();
 
+		@com.agentclientprotocol.sdk.annotation.NewSession
+		com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse newSession() {
+			return new com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse("s1", null, null);
+		}
+
 		@SetSessionConfigOption
 		SetSessionConfigOptionResponse set(@ConfigId String id, @ConfigValue boolean value) {
 			received.put(id, value);
@@ -66,6 +76,11 @@ class TypedConfigValueTest {
 	static class RawAgent {
 
 		final Map<String, Object> received = new ConcurrentHashMap<>();
+
+		@com.agentclientprotocol.sdk.annotation.NewSession
+		com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse newSession() {
+			return new com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse("s1", null, null);
+		}
 
 		@SetSessionConfigOption
 		SetSessionConfigOptionResponse set(@ConfigId String id, @ConfigValue Object value) {

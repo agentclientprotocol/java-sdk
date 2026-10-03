@@ -15,9 +15,9 @@ import java.lang.annotation.Target;
  * of the authentication methods the agent listed ({@code authMethods}) in its {@code initialize}
  * response, and the method checks the login. Declare those methods on the class, in
  * {@link AcpAgent#authMethods()}; they are advertised without an {@link Initialize} method, and an
- * agent that declares an agent-type method without an {@code @Authenticate} method fails to build. Declare one when the user must log in before the
- * agent can work. Without an {@code @Authenticate} method the agent answers {@code authenticate}
- * with "Method not found" ({@code -32601}).
+ * agent that declares an agent-type method without an {@code @Authenticate} method fails to build.
+ * Declare one when the user must log in before the agent can work. Without an {@code @Authenticate}
+ * method the agent answers {@code authenticate} with "Method not found" ({@code -32601}).
  *
  * <p>The SDK does not track whether a client has logged in. A handler method that needs a login,
  * such as a {@link NewSession} method, checks for one itself and, when there is none, throws an

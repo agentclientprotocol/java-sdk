@@ -130,6 +130,30 @@ final class HandlerSignatures {
 		});
 	}
 
+	/**
+	 * Checks that an agent setting modes or config options has a {@code @NewSession} method to
+	 * offer them: the default {@code session/new} answers with none, so a client would never see
+	 * any to set.
+	 * @throws IllegalStateException if it has none
+	 */
+	static void checkSessionSetup(Map<String, AcpHandlerMethod> handlers) {
+		if (handlers.containsKey(AcpSchema.METHOD_SESSION_NEW)) {
+			return;
+		}
+		Map<String, String> setters = Map.of(AcpSchema.METHOD_SESSION_SET_MODE, "@SetSessionMode",
+				AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, "@SetSessionConfigOption");
+		setters.forEach((acpMethod, annotation) -> {
+			AcpHandlerMethod setter = handlers.get(acpMethod);
+			if (setter != null) {
+				Method method = setter.getMethod();
+				throw new IllegalStateException(method.getDeclaringClass().getName() + "." + method.getName()
+						+ " is a " + annotation + " method, but the agent has no @NewSession method, and the default"
+						+ " session/new offers no modes or config options, so a client never sees any to set."
+						+ " Add a @NewSession method that returns them");
+			}
+		});
+	}
+
 	private static void checkParameter(AcpHandlerMethod handler, String annotation, AcpMethodParameter parameter,
 			ArgumentResolverComposite resolvers) {
 		if (!resolvers.supportsParameter(parameter)) {

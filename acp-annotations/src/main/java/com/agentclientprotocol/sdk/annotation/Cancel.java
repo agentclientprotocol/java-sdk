@@ -29,8 +29,8 @@ import java.lang.annotation.Target;
  *
  * <p>This method runs on a handler thread while the prompt method is still running on another, so
  * state the two share is thread-safe and keyed by session id, as in the example. An exception it
- * throws is logged and dropped. {@code $/cancel_request}, which cancels a single request, never reaches
- * this method: the SDK handles it.
+ * throws is logged and dropped. {@code $/cancel_request}, which cancels a single request, never
+ * reaches this method: the SDK handles it.
  *
  * <p>The method can take a {@code CancelNotification}, a {@link SessionId @SessionId}
  * {@code String} and the connection parameters (see {@link AcpAgent}).

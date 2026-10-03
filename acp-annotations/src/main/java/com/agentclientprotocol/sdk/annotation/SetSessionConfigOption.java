@@ -15,9 +15,11 @@ import java.lang.annotation.Target;
  * changes one of the config options the agent offered for a session, such as the model, and the
  * method applies the change and returns all of the session's options with their current values.
  * Declare one when the agent returns config options from its {@link NewSession},
- * {@link LoadSession} or {@link ResumeSession} method; a model picker is a select option with
- * category {@code "model"}. Without a {@code @SetSessionConfigOption} method the agent answers
- * {@code session/set_config_option} with "Method not found" ({@code -32601}).
+ * {@link LoadSession} or {@link ResumeSession} method; the agent must then also have a {@link
+ * NewSession} method, since the default {@code session/new} offers none (building the agent fails
+ * otherwise); a model picker is a select option with category {@code "model"}. Without a {@code
+ * @SetSessionConfigOption} method the agent answers {@code session/set_config_option} with "Method
+ * not found" ({@code -32601}).
  *
  * <p>The request names the option ({@code configId}) and its new {@code value}: a
  * {@code String} for a select option, a {@code Boolean} for a boolean one. A {@link ConfigId}
@@ -44,14 +46,11 @@ import java.lang.annotation.Target;
  * public SetSessionConfigOptionResponse set(@SessionId String sessionId, @ConfigId String id,
  *         @ConfigValue String model) {
  *     if (!"model".equals(id) || !Set.of("fast", "deep").contains(model)) {
- *         throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "No option " + id + " = " + model);
- *     }
- *     models.put(sessionId, model);
- *     return new SetSessionConfigOptionResponse(List.of(SessionConfigSelect.model("model", "Model",
- *             model, List.of(new SessionConfigSelectOption("fast", "Fast"),
- *                     new SessionConfigSelectOption("deep", "Deep")))));
- * }
- * }</pre>
+ *         throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "No option " + id + " = " +
+ * model);     }     models.put(sessionId, model);     return new
+ * SetSessionConfigOptionResponse(List.of(SessionConfigSelect.model("model", "Model",
+ * model, List.of(new SessionConfigSelectOption("fast", "Fast"),                     new
+ * SessionConfigSelectOption("deep", "Deep"))))); } }</pre>
  *
  * @author Mark Pollack
  * @since 0.12.0

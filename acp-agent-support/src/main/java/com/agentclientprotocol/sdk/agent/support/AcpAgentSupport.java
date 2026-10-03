@@ -700,6 +700,7 @@ public class AcpAgentSupport {
 			Map<String, AcpHandlerMethod> handlers = Map.copyOf(this.handlers);
 			HandlerSignatures.check(handlers, HANDLER_ANNOTATIONS, argumentResolvers, customArgumentResolvers,
 					returnValueHandlers, customReturnValueHandlers);
+			HandlerSignatures.checkSessionSetup(handlers);
 			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
 					HANDLER_ANNOTATIONS);
 			return new Definition(handlers, advertisement, argumentResolvers, returnValueHandlers,

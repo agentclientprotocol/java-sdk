@@ -18,11 +18,11 @@ import java.lang.annotation.Target;
  * ({@code -32601}).
  *
  * <p>ACP lets a client call {@code session/close} only when the agent advertised
- * {@code sessionCapabilities.close} in its {@code initialize} response; the agent advertises it for you when it has this method, and requires the agent to
- * cancel any running work in the session as if {@code session/cancel} had arrived. The SDK does not
- * do this for you: closing neither stops a running {@link Prompt} method nor calls the
- * {@link Cancel} method. To remove a stored session for good, the client uses
- * {@link DeleteSession}.
+ * {@code sessionCapabilities.close} in its {@code initialize} response; the agent advertises it for
+ * you when it has this method, and requires the agent to cancel any running work in the session as
+ * if {@code session/cancel} had arrived. The SDK does not do this for you: closing neither stops a
+ * running {@link Prompt} method nor calls the {@link Cancel} method. To remove a stored session for
+ * good, the client uses {@link DeleteSession}.
  *
  * <p>The method can take a {@code CloseSessionRequest}, a {@link SessionId @SessionId}
  * {@code String} and the connection parameters (see {@link AcpAgent}). It must return a

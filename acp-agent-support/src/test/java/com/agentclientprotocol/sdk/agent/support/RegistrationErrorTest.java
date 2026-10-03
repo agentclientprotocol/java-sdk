@@ -19,6 +19,8 @@ import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.annotation.SessionId;
+import com.agentclientprotocol.sdk.annotation.SetSessionConfigOption;
+import com.agentclientprotocol.sdk.annotation.SetSessionMode;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -272,6 +274,43 @@ class RegistrationErrorTest {
 			.hasMessageContaining("TwoAnnotationsOnOneMethod.both")
 			.hasMessageContaining("@NewSession")
 			.hasMessageContaining("@Prompt");
+	}
+
+	@AcpAgent
+	static class ModesWithoutNewSession {
+
+		@SetSessionMode
+		AcpSchema.SetSessionModeResponse setMode() {
+			return new AcpSchema.SetSessionModeResponse(null);
+		}
+
+	}
+
+	@AcpAgent
+	static class ConfigOptionsWithoutNewSession {
+
+		@SetSessionConfigOption
+		AcpSchema.SetSessionConfigOptionResponse set() {
+			return new AcpSchema.SetSessionConfigOptionResponse(List.of());
+		}
+
+	}
+
+	/**
+	 * The default session/new offers no modes or config options, so a client would never see any
+	 * to set: such an agent needs a @NewSession method that returns them.
+	 */
+	@Test
+	void modesOrConfigOptionsWithoutANewSessionMethod() {
+		assertThatThrownBy(() -> AcpAgentSupport.create(new ModesWithoutNewSession()).buildFactory())
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("ModesWithoutNewSession")
+			.hasMessageContaining("@SetSessionMode")
+			.hasMessageContaining("@NewSession");
+		assertThatThrownBy(() -> AcpAgentSupport.create(new ConfigOptionsWithoutNewSession()).buildFactory())
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("@SetSessionConfigOption")
+			.hasMessageContaining("@NewSession");
 	}
 
 	@AcpAgent

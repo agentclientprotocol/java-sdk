@@ -67,8 +67,8 @@ This module transitively includes `acp-annotations` and `acp-core`.
 | `@DeleteSession` | `session/delete` | `sessionCapabilities.delete` | Permanently deletes a stored session. |
 | `@ForkSession` | `session/fork` | `sessionCapabilities.fork` | Creates a session branched from an existing one (unstable, `@UnstableAcpApi`). |
 | `@Prompt` | `session/prompt` | `promptCapabilities`, from its `image`, `audio` and `embeddedContext` attributes | Handles user prompts within a session. |
-| `@SetSessionMode` | `session/set_mode` | nothing (modes are offered per session) | Changes the operational mode of a session. |
-| `@SetSessionConfigOption` | `session/set_config_option` | nothing (options are offered per session) | Changes a session configuration option. |
+| `@SetSessionMode` | `session/set_mode` | nothing (modes are offered per session) | Changes the operational mode of a session. Needs a `@NewSession` method that returns the modes. |
+| `@SetSessionConfigOption` | `session/set_config_option` | nothing (options are offered per session) | Changes a session configuration option. Needs a `@NewSession` method that returns the options. |
 | `@ListProviders` | `providers/list` | `providers` | Lists the providers the agent can route to (unstable). |
 | `@SetProvider` | `providers/set` | `providers` | Configures a provider (unstable). |
 | `@DisableProvider` | `providers/disable` | `providers` | Disables a provider (unstable). |

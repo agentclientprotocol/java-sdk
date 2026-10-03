@@ -243,7 +243,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `PromptContext`/`SyncPromptContext` outside `@Prompt`, `@ConfigId`/`@ConfigValue` outside
     `@SetSessionConfigOption`, a request handler declared `void` (other than `@Prompt`), a return
     type no return value handler accepts, a return type that cannot give the method's response
-    (including a `Mono` of another type), and a `void` `@ExtRequest`.
+    (including a `Mono` of another type), a `void` `@ExtRequest`, and a `@SetSessionMode` or
+    `@SetSessionConfigOption` method without a `@NewSession` method (the default `session/new`
+    offers no modes or config options, so a client never saw any to set).
   Each of these used to fail every call with `-32603` or `-32602`. Parameters and return types a
   custom `ArgumentResolver` or `ReturnValueHandler` supports are not checked. Private and static
   handler methods remain supported.
