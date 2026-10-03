@@ -201,6 +201,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (behaviour): a client's prompt is no longer bounded by its request timeout; new
+  `promptTimeout(Duration)` on `AcpClient.AsyncSpec` and `AcpClient.SyncSpec`, default none.** A
+  prompt's answer comes only at the end of its turn, so the 30-second request timeout cancelled
+  every turn that ran longer (the client failed the call with a `TimeoutException` and sent the
+  agent `$/cancel_request`, which ended the turn). `session/prompt` now waits for the end of the turn
+  however long it takes; every other request keeps the request timeout. Disposing the prompt's
+  `Mono` (or interrupting a blocked `AcpSyncClient.prompt`) still cancels it. Migration: to keep a
+  bound on turns, set `.promptTimeout(Duration.ofMinutes(10))` (any positive duration; it fails the
+  call with a `TimeoutException` and sends `$/cancel_request`, as before); code that raised
+  `requestTimeout` only to let long turns finish can drop it.
+
 - **`AcpError.getMessage()` no longer ends with `[code=N]`.** It is the peer's message, followed
   by the detail its data carries, so `e.getCode() + " " + e.getMessage()` names the code once.
   `toString()` (what stack traces show) still includes `[code=N]`. Code that parsed the code out of

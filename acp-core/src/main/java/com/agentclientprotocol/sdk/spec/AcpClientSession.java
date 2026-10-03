@@ -382,6 +382,25 @@ public class AcpClientSession implements AcpSession {
 	}
 
 	/**
+	 * Sends a JSON-RPC request with a timeout of its own instead of the session's request
+	 * timeout. The client sends {@code session/prompt} this way, since a prompt's answer comes
+	 * only at the end of its turn. When {@code timeout} passes, the request fails with a
+	 * {@link java.util.concurrent.TimeoutException} and the agent is sent a
+	 * {@code $/cancel_request}, as with the request timeout.
+	 * @param <T> The expected response type
+	 * @param method The method name to call
+	 * @param requestParams The request parameters
+	 * @param typeRef Type reference for response deserialization
+	 * @param timeout how long to wait for the response; {@code null} waits until it arrives, the
+	 * caller disposes the request, or the transport fails
+	 * @return A Mono containing the response; an error response fails it with {@link AcpError}
+	 */
+	public <T> Mono<T> sendRequest(String method, Object requestParams, TypeRef<T> typeRef,
+			@Nullable Duration timeout) {
+		return this.outbound.sendRequest(method, requestParams, typeRef, timeout);
+	}
+
+	/**
 	 * Sends a JSON-RPC notification.
 	 * @param method The method name for the notification
 	 * @param params The notification parameters

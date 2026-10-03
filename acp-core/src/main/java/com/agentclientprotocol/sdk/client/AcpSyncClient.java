@@ -30,9 +30,7 @@ import reactor.core.publisher.Mono;
  * session ID, then {@link #prompt} as often as needed, one turn at a time per session.
  *
  * <pre>{@code
- * try (AcpSyncClient client = AcpClient.sync(transport)
- *         .requestTimeout(Duration.ofMinutes(5))
- *         .build()) {
+ * try (AcpSyncClient client = AcpClient.sync(transport).build()) {
  *     client.initialize();
  *     AcpSchema.NewSessionResponse session = client.newSession(
  *         new AcpSchema.NewSessionRequest("/workspace", List.of()));
@@ -43,7 +41,8 @@ import reactor.core.publisher.Mono;
  * }</pre>
  *
  * <p>A call blocks until the answer arrives; it has no time limit of its own beyond the builder's
- * request timeout (30 seconds by default). Failures are thrown:
+ * request timeout (30 seconds by default), or, for {@link #prompt}, the builder's prompt timeout
+ * (none by default). Failures are thrown:
  * {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer, whose {@code getCode()} is
  * the JSON-RPC error code; a {@link RuntimeException} whose cause is a
  * {@link java.util.concurrent.TimeoutException} when no answer came in time, after the client has
@@ -372,13 +371,15 @@ public class AcpSyncClient implements AutoCloseable {
 	 * <p>The answer is delivered only once the session update consumers have finished with every
 	 * notification the agent sent before it, so what they collected for the turn is complete when
 	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
-	 * request timeout. The one exception: a consumer that was already running when the prompt was
+	 * prompt timeout, if one is set. The one exception: a consumer that was already running when the prompt was
 	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
 	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
 	 *
-	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
-	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
-	 * {@code requestTimeout} on the builder for long turns.
+	 * <p>A prompt is not bound by the builder's {@code requestTimeout}: by default it blocks until
+	 * the end of the turn however long that takes. Set {@link AcpClient.SyncSpec#promptTimeout} to
+	 * bound it; when that passes, the call fails as described above for a timeout and the client
+	 * sends {@code $/cancel_request}, which makes a Java agent cancel the turn. To stop a turn from
+	 * another thread and still receive its answer, call {@link #cancel}.
 	 * @param promptRequest the session ID and the prompt's content blocks
 	 * @return the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT

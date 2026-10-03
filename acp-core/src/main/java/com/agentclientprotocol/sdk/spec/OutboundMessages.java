@@ -75,7 +75,16 @@ final class OutboundMessages {
 	 * completes the Mono when the {@link ResponseOrder} lets it, within the same timeout.
 	 */
 	<T> Mono<T> sendRequest(String method, Object params, TypeRef<T> typeRef) {
-		return Mono.deferContextual(ctx -> {
+		return sendRequest(method, params, typeRef, this.requestTimeout);
+	}
+
+	/**
+	 * Sends a request and waits, at most {@code timeout}, for its response; with a null
+	 * {@code timeout} it waits until the response arrives, the caller disposes the request, or
+	 * the transport fails. Otherwise as {@link #sendRequest(String, Object, TypeRef)}.
+	 */
+	<T> Mono<T> sendRequest(String method, Object params, TypeRef<T> typeRef, @Nullable Duration timeout) {
+		Mono<AcpSchema.JSONRPCResponse> response = Mono.deferContextual(ctx -> {
 			// One id per subscription: a resubscribed request (a retry) is a new request.
 			String requestId = this.idPrefix + "-" + this.requestCounter.getAndIncrement();
 			long sentAt = this.responseOrder.position();
@@ -115,10 +124,12 @@ final class OutboundMessages {
 					}));
 				}
 			}).doFinally(signal -> gracefulCancel.dispose())
-				.flatMap(response -> this.responseOrder.after(sentAt, response));
-		})
-			.transform(response -> AcpSchedulers.withTimeout(response, this.requestTimeout))
-			.handle((response, resultSink) -> deliver(method, response, typeRef, resultSink));
+				.flatMap(answer -> this.responseOrder.after(sentAt, answer));
+		});
+		if (timeout != null) {
+			response = AcpSchedulers.withTimeout(response, timeout);
+		}
+		return response.handle((answer, resultSink) -> deliver(method, answer, typeRef, resultSink));
 	}
 
 	private <T> void deliver(String method, AcpSchema.JSONRPCResponse response, TypeRef<T> typeRef,
