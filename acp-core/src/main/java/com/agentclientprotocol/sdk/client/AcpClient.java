@@ -71,11 +71,11 @@ import reactor.core.scheduler.Schedulers;
  * the handlers. A request without a handler is answered {@code -32601} (method not found). A
  * request reaches its handler once the session updates the agent sent before it have been handled
  * (see below); handlers do not wait for each other. Asynchronous handlers are called on the thread
- * that delivered the request or finished the last of those updates, and must not block;
- * synchronous handlers run on the executor given to {@link SyncSpec#handlerExecutor}, by default a
- * pool of daemon threads the SDK shares between all synchronous clients in the JVM. A handler that fails is answered with an error: an
- * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
- * error).
+ * that delivered the request or finished the last of those updates, and must not block; synchronous
+ * handlers run on the executor given to {@link SyncSpec#handlerExecutor}, by default a pool of
+ * daemon threads the SDK shares between all synchronous clients in the JVM. A handler that fails is
+ * answered with an error: an {@link AcpProtocolException} with its own code, anything else with
+ * {@code -32603} (internal error).
  *
  * <h2>Session updates and ordering</h2>
  *
@@ -224,10 +224,10 @@ public interface AcpClient {
 		 * Sets how long a prompt turn ({@code session/prompt}) may take before the client gives up
 		 * on it. When it passes, {@code prompt} fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a prompt
-		 * waits for the end of its turn however long it takes; the request timeout does not apply
-		 * to it. {@link Duration#ZERO} also means none. To stop a turn early and still receive its
-		 * answer, send {@code session/cancel} instead.
+		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a
+		 * prompt waits for the end of its turn however long it takes; the request timeout does not
+		 * apply to it. {@link Duration#ZERO} also means none. To stop a turn early and still
+		 * receive its answer, send {@code session/cancel} instead.
 		 * @param promptTimeout the longest a turn may take, or {@link Duration#ZERO} for no limit
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code promptTimeout} is null or negative
@@ -756,10 +756,10 @@ public interface AcpClient {
 		 * Sets how long a prompt turn ({@code session/prompt}) may take before the client gives up
 		 * on it. When it passes, {@code prompt} fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a prompt
-		 * waits for the end of its turn however long it takes; the request timeout does not apply
-		 * to it. {@link Duration#ZERO} also means none. To stop a turn early and still receive its
-		 * answer, send {@code session/cancel} instead.
+		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a
+		 * prompt waits for the end of its turn however long it takes; the request timeout does not
+		 * apply to it. {@link Duration#ZERO} also means none. To stop a turn early and still
+		 * receive its answer, send {@code session/cancel} instead.
 		 * @param promptTimeout the longest a turn may take, or {@link Duration#ZERO} for no limit
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code promptTimeout} is null or negative

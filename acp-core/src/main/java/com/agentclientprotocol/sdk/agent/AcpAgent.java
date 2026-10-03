@@ -621,8 +621,8 @@ public interface AcpAgent {
 	 *
 	 * <p>Each setter registers the handler for one ACP method. A null handler fails with
 	 * {@link IllegalArgumentException}, and registering a method a second time fails with
-	 * {@link IllegalStateException} naming the setter. A request handler's {@code Mono} must emit the response: a failed
-	 * {@code Mono} is sent to the client as an error answer (an
+	 * {@link IllegalStateException} naming the setter. A request handler's {@code Mono} must emit
+	 * the response: a failed {@code Mono} is sent to the client as an error answer (an
 	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with its own code, anything
 	 * else as {@code -32603}), and an empty one is answered {@code -32603}. A builder is not
 	 * thread-safe; configure it on one thread.
@@ -1048,15 +1048,15 @@ public interface AcpAgent {
 	 * one from {@link AcpAgent#sync(AcpAgentTransport)}. Use it when handler code blocks, for
 	 * example on file or network I/O, or on {@link SyncPromptContext} calls to the client.
 	 *
-	 * <p>Every handler runs on the builder's handler executor ({@link #handlerExecutor}), by default a
-	 * pool of daemon threads shared by the synchronous agents in the JVM, not on the transport's
-	 * thread, so it may block. Handlers for different requests run at the same time on different
-	 * threads, so state they share must be thread-safe. The builder turns each handler into its
-	 * asynchronous counterpart on an {@link AsyncAgentBuilder} and builds the agent from it, so the
-	 * rules described there apply: a null handler or a second handler for a method fails at the
-	 * setter, and a handler that throws is answered with an error. A request handler that returns {@code null} is
-	 * answered {@code -32603} (internal error). A builder is not thread-safe; configure it on one
-	 * thread.
+	 * <p>Every handler runs on the builder's handler executor ({@link #handlerExecutor}), by
+	 * default a pool of daemon threads shared by the synchronous agents in the JVM, not on the
+	 * transport's thread, so it may block. Handlers for different requests run at the same time on
+	 * different threads, so state they share must be thread-safe. The builder turns each handler
+	 * into its asynchronous counterpart on an {@link AsyncAgentBuilder} and builds the agent from
+	 * it, so the rules described there apply: a null handler or a second handler for a method fails
+	 * at the setter, and a handler that throws is answered with an error. A request handler that
+	 * returns {@code null} is answered {@code -32603} (internal error). A builder is not
+	 * thread-safe; configure it on one thread.
 	 *
 	 * <pre>{@code
 	 * AcpSyncAgent agent = AcpAgent.sync(transport)

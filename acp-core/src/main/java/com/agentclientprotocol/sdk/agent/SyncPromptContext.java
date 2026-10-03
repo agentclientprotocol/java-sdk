@@ -262,7 +262,8 @@ public interface SyncPromptContext {
 	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
 	 * message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an
+	 * {@link AcpSchema.AgentMessageChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 */

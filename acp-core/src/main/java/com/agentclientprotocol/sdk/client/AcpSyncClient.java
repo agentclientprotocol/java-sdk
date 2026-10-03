@@ -43,17 +43,16 @@ import reactor.core.publisher.Mono;
  *
  * <p>A call blocks until the answer arrives; it has no time limit of its own beyond the builder's
  * request timeout (30 seconds by default), or, for {@link #prompt}, the builder's prompt timeout
- * (none by default). Failures are thrown:
- * {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer, whose {@code getCode()} is
- * the JSON-RPC error code; {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose
- * cause is the {@link java.util.concurrent.TimeoutException}, when no answer came in time, after
- * the client has sent the agent a {@code $/cancel_request};
- * {@link java.util.concurrent.CancellationException} when the waiting thread is interrupted (the
- * request is cancelled and the interrupt flag stays set); and {@link IllegalArgumentException} for a null
- * argument. The client does not check the agent's capabilities before a call; see
- * {@link #getAgentCapabilities()}. Methods may be called from several threads at once, but not from
- * a thread that must not block, and not from a session update consumer waiting for a prompt in
- * flight (see {@link #prompt}).
+ * (none by default). Failures are thrown: {@link com.agentclientprotocol.sdk.spec.AcpError} for an
+ * error answer, whose {@code getCode()} is the JSON-RPC error code;
+ * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the
+ * {@link java.util.concurrent.TimeoutException}, when no answer came in time, after the client has
+ * sent the agent a {@code $/cancel_request}; {@link java.util.concurrent.CancellationException}
+ * when the waiting thread is interrupted (the request is cancelled and the interrupt flag stays
+ * set); and {@link IllegalArgumentException} for a null argument. The client does not check the
+ * agent's capabilities before a call; see {@link #getAgentCapabilities()}. Methods may be called
+ * from several threads at once, but not from a thread that must not block, and not from a session
+ * update consumer waiting for a prompt in flight (see {@link #prompt}).
  *
  * @author Mark Pollack
  * @author Christian Tzolov

@@ -502,15 +502,17 @@ public class AcpAsyncClient {
 	 * <p>The answer is delivered only once the session update consumers have finished with every
 	 * notification the agent sent before it, so what they collected for the turn is complete when
 	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
-	 * prompt timeout, if one is set. The one exception: a consumer that was already running when the prompt was
-	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
-	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
+	 * prompt timeout, if one is set. The one exception: a consumer that was already running when
+	 * the prompt was sent, and is still running when its answer arrives, is not waited for, since
+	 * it may be the one waiting for the prompt. A consumer must therefore not wait for this prompt
+	 * to complete.
 	 *
 	 * <p>A prompt is not bound by the builder's {@code requestTimeout}: by default it waits for the
 	 * end of the turn however long that takes. Set {@link AcpClient.AsyncSpec#promptTimeout} to
-	 * bound it; when that passes, the call fails with a {@link java.util.concurrent.TimeoutException}
-	 * and the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn.
-	 * Disposing the returned {@code Mono} does the same at any time.
+	 * bound it; when that passes, the call fails with a
+	 * {@link java.util.concurrent.TimeoutException} and the client sends {@code $/cancel_request},
+	 * which makes a Java agent cancel the turn. Disposing the returned {@code Mono} does the same
+	 * at any time.
 	 * @param promptRequest the session ID and the prompt's content blocks
 	 * @return a {@code Mono} emitting the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT

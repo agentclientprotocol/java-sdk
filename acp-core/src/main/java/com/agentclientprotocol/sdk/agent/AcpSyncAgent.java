@@ -87,8 +87,8 @@ public class AcpSyncAgent implements AutoCloseable {
 
 	/**
 	 * Starts the agent, as {@link AcpAsyncAgent#start()} does, and returns without waiting for the
-	 * client. Call {@link #awaitTermination()} afterwards, or use {@link #run()}, to block until the
-	 * transport has ended.
+	 * client. Call {@link #awaitTermination()} afterwards, or use {@link #run()}, to block until
+	 * the transport has ended.
 	 * @throws IllegalStateException if the transport refuses to start, for example because it was
 	 * started before
 	 */
@@ -335,10 +335,10 @@ public class AcpSyncAgent implements AutoCloseable {
 	}
 
 	/**
-	 * Closes the agent the way try-with-resources expects: gracefully, as {@link #closeGracefully()}
-	 * does, waiting at most 10 seconds (or the block timeout, if shorter), then at once, as
-	 * {@link AcpAsyncAgent#close()} does, if that failed or took longer. To close at once without
-	 * waiting, call {@code async().close()}.
+	 * Closes the agent the way try-with-resources expects: gracefully, as
+	 * {@link #closeGracefully()} does, waiting at most 10 seconds (or the block timeout, if
+	 * shorter), then at once, as {@link AcpAsyncAgent#close()} does, if that failed or took longer.
+	 * To close at once without waiting, call {@code async().close()}.
 	 */
 	@Override
 	public void close() {

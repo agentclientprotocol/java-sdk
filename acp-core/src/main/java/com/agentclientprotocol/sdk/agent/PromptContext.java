@@ -254,7 +254,8 @@ public interface PromptContext {
 	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
 	 * message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentMessageChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendUpdate} with an
+	 * {@link AcpSchema.AgentMessageChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 * @return a {@code Mono} that completes when the update has been handed to the transport
@@ -331,8 +332,9 @@ public interface PromptContext {
 	 * so the context first announces one: a {@code tool_call} session update with a new random ID,
 	 * the action as its title, the kind, and status {@code pending}. The permission request names
 	 * that tool call, and once the user answered, a {@code tool_call_update} sets its status to
-	 * {@code completed} (answered, either way) or {@code failed} (the client cancelled the request).
-	 * For a tool call the agent announced itself, send {@link #requestPermission} instead.
+	 * {@code completed} (answered, either way) or {@code failed} (the client cancelled the
+	 * request). For a tool call the agent announced itself, send {@link #requestPermission}
+	 * instead.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @param kind the kind of tool call, which clients use to pick an icon, for example
 	 * {@code execute} for a command

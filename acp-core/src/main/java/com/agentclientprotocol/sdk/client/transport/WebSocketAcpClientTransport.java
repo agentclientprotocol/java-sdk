@@ -278,9 +278,10 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	/**
 	 * {@inheritDoc}
 	 * <p>Stops delivering and sending messages, completes {@link #awaitTermination()}, sends a
-	 * normal close frame (1000) when the connection is open, and stops the writer thread and,
-	 * if the transport created its own HTTP client, that client's threads. It does not wait for the agent's close frame. Only the first call closes; a later call
-	 * completes when that close has finished.
+	 * normal close frame (1000) when the connection is open, and stops the writer thread and, if
+	 * the transport created its own HTTP client, that client's threads. It does not wait for the
+	 * agent's close frame. Only the first call closes; a later call completes when that close has
+	 * finished.
 	 */
 	@Override
 	public Mono<Void> closeGracefully() {
