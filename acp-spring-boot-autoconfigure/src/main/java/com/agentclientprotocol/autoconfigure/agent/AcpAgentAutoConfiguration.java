@@ -19,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,8 +43,11 @@ public class AcpAgentAutoConfiguration {
 		AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
 				AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
 			Object agentBean = findAgentBean(applicationContext);
-			return new AcpAgentLifecycle(
-					agentSupportBuilder(agentBean, properties, interceptors).transport(transport).build());
+			AcpAgentSupport agentSupport = agentSupportBuilder(agentBean, properties, interceptors).transport(transport)
+				.build();
+			ConfigurableApplicationContext contextToClose = (properties.isShutdownOnTransportEnd()
+					&& applicationContext instanceof ConfigurableApplicationContext configurable) ? configurable : null;
+			return new AcpAgentLifecycle(agentSupport, transport, contextToClose);
 		}
 
 	}
@@ -83,24 +87,54 @@ public class AcpAgentAutoConfiguration {
 		return builder;
 	}
 
+	/**
+	 * Starts and stops the agent with the context. When the transport ends on its own
+	 * (for stdio: the client closed the agent's input and every reply has been written),
+	 * the agent has no one left to serve, so the lifecycle closes the application
+	 * context, which lets a {@code spring.main.keep-alive} application exit.
+	 */
 	static class AcpAgentLifecycle implements SmartLifecycle {
 
 		private final AcpAgentSupport agentSupport;
 
+		private final AcpAgentTransport transport;
+
+		private final ConfigurableApplicationContext contextToClose;
+
 		private volatile boolean running = false;
 
-		AcpAgentLifecycle(AcpAgentSupport agentSupport) {
+		private volatile boolean stopping = false;
+
+		AcpAgentLifecycle(AcpAgentSupport agentSupport, AcpAgentTransport transport,
+				ConfigurableApplicationContext contextToClose) {
 			this.agentSupport = agentSupport;
+			this.transport = transport;
+			this.contextToClose = contextToClose;
 		}
 
 		@Override
 		public void start() {
 			agentSupport.start();
 			running = true;
+			if (contextToClose != null) {
+				transport.awaitTermination().subscribe(null, error -> closeContext(), this::closeContext);
+			}
+		}
+
+		private void closeContext() {
+			if (stopping || contextToClose == null || !contextToClose.isActive()) {
+				return;
+			}
+			logger.info("ACP agent transport ended; closing the application context");
+			// Not on the transport's thread: closing the context stops this lifecycle,
+			// which closes the transport.
+			Thread closer = new Thread(contextToClose::close, "acp-agent-shutdown");
+			closer.start();
 		}
 
 		@Override
 		public void stop() {
+			stopping = true;
 			agentSupport.close();
 			running = false;
 		}

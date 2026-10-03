@@ -14,6 +14,12 @@ public class AcpAgentProperties {
 
 	private Duration requestTimeout = Duration.ofSeconds(60);
 
+	/**
+	 * Close the application context when the agent's transport ends on its own, for stdio
+	 * when the client closes the agent's input. Lets a keep-alive application exit.
+	 */
+	private boolean shutdownOnTransportEnd = true;
+
 	private AgentTransportProperties transport = new AgentTransportProperties();
 
 	public boolean isEnabled() {
@@ -30,6 +36,14 @@ public class AcpAgentProperties {
 
 	public void setRequestTimeout(Duration requestTimeout) {
 		this.requestTimeout = requestTimeout;
+	}
+
+	public boolean isShutdownOnTransportEnd() {
+		return shutdownOnTransportEnd;
+	}
+
+	public void setShutdownOnTransportEnd(boolean shutdownOnTransportEnd) {
+		this.shutdownOnTransportEnd = shutdownOnTransportEnd;
 	}
 
 	public AgentTransportProperties getTransport() {

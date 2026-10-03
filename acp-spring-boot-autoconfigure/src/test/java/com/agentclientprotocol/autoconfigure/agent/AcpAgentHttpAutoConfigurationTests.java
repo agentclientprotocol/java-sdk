@@ -49,8 +49,12 @@ class AcpAgentHttpAutoConfigurationTests {
 			AcpAgentTransportAutoConfiguration.class, AcpAgentAutoConfiguration.class,
 			AcpAgentHttpAutoConfiguration.class);
 
+	// stdioRemainsTheDefault starts the stdio agent on the tests' empty System.in: keep
+	// the
+	// context open for its assertions.
 	private final ApplicationContextRunner runner = new ApplicationContextRunner()
-		.withConfiguration(AGENT_AUTO_CONFIGURATIONS);
+		.withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+		.withPropertyValues("spring.acp.agent.shutdown-on-transport-end=false");
 
 	@Test
 	void listenerServesAgentOverStreamableHttpAndWebSocket() {

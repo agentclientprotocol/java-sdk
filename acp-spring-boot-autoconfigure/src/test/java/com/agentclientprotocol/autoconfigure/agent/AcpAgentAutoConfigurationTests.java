@@ -1,14 +1,21 @@
 package com.agentclientprotocol.autoconfigure.agent;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.time.Duration;
 import java.util.UUID;
 
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
+import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Initialize;
 import com.agentclientprotocol.sdk.annotation.NewSession;
 import com.agentclientprotocol.sdk.annotation.Prompt;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
@@ -23,15 +30,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 class AcpAgentAutoConfigurationTests {
 
-	private final ApplicationContextRunner runner = new ApplicationContextRunner().withConfiguration(
-			AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class, AcpAgentAutoConfiguration.class));
+	private static final AutoConfigurations AGENT_AUTO_CONFIGURATIONS = AutoConfigurations
+		.of(AcpAgentTransportAutoConfiguration.class, AcpAgentAutoConfiguration.class);
+
+	// The default stdio agent reads the tests' empty System.in and ends at once: keep the
+	// context open for the assertions. The shutdown itself is tested on its own
+	// transport.
+	private final ApplicationContextRunner runner = new ApplicationContextRunner()
+		.withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+		.withPropertyValues("spring.acp.agent.shutdown-on-transport-end=false");
 
 	@Test
 	void noAgentLifecycleWithoutAgentBean() {
@@ -110,6 +126,41 @@ class AcpAgentAutoConfigurationTests {
 			assertThat(context).hasBean("acpAgentLifecycle");
 			assertThat(context).hasSingleBean(AcpAgentTransport.class);
 		});
+	}
+
+	@Test
+	void closesContextWhenTransportEnds() throws IOException {
+		PipedOutputStream clientSide = new PipedOutputStream();
+		PipedInputStream agentInput = new PipedInputStream(clientSide);
+		new ApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+			.withUserConfiguration(SingleAgentConfiguration.class)
+			.withBean(AcpAgentTransport.class,
+					() -> new StdioAcpAgentTransport(AcpJsonMapper.createDefault(), agentInput,
+							new ByteArrayOutputStream()))
+			.run(context -> {
+				ConfigurableApplicationContext source = (ConfigurableApplicationContext) context
+					.getSourceApplicationContext();
+				assertThat(source.isActive()).isTrue();
+				clientSide.close();
+				await().atMost(Duration.ofSeconds(10)).until(() -> !source.isActive());
+			});
+	}
+
+	@Test
+	void keepsContextWhenShutdownOnTransportEndDisabled() throws IOException {
+		PipedOutputStream clientSide = new PipedOutputStream();
+		PipedInputStream agentInput = new PipedInputStream(clientSide);
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(AcpJsonMapper.createDefault(), agentInput,
+				new ByteArrayOutputStream());
+		this.runner.withUserConfiguration(SingleAgentConfiguration.class)
+			.withBean(AcpAgentTransport.class, () -> transport)
+			.run(context -> {
+				clientSide.close();
+				transport.awaitTermination().block(Duration.ofSeconds(10));
+				ConfigurableApplicationContext source = (ConfigurableApplicationContext) context
+					.getSourceApplicationContext();
+				await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).until(source::isActive);
+			});
 	}
 
 	@Configuration(proxyBeanMethods = false)
