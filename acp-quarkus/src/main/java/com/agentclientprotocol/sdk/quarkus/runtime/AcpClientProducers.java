@@ -71,6 +71,7 @@ public class AcpClientProducers {
 			.clientCapabilities(capabilities(config.client().capabilities()))
 			.sessionUpdateConsumer(AcpClientProducers::logSessionUpdate);
 		config.client().requestTimeout().ifPresent(spec::requestTimeout);
+		config.client().promptTimeout().ifPresent(spec::promptTimeout);
 		customizers.forEach(customizer -> customizer.customize(spec));
 		return spec.build();
 	}

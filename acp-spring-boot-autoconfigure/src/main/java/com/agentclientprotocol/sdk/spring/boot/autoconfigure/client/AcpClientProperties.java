@@ -18,6 +18,12 @@ public class AcpClientProperties {
 
 	private Duration requestTimeout = Duration.ofSeconds(30);
 
+	/**
+	 * How long a prompt turn may take before the client cancels it; unset (the default) for no
+	 * limit. Prompts are not bound by the request timeout.
+	 */
+	private @Nullable Duration promptTimeout;
+
 	private TransportProperties transport = new TransportProperties();
 
 	private CapabilitiesProperties capabilities = new CapabilitiesProperties();
@@ -28,6 +34,14 @@ public class AcpClientProperties {
 
 	public void setRequestTimeout(Duration requestTimeout) {
 		this.requestTimeout = requestTimeout;
+	}
+
+	public @Nullable Duration getPromptTimeout() {
+		return promptTimeout;
+	}
+
+	public void setPromptTimeout(@Nullable Duration promptTimeout) {
+		this.promptTimeout = promptTimeout;
 	}
 
 	public TransportProperties getTransport() {

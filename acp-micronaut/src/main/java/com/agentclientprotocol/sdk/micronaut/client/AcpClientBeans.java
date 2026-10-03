@@ -86,6 +86,9 @@ public class AcpClientBeans {
 			// Session updates always have a consumer, so the SDK does not warn about an
 			// unhandled session/update; an application adds its own through a customizer.
 			.sessionUpdateConsumer(AcpClientBeans::logSessionUpdate);
+		if (config.getPromptTimeout() != null) {
+			spec.promptTimeout(config.getPromptTimeout());
+		}
 		customizers.forEach(customizer -> customizer.customize(spec));
 		return spec.build();
 	}

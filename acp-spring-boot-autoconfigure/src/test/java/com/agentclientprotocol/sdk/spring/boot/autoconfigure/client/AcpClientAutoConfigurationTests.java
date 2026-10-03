@@ -76,6 +76,16 @@ class AcpClientAutoConfigurationTests {
 	}
 
 	@Test
+	void respectsCustomPromptTimeout() {
+		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class)
+			.withPropertyValues("spring.acp.client.prompt-timeout=10m")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(AcpAsyncClient.class);
+			});
+	}
+
+	@Test
 	void defaultCapabilities() {
 		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class).run(context -> {
 			assertThat(context).hasSingleBean(AcpSyncClient.class);

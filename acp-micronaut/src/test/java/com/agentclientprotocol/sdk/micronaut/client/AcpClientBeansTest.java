@@ -53,6 +53,7 @@ class AcpClientBeansTest {
 	@Test
 	void everySettingBinds() {
 		Map<String, Object> properties = Map.ofEntries(Map.entry("acp.client.request-timeout", "45s"),
+				Map.entry("acp.client.prompt-timeout", "10m"),
 				Map.entry("acp.client.transport.type", "stdio"),
 				Map.entry("acp.client.transport.stdio.command", "my-agent"),
 				Map.entry("acp.client.transport.stdio.args", List.of("--acp", "--verbose")),
@@ -66,6 +67,7 @@ class AcpClientBeansTest {
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
 			AcpClientConfiguration config = context.getBean(AcpClientConfiguration.class);
 			assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofSeconds(45));
+			assertThat(config.getPromptTimeout()).isEqualTo(Duration.ofMinutes(10));
 			assertThat(config.getTransport().getType()).isEqualTo(TransportType.STDIO);
 			assertThat(config.getTransport().getStdio().getCommand()).isEqualTo("my-agent");
 			assertThat(config.getTransport().getStdio().getArgs()).containsExactly("--acp", "--verbose");

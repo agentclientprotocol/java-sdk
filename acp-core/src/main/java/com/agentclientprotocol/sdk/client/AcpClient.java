@@ -84,9 +84,10 @@ import reactor.core.scheduler.Schedulers;
  *
  * <h2>Timeouts and cancellation</h2>
  *
- * <p>Requests wait at most 30 seconds unless the builder's {@code requestTimeout} says otherwise,
- * and a prompt's answer comes only at the end of its turn, so raise it for real agents. When the
- * timeout passes, or the caller disposes a request's {@code Mono}, the client sends the agent a
+ * <p>Requests wait at most 30 seconds unless the builder's {@code requestTimeout} says otherwise.
+ * A prompt is the exception: its answer comes only at the end of its turn, so it waits as long as
+ * the turn takes unless the builder's {@code promptTimeout} sets a limit. When a timeout passes, or
+ * the caller disposes a request's {@code Mono}, the client sends the agent a
  * {@code $/cancel_request} and the call fails; a Java agent then cancels the handler, which for a
  * prompt ends the turn. To stop a turn and still receive its answer, send {@code session/cancel}
  * with {@code cancel(...)}, or put
@@ -198,6 +199,9 @@ public interface AcpClient {
 
 		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
 
+		/** How long a prompt turn may take; null for no limit (the default). */
+		private @Nullable Duration promptTimeout;
+
 		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
 
 		private AcpSchema.@Nullable Implementation clientInfo;
@@ -217,11 +221,11 @@ public interface AcpClient {
 
 		/**
 		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
-		 * session calls, extension requests and {@code session/prompt}, whose answer comes only at
-		 * the end of the turn. When it passes, the call fails with a
+		 * session calls and extension requests. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
-		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 30 seconds.
+		 * {@code session/prompt} is not bound by it, since its answer comes only at the end of the
+		 * turn; see {@code promptTimeout}.
 		 * @param requestTimeout the timeout
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code requestTimeout} is null
@@ -229,6 +233,25 @@ public interface AcpClient {
 		public AsyncSpec requestTimeout(Duration requestTimeout) {
 			Assert.notNull(requestTimeout, "Request timeout must not be null");
 			this.requestTimeout = requestTimeout;
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt turn ({@code session/prompt}) may take before the client gives up
+		 * on it. When it passes, {@code prompt} fails with a
+		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
+		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a prompt
+		 * waits for the end of its turn however long it takes; the request timeout does not apply
+		 * to it. {@link Duration#ZERO} also means none. To stop a turn early and still receive its
+		 * answer, send {@code session/cancel} instead.
+		 * @param promptTimeout the longest a turn may take, or {@link Duration#ZERO} for no limit
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code promptTimeout} is null or negative
+		 */
+		public AsyncSpec promptTimeout(Duration promptTimeout) {
+			Assert.notNull(promptTimeout, "Prompt timeout must not be null");
+			Assert.isTrue(!promptTimeout.isNegative(), "Prompt timeout must not be negative");
+			this.promptTimeout = promptTimeout.isZero() ? null : promptTimeout;
 			return this;
 		}
 
@@ -645,7 +668,7 @@ public interface AcpClient {
 			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers,
 					new HashMap<>(notificationHandlers), Function.identity());
 
-			return new AcpAsyncClient(session, transport, clientCapabilities, clientInfo, advertised);
+			return new AcpAsyncClient(session, transport, clientCapabilities, clientInfo, advertised, promptTimeout);
 		}
 
 		/**
@@ -709,17 +732,34 @@ public interface AcpClient {
 
 		/**
 		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
-		 * session calls, extension requests and {@code session/prompt}, whose answer comes only at
-		 * the end of the turn. When it passes, the call fails with a
+		 * session calls and extension requests. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
-		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 30 seconds.
+		 * {@code session/prompt} is not bound by it, since its answer comes only at the end of the
+		 * turn; see {@code promptTimeout}.
 		 * @param requestTimeout the timeout
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code requestTimeout} is null
 		 */
 		public SyncSpec requestTimeout(Duration requestTimeout) {
 			asyncSpec.requestTimeout(requestTimeout);
+			return this;
+		}
+
+		/**
+		 * Sets how long a prompt turn ({@code session/prompt}) may take before the client gives up
+		 * on it. When it passes, {@code prompt} fails with a
+		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
+		 * {@code $/cancel_request}, which makes a Java agent cancel the turn. Default: none, a prompt
+		 * waits for the end of its turn however long it takes; the request timeout does not apply
+		 * to it. {@link Duration#ZERO} also means none. To stop a turn early and still receive its
+		 * answer, send {@code session/cancel} instead.
+		 * @param promptTimeout the longest a turn may take, or {@link Duration#ZERO} for no limit
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code promptTimeout} is null or negative
+		 */
+		public SyncSpec promptTimeout(Duration promptTimeout) {
+			asyncSpec.promptTimeout(promptTimeout);
 			return this;
 		}
 

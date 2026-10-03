@@ -1,5 +1,7 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
+import java.time.Duration;
+
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
@@ -43,6 +45,10 @@ public class AcpClientAutoConfiguration {
 			// Session updates always have a consumer, so the SDK does not warn about an
 			// unhandled session/update; an application adds its own through a customizer.
 			.sessionUpdateConsumer(AcpClientAutoConfiguration::logSessionUpdate);
+		Duration promptTimeout = properties.getPromptTimeout();
+		if (promptTimeout != null) {
+			spec.promptTimeout(promptTimeout);
+		}
 		customizers.orderedStream().forEach(customizer -> customizer.customize(spec));
 		return spec.build();
 	}

@@ -32,6 +32,7 @@ class ClientConfigBindingTest {
 	@RegisterExtension
 	static final QuarkusUnitTest app = new QuarkusUnitTest().withEmptyApplication()
 		.overrideConfigKey("quarkus.acp.client.request-timeout", "9s")
+		.overrideConfigKey("quarkus.acp.client.prompt-timeout", "10m")
 		.overrideConfigKey("quarkus.acp.client.transport.type", "stdio")
 		.overrideConfigKey("quarkus.acp.client.transport.stdio.command", "my-agent")
 		.overrideConfigKey("quarkus.acp.client.transport.stdio.args", "--acp,--verbose")
@@ -56,6 +57,7 @@ class ClientConfigBindingTest {
 	void everyClientSettingBinds() {
 		AcpRuntimeConfig.Client client = config.client();
 		assertThat(client.requestTimeout()).contains(Duration.ofSeconds(9));
+		assertThat(client.promptTimeout()).contains(Duration.ofMinutes(10));
 		assertThat(client.transport().type()).contains(ClientTransportType.STDIO);
 		assertThat(client.transport().stdio().command()).contains("my-agent");
 		assertThat(client.transport().stdio().args()).contains(List.of("--acp", "--verbose"));

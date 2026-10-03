@@ -42,6 +42,8 @@ public class AcpClientConfiguration {
 
 	private Duration requestTimeout = Duration.ofSeconds(30);
 
+	private @Nullable Duration promptTimeout;
+
 	private Transport transport = new Transport();
 
 	private Capabilities capabilities = new Capabilities();
@@ -60,6 +62,23 @@ public class AcpClientConfiguration {
 	 */
 	public void setRequestTimeout(Duration requestTimeout) {
 		this.requestTimeout = requestTimeout;
+	}
+
+	/**
+	 * How long a prompt turn may take before the client cancels it; unset (the default) for no
+	 * limit. Prompts are not bound by the request timeout.
+	 * @return the prompt timeout, or null for none
+	 */
+	public @Nullable Duration getPromptTimeout() {
+		return promptTimeout;
+	}
+
+	/**
+	 * Sets how long a prompt turn may take before the client cancels it.
+	 * @param promptTimeout the longest a turn may take, or null for no limit
+	 */
+	public void setPromptTimeout(@Nullable Duration promptTimeout) {
+		this.promptTimeout = promptTimeout;
 	}
 
 	/**

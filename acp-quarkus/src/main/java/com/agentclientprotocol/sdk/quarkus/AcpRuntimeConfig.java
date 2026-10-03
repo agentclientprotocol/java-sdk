@@ -152,6 +152,13 @@ public interface AcpRuntimeConfig {
 		Optional<Duration> requestTimeout();
 
 		/**
+		 * How long a prompt turn may take before the client cancels it. Unset (the default) for
+		 * no limit: prompts are not bound by the request timeout.
+		 * @return the prompt timeout
+		 */
+		Optional<Duration> promptTimeout();
+
+		/**
 		 * The client transport.
 		 * @return the transport settings
 		 */

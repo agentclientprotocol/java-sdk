@@ -291,6 +291,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (behaviour): a client's prompt is no longer bounded by its request timeout; new
+  `promptTimeout(Duration)` on `AcpClient.AsyncSpec` and `AcpClient.SyncSpec`, default none.** A
+  prompt's answer comes only at the end of its turn, so the 30-second request timeout cancelled
+  every turn that ran longer (the client failed the call with a `TimeoutException` and sent the
+  agent `$/cancel_request`, which ended the turn). `session/prompt` now waits for the end of the turn
+  however long it takes; every other request keeps the request timeout. Disposing the prompt's
+  `Mono` (or interrupting a blocked `AcpSyncClient.prompt`) still cancels it. Migration: to keep a
+  bound on turns, set `.promptTimeout(Duration.ofMinutes(10))` (any positive duration; it fails the
+  call with a `TimeoutException` and sends `$/cancel_request`, as before); code that raised
+  `requestTimeout` only to let long turns finish can drop it. In Spring Boot, set
+  `spring.acp.client.prompt-timeout`, in Micronaut `acp.client.prompt-timeout`, in Quarkus
+  `quarkus.acp.client.prompt-timeout` (unset by default).
+
 - **Breaking: an annotated agent with `@SetSessionMode` or `@SetSessionConfigOption` needs a
   `@NewSession` method.** The default `session/new` answers with a random session id and no modes
   or config options, so a client never saw any to set and never called those methods. Modes and

@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.client;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -11,6 +12,7 @@ import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSession;
 import com.agentclientprotocol.sdk.spec.ExtensionMethods;
@@ -34,7 +36,6 @@ import reactor.core.publisher.Mono;
  *
  * <pre>{@code
  * AcpAsyncClient client = AcpClient.async(transport)
- *     .requestTimeout(Duration.ofMinutes(5))
  *     .sessionUpdateConsumer(notification -> Mono.fromRunnable(
  *         () -> System.out.println(notification.update())))
  *     .build();
@@ -53,7 +54,8 @@ import reactor.core.publisher.Mono;
  * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (30
  * seconds by default), the {@code Mono} fails with a {@link java.util.concurrent.TimeoutException};
  * then, or when the caller disposes the {@code Mono} first, the client sends the agent a
- * {@code $/cancel_request}. To send one and still wait for the answer, put
+ * {@code $/cancel_request}. {@link #prompt} is the exception: a turn has no time limit unless the
+ * builder's {@code promptTimeout} sets one. To send one and still wait for the answer, put
  * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context.
  * The client does not check the agent's capabilities before a call; see
  * {@link #getAgentCapabilities()}. Methods may be called from several threads at once, and a null
@@ -151,6 +153,12 @@ public class AcpAsyncClient {
 	private final AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities;
 
 	/**
+	 * How long a prompt turn may take, or null for no limit; prompts are not bound by the
+	 * request timeout.
+	 */
+	private final @Nullable Duration promptTimeout;
+
+	/**
 	 * Creates a new AcpAsyncClient with the given session and transport. Uses default
 	 * client capabilities.
 	 * @param session the ACP session for communication
@@ -170,7 +178,7 @@ public class AcpAsyncClient {
 	 */
 	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
 			AcpSchema.@Nullable ClientCapabilities clientCapabilities) {
-		this(session, transport, clientCapabilities, null, new AtomicReference<>());
+		this(session, transport, clientCapabilities, null, new AtomicReference<>(), null);
 	}
 
 	/**
@@ -183,10 +191,12 @@ public class AcpAsyncClient {
 	 * @param clientInfo the client info to send during initialization (may be null)
 	 * @param advertisedCapabilities set to the capabilities of each initialize request
 	 * the client sends
+	 * @param promptTimeout how long a prompt turn may take, or null for no limit
 	 */
 	AcpAsyncClient(AcpSession session, AcpClientTransport transport,
 			AcpSchema.@Nullable ClientCapabilities clientCapabilities, AcpSchema.@Nullable Implementation clientInfo,
-			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities) {
+			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertisedCapabilities,
+			@Nullable Duration promptTimeout) {
 		Assert.notNull(session, "Session must not be null");
 		Assert.notNull(transport, "Transport must not be null");
 		this.session = session;
@@ -194,6 +204,7 @@ public class AcpAsyncClient {
 		this.clientCapabilities = clientCapabilities != null ? clientCapabilities : new AcpSchema.ClientCapabilities();
 		this.clientInfo = clientInfo;
 		this.advertisedCapabilities = advertisedCapabilities;
+		this.promptTimeout = promptTimeout;
 	}
 
 	// --------------------------
@@ -491,13 +502,15 @@ public class AcpAsyncClient {
 	 * <p>The answer is delivered only once the session update consumers have finished with every
 	 * notification the agent sent before it, so what they collected for the turn is complete when
 	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
-	 * request timeout. The one exception: a consumer that was already running when the prompt was
+	 * prompt timeout, if one is set. The one exception: a consumer that was already running when the prompt was
 	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
 	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
 	 *
-	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
-	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
-	 * {@code requestTimeout} on the builder for long turns.
+	 * <p>A prompt is not bound by the builder's {@code requestTimeout}: by default it waits for the
+	 * end of the turn however long that takes. Set {@link AcpClient.AsyncSpec#promptTimeout} to
+	 * bound it; when that passes, the call fails with a {@link java.util.concurrent.TimeoutException}
+	 * and the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn.
+	 * Disposing the returned {@code Mono} does the same at any time.
 	 * @param promptRequest the session ID and the prompt's content blocks
 	 * @return a {@code Mono} emitting the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
@@ -505,6 +518,10 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest promptRequest) {
 		Assert.notNull(promptRequest, "Prompt request must not be null");
 		logger.debug("Sending prompt to session: {}", promptRequest.sessionId());
+		if (session instanceof AcpClientSession clientSession) {
+			return clientSession.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, promptRequest, PROMPT_RESPONSE_TYPE_REF,
+					this.promptTimeout);
+		}
 		return session.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, promptRequest, PROMPT_RESPONSE_TYPE_REF);
 	}
 

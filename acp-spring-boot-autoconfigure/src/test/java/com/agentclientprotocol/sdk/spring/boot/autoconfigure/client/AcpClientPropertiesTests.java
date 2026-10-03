@@ -23,6 +23,7 @@ class AcpClientPropertiesTests {
 		this.runner.run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
 			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
+			assertThat(props.getPromptTimeout()).isNull();
 			assertThat(props.getTransport().getType()).isNull();
 			assertThat(props.getTransport().getWebsocket().getUri()).isNull();
 			assertThat(props.getTransport().getWebsocket().getConnectTimeout()).isEqualTo(Duration.ofSeconds(10));
@@ -40,6 +41,14 @@ class AcpClientPropertiesTests {
 		this.runner.withPropertyValues("spring.acp.client.request-timeout=2m").run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
 			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofMinutes(2));
+		});
+	}
+
+	@Test
+	void promptTimeout() {
+		this.runner.withPropertyValues("spring.acp.client.prompt-timeout=10m").run(context -> {
+			AcpClientProperties props = context.getBean(AcpClientProperties.class);
+			assertThat(props.getPromptTimeout()).isEqualTo(Duration.ofMinutes(10));
 		});
 	}
 
