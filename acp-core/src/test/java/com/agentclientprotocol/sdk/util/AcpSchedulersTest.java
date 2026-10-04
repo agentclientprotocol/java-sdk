@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.util;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -51,6 +52,17 @@ class AcpSchedulersTest {
 		finally {
 			release.countDown();
 		}
+	}
+
+	@Test
+	void timeoutsAreDeliveredOnVirtualThreadsWhereTheJdkHasThem() throws Exception {
+		CompletableFuture<Thread> delivered = new CompletableFuture<>();
+		AcpSchedulers.withTimeout(Mono.never(), Duration.ofMillis(10))
+			.subscribe(v -> {
+			}, error -> delivered.complete(Thread.currentThread()));
+		Thread thread = delivered.get(5, TimeUnit.SECONDS);
+		assertThat(VirtualThreads.isVirtual(thread)).isEqualTo(Runtime.version().feature() >= 21);
+		assertThat(thread.isDaemon()).isTrue();
 	}
 
 }
