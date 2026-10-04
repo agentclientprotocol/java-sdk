@@ -20,9 +20,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>It works as {@link AsyncValueHandler} does, for a method that returns nothing. A request
  * method other than a {@code @Prompt} one cannot be {@code void}: building the agent rejects it,
- * because a request must get a result. The turn ends with stop reason {@code end_turn} also after a
- * {@code session/cancel}; to answer {@code cancelled}, return {@code PromptResponse.cancelled()}
- * instead.
+ * because a request must get a result. After {@code session/cancel} the agent sends stop reason
+ * {@code cancelled} instead of {@code end_turn}, as ACP requires: the SDK answers
+ * {@code cancelled} once the cancel was received.
  *
  * @author Mark Pollack
  * @since 1.0.0

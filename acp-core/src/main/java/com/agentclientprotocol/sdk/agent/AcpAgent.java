@@ -64,8 +64,9 @@ import reactor.core.scheduler.Schedulers;
  *
  * <p>Each ACP session, named by its {@code sessionId}, has at most one prompt turn at a time: a
  * second {@code session/prompt} for a busy session is answered {@code -32600} (invalid request). A
- * {@code session/cancel} does not end the turn; the prompt's answer does, normally with stop reason
- * {@code cancelled}. The builders' {@code cancelGracePeriod} (60 seconds by default) and
+ * {@code session/cancel} does not end the turn; the prompt's answer does, with stop reason
+ * {@code cancelled}: once {@code session/cancel} was received, the SDK answers {@code cancelled}
+ * whatever the handler returns or fails with. The builders' {@code cancelGracePeriod} (60 seconds by default) and
  * {@code maxPromptDuration} (off by default) bound how long that can take: the SDK then cancels the
  * handler and answers for it. Both limits are Java SDK policy, not protocol. A
  * {@code $/cancel_request} from the client cancels the handler of the request it names, which is
@@ -282,12 +283,11 @@ public interface AcpAgent {
 	 * send any last updates and answer {@link AcpSchema.PromptResponse#cancelled()}. If the handler
 	 * has not answered within the builder's cancel grace period (60 seconds by default), the SDK
 	 * disposes its {@code Mono} and answers {@code cancelled} itself; the builder's maximum prompt
-	 * duration (off by default) bounds the whole turn the same way. While the prompt is cancelled,
-	 * a failure that is a cancellation ({@link java.util.concurrent.CancellationException}, an
-	 * interrupt, or an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with code
-	 * {@code -32800}) is answered {@code cancelled}. Any other failure, such as the exception a
-	 * model client throws when its call is aborted, is answered {@code -32603}; ACP requires
-	 * {@code cancelled}, so catch it and answer {@code cancelled}.
+	 * duration (off by default) bounds the whole turn the same way. ACP requires a cancelled
+	 * prompt to answer {@code cancelled}, so the SDK answers {@code cancelled} once
+	 * {@code session/cancel} was received: also when the handler then answers another stop reason
+	 * (its {@code _meta} is kept), and when it fails with any exception, such as the one a model
+	 * client throws when its call is aborted (the failure is logged at DEBUG).
 	 *
 	 * <pre>{@code
 	 * AcpAgent.async(transport)
@@ -805,12 +805,11 @@ public interface AcpAgent {
 	 * builder's maximum prompt duration (off by default) and a {@code $/cancel_request} that names
 	 * the prompt also end the turn: the SDK answers {@code -32800} (request cancelled), or
 	 * {@code cancelled} if the client had sent {@code session/cancel}, and interrupts the thread.
-	 * What the handler returns after that is discarded. While the prompt is cancelled, a failure
-	 * that is a cancellation ({@link java.util.concurrent.CancellationException}, an interrupt, or
-	 * an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with code {@code -32800})
-	 * is answered {@code cancelled}. Any other failure, such as the exception a model client throws
-	 * when its call is aborted, is answered {@code -32603}; ACP requires {@code cancelled}, so
-	 * catch it and return {@code cancelled}.
+	 * What the handler returns after that is discarded. ACP requires a cancelled prompt to answer
+	 * {@code cancelled}, so the SDK answers {@code cancelled} once {@code session/cancel} was
+	 * received: also when the handler then returns another stop reason (its {@code _meta} is
+	 * kept), and when it throws any exception, such as the one a model client throws when its call
+	 * is aborted (the failure is logged at DEBUG).
 	 *
 	 * <pre>{@code
 	 * AcpAgent.sync(transport)

@@ -31,8 +31,8 @@ import java.lang.annotation.Target;
  *
  * <p>It returns one of:
  * <ul>
- *   <li>{@code PromptResponse}: the turn's stop reason, usually {@code PromptResponse.endTurn()},
- *   or stop reason {@code cancelled} after a cancel</li>
+ *   <li>{@code PromptResponse}: the turn's stop reason, usually {@code PromptResponse.endTurn()};
+ *   after {@code session/cancel} the SDK sends stop reason {@code cancelled} whatever it is</li>
  *   <li>{@code void}: the same as {@code PromptResponse.endTurn()}</li>
  *   <li>{@code Mono}, {@code CompletionStage} or single-value {@code Publisher} of
  *   {@code PromptResponse} or {@code String}: the runtime waits for it on the handler thread, and
@@ -55,8 +55,11 @@ import java.lang.annotation.Target;
  * method polls {@code SyncPromptContext.isCancelled()} (or registers {@code onCancel(Runnable)}),
  * a method returning {@code Mono} composes {@code PromptContext.whenCancelled()}. After
  * {@code session/cancel} the method keeps running until it returns: it should stop, send any last
- * updates, and return {@code PromptResponse.cancelled()}. If it has not returned when the cancel
- * grace period ends, the SDK answers {@code cancelled} for it and interrupts its thread. After
+ * updates, and return. Once {@code session/cancel} was received, the SDK answers the prompt
+ * {@code cancelled}, as ACP requires, whatever the method returns ({@code void}, a string or
+ * another stop reason; a {@code PromptResponse}'s {@code _meta} is kept) and also when it throws.
+ * If it has not returned when the cancel grace period ends, the SDK answers {@code cancelled} for
+ * it and interrupts its thread. After
  * {@code $/cancel_request} the SDK has already answered, so the method just stops.
  * {@code AcpAgentSupport.Builder} sets the grace period and can also limit how long any turn runs
  * ({@code maxPromptDuration}, off by default).

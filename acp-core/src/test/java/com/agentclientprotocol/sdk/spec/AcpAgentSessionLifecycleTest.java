@@ -235,13 +235,17 @@ class AcpAgentSessionLifecycleTest {
 
 		failing.tryEmitError(new IllegalStateException("aborted"));
 
-		assertThat(((AcpSchema.JSONRPCResponse) first.block(WAIT)).error()).isNotNull();
-		assertThat(session.hasActivePrompt("s1")).as("an error response ends the turn").isFalse();
+		// ACP spec 7628b153: prompt-turn.mdx:361, a failure after session/cancel answers cancelled
+		AcpSchema.JSONRPCResponse answer = (AcpSchema.JSONRPCResponse) first.block(WAIT);
+		assertThat(answer.error()).isNull();
+		assertThat(answer.result()).isEqualTo(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
+		assertThat(session.hasActivePrompt("s1")).as("the failed handler's answer ends the turn").isFalse();
 	}
 
 	/**
-	 * A timeout the handler applies is an error like any other, and ends the turn, well
-	 * within the session's own cancel grace period (AcpAgentSessionPromptTimeoutsTest).
+	 * A timeout the handler applies is a failure like any other: after session/cancel it is
+	 * answered cancelled, and ends the turn, well within the session's own cancel grace period
+	 * (AcpAgentSessionPromptTimeoutsTest).
 	 */
 	@Test
 	void aCancelledPromptWhoseHandlerTimesOutEndsItsTurn() {
@@ -256,7 +260,9 @@ class AcpAgentSessionLifecycleTest {
 		first.subscribe();
 		this.transport.deliver(cancel(Map.of("sessionId", "s1"))).block(WAIT);
 
-		assertThat(((AcpSchema.JSONRPCResponse) first.block(WAIT)).error()).isNotNull();
+		AcpSchema.JSONRPCResponse answer = (AcpSchema.JSONRPCResponse) first.block(WAIT);
+		assertThat(answer.error()).isNull();
+		assertThat(answer.result()).isEqualTo(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
 		assertThat(session.hasActivePrompt("s1")).isFalse();
 	}
 

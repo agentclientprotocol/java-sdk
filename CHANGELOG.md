@@ -1043,6 +1043,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A prompt answers `cancelled` once `session/cancel` was received, whatever its handler
+  returns.** ACP requires an agent to answer a cancelled prompt with stop reason `cancelled`. A
+  handler that noticed the cancel and returned another stop reason within the grace period had
+  that stop reason sent: a `void`, `String`, `Mono<String>` or `CompletionStage<String>` `@Prompt`
+  method sent `end_turn`, and so did a builder handler returning `PromptResponse.endTurn()`. The
+  agent session now sends a handler's `PromptResponse` with stop reason `cancelled` once
+  `session/cancel` was received for that prompt, keeping its `_meta`, and logs the change at
+  DEBUG. It uses the prompt's existing cancelling state, the one the cancel grace period uses.
+  Behaviour change; migration: a handler that returned another stop reason after cancel now sends
+  `cancelled`.
+
+- **A prompt that fails after `session/cancel` answers `cancelled`, not an error.** ACP requires
+  agents to catch the errors aborted work raises and answer `cancelled`. Only a cancellation
+  (`CancellationException`, an interrupt, an `AcpProtocolException` with `-32800`) was answered
+  `cancelled`; any other exception, such as the one a model client throws when its call is aborted,
+  went out as `-32603`. Once `session/cancel` was received for the prompt, any failure is now
+  answered `{"stopReason":"cancelled"}` and logged at DEBUG. Before a cancel, failures are answered
+  as before. Behaviour change; covered by the migration line above.
+
 - **A prompt's updates no longer follow its answer.** ACP requires an agent to send a prompt's
   `session/update` notifications before it answers the prompt, also after `session/cancel`. When
   the SDK answered a prompt itself (the cancel grace period or `maxPromptDuration` passed), a

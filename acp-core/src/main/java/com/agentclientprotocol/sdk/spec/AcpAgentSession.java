@@ -254,14 +254,14 @@ public class AcpAgentSession implements AcpSession {
 				// signal that passes through the release.
 				// The deadlines may answer instead of the handler; either answer passes
 				// through the release.
-				// A handler whose work was aborted after session/cancel answers cancelled, not
-				// an error (ACP v1, prompt turn, Cancellation).
+				// Once session/cancel was received, the prompt answers stop reason cancelled,
+				// whatever its handler returns or fails with (ACP v1, prompt turn, Cancellation).
 				return activePrompts.endBeforePublishing(turn, promptDeadlines.answer(turn, request,
 						InboundMessages.requireResult(HandlerFailures.invoke(() -> handler.handle(InboundMessages.paramsOrEmpty(request.params()))),
 								request.method())
-							.map(result -> InboundMessages.result(request, result))
-							.onErrorResume(error -> InboundMessages.isCancellation(error) && turn.answer().isCancelling(),
-									error -> Mono.just(cancelledPrompt(request)))));
+							.map(result -> InboundMessages.result(request, cancelledIfCancelling(turn, request, result)))
+							.onErrorResume(error -> turn.answer().isCancelling(),
+									error -> Mono.just(cancelledPromptAfterFailure(request, error)))));
 			}
 
 			Mono<AcpSchema.JSONRPCResponse> response = InboundMessages
@@ -311,6 +311,33 @@ public class AcpAgentSession implements AcpSession {
 
 	private static AcpSchema.JSONRPCResponse cancelledPrompt(AcpSchema.JSONRPCRequest request) {
 		return InboundMessages.result(request, new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
+	}
+
+	/**
+	 * A prompt handler's answer, with stop reason {@code cancelled} once session/cancel was
+	 * received for the prompt: the agent must then answer cancelled (ACP v1, prompt turn,
+	 * Cancellation), also when its handler returned another stop reason. {@code _meta} is kept.
+	 */
+	private static Object cancelledIfCancelling(ActivePrompts.Turn turn, AcpSchema.JSONRPCRequest request,
+			Object result) {
+		if (turn.answer().isCancelling() && result instanceof AcpSchema.PromptResponse response
+				&& !AcpSchema.StopReason.CANCELLED.equals(response.stopReason())) {
+			logger.debug("Prompt {} answered {} after session/cancel; sending cancelled", request.id(),
+					response.stopReason());
+			return new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED, response.meta());
+		}
+		return result;
+	}
+
+	/**
+	 * The answer to a prompt whose handler failed after session/cancel: stop reason
+	 * {@code cancelled}, whatever the failure (ACP v1, prompt turn, Cancellation: agents must
+	 * catch the errors aborted work raises and answer cancelled). The failure is logged here.
+	 */
+	private static AcpSchema.JSONRPCResponse cancelledPromptAfterFailure(AcpSchema.JSONRPCRequest request,
+			Throwable error) {
+		logger.debug("Prompt {} failed after session/cancel; answering cancelled", request.id(), error);
+		return cancelledPrompt(request);
 	}
 
 	/**
