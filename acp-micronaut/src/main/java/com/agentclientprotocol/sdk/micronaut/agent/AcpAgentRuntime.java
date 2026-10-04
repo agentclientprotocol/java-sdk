@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutorService;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
@@ -35,6 +36,7 @@ import io.micronaut.inject.BeanDefinition;
 import io.micronaut.inject.qualifiers.Qualifiers;
 import io.micronaut.runtime.EmbeddedApplication;
 import io.micronaut.runtime.graceful.GracefulShutdownCapable;
+import io.micronaut.scheduling.TaskExecutors;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Singleton;
 import org.jspecify.annotations.Nullable;
@@ -66,7 +68,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * {@code AcpInterceptor}, {@code ArgumentResolver} and {@code ReturnValueHandler} beans are
- * added to the agent, in their bean order. Handler methods may also return a
+ * added to the agent, in their bean order. Handler methods run on Micronaut's blocking executor
+ * ({@code TaskExecutors.BLOCKING}: virtual threads on a JVM that has them, else the I/O pool). Handler methods may also return a
  * {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams {@code Publisher},
  * which {@code AcpAgentSupport} waits for.
  *
@@ -143,8 +146,10 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			}
 			AcpAgentSettings settings = config.toSettings();
 			logger.info("Serving @AcpAgent bean {} over {}", agent.userClass().getName(), settings.transport());
+			// Handlers block: they run on Micronaut's blocking executor, virtual threads where
+			// the JVM has them, the I/O pool otherwise.
 			AcpHost newHost = createHost(AcpAgents.builder(agent, settings, interceptors, argumentResolvers,
-					returnValueHandlers), settings);
+					returnValueHandlers, blockingExecutor()), settings);
 			// Before the host serves anything, so a SIGTERM after the first answer is handled.
 			registerShutdownHook();
 			try {
@@ -235,6 +240,10 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	private static <T> AgentCandidate<T> candidate(ApplicationContext context, BeanDefinition<T> definition) {
 		// The declared bean type, not the instance's class, carries the handler annotations.
 		return new AgentCandidate<>(definition.getName(), definition.getBeanType(), () -> context.getBean(definition));
+	}
+
+	private @Nullable ExecutorService blockingExecutor() {
+		return context.findBean(ExecutorService.class, Qualifiers.byName(TaskExecutors.BLOCKING)).orElse(null);
 	}
 
 	private AcpHost createHost(AcpAgentSupport.Builder builder, AcpAgentSettings settings) {

@@ -9,6 +9,8 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Serves an agent for a framework, which calls these methods from its own lifecycle hooks: start
  * with the container, stop with it. Nothing here blocks except {@link #stop(Duration)}, so a
@@ -33,7 +35,7 @@ public interface AcpHost {
 	 * the transport closes. Only the first call has an effect; later calls return the same stage.
 	 * @return completes when stopped
 	 */
-	CompletionStage<Void> stopGracefully();
+	CompletionStage<@Nullable Void> stopGracefully();
 
 	/**
 	 * Stops gracefully, waiting at most {@code timeout}, then stops at once. Safe from a JVM
@@ -46,7 +48,7 @@ public interface AcpHost {
 	 * Completes when the transport or listener ends, by itself or by a stop.
 	 * @return the termination signal
 	 */
-	CompletionStage<Void> termination();
+	CompletionStage<@Nullable Void> termination();
 
 	/**
 	 * The port a listener is bound to, once started.

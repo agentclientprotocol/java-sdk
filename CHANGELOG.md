@@ -94,7 +94,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       `com.agentclientprotocol.sdk.integration.AcpTransportType`;
     - closing the client waits at most its request timeout plus 10 s, then closes it at once;
     - a second `@AcpAgent` bean fails with "Found 2 @AcpAgent beans [...]", naming
-      `spring.acp.agent.enabled=false` as the way to serve none.
+      `spring.acp.agent.enabled=false` as the way to serve none;
+    - the agent's handler methods can run on a Spring executor: `spring.acp.agent.handler-executor` names an
+      `Executor` bean (a plain `TaskExecutor` is adapted), or `none` for the SDK's own pool. Unset, they run on
+      the context's `applicationTaskExecutor` when `spring.threads.virtual.enabled=true` (a virtual thread per
+      handler), and on the SDK's pool otherwise: without virtual threads Boot's executor is a pool of 8 threads,
+      which would cap the prompts served at once.
   - Everything else in this release's breaking changes applies too: Spring applications compile against the
     SDK's API.
 
@@ -115,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `holdJvmUntilTermination`) with `AcpAgentHost` (one transport; a latched `onTransportEnd` action on a host
     thread, never run when the host stopped the agent) and `AcpListenerHost`; `AcpServletHost` and
     `AcpClientHost`.
+  - Handler executors: `AcpAgents.builder(..., handlerExecutor)` passes a framework's executor to
+    `AcpAgentSupport.Builder.handlerExecutor`, so annotated handlers run on the framework's threads instead of a
+    second pool; unset keeps the SDK's own pool.
 
 - **`acp-micronaut`: Micronaut 4 integration** (Java 17+), with `acp-micronaut-sample` (not published).
   - **Agent.** Annotate an `@AcpAgent` class `@Singleton` and it is served with the application
@@ -134,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Built on `acp-integration`: `AcpClientCustomizer` and the transport type are its
     `com.agentclientprotocol.sdk.integration` types, and an explicit client type without its property
     fails with "...transport.type=http requires ...transport.http.uri".
+  - The agent's handler methods run on Micronaut's blocking executor (`TaskExecutors.BLOCKING`: virtual
+    threads on a JVM that has them, the I/O pool otherwise) instead of the SDK's own pool.
 
 - **Quarkus extension: `acp-quarkus` (with `acp-quarkus-deployment`).** One `@AcpAgent` class
   becomes a singleton bean (found at build time; a second one fails the build) and is served over
@@ -150,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type are its `com.agentclientprotocol.sdk.integration` types, `quarkus.acp.agent.transport.type`
   also accepts `websocket` (the same as `http`), and several client transports set with no
   `quarkus.acp.client.transport.type` fail at startup, naming them, as in the other frameworks.
+  The agent's handler methods run on the `ManagedExecutor` (Quarkus' worker pool, with context
+  propagation) instead of the SDK's own pool.
 - **Prompt handlers see their prompt's cancellation.** `SyncPromptContext.isCancelled()` and
   `onCancel(Runnable)`, and `PromptContext.isCancelled()` and `whenCancelled()` (a `Mono<Void>`
   that completes on cancel), signal a cancel by `session/cancel` for the prompt's session or by

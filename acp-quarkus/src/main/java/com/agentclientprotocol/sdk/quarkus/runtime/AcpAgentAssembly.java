@@ -21,12 +21,15 @@ import io.quarkus.arc.All;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.inject.Any;
 import jakarta.inject.Singleton;
+import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
  * Assembles the {@link AcpAgentSupport} builder for the application's {@code @AcpAgent}
  * bean ({@link AcpAgents}): the bean instance from the container, the configured timeouts,
  * and the interceptor, argument resolver and return value handler beans, then the Mutiny
- * return types.
+ * return types. Handler methods block, so they run on the {@link ManagedExecutor}: Quarkus'
+ * worker pool, where blocking work belongs (never the Vert.x event loop), with the
+ * application's contexts propagated, rather than on a second pool of the SDK's.
  * <p>
  * Handlers are discovered on the user's class (from the build-time index), not on the
  * instance's class, so a container subclass of the bean does not hide them.
@@ -88,7 +91,7 @@ public class AcpAgentAssembly {
 	private <T> AcpAgentSupport.Builder builder(Class<T> type) {
 		T bean = Arc.container().select(type, Any.Literal.INSTANCE).get();
 		return AcpAgents.builder(new AgentCandidate<>(type.getName(), type, () -> bean), settings, interceptors,
-				argumentResolvers, returnValueHandlers);
+				argumentResolvers, returnValueHandlers, Arc.container().select(ManagedExecutor.class).get());
 	}
 
 }

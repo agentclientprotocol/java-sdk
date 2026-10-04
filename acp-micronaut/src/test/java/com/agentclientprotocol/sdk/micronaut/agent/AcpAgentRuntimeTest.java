@@ -46,6 +46,9 @@ class AcpAgentRuntimeTest {
 	@Inject
 	TestAgents.RecordingInterceptor interceptor;
 
+	@Inject
+	TestAgents.EchoAgent agent;
+
 	private final List<String> chunks = new CopyOnWriteArrayList<>();
 
 	/** One client: the in-memory transport connects once, for the context's life. */
@@ -98,6 +101,15 @@ class AcpAgentRuntimeTest {
 		assertThat(interceptor.methods).contains("initialize", "session/new", "session/prompt", "session/set_mode");
 		assertThat(runtime.isRunning()).isTrue();
 		assertThat(runtime.port()).isEmpty();
+
+		// The handler ran on Micronaut's blocking executor, not on the SDK's own pool:
+		// virtual threads where the JVM has them, else the I/O executor's threads.
+		assertThat(agent.promptThreads).hasSize(1).allSatisfy(thread -> {
+			assertThat(thread.getName()).doesNotStartWith("acp-");
+			assertThat(isVirtual(thread) || thread.getName().startsWith("io-executor-thread"))
+				.as("virtual or io-executor-thread: %s", thread)
+				.isTrue();
+		});
 	}
 
 	@Test
@@ -105,6 +117,15 @@ class AcpAgentRuntimeTest {
 		assertThatThrownBy(() -> acp.sendExtRequest("_test/empty", Map.of())).isInstanceOf(AcpError.class)
 			.hasMessageContaining("produced no response")
 			.satisfies(error -> assertThat(((AcpError) error).getCode()).isEqualTo(-32603));
+	}
+
+	static boolean isVirtual(Thread thread) {
+		try {
+			return (boolean) Thread.class.getMethod("isVirtual").invoke(thread);
+		}
+		catch (ReflectiveOperationException ex) {
+			return false; // JDK 17: no virtual threads
+		}
 	}
 
 }

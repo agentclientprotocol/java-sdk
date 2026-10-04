@@ -39,8 +39,12 @@ final class TestAgents {
 	@AcpAgent(name = "integration-test-agent", version = "1.0")
 	public static class EchoAgent {
 
+		/** The threads the prompt handler ran on. */
+		final List<String> threads = new CopyOnWriteArrayList<>();
+
 		@Prompt
 		public Reply prompt(AcpSchema.PromptRequest request, SyncPromptContext context, Suffix suffix) {
+			threads.add(Thread.currentThread().getName());
 			context.sendMessage("echo: " + ((AcpSchema.TextContent) request.prompt().get(0)).text() + suffix.value());
 			return new Reply();
 		}

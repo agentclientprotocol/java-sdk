@@ -49,6 +49,13 @@ public class AcpAgentProperties {
 	 */
 	private boolean shutdownOnTransportEnd = true;
 
+	/**
+	 * The executor the agent's handler methods run on: the name of an Executor bean, or
+	 * "none" for the SDK's own pool. Unset: the context's applicationTaskExecutor when
+	 * spring.threads.virtual.enabled=true (virtual threads), else the SDK's own pool.
+	 */
+	private @Nullable String handlerExecutor;
+
 	private AgentTransportProperties transport = new AgentTransportProperties();
 
 	public boolean isEnabled() {
@@ -89,6 +96,14 @@ public class AcpAgentProperties {
 
 	public void setShutdownOnTransportEnd(boolean shutdownOnTransportEnd) {
 		this.shutdownOnTransportEnd = shutdownOnTransportEnd;
+	}
+
+	public @Nullable String getHandlerExecutor() {
+		return handlerExecutor;
+	}
+
+	public void setHandlerExecutor(@Nullable String handlerExecutor) {
+		this.handlerExecutor = handlerExecutor;
 	}
 
 	public AgentTransportProperties getTransport() {

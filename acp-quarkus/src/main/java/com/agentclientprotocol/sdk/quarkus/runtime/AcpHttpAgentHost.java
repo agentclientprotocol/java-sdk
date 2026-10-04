@@ -16,6 +16,7 @@ import io.quarkus.runtime.ShutdownEvent;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Singleton;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +48,7 @@ public class AcpHttpAgentHost {
 	void stop(@Observes @Priority(0) ShutdownEvent event) {
 		Duration timeout = endpoint.options().shutdownTimeout().plusSeconds(1);
 		// Both at once: the WebSocket connections close while the servlet's do.
-		CompletableFuture<Void> webSocketsClosed = webSockets.closeGracefully().toFuture();
+		CompletableFuture<@Nullable Void> webSocketsClosed = webSockets.closeGracefully().toFuture();
 		AcpServletHost.closeBeforeShutdown(servlet, timeout);
 		try {
 			webSocketsClosed.get(timeout.toMillis(), TimeUnit.MILLISECONDS);

@@ -23,7 +23,7 @@ public final class AcpClientHost {
 
 	private final Object lock = new Object();
 
-	private @Nullable CompletableFuture<Void> closed;
+	private @Nullable CompletableFuture<@Nullable Void> closed;
 
 	/**
 	 * A host for the client.
@@ -37,9 +37,9 @@ public final class AcpClientHost {
 	 * Closes the client gracefully; only the first call has an effect.
 	 * @return completes when the client is closed
 	 */
-	public CompletionStage<Void> closeGracefully() {
+	public CompletionStage<@Nullable Void> closeGracefully() {
 		synchronized (lock) {
-			CompletableFuture<Void> current = closed;
+			CompletableFuture<@Nullable Void> current = closed;
 			if (current == null) {
 				current = client.closeGracefully().toFuture();
 				closed = current;

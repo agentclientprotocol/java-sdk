@@ -42,7 +42,7 @@ public final class AcpAgentHost implements AcpHost {
 
 	private final Runnable onTransportEnd;
 
-	private final CompletableFuture<Void> termination;
+	private final CompletableFuture<@Nullable Void> termination;
 
 	private final Object lock = new Object();
 
@@ -52,7 +52,7 @@ public final class AcpAgentHost implements AcpHost {
 
 	private boolean started;
 
-	private @Nullable CompletableFuture<Void> stopped;
+	private @Nullable CompletableFuture<@Nullable Void> stopped;
 
 	/**
 	 * A host for an agent built on its transport.
@@ -81,14 +81,14 @@ public final class AcpAgentHost implements AcpHost {
 	}
 
 	@Override
-	public CompletionStage<Void> stopGracefully() {
+	public CompletionStage<@Nullable Void> stopGracefully() {
 		synchronized (lock) {
-			CompletableFuture<Void> current = stopped;
+			CompletableFuture<@Nullable Void> current = stopped;
 			if (current == null) {
 				stopping.set(true);
 				// Off the caller's thread: the SDK's close blocks, gracefully for a bounded time,
 				// then closes at once.
-				current = CompletableFuture.runAsync(agent::close, runnable -> {
+				current = CompletableFuture.<@Nullable Void>supplyAsync(this::closeAgent, runnable -> {
 					Thread closer = new Thread(runnable, "acp-agent-stop");
 					closer.setDaemon(true);
 					closer.start();
@@ -105,13 +105,18 @@ public final class AcpAgentHost implements AcpHost {
 	}
 
 	@Override
-	public CompletionStage<Void> termination() {
+	public CompletionStage<@Nullable Void> termination() {
 		return termination.minimalCompletionStage();
 	}
 
 	@Override
 	public OptionalInt port() {
 		return OptionalInt.empty();
+	}
+
+	private @Nullable Void closeAgent() {
+		agent.close();
+		return null;
 	}
 
 	private void transportEnded() {

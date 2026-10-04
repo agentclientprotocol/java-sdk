@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,7 +26,7 @@ final class Hosts {
 	 * Waits for {@code graceful} at most {@code timeout}; when it does not complete in time, or
 	 * fails, runs {@code now}.
 	 */
-	static void await(CompletionStage<Void> graceful, Duration timeout, String what, Runnable now) {
+	static void await(CompletionStage<@Nullable Void> graceful, Duration timeout, String what, Runnable now) {
 		try {
 			graceful.toCompletableFuture().get(timeout.toNanos(), TimeUnit.NANOSECONDS);
 			return;
