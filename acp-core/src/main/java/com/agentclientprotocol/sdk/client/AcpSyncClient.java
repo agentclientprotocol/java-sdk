@@ -198,12 +198,12 @@ public class AcpSyncClient implements AutoCloseable {
 	 * Logs in with one of the authentication methods the agent listed in its {@code initialize}
 	 * answer ({@code authenticate}). Needed only for an agent that requires it; such an agent
 	 * answers other requests with {@code -32000} (authentication required) until then.
-	 * @param authenticateRequest the ID of the chosen authentication method
+	 * @param request the ID of the chosen authentication method
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE
 	 */
-	public AcpSchema.AuthenticateResponse authenticate(AcpSchema.AuthenticateRequest authenticateRequest) {
-		return awaitResponse(this.delegate.authenticate(authenticateRequest));
+	public AcpSchema.AuthenticateResponse authenticate(AcpSchema.AuthenticateRequest request) {
+		return awaitResponse(this.delegate.authenticate(request));
 	}
 
 	/**
@@ -213,12 +213,12 @@ public class AcpSyncClient implements AutoCloseable {
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}
 	 * first: otherwise the call fails with
 	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param logoutRequest the logout request
+	 * @param request the logout request
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_LOGOUT
 	 */
-	public AcpSchema.LogoutResponse logout(AcpSchema.LogoutRequest logoutRequest) {
-		return awaitResponse(this.delegate.logout(logoutRequest));
+	public AcpSchema.LogoutResponse logout(AcpSchema.LogoutRequest request) {
+		return awaitResponse(this.delegate.logout(request));
 	}
 
 	// --------------------------
@@ -229,12 +229,12 @@ public class AcpSyncClient implements AutoCloseable {
 	 * Creates an ACP session ({@code session/new}) for a working directory, with the MCP servers
 	 * the agent should connect to. The answer carries the session ID every later call for the
 	 * session uses, and optionally the session's modes and config options.
-	 * @param newSessionRequest the working directory, an absolute path, and the MCP servers
+	 * @param request the working directory, an absolute path, and the MCP servers
 	 * @return the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
 	 */
-	public AcpSchema.NewSessionResponse newSession(AcpSchema.NewSessionRequest newSessionRequest) {
-		return awaitResponse(this.delegate.newSession(newSessionRequest));
+	public AcpSchema.NewSessionResponse newSession(AcpSchema.NewSessionRequest request) {
+		return awaitResponse(this.delegate.newSession(request));
 	}
 
 	/**
@@ -242,46 +242,46 @@ public class AcpSyncClient implements AutoCloseable {
 	 * as session updates, which reach the session update consumers before this call completes, then
 	 * answers. Only an agent that advertises {@code loadSession} supports it; for any other the call
 	 * fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param loadSessionRequest the session ID, the working directory and the MCP servers
+	 * @param request the session ID, the working directory and the MCP servers
 	 * @return the agent's answer, once the history has been replayed
 	 * @see AcpSchema#METHOD_SESSION_LOAD
 	 */
-	public AcpSchema.LoadSessionResponse loadSession(AcpSchema.LoadSessionRequest loadSessionRequest) {
-		return awaitResponse(this.delegate.loadSession(loadSessionRequest));
+	public AcpSchema.LoadSessionResponse loadSession(AcpSchema.LoadSessionRequest request) {
+		return awaitResponse(this.delegate.loadSession(request));
 	}
 
 	/**
 	 * Switches a session to one of the modes the agent offered ({@code session/set_mode}). Modes
 	 * may change how the agent works on prompts and what it asks permission for.
-	 * @param setModeRequest the session ID and the mode ID
+	 * @param request the session ID and the mode ID
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_SET_MODE
 	 */
-	public AcpSchema.SetSessionModeResponse setSessionMode(AcpSchema.SetSessionModeRequest setModeRequest) {
-		return awaitResponse(this.delegate.setSessionMode(setModeRequest));
+	public AcpSchema.SetSessionModeResponse setSessionMode(AcpSchema.SetSessionModeRequest request) {
+		return awaitResponse(this.delegate.setSessionMode(request));
 	}
 
 	/**
 	 * Lists the sessions the agent knows ({@code session/list}), optionally only those of one
 	 * working directory. The answer may be one page: pass its {@code nextCursor} in the next
 	 * request to get the next page.
-	 * @param listSessionsRequest an optional working directory and an optional cursor
+	 * @param request an optional working directory and an optional cursor
 	 * @return a page of sessions
 	 * @see AcpSchema#METHOD_SESSION_LIST
 	 */
-	public AcpSchema.ListSessionsResponse listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
-		return awaitResponse(this.delegate.listSessions(listSessionsRequest));
+	public AcpSchema.ListSessionsResponse listSessions(AcpSchema.ListSessionsRequest request) {
+		return awaitResponse(this.delegate.listSessions(request));
 	}
 
 	/**
 	 * Closes an active session ({@code session/close}): the agent stops its work as for
 	 * {@code session/cancel}, then frees what the session holds.
-	 * @param closeSessionRequest the session ID
+	 * @param request the session ID
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_CLOSE
 	 */
-	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
-		return awaitResponse(this.delegate.closeSession(closeSessionRequest));
+	public AcpSchema.CloseSessionResponse closeSession(AcpSchema.CloseSessionRequest request) {
+		return awaitResponse(this.delegate.closeSession(request));
 	}
 
 	/**
@@ -290,35 +290,35 @@ public class AcpSyncClient implements AutoCloseable {
 	 * appears in {@code session/list}. Only an agent that advertises
 	 * {@code sessionCapabilities.delete} supports it; for any other the call fails with
 	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param deleteSessionRequest the session ID
+	 * @param request the session ID
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_DELETE
 	 */
-	public AcpSchema.DeleteSessionResponse deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
-		return awaitResponse(this.delegate.deleteSession(deleteSessionRequest));
+	public AcpSchema.DeleteSessionResponse deleteSession(AcpSchema.DeleteSessionRequest request) {
+		return awaitResponse(this.delegate.deleteSession(request));
 	}
 
 	/**
 	 * Reopens a session without replaying its history ({@code session/resume}), unlike
 	 * {@link #loadSession}. Use it to reconnect to a session the agent still runs, or when the
 	 * client keeps the history itself.
-	 * @param resumeSessionRequest the session ID, the working directory and the MCP servers
+	 * @param request the session ID, the working directory and the MCP servers
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_RESUME
 	 */
-	public AcpSchema.ResumeSessionResponse resumeSession(AcpSchema.ResumeSessionRequest resumeSessionRequest) {
-		return awaitResponse(this.delegate.resumeSession(resumeSessionRequest));
+	public AcpSchema.ResumeSessionResponse resumeSession(AcpSchema.ResumeSessionRequest request) {
+		return awaitResponse(this.delegate.resumeSession(request));
 	}
 
 	/**
 	 * Creates a new session branched from an existing one ({@code session/fork}).
-	 * @param forkSessionRequest the ID of the session to branch from and the working directory
+	 * @param request the ID of the session to branch from and the working directory
 	 * @return the agent's answer, with the new session's ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
 	@UnstableAcpApi
-	public AcpSchema.ForkSessionResponse forkSession(AcpSchema.ForkSessionRequest forkSessionRequest) {
-		return awaitResponse(this.delegate.forkSession(forkSessionRequest));
+	public AcpSchema.ForkSessionResponse forkSession(AcpSchema.ForkSessionRequest request) {
+		return awaitResponse(this.delegate.forkSession(request));
 	}
 
 	/**
@@ -398,12 +398,12 @@ public class AcpSyncClient implements AutoCloseable {
 	 * bound it; when that passes, the call fails as described above for a timeout and the client
 	 * sends {@code $/cancel_request}, which makes a Java agent cancel the turn. To stop a turn from
 	 * another thread and still receive its answer, call {@link #cancel}.
-	 * @param promptRequest the session ID and the prompt's content blocks
+	 * @param request the session ID and the prompt's content blocks
 	 * @return the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
 	 */
-	public AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest promptRequest) {
-		return awaitResponse(this.delegate.prompt(promptRequest));
+	public AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request) {
+		return awaitResponse(this.delegate.prompt(request));
 	}
 
 	/**
@@ -417,11 +417,11 @@ public class AcpSyncClient implements AutoCloseable {
 	 *
 	 * <p>Returns once the notification has been handed to the transport, so it can be called from
 	 * another thread while {@link #prompt} blocks.
-	 * @param cancelNotification the session ID
+	 * @param notification the session ID
 	 * @see AcpSchema#METHOD_SESSION_CANCEL
 	 */
-	public void cancel(AcpSchema.CancelNotification cancelNotification) {
-		SyncCalls.block(this.delegate.cancel(cancelNotification));
+	public void cancel(AcpSchema.CancelNotification notification) {
+		SyncCalls.block(this.delegate.cancel(notification));
 	}
 
 	/**

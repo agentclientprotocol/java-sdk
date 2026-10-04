@@ -282,15 +282,15 @@ public class AcpAsyncClient {
 	 * Logs in with one of the authentication methods the agent listed in its {@code initialize}
 	 * answer ({@code authenticate}). Needed only for an agent that requires it; such an agent
 	 * answers other requests with {@code -32000} (authentication required) until then.
-	 * @param authenticateRequest the ID of the chosen authentication method
+	 * @param request the ID of the chosen authentication method
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE
 	 */
-	public Mono<AcpSchema.AuthenticateResponse> authenticate(AcpSchema.AuthenticateRequest authenticateRequest) {
-		Assert.notNull(authenticateRequest, "Authenticate request must not be null");
-		logger.debug("Authenticating with method: {}", authenticateRequest.methodId());
+	public Mono<AcpSchema.AuthenticateResponse> authenticate(AcpSchema.AuthenticateRequest request) {
+		Assert.notNull(request, "Authenticate request must not be null");
+		logger.debug("Authenticating with method: {}", request.methodId());
 		return afterInitialize(AcpSchema.METHOD_AUTHENTICATE, AcpAsyncClient::initializedOnly,
-				() -> session.sendRequest(AcpSchema.METHOD_AUTHENTICATE, authenticateRequest, AUTHENTICATE_RESPONSE_TYPE_REF));
+				() -> session.sendRequest(AcpSchema.METHOD_AUTHENTICATE, request, AUTHENTICATE_RESPONSE_TYPE_REF));
 	}
 
 	/**
@@ -300,15 +300,15 @@ public class AcpAsyncClient {
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}
 	 * first: otherwise the call fails with
 	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param logoutRequest the logout request
+	 * @param request the logout request
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_LOGOUT
 	 */
-	public Mono<AcpSchema.LogoutResponse> logout(AcpSchema.LogoutRequest logoutRequest) {
-		Assert.notNull(logoutRequest, "Logout request must not be null");
+	public Mono<AcpSchema.LogoutResponse> logout(AcpSchema.LogoutRequest request) {
+		Assert.notNull(request, "Logout request must not be null");
 		logger.debug("Logging out");
 		return afterInitialize(AcpSchema.METHOD_LOGOUT, NegotiatedCapabilities::requireLogout,
-				() -> session.sendRequest(AcpSchema.METHOD_LOGOUT, logoutRequest, LOGOUT_RESPONSE_TYPE_REF));
+				() -> session.sendRequest(AcpSchema.METHOD_LOGOUT, request, LOGOUT_RESPONSE_TYPE_REF));
 	}
 
 	// --------------------------
@@ -319,15 +319,15 @@ public class AcpAsyncClient {
 	 * Creates an ACP session ({@code session/new}) for a working directory, with the MCP servers
 	 * the agent should connect to. The answer carries the session ID every later call for the
 	 * session uses, and optionally the session's modes and config options.
-	 * @param newSessionRequest the working directory, an absolute path, and the MCP servers
+	 * @param request the working directory, an absolute path, and the MCP servers
 	 * @return a {@code Mono} emitting the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
 	 */
-	public Mono<AcpSchema.NewSessionResponse> newSession(AcpSchema.NewSessionRequest newSessionRequest) {
-		Assert.notNull(newSessionRequest, "New session request must not be null");
-		logger.debug("Creating new session with cwd: {}", newSessionRequest.cwd());
+	public Mono<AcpSchema.NewSessionResponse> newSession(AcpSchema.NewSessionRequest request) {
+		Assert.notNull(request, "New session request must not be null");
+		logger.debug("Creating new session with cwd: {}", request.cwd());
 		return afterInitialize(AcpSchema.METHOD_SESSION_NEW, AcpAsyncClient::initializedOnly,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, newSessionRequest, NEW_SESSION_RESPONSE_TYPE_REF));
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, request, NEW_SESSION_RESPONSE_TYPE_REF));
 	}
 
 	/**
@@ -335,29 +335,29 @@ public class AcpAsyncClient {
 	 * as session updates, which reach the session update consumers before this call completes, then
 	 * answers. Only an agent that advertises {@code loadSession} supports it; for any other the call
 	 * fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param loadSessionRequest the session ID, the working directory and the MCP servers
+	 * @param request the session ID, the working directory and the MCP servers
 	 * @return a {@code Mono} emitting the agent's answer once the history has been replayed
 	 * @see AcpSchema#METHOD_SESSION_LOAD
 	 */
-	public Mono<AcpSchema.LoadSessionResponse> loadSession(AcpSchema.LoadSessionRequest loadSessionRequest) {
-		Assert.notNull(loadSessionRequest, "Load session request must not be null");
-		logger.debug("Loading session: {}", loadSessionRequest.sessionId());
+	public Mono<AcpSchema.LoadSessionResponse> loadSession(AcpSchema.LoadSessionRequest request) {
+		Assert.notNull(request, "Load session request must not be null");
+		logger.debug("Loading session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_LOAD, NegotiatedCapabilities::requireLoadSession,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, loadSessionRequest, LOAD_SESSION_RESPONSE_TYPE_REF));
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, request, LOAD_SESSION_RESPONSE_TYPE_REF));
 	}
 
 	/**
 	 * Switches a session to one of the modes the agent offered ({@code session/set_mode}). Modes
 	 * may change how the agent works on prompts and what it asks permission for.
-	 * @param setModeRequest the session ID and the mode ID
+	 * @param request the session ID and the mode ID
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_SET_MODE
 	 */
-	public Mono<AcpSchema.SetSessionModeResponse> setSessionMode(AcpSchema.SetSessionModeRequest setModeRequest) {
-		Assert.notNull(setModeRequest, "Set session mode request must not be null");
-		logger.debug("Setting session mode: {} for session: {}", setModeRequest.modeId(), setModeRequest.sessionId());
+	public Mono<AcpSchema.SetSessionModeResponse> setSessionMode(AcpSchema.SetSessionModeRequest request) {
+		Assert.notNull(request, "Set session mode request must not be null");
+		logger.debug("Setting session mode: {} for session: {}", request.modeId(), request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_SET_MODE, AcpAsyncClient::initializedOnly,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_SET_MODE, setModeRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_SET_MODE, request,
 				SET_SESSION_MODE_RESPONSE_TYPE_REF));
 	}
 
@@ -365,30 +365,30 @@ public class AcpAsyncClient {
 	 * Lists the sessions the agent knows ({@code session/list}), optionally only those of one
 	 * working directory. The answer may be one page: pass its {@code nextCursor} in the next
 	 * request to get the next page.
-	 * @param listSessionsRequest an optional working directory and an optional cursor
+	 * @param request an optional working directory and an optional cursor
 	 * @return a {@code Mono} emitting a page of sessions
 	 * @see AcpSchema#METHOD_SESSION_LIST
 	 */
-	public Mono<AcpSchema.ListSessionsResponse> listSessions(AcpSchema.ListSessionsRequest listSessionsRequest) {
-		Assert.notNull(listSessionsRequest, "List sessions request must not be null");
+	public Mono<AcpSchema.ListSessionsResponse> listSessions(AcpSchema.ListSessionsRequest request) {
+		Assert.notNull(request, "List sessions request must not be null");
 		logger.debug("Listing sessions");
 		return afterInitialize(AcpSchema.METHOD_SESSION_LIST, NegotiatedCapabilities::requireListSessions,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LIST, listSessionsRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LIST, request,
 				LIST_SESSIONS_RESPONSE_TYPE_REF));
 	}
 
 	/**
 	 * Closes an active session ({@code session/close}): the agent stops its work as for
 	 * {@code session/cancel}, then frees what the session holds.
-	 * @param closeSessionRequest the session ID
+	 * @param request the session ID
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_CLOSE
 	 */
-	public Mono<AcpSchema.CloseSessionResponse> closeSession(AcpSchema.CloseSessionRequest closeSessionRequest) {
-		Assert.notNull(closeSessionRequest, "Close session request must not be null");
-		logger.debug("Closing session: {}", closeSessionRequest.sessionId());
+	public Mono<AcpSchema.CloseSessionResponse> closeSession(AcpSchema.CloseSessionRequest request) {
+		Assert.notNull(request, "Close session request must not be null");
+		logger.debug("Closing session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_CLOSE, NegotiatedCapabilities::requireCloseSession,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_CLOSE, closeSessionRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_CLOSE, request,
 				CLOSE_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -398,15 +398,15 @@ public class AcpAsyncClient {
 	 * appears in {@code session/list}. Only an agent that advertises
 	 * {@code sessionCapabilities.delete} supports it; for any other the call fails with
 	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
-	 * @param deleteSessionRequest the session ID
+	 * @param request the session ID
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_DELETE
 	 */
-	public Mono<AcpSchema.DeleteSessionResponse> deleteSession(AcpSchema.DeleteSessionRequest deleteSessionRequest) {
-		Assert.notNull(deleteSessionRequest, "Delete session request must not be null");
-		logger.debug("Deleting session: {}", deleteSessionRequest.sessionId());
+	public Mono<AcpSchema.DeleteSessionResponse> deleteSession(AcpSchema.DeleteSessionRequest request) {
+		Assert.notNull(request, "Delete session request must not be null");
+		logger.debug("Deleting session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_DELETE, NegotiatedCapabilities::requireDeleteSession,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_DELETE, deleteSessionRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_DELETE, request,
 				DELETE_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -414,31 +414,31 @@ public class AcpAsyncClient {
 	 * Reopens a session without replaying its history ({@code session/resume}), unlike
 	 * {@link #loadSession}. Use it to reconnect to a session the agent still runs, or when the
 	 * client keeps the history itself.
-	 * @param resumeSessionRequest the session ID, the working directory and the MCP servers
+	 * @param request the session ID, the working directory and the MCP servers
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_RESUME
 	 */
 	public Mono<AcpSchema.ResumeSessionResponse> resumeSession(
-			AcpSchema.ResumeSessionRequest resumeSessionRequest) {
-		Assert.notNull(resumeSessionRequest, "Resume session request must not be null");
-		logger.debug("Resuming session: {}", resumeSessionRequest.sessionId());
+			AcpSchema.ResumeSessionRequest request) {
+		Assert.notNull(request, "Resume session request must not be null");
+		logger.debug("Resuming session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_RESUME, NegotiatedCapabilities::requireResumeSession,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, resumeSessionRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, request,
 				RESUME_SESSION_RESPONSE_TYPE_REF));
 	}
 
 	/**
 	 * Creates a new session branched from an existing one ({@code session/fork}).
-	 * @param forkSessionRequest the ID of the session to branch from and the working directory
+	 * @param request the ID of the session to branch from and the working directory
 	 * @return a {@code Mono} emitting the agent's answer, with the new session's ID
 	 * @see AcpSchema#METHOD_SESSION_FORK
 	 */
 	@UnstableAcpApi
-	public Mono<AcpSchema.ForkSessionResponse> forkSession(AcpSchema.ForkSessionRequest forkSessionRequest) {
-		Assert.notNull(forkSessionRequest, "Fork session request must not be null");
-		logger.debug("Forking session: {}", forkSessionRequest.sessionId());
+	public Mono<AcpSchema.ForkSessionResponse> forkSession(AcpSchema.ForkSessionRequest request) {
+		Assert.notNull(request, "Fork session request must not be null");
+		logger.debug("Forking session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_FORK, NegotiatedCapabilities::requireForkSession,
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, forkSessionRequest,
+				() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, request,
 				FORK_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -534,19 +534,19 @@ public class AcpAsyncClient {
 	 * {@link java.util.concurrent.TimeoutException} and the client sends {@code $/cancel_request},
 	 * which makes a Java agent cancel the turn. Disposing the returned {@code Mono} does the same
 	 * at any time.
-	 * @param promptRequest the session ID and the prompt's content blocks
+	 * @param request the session ID and the prompt's content blocks
 	 * @return a {@code Mono} emitting the agent's answer, with the stop reason
 	 * @see AcpSchema#METHOD_SESSION_PROMPT
 	 */
-	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest promptRequest) {
-		Assert.notNull(promptRequest, "Prompt request must not be null");
-		logger.debug("Sending prompt to session: {}", promptRequest.sessionId());
+	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest request) {
+		Assert.notNull(request, "Prompt request must not be null");
+		logger.debug("Sending prompt to session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_PROMPT, AcpAsyncClient::initializedOnly, () -> {
 			if (session instanceof AcpClientSession clientSession) {
-				return clientSession.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, promptRequest,
+				return clientSession.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, request,
 						PROMPT_RESPONSE_TYPE_REF, this.promptTimeout);
 			}
-			return session.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, promptRequest, PROMPT_RESPONSE_TYPE_REF);
+			return session.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, request, PROMPT_RESPONSE_TYPE_REF);
 		});
 	}
 
@@ -558,15 +558,15 @@ public class AcpAsyncClient {
 	 * reach the session update consumers as usual, and then answers the pending prompt with stop
 	 * reason {@code cancelled}. Send the next prompt on the session once that answer has arrived:
 	 * until then the agent refuses it (ACP v1, prompt turn, Cancellation).
-	 * @param cancelNotification the session ID
+	 * @param notification the session ID
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 * @see AcpSchema#METHOD_SESSION_CANCEL
 	 */
-	public Mono<Void> cancel(AcpSchema.CancelNotification cancelNotification) {
-		Assert.notNull(cancelNotification, "Cancel notification must not be null");
-		logger.debug("Canceling operations for session: {}", cancelNotification.sessionId());
+	public Mono<Void> cancel(AcpSchema.CancelNotification notification) {
+		Assert.notNull(notification, "Cancel notification must not be null");
+		logger.debug("Canceling operations for session: {}", notification.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_CANCEL, AcpAsyncClient::initializedOnly,
-				() -> session.sendNotification(AcpSchema.METHOD_SESSION_CANCEL, cancelNotification));
+				() -> session.sendNotification(AcpSchema.METHOD_SESSION_CANCEL, notification));
 	}
 
 	// --------------------------
