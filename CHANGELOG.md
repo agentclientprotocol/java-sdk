@@ -379,6 +379,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: `AcpError` extends `AcpException`.** It extended `RuntimeException` directly, so
+  `catch (AcpException e)`, which the SDK documented as the one place to handle its failures,
+  missed every error the peer answered with. `AcpException` is now the base of every failure of a
+  call: `AcpError`, `AcpProtocolException`, `AcpCapabilityException`, `AcpConnectionException`
+  and `AcpTimeoutException`. `AcpError` keeps its package, constructor, methods and messages.
+  Migration: a multi-catch `catch (AcpException | AcpError e)` no longer compiles; catch
+  `AcpException` alone. A `catch (AcpException e)` placed before a `catch (AcpError e)` now takes
+  the peer's errors too; put the `AcpError` clause first.
+
 - **Breaking: a lost connection fails a request with `AcpConnectionException`, on both sides.** A
   request still waiting when the transport ended failed with a plain `RuntimeException` ("ACP
   session with agent terminated"), and a request or notification sent after that with an
