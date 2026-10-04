@@ -12,10 +12,15 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Composite that chains multiple return value handlers.
+ * A {@link ReturnValueHandler} that asks a list of handlers in order and uses the first that
+ * supports a return type. The annotation runtime builds one each time an agent is built, with the
+ * custom handlers first and the built-in ones after, and turns every handler method's result into
+ * its response through it. Applications register handlers on {@code AcpAgentSupport.Builder} and do
+ * not need this class.
  *
- * <p>NOTE: Unlike argument resolvers, NO caching is used here.
- * Return types vary more and caching provides less benefit.
+ * <p>Unlike {@link com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite},
+ * it remembers nothing: it asks the handlers again on every call. Handling is thread-safe once the
+ * handlers are added; adding handlers is not, so add them all before the first use.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -25,9 +30,9 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 	private final List<ReturnValueHandler> handlers = new ArrayList<>();
 
 	/**
-	 * Add a handler to the chain.
-	 * @param handler the handler to add
-	 * @return this composite for chaining
+	 * Adds a handler, asked after the ones added before.
+	 * @param handler the handler, not null
+	 * @return this composite
 	 */
 	public ReturnValueHandlerComposite addHandler(ReturnValueHandler handler) {
 		this.handlers.add(handler);
@@ -35,9 +40,9 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 	}
 
 	/**
-	 * Add multiple handlers to the chain.
-	 * @param handlers the handlers to add
-	 * @return this composite for chaining
+	 * Adds handlers, in list order, asked after the ones added before.
+	 * @param handlers the handlers, none of them null
+	 * @return this composite
 	 */
 	public ReturnValueHandlerComposite addHandlers(List<ReturnValueHandler> handlers) {
 		this.handlers.addAll(handlers);
@@ -45,8 +50,8 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 	}
 
 	/**
-	 * Get the list of registered handlers.
-	 * @return unmodifiable list of handlers
+	 * Returns the handlers in the order they are asked.
+	 * @return an unmodifiable copy of the handlers
 	 */
 	public List<ReturnValueHandler> getHandlers() {
 		return List.copyOf(handlers);
@@ -57,6 +62,17 @@ public class ReturnValueHandlerComposite implements ReturnValueHandler {
 		return findHandler(returnType) != null;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Delegates to the first handler that supports the return type.
+	 * @param returnValue {@inheritDoc}
+	 * @param returnType {@inheritDoc}
+	 * @param context {@inheritDoc}
+	 * @return {@inheritDoc}
+	 * @throws ReturnValueHandlingException if no handler supports the return type, or the handler
+	 * throws it
+	 */
 	@Override
 	public @Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
 			AcpInvocationContext context) {

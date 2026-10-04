@@ -13,10 +13,15 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Metadata about a method parameter. Implements equals/hashCode
- * for use as cache key in argument resolver lookup.
+ * Describes one parameter of a handler method, or its return type: its type, generic type,
+ * annotations and position. The annotation runtime creates one for each parameter and for the
+ * return type when it finds a handler method. Argument resolvers and return value handlers receive
+ * it, decide from it whether they handle that parameter or return type ({@code supportsParameter},
+ * {@code supportsReturnType}), and then supply the value or the response.
  *
- * <p>Computes the parameter metadata once, at construction.
+ * <p>Two descriptions are equal when they describe the same position (a parameter index, or the
+ * return type) of the same method; the composite argument resolver keeps its choice of resolver by
+ * this key. The values are read once, at construction.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -37,9 +42,10 @@ public final class AcpMethodParameter {
 	private final Type genericType;
 
 	/**
-	 * Create a new AcpMethodParameter for a method parameter.
-	 * @param method the method
-	 * @param index the parameter index (0-based)
+	 * Describes parameter {@code index} of {@code method}.
+	 * @param method the handler method
+	 * @param index the parameter's position, from 0, which must be one of the method's parameters;
+	 * -1 describes the return type, as {@link #forReturnType} does
 	 */
 	public AcpMethodParameter(Method method, int index) {
 		this.method = method;
@@ -52,16 +58,17 @@ public final class AcpMethodParameter {
 	}
 
 	/**
-	 * Create an AcpMethodParameter representing the return type.
-	 * @param method the method
-	 * @return a parameter representing the return type
+	 * Describes the return type of {@code method}: its {@link #getParameterType()} is the return
+	 * type ({@code void.class} for {@code void}), its annotations are empty and its name is null.
+	 * @param method the handler method
+	 * @return the description of the return type
 	 */
 	public static AcpMethodParameter forReturnType(Method method) {
 		return new AcpMethodParameter(method, -1);
 	}
 
 	/**
-	 * Get the method this parameter belongs to.
+	 * Returns the handler method this parameter belongs to.
 	 * @return the method
 	 */
 	public Method getMethod() {
@@ -69,50 +76,57 @@ public final class AcpMethodParameter {
 	}
 
 	/**
-	 * Get the parameter index (0-based), or -1 for return type.
-	 * @return the parameter index
+	 * Returns the parameter's position.
+	 * @return the position, from 0, or -1 for the return type
 	 */
 	public int getIndex() {
 		return index;
 	}
 
 	/**
-	 * Get the parameter name (requires -parameters compiler flag).
-	 * @return the parameter name, or null for return type
+	 * Returns the parameter's name as compiled: the source name if the class was compiled with
+	 * {@code javac -parameters}, otherwise a generated name such as {@code arg0}. Decide on the
+	 * type or an annotation, not on the name.
+	 * @return the name, or null for the return type
 	 */
 	public @Nullable String getName() {
 		return parameter != null ? parameter.getName() : null;
 	}
 
 	/**
-	 * Get the parameter type, or return type if index is -1.
-	 * @return the type
+	 * Returns the parameter's class, or the method's return class for the return type. For a
+	 * generic type this is the raw class, such as {@code Mono} for {@code Mono<PromptResponse>}.
+	 * @return the class
 	 */
 	public Class<?> getParameterType() {
 		return parameterType;
 	}
 
 	/**
-	 * Get the generic type, preserving type parameters.
-	 * @return the generic type
+	 * Returns the declared type with its type arguments, such as {@code Mono<PromptResponse>}; for
+	 * a type without arguments, the same class as {@link #getParameterType()}.
+	 * @return the declared type
 	 */
 	public Type getGenericType() {
 		return genericType;
 	}
 
 	/**
-	 * Get all annotations on this parameter.
-	 * @return the annotations, or empty array for return type
+	 * Returns the parameter's annotations, such as {@code @SessionId}. The array is shared: do not
+	 * change it.
+	 * @return the annotations; empty for the return type (the method's own annotations are on
+	 * {@link #getMethod()})
 	 */
 	public Annotation[] getAnnotations() {
 		return annotations;
 	}
 
 	/**
-	 * Get a specific annotation if present.
+	 * Returns the parameter's annotation of the given type.
 	 * @param annotationType the annotation type
 	 * @param <A> the annotation type
-	 * @return the annotation, or null if not present
+	 * @return the annotation, or null if the parameter has none of that type (always null for the
+	 * return type)
 	 */
 	public <A extends Annotation> @Nullable A getAnnotation(Class<A> annotationType) {
 		for (Annotation ann : getAnnotations()) {
@@ -124,17 +138,18 @@ public final class AcpMethodParameter {
 	}
 
 	/**
-	 * Check if this parameter has the specified annotation.
+	 * Returns whether the parameter carries an annotation of the given type, as a resolver checks
+	 * for {@code @SessionId}.
 	 * @param annotationType the annotation type
-	 * @return true if the annotation is present
+	 * @return true if the parameter has it
 	 */
 	public boolean hasAnnotation(Class<? extends Annotation> annotationType) {
 		return getAnnotation(annotationType) != null;
 	}
 
 	/**
-	 * Check if this represents a return type (index == -1).
-	 * @return true if this is a return type
+	 * Returns whether this describes the method's return type rather than a parameter.
+	 * @return true for the return type
 	 */
 	public boolean isReturnType() {
 		return index == -1;

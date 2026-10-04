@@ -15,12 +15,16 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Composite that chains multiple argument resolvers.
- * Caches resolver selection per parameter for performance.
+ * An {@link ArgumentResolver} that asks a list of resolvers in order and uses the first that
+ * supports a parameter. The annotation runtime builds one each time an agent is built, with the
+ * custom resolvers first and the built-in ones after, and resolves every handler parameter through
+ * it. Applications register resolvers on {@code AcpAgentSupport.Builder} and do not need this
+ * class.
  *
- * <p>Resolver lookup is cached using {@link AcpMethodParameter} as the
- * cache key. The first resolver that supports a parameter is cached and
- * reused for subsequent invocations.
+ * <p>It remembers, for each {@link AcpMethodParameter}, which resolver supports it, or that none
+ * does, so it asks the resolvers once per parameter. Resolvers added after a parameter was looked
+ * up do not change the answer for it; call {@link #clearCache()} then. Looking up and resolving are
+ * thread-safe; adding resolvers is not, so add them all before the first use.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -34,9 +38,9 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 			256);
 
 	/**
-	 * Add a resolver to the chain.
-	 * @param resolver the resolver to add
-	 * @return this composite for chaining
+	 * Adds a resolver, asked after the ones added before.
+	 * @param resolver the resolver, not null
+	 * @return this composite
 	 */
 	public ArgumentResolverComposite addResolver(ArgumentResolver resolver) {
 		this.resolvers.add(resolver);
@@ -44,9 +48,9 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 	}
 
 	/**
-	 * Add multiple resolvers to the chain.
-	 * @param resolvers the resolvers to add
-	 * @return this composite for chaining
+	 * Adds resolvers, in list order, asked after the ones added before.
+	 * @param resolvers the resolvers, none of them null
+	 * @return this composite
 	 */
 	public ArgumentResolverComposite addResolvers(List<ArgumentResolver> resolvers) {
 		this.resolvers.addAll(resolvers);
@@ -54,26 +58,43 @@ public class ArgumentResolverComposite implements ArgumentResolver {
 	}
 
 	/**
-	 * Get the list of registered resolvers.
-	 * @return unmodifiable list of resolvers
+	 * Returns the resolvers in the order they are asked.
+	 * @return an unmodifiable copy of the resolvers
 	 */
 	public List<ArgumentResolver> getResolvers() {
 		return List.copyOf(resolvers);
 	}
 
 	/**
-	 * Clear the resolver cache. Call this if resolvers are modified after
-	 * the composite has been used.
+	 * Forgets which resolver supports each parameter, so the next lookup asks the resolvers again.
+	 * Needed only after adding resolvers to a composite already in use.
 	 */
 	public void clearCache() {
 		resolverCache.clear();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>True if one of its resolvers supports the parameter. The answer is kept.
+	 * @param parameter {@inheritDoc}
+	 * @return {@inheritDoc}
+	 */
 	@Override
 	public boolean supportsParameter(AcpMethodParameter parameter) {
 		return getResolver(parameter) != null;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Delegates to the first resolver that supports the parameter.
+	 * @param parameter {@inheritDoc}
+	 * @param context {@inheritDoc}
+	 * @return {@inheritDoc}
+	 * @throws ArgumentResolutionException if no resolver supports the parameter, or the resolver
+	 * throws it
+	 */
 	@Override
 	public @Nullable Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context) {
 		ArgumentResolver resolver = getResolver(parameter);

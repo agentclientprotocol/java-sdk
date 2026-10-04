@@ -15,11 +15,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Manages interceptor execution with proper lifecycle tracking.
- * Ensures afterCompletion is only called for interceptors that started.
+ * Runs a list of {@link AcpInterceptor}s around one handler method call, in their order, and
+ * records which ones started so that each gets its {@code afterCompletion} exactly once. The
+ * annotation runtime creates one for every call; applications do not need it. Its methods carry out
+ * the order that {@link AcpInterceptor} describes, which is where an interceptor's author reads the
+ * contract.
  *
- * <p>Tracks the index of the last successfully invoked interceptor,
- * ensuring proper cleanup even when exceptions occur.
+ * <p>A chain records how far {@code preInvoke} got, so it serves one call only: create a new one
+ * for each call. It is not thread-safe.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -33,9 +36,10 @@ public class InterceptorChain {
 	private int interceptorIndex = -1;
 
 	/**
-	 * Create an interceptor chain with the given interceptors.
-	 * Interceptors are sorted by order (lower values first).
-	 * @param interceptors the interceptors
+	 * Creates a chain over a copy of {@code interceptors}, sorted by
+	 * {@link AcpInterceptor#getOrder()}, lowest first; interceptors with the same order keep their
+	 * order in the list.
+	 * @param interceptors the interceptors, in the order they were added
 	 */
 	public InterceptorChain(List<AcpInterceptor> interceptors) {
 		this.interceptors = new ArrayList<>(interceptors);
@@ -43,12 +47,13 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Apply preInvoke to all interceptors, stopping at the first that vetoes the call or
-	 * throws. Cleanup is not run here: whichever way the invocation ends, the caller runs
-	 * {@link #triggerAfterCompletion} once, which covers the interceptors whose preInvoke
-	 * returned true.
-	 * @param context the invocation context
-	 * @return true to continue, false to abort
+	 * Calls {@code preInvoke} on each interceptor in order, stopping at the first that returns
+	 * {@code false}. An exception from {@code preInvoke} reaches the caller. However the call then
+	 * ends, the caller must call {@link #triggerAfterCompletion} once, which covers the
+	 * interceptors whose {@code preInvoke} returned {@code true}.
+	 * @param context the call's context
+	 * @return {@code true} if every interceptor returned {@code true}, {@code false} if one stopped
+	 * the call
 	 */
 	public boolean applyPreInvoke(AcpInvocationContext context) {
 		for (int i = 0; i < interceptors.size(); i++) {
@@ -61,10 +66,12 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Apply postInvoke in reverse order.
-	 * @param context the invocation context
-	 * @param result the handler result
-	 * @return the (possibly modified) result
+	 * Calls {@code postInvoke} on each interceptor in reverse order, passing each the value the
+	 * previous one returned. An exception from an interceptor is logged, and the value goes on
+	 * unchanged.
+	 * @param context the call's context
+	 * @param result what the handler method returned
+	 * @return the value the last interceptor returned
 	 */
 	public @Nullable Object applyPostInvoke(AcpInvocationContext context, @Nullable Object result) {
 		for (int i = interceptors.size() - 1; i >= 0; i--) {
@@ -80,10 +87,12 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Apply onError in reverse order until one handles it.
-	 * @param context the invocation context
-	 * @param ex the exception
-	 * @return replacement result, or null to propagate exception
+	 * Calls {@code onError} on each interceptor in reverse order, whether or not its
+	 * {@code preInvoke} ran, until one returns a replacement. An exception from an interceptor is
+	 * logged, and the next one is asked.
+	 * @param context the call's context
+	 * @param ex what the call threw
+	 * @return the first replacement, or null if no interceptor gave one
 	 */
 	public @Nullable Object applyOnError(AcpInvocationContext context, Throwable ex) {
 		for (int i = interceptors.size() - 1; i >= 0; i--) {
@@ -102,11 +111,11 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Trigger afterCompletion, in reverse order, for every interceptor whose preInvoke
-	 * returned true. Called in a finally block; never throws, and runs at most once per
-	 * chain, so each interceptor's afterCompletion runs exactly once per invocation.
-	 * @param context the invocation context
-	 * @param ex the exception (may be null)
+	 * Calls {@code afterCompletion}, in reverse order, on each interceptor whose {@code preInvoke}
+	 * returned {@code true}, and resets the chain, so a second call does nothing. Never throws:
+	 * what an interceptor throws is logged.
+	 * @param context the call's context
+	 * @param ex the exception that ended the call, or null; it is not passed to the interceptors
 	 */
 	public void triggerAfterCompletion(AcpInvocationContext context, @Nullable Throwable ex) {
 		int started = this.interceptorIndex;

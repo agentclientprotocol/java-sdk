@@ -100,58 +100,83 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Bootstrap class for annotation-based ACP agents.
+ * Runs an ACP agent written with annotations. Give it an object whose class is marked
+ * {@link com.agentclientprotocol.sdk.annotation.AcpAgent @AcpAgent}: it finds the handler methods,
+ * answers {@code initialize} from the annotations, and serves the methods over a transport. Use it
+ * when one method per request reads better than lambdas on the
+ * {@link AcpAgent#sync(AcpAgentTransport) AcpAgent.sync(..)} builder, which it uses underneath. The
+ * rules for the handler methods themselves (parameters, return values, errors, threads) are on
+ * {@code @AcpAgent}.
  *
- * <p>This class provides a fluent builder API to configure and run
- * annotation-based agents without requiring any external framework.
- *
- * <p>Example usage:
  * <pre>{@code
  * @AcpAgent(name = "my-agent", version = "1.0")
  * class MyAgent {
+ *
  *     @LoadSession
- *     LoadSessionResponse load(LoadSessionRequest req) {
- *         return new LoadSessionResponse(null);
+ *     LoadSessionResponse load(LoadSessionRequest request) {
+ *         return new LoadSessionResponse(null, null);
  *     }
  *
  *     @Prompt
- *     PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) {
- *         ctx.sendMessage("Hello!");
+ *     PromptResponse prompt(PromptRequest request, SyncPromptContext context) {
+ *         context.sendMessage("Hello!");
  *         return PromptResponse.endTurn();
  *     }
  * }
  *
- * // Bootstrap
- * AcpAgentSupport.create(new MyAgent())
- *     .transport(new StdioAcpAgentTransport())
- *     .run();
+ * // In main: serve the agent on stdio until the client closes its input
+ * AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run();
  * }</pre>
  *
- * <p><b>Advertising.</b> The agent answers {@code initialize} with what its annotations
- * declare, with no {@code @Initialize} method needed: each handler annotation advertises the
- * capability its ACP method needs (above, {@code loadSession}), the {@code @AcpAgent}
- * attributes give {@code agentInfo}, {@code authMethods} and the MCP transports, and the
- * {@code @Prompt} attributes the prompt content accepted. An {@code @Initialize} method's
- * response is laid over the derived one; see {@code Initialize} for the merge rule.
+ * <h2>Building and running</h2>
+ * <p>{@link #create(Object)} returns a {@link Builder}. The builder finds the handler methods when
+ * the bean is given to it and checks them when it builds, so a mistake, such as a parameter that no
+ * resolver can fill or a missing {@code @Prompt} method, throws there with a message naming the
+ * method and the fix, not at the first request. {@link Builder#build()} gives an agent on the
+ * builder's transport: {@link #start()} starts it and returns, {@link #run()} starts it and blocks
+ * until the transport ends, and {@link #close()} closes it (try-with-resources works).
+ * {@link Builder#run()} does all of it in one call, for a {@code main} method.
  *
- * <p>A listener transport accepts many connections and needs one agent per connection:
+ * <p>A listener transport, such as {@code StreamableHttpAcpAgentTransport} from the
+ * {@code acp-streamable-http-jetty} module, accepts many connections and needs one agent for each:
  * {@link Builder#buildFactory()} gives it an {@link AcpAgentFactory} instead.
  * <pre>{@code
  * AcpAgentFactory factory = AcpAgentSupport.create(new MyAgent()).buildFactory();
- * new StreamableHttpAcpAgentTransport(8080, jsonMapper, factory).start().block();
+ * new StreamableHttpAcpAgentTransport(8080, factory).start().block();
  * }</pre>
  *
- * <p><b>One handler bean, shared.</b> The annotated object is the application's bean, like a
- * Spring controller: the builder discovers its handler methods once, and every agent the
- * builder builds, every connection a factory serves included, invokes the same instance.
- * Its handler methods are therefore called concurrently, from different connections and
- * from different sessions of one connection, and must be thread-safe; keep per-connection
- * or per-session state keyed by session id, not in plain fields. The same holds for
- * interceptors and custom resolvers and return value handlers. For the same reason a bean
- * cannot hold "its" agent: a handler that needs the connection's agent (to push a session
- * update outside a prompt) or its negotiated capabilities takes an {@code AcpSyncAgent},
- * {@code AcpAsyncAgent} or {@code NegotiatedCapabilities} parameter, resolved per call for the
+ * <h2>Answering {@code initialize}</h2>
+ * <p>The agent answers {@code initialize} from its annotations, with no {@code @Initialize} method
+ * needed: each handler annotation advertises the capability its ACP method needs (above,
+ * {@code loadSession}), the {@code @AcpAgent} attributes give {@code agentInfo},
+ * {@code authMethods} and the MCP transports, and the {@code @Prompt} attributes give the prompt
+ * content the agent accepts. An {@code @Initialize} method's response is laid over the derived one;
+ * see {@link com.agentclientprotocol.sdk.annotation.Initialize @Initialize} for the merge rule.
+ * Without a {@code @NewSession} method, {@code session/new} is answered with a random UUID as the
+ * session id.
+ *
+ * <h2>One handler bean, shared</h2>
+ * <p>The annotated object is the application's bean, like a Spring controller: the builder finds
+ * its handler methods once, and every agent the builder builds, every connection a factory serves
+ * included, calls the same instance. Its handler methods are therefore called concurrently, from
+ * different connections and from different sessions of one connection, and must be thread-safe;
+ * keep per-session state in a concurrent map keyed by session id, not in plain fields. The same
+ * holds for interceptors, argument resolvers and return value handlers. For the same reason a bean
+ * cannot hold "its" agent: a handler method that needs the connection's agent (to send a session
+ * update outside a prompt turn) or its negotiated capabilities takes an {@code AcpSyncAgent},
+ * {@code AcpAsyncAgent} or {@code NegotiatedCapabilities} parameter, filled for each call from the
  * connection the request arrived on.
+ *
+ * <h2>Extension points</h2>
+ * <p>Each call of a handler method runs these steps on the handler's thread: the
+ * {@link AcpInterceptor}s' {@code preInvoke}, an {@link ArgumentResolver} for each parameter, the
+ * method itself, the interceptors' {@code postInvoke}, a {@link ReturnValueHandler} that turns the
+ * returned value into the response, and the interceptors' {@code afterCompletion}. Add your own
+ * with {@link Builder#interceptor}, {@link Builder#argumentResolver} and
+ * {@link Builder#returnValueHandler}. Custom resolvers and return value handlers are asked before
+ * the built-in ones, so they can also replace one. The {@code initialize} answer derived from the
+ * annotations passes through the interceptors as an {@code @Initialize} method's would; the default
+ * {@code session/new} answer, given when there is no {@code @NewSession} method, does not.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -203,26 +228,35 @@ public class AcpAgentSupport implements AutoCloseable {
 	}
 
 	/**
-	 * Create a new builder for an agent instance.
-	 * @param agentInstance the annotated agent instance
-	 * @return a new builder
+	 * Starts a builder for an agent served by {@code agentInstance}, as
+	 * {@code builder().agent(agentInstance)} does. Its handler methods are found here, once.
+	 * @param agentInstance the handler bean, an instance of a class marked {@code @AcpAgent} (or of
+	 * a subclass of one)
+	 * @return a new builder with the bean added
+	 * @throws IllegalArgumentException if the bean's handler methods are malformed (see
+	 * {@link Builder#agent(Object)})
 	 */
 	public static Builder create(Object agentInstance) {
 		return new Builder().agent(agentInstance);
 	}
 
 	/**
-	 * Create a new builder for an agent class (requires no-arg constructor). The class is
-	 * instantiated once, here, and that instance serves every request.
-	 * @param agentClass the annotated agent class
-	 * @return a new builder
+	 * Starts a builder for an agent served by a new instance of {@code agentClass}, as
+	 * {@code builder().agent(agentClass)} does. The class is instantiated once, here, with its
+	 * no-argument constructor, and that instance serves every request.
+	 * @param agentClass the class marked {@code @AcpAgent}
+	 * @return a new builder with the bean added
+	 * @throws IllegalArgumentException if the class cannot be instantiated, or its handler methods
+	 * are malformed (see {@link Builder#agent(Object)})
 	 */
 	public static Builder create(Class<?> agentClass) {
 		return new Builder().agent(agentClass);
 	}
 
 	/**
-	 * Create a new empty builder.
+	 * Starts an empty builder. Add the handler bean with one of the {@code agent(..)} methods
+	 * before building; {@link Builder#agent(Class, Supplier)} suits a framework that creates the
+	 * bean itself.
 	 * @return a new builder
 	 */
 	public static Builder builder() {
@@ -230,7 +264,9 @@ public class AcpAgentSupport implements AutoCloseable {
 	}
 
 	/**
-	 * Start the agent (non-blocking).
+	 * Starts the agent: its transport starts and it begins answering the client. Returns at once;
+	 * the transport's threads serve the client. Call it once.
+	 * @throws IllegalStateException if the agent was already started
 	 */
 	public void start() {
 		log.info("Starting annotation-based ACP agent");
@@ -238,7 +274,10 @@ public class AcpAgentSupport implements AutoCloseable {
 	}
 
 	/**
-	 * Run the agent (blocking until close).
+	 * Starts the agent and blocks until its transport ends: on stdio, once the client has closed
+	 * the agent's input and every request received before has been answered; on any transport, once
+	 * {@link #close()} has been called. Use it to keep a {@code main} method alive.
+	 * @throws IllegalStateException if the agent was already started
 	 */
 	public void run() {
 		start();
@@ -247,7 +286,8 @@ public class AcpAgentSupport implements AutoCloseable {
 
 	/**
 	 * Closes the agent as {@link AcpSyncAgent#close()} does: gracefully, waiting at most 10
-	 * seconds, then at once if that failed or took longer. Try-with-resources calls it.
+	 * seconds, then at once if that failed or took longer. A {@link #run()} in progress then
+	 * returns. Try-with-resources calls it.
 	 */
 	@Override
 	public void close() {
@@ -256,8 +296,11 @@ public class AcpAgentSupport implements AutoCloseable {
 	}
 
 	/**
-	 * Get the underlying sync agent.
-	 * @return the sync agent
+	 * Returns the sync agent this object runs. Use it to send session updates and requests to the
+	 * client from outside a handler method, such as from a background task, once the agent has
+	 * started. Inside a handler method, take an {@code AcpSyncAgent} parameter instead, which works
+	 * under {@link Builder#buildFactory()} too.
+	 * @return the agent
 	 */
 	public AcpSyncAgent getAgent() {
 		return agent;
@@ -532,11 +575,16 @@ public class AcpAgentSupport implements AutoCloseable {
 	// ========== BUILDER ==========
 
 	/**
-	 * Builder for AcpAgentSupport. A builder can be built any number of times: each
-	 * {@link #build()} and {@link #buildFactory()} composes the default argument resolvers
-	 * and return value handlers after the custom ones without changing the builder, and
-	 * what is built is not affected by later changes to the builder. Every agent built from
-	 * one builder invokes the same annotated handler instance (see {@link AcpAgentSupport}).
+	 * Configures an annotated agent and builds it: an {@link AcpAgentSupport} on one transport
+	 * ({@link #build()}, {@link #run()}), or an {@link AcpAgentFactory} for a listener transport
+	 * ({@link #buildFactory()}). Get one from {@link AcpAgentSupport#create(Object)} or
+	 * {@link AcpAgentSupport#builder()}.
+	 *
+	 * <p>A builder can be built any number of times. Each {@link #build()} and
+	 * {@link #buildFactory()} puts the default argument resolvers and return value handlers after
+	 * the custom ones without changing the builder, and what is built is not affected by later
+	 * changes to the builder. Every agent built from one builder calls the same handler bean (see
+	 * {@link AcpAgentSupport}). A builder is not thread-safe: configure it on one thread.
 	 */
 	public static class Builder {
 
@@ -562,9 +610,18 @@ public class AcpAgentSupport implements AutoCloseable {
 		private @Nullable ExecutorService handlerExecutor;
 
 		/**
-		 * Register an agent instance.
-		 * @param agentInstance the annotated agent instance
+		 * Adds a handler bean: finds the handler methods of its class and superclasses now, and
+		 * binds them to this instance. Add more than one bean to split an agent across classes:
+		 * their handler methods combine, the first bean's {@code @AcpAgent} names the agent, and
+		 * their auth methods and MCP transports are combined.
+		 * @param agentInstance the handler bean, an instance of a class marked {@code @AcpAgent}
+		 * (or of a subclass of one)
 		 * @return this builder
+		 * @throws IllegalArgumentException if neither the bean's class nor a superclass is marked
+		 * {@code @AcpAgent}, a method carries two handler annotations, two methods (in this bean or
+		 * one added before) answer the same ACP method, an extension method is malformed (a name
+		 * without the {@code _} prefix, more than one params parameter, or a session parameter), or
+		 * an {@code @AcpAgent} auth method is malformed
 		 */
 		public Builder agent(Object agentInstance) {
 			discoverHandlers(agentInstance.getClass(), () -> agentInstance);
@@ -572,11 +629,13 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Register an agent class (must have no-arg constructor). The class is
-		 * instantiated once, here, and that instance serves every request.
-		 * @param agentClass the annotated agent class
+		 * Adds a handler bean created from {@code agentClass} with its no-argument constructor, as
+		 * {@link #agent(Object)} does. The class is instantiated once, here, and that instance
+		 * serves every request.
+		 * @param agentClass the class marked {@code @AcpAgent}
 		 * @return this builder
-		 * @throws IllegalArgumentException if the class cannot be instantiated
+		 * @throws IllegalArgumentException if the class cannot be instantiated, or for the reasons
+		 * {@link #agent(Object)} gives
 		 */
 		public Builder agent(Class<?> agentClass) {
 			discoverHandlers(agentClass, () -> {
@@ -591,12 +650,15 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Register an agent class with factory. The factory is called once, here, and the
-		 * instance it returns serves every request.
-		 * @param agentClass the annotated agent class
-		 * @param factory supplier of the agent instance
-		 * @param <T> the agent type
+		 * Adds a handler bean that a framework creates, as {@link #agent(Object)} does. The handler
+		 * methods are found on {@code agentClass} and its superclasses; {@code factory} is called
+		 * once, here, and the object it returns serves every request. That object may be a subclass
+		 * of {@code agentClass}, such as a proxy the framework generates, so its interceptors run.
+		 * @param agentClass the class marked {@code @AcpAgent}
+		 * @param factory gives the handler bean, an instance of {@code agentClass}
+		 * @param <T> the bean type
 		 * @return this builder
+		 * @throws IllegalArgumentException for the reasons {@link #agent(Object)} gives
 		 */
 		public <T> Builder agent(Class<T> agentClass, Supplier<T> factory) {
 			discoverHandlers(agentClass, factory::get);
@@ -604,7 +666,9 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Set the transport.
+		 * Sets the transport that {@link #build()} and {@link #run()} serve the agent on, such as a
+		 * {@code StdioAcpAgentTransport}. Leave it unset for {@link #buildFactory()}, whose
+		 * listener transport supplies one per connection.
 		 * @param transport the agent transport
 		 * @return this builder
 		 */
@@ -616,9 +680,9 @@ public class AcpAgentSupport implements AutoCloseable {
 		/**
 		 * Sets the executor the agent's handler methods run on, for example
 		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool, as
-		 * {@code AcpAgent.SyncAgentBuilder#handlerExecutor} does. Without it they run on the SDK's
-		 * shared pool of daemon threads. The executor must allow blocking; the SDK never shuts it
-		 * down.
+		 * {@link AcpAgent.SyncAgentBuilder#handlerExecutor(ExecutorService)} does. Without it they
+		 * run on the SDK's shared pool of daemon threads. The executor must allow blocking; the SDK
+		 * never shuts it down.
 		 * @param executor the executor the handler methods run on
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code executor} is null
@@ -632,10 +696,9 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Set how long the agent waits for the client to answer a request the agent sends,
-		 * such as a permission prompt or a file read. Default: the SDK's default request
-		 * timeout, 60 seconds, the same as for a builder agent ({@code AcpAgent.sync(..)}) and
-		 * a client.
+		 * Sets how long the agent waits for the client to answer a request the agent sends, such as
+		 * a permission prompt or a file read. The default is the SDK's default request timeout, 60
+		 * seconds, the same as for a builder agent ({@code AcpAgent.sync(..)}) and a client.
 		 * @param timeout the timeout, or {@code null} for the SDK's default
 		 * @return this builder
 		 */
@@ -645,10 +708,11 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Set how long a {@code @Prompt} method has to return after {@code session/cancel}
-		 * before the agent answers the prompt with stop reason {@code cancelled} itself and
-		 * interrupts the method's thread. Default 60 seconds; {@link Duration#ZERO} for
-		 * none. See {@code AcpAgent.SyncAgentBuilder#cancelGracePeriod}.
+		 * Sets how long a {@code @Prompt} method has to return after {@code session/cancel} before
+		 * the agent answers the prompt with stop reason {@code cancelled} itself and interrupts the
+		 * method's thread. Default 60 seconds; {@link Duration#ZERO} for none. See
+		 * {@link AcpAgent.SyncAgentBuilder#cancelGracePeriod(Duration)}. The value is checked when
+		 * an agent is built, not here.
 		 * @param gracePeriod the grace period; zero for none, not negative
 		 * @return this builder
 		 */
@@ -658,9 +722,10 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Set how long a prompt may run before the agent answers it with error
-		 * {@code -32800} (request cancelled). Default none ({@link Duration#ZERO}). See
-		 * {@code AcpAgent.SyncAgentBuilder#maxPromptDuration}.
+		 * Sets how long a prompt turn may run before the agent answers it with error {@code -32800}
+		 * (request cancelled). Default none ({@link Duration#ZERO}). See
+		 * {@link AcpAgent.SyncAgentBuilder#maxPromptDuration(Duration)}. The value is checked when
+		 * an agent is built, not here.
 		 * @param maxDuration the maximum prompt duration; zero for none, not negative
 		 * @return this builder
 		 */
@@ -670,8 +735,10 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Add an interceptor.
-		 * @param interceptor the interceptor
+		 * Adds an interceptor that runs around every handler method call. Interceptors run in
+		 * {@link AcpInterceptor#getOrder()} order, and those with the same order in the order they
+		 * were added.
+		 * @param interceptor the interceptor, not null
 		 * @return this builder
 		 */
 		public Builder interceptor(AcpInterceptor interceptor) {
@@ -680,9 +747,13 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Add a custom argument resolver.
+		 * Adds an argument resolver, for a parameter type the built-in resolvers do not supply or
+		 * to replace one of them: custom resolvers are asked before the built-in ones, in the order
+		 * they were added. A parameter a custom resolver supports is not checked when the agent is
+		 * built.
 		 * @param resolver the resolver
 		 * @return this builder
+		 * @throws IllegalArgumentException if {@code resolver} is null
 		 */
 		public Builder argumentResolver(ArgumentResolver resolver) {
 			Assert.notNull(resolver, "The resolver must not be null");
@@ -691,9 +762,13 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Add a custom return value handler.
+		 * Adds a return value handler, for a return type the built-in handlers do not accept or to
+		 * replace one of them: custom handlers are asked before the built-in ones, in the order
+		 * they were added. A return type a custom handler supports is not checked when the agent is
+		 * built.
 		 * @param handler the handler
 		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
 		 */
 		public Builder returnValueHandler(ReturnValueHandler handler) {
 			Assert.notNull(handler, "The handler must not be null");
@@ -702,10 +777,17 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Build the AcpAgentSupport instance on the configured transport. May be called
-		 * again, with the same or another transport, for another agent.
-		 * @return the configured instance
-		 * @throws IllegalStateException if no transport is configured
+		 * Builds an agent on the configured transport. It is not started: call
+		 * {@link AcpAgentSupport#start()} or {@link AcpAgentSupport#run()}. May be called again,
+		 * with the same or another transport, for another agent that calls the same handler bean.
+		 * @return the agent
+		 * @throws IllegalStateException if no transport or no handler bean is configured, or a
+		 * handler method cannot be served: it takes a parameter that no resolver supplies or that
+		 * does not suit its method, or returns a type that cannot give its method's response; there
+		 * is no {@code @Prompt} method; a {@code @SetSessionMode} or
+		 * {@code @SetSessionConfigOption} method has no {@code @NewSession} method to offer modes
+		 * or config options; or an auth method has no {@code @Authenticate} method to serve it
+		 * @throws IllegalArgumentException if a duration set on this builder is negative
 		 */
 		public AcpAgentSupport build() {
 			AcpAgentTransport transport = this.transport;
@@ -717,13 +799,14 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 
 		/**
-		 * Build the agent on the configured transport, start it, and block until the
-		 * transport ends (stdin closes, or the agent is closed). The one call a stdio agent's
+		 * Builds the agent on the configured transport, starts it, and blocks until the transport
+		 * ends (on stdio, once the client closes the agent's input). The one call a stdio agent's
 		 * {@code main} method needs:
 		 * <pre>{@code
 		 * AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run();
 		 * }</pre>
-		 * @throws IllegalStateException if no transport or agent bean is configured
+		 * @throws IllegalStateException for the reasons {@link #build()} gives
+		 * @throws IllegalArgumentException if a duration set on this builder is negative
 		 */
 		public void run() {
 			build().run();
@@ -731,15 +814,17 @@ public class AcpAgentSupport implements AutoCloseable {
 
 
 		/**
-		 * Build a factory for a listener transport, such as
-		 * {@code StreamableHttpAcpAgentTransport} or {@code StreamableHttpAcpServlet}, that
-		 * creates a fresh agent for each connection it accepts. Every agent invokes the same
-		 * annotated handler instance, concurrently across connections, so its handlers must
-		 * be thread-safe (see {@link AcpAgentSupport}). The factory captures the builder as
-		 * it is now. The listener supplies a transport per connection, so a builder with a
-		 * {@link #transport} set is refused.
+		 * Builds a factory for a listener transport, such as
+		 * {@code StreamableHttpAcpAgentTransport} or {@code StreamableHttpAcpServlet}, that creates
+		 * a fresh agent for each connection it accepts. Every agent calls the same handler bean,
+		 * concurrently across connections, so its handler methods must be thread-safe (see
+		 * {@link AcpAgentSupport}). The factory captures the builder as it is now. The listener
+		 * supplies a transport per connection, so a builder with a {@link #transport} set is
+		 * refused. A negative duration is not checked here: each connection's agent then fails to
+		 * build.
 		 * @return a factory creating one agent per connection
-		 * @throws IllegalStateException if a transport was set, or no agent bean was given
+		 * @throws IllegalStateException if a transport was set, or for the reasons {@link #build()}
+		 * gives (other than the transport)
 		 */
 		public AcpAgentFactory buildFactory() {
 			if (this.transport != null) {
