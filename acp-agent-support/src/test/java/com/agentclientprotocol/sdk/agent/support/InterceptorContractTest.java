@@ -171,6 +171,34 @@ class InterceptorContractTest {
 			.containsExactly("afterCompletion first");
 	}
 
+	@Test
+	void theDefaultNewSessionPassesThroughTheInterceptors() {
+		List<String> calls = new CopyOnWriteArrayList<>();
+		AcpAsyncClient client = connect(
+				AcpAgentSupport.create(new FailingAgent()).interceptor(new Recording("log", 0, calls)));
+
+		client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+
+		assertThat(calls).contains("preInvoke log session/new", "afterCompletion log session/new");
+	}
+
+	@Test
+	void anInterceptorCanVetoTheDefaultNewSession() {
+		AcpInterceptor deny = new AcpInterceptor() {
+			@Override
+			public boolean preInvoke(AcpInvocationContext context) {
+				if (AcpSchema.METHOD_SESSION_NEW.equals(context.getAcpMethod())) {
+					throw new AcpProtocolException(AcpErrorCodes.AUTHENTICATION_REQUIRED, "log in first");
+				}
+				return true;
+			}
+		};
+		AcpAsyncClient client = connect(AcpAgentSupport.create(new FailingAgent()).interceptor(deny));
+
+		assertThat(failure(() -> client.newSession(new NewSessionRequest("/workspace", List.of())).block(TIMEOUT))
+			.getCode()).isEqualTo(AcpErrorCodes.AUTHENTICATION_REQUIRED);
+	}
+
 	/** Records each step it sees as "step name method". */
 	static class Recording implements AcpInterceptor {
 
