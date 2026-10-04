@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <pre>
  *        client          agent
  *            \           /
- *          (TransportType)
+ *         acp-integration
  * </pre>
  *
  * <p>

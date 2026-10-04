@@ -61,7 +61,7 @@ class AcpAgentHttpAutoConfigurationTests {
 	@Test
 	void listenerServesAgentOverStreamableHttpAndWebSocket() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0")
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.listener.port=0")
 			.run(context -> {
 				assertThat(context).hasSingleBean(StreamableHttpAcpAgentTransport.class);
 				int port = context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
@@ -76,9 +76,42 @@ class AcpAgentHttpAutoConfigurationTests {
 	}
 
 	@Test
+	void websocketIsTheSameAsHttp() {
+		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=websocket",
+					"spring.acp.agent.transport.http.listener.port=0")
+			.run(context -> {
+				int port = context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
+				assertThat(context).doesNotHaveBean(AcpAgentTransport.class);
+				assertRoundTrip(new WebSocketAcpClientTransport(URI.create("ws://localhost:" + port + "/acp"),
+						AcpJsonMapper.createDefault()));
+			});
+	}
+
+	@Test
+	void anExplicitStdioTypeServesNoListener() {
+		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=STDIO")
+			.run(context -> {
+				assertThat(context).doesNotHaveBean(StreamableHttpAcpAgentTransport.class);
+				assertThat(context).hasBean("acpAgentLifecycle");
+			});
+	}
+
+	@Test
+	void anUnknownTypeFailsTheBinding() {
+		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=pigeon")
+			.run(context -> {
+				assertThat(context).hasFailed();
+				assertThat(context).getFailure().hasStackTraceContaining("pigeon");
+			});
+	}
+
+	@Test
 	void autoConfiguredHttpClientTalksToTheAgent() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0")
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.listener.port=0")
 			.run(agentContext -> {
 				int port = agentContext.getBean(StreamableHttpAcpAgentTransport.class).getPort();
 				new ApplicationContextRunner()
@@ -99,7 +132,7 @@ class AcpAgentHttpAutoConfigurationTests {
 	@Test
 	void listenerUsesConfiguredPath() {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.port=0",
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.listener.port=0",
 					"spring.acp.agent.transport.http.path=/agents/echo")
 			.run(context -> {
 				int port = context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
@@ -182,9 +215,9 @@ class AcpAgentHttpAutoConfigurationTests {
 
 	@Test
 	void mapsLimitsToTransportOptions() {
-		AcpAgentProperties.AgentHttpProperties http = new AcpAgentProperties.AgentHttpProperties();
-		assertThat(AcpAgentHttpAutoConfiguration.options(http))
-			.isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
+		AcpAgentProperties properties = new AcpAgentProperties();
+		AcpAgentProperties.AgentHttpProperties http = properties.getTransport().getHttp();
+		assertThat(properties.toSettings().toOptions(true)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
 
 		http.setMaxPostBodySize(DataSize.ofMegabytes(1));
 		http.setKeepAliveInterval(Duration.ZERO);
@@ -192,9 +225,9 @@ class AcpAgentHttpAutoConfigurationTests {
 		http.setMaxPendingSseEvents(11);
 		http.setMaxWebSocketPendingFrames(12);
 		http.setMaxProvisionalSessions(13);
-		http.setMaxConcurrentStreamsPerConnection(14);
+		http.getListener().setMaxConcurrentStreamsPerConnection(14);
 		http.setShutdownTimeout(Duration.ofSeconds(2));
-		assertThat(AcpAgentHttpAutoConfiguration.options(http))
+		assertThat(properties.toSettings().toOptions(true))
 			.isEqualTo(StreamableHttpAcpAgentTransportOptions.builder()
 				.maxPostBodyBytes(1024 * 1024)
 				.mailboxCapacity(10)
