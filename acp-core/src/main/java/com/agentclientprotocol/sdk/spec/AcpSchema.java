@@ -1662,12 +1662,52 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Session update notification - real-time progress
+	 * The params of {@code session/update}: one {@link SessionUpdate} for an ACP session. The agent
+	 * sends it to show the client its work as it happens, such as its reply, its tool calls and its
+	 * plan. During a prompt turn the agent sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate}
+	 * or a shortcut such as {@code sendMessage}; at other times with
+	 * {@link com.agentclientprotocol.sdk.agent.AcpSyncAgent#sendSessionUpdate
+	 * AcpSyncAgent.sendSessionUpdate} or the {@code AcpAsyncAgent} method of the same name. Both
+	 * wrap the update in this record. The client's session-update consumers
+	 * ({@link com.agentclientprotocol.sdk.client.AcpClient.SyncSpec#sessionUpdateConsumer
+	 * sessionUpdateConsumer} on the client builder) receive it. It is a notification, so it gets no
+	 * answer of its own.
+	 *
+	 * <p>
+	 * The Java client hands notifications to its consumers one at a time, in the order the agent
+	 * sent them, and a response from the agent completes its caller only after the consumers have
+	 * handled every notification sent before it: when {@code prompt(...)} returns, that turn's
+	 * updates have all been handled. Updates are not limited to prompt turns. An agent replays a
+	 * loaded session's conversation as updates before it answers {@code session/load}, and can send
+	 * others, such as its available commands, at any time.
+	 *
+	 * <p>
+	 * The protocol requires an agent to send a turn's updates before it answers the prompt, also
+	 * after a {@code session/cancel}. When the SDK answers a prompt itself, because the cancel
+	 * grace period or the maximum prompt duration passed, a prompt handler that keeps running and
+	 * sends more updates sends them after that answer (see {@link PromptTimeouts}).
+	 *
+	 * <p>
+	 * The Java client skips, with a warning in the log, a received notification it cannot read or
+	 * that lacks a required member at any depth: an update without its content, a plan entry
+	 * without its text. The whole notification is skipped, not only the bad part. An update of a
+	 * kind this SDK does not know is not skipped: it reads as an {@link UnknownSessionUpdate}. A
+	 * client without a session-update consumer ignores {@code session/update}, also with a warning.
+	 *
+	 * @param sessionId the ACP session the update belongs to
+	 * @param update the update
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionNotification(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("update") SessionUpdate update,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a notification without {@code _meta}.
+		 * @param sessionId the ACP session the update belongs to
+		 * @param update the update
+		 */
 		public SessionNotification(String sessionId, SessionUpdate update) {
 			this(sessionId, update, null);
 		}
@@ -3929,9 +3969,29 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Session update - different types of updates. An update of a type this SDK does not
-	 * know reads as an {@link UnknownSessionUpdate}, so the notification that carries it
-	 * still reaches the client's consumers (see {@link AcpSchema} on forward
+	 * One update that an agent streams to the client in a {@link SessionNotification}: a piece of
+	 * its reply or reasoning, a tool call or a change to one, its plan, or a change to the session.
+	 * An agent creates one of the variant records and sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate};
+	 * a client checks the variant with {@code instanceof} in its session-update consumer and shows
+	 * what it understands.
+	 *
+	 * <p>
+	 * The variants: {@link AgentMessageChunk}, {@link AgentThoughtChunk} and
+	 * {@link UserMessageChunk} carry a message in pieces; {@link ToolCall} announces a tool call
+	 * and {@link ToolCallUpdateNotification} changes it; {@link Plan} reports the agent's plan;
+	 * {@link AvailableCommandsUpdate}, {@link CurrentModeUpdate}, {@link ConfigOptionUpdate} and
+	 * {@link SessionInfoUpdate} report the session's slash commands, mode, config options and
+	 * title; {@link UsageUpdate} reports how much of the context window the session uses, and its
+	 * cost. A plan, a command list and a config option list are always complete: each update
+	 * replaces the previous one.
+	 *
+	 * <p>
+	 * On the wire the {@code sessionUpdate} member names the variant, and each variant record has
+	 * it as its first component. An update of a kind this SDK does not know, or one without
+	 * {@code sessionUpdate}, reads as an {@link UnknownSessionUpdate}, so the notification that
+	 * carries it still reaches the consumers. The interface is not sealed: end an
+	 * {@code instanceof} chain with a branch for anything else (see {@link AcpSchema} on forward
 	 * compatibility).
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "sessionUpdate", include = JsonTypeInfo.As.EXISTING_PROPERTY,
@@ -3952,87 +4012,228 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A session update of a kind this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code sessionUpdate} discriminator (null when the peer sent none)
-	 * and every other field, and writes them back unchanged.
+	 * A session update of a kind this SDK does not know, kept as received: the agent is on a newer
+	 * protocol version or sent an extension. A client consumer that does not understand it should
+	 * ignore it; a proxy can forward it unchanged.
 	 *
-	 * @param sessionUpdate the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code sessionUpdate} discriminator ({@code null} when the update had none) and
+	 * every other member in {@link #fields()}, an unmodifiable map in wire order, and writes them
+	 * back unchanged. Names are case sensitive: {@code "PLAN"} is an unknown update, not a
+	 * {@link Plan}.
+	 *
+	 * @param sessionUpdate the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownSessionUpdate(@JsonProperty("sessionUpdate") @Nullable String sessionUpdate,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements SessionUpdate {
+		/**
+		 * Creates an unknown update. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param sessionUpdate the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownSessionUpdate {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * User message chunk
+	 * A piece of a user's message, streamed as a session update. An agent sends these to replay the
+	 * user's side of a conversation: when it answers {@code session/load}, it sends the whole
+	 * conversation as user and agent message chunks before its answer. In a live prompt turn the
+	 * client already has the user's message, the {@link PromptRequest}.
+	 *
+	 * <p>
+	 * It differs from {@link AgentMessageChunk} only in whose message it carries: the content and
+	 * the message id work the same way. The prompt context has no shortcut for it; send it with
+	 * {@code PromptContext.sendUpdate} or {@code AcpSyncAgent.sendSessionUpdate}.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "user_message_chunk"}
+	 * @param content the piece of the message, one content block
+	 * @param messageId the id of the message the piece belongs to, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UserMessageChunk(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates a chunk with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "user_message_chunk"}.
+		 * @param sessionUpdate {@code null} or {@code "user_message_chunk"}
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public UserMessageChunk {
 			sessionUpdate = discriminator(sessionUpdate, "user_message_chunk");
 		}
 
+		/**
+		 * Creates a chunk without a message id or {@code _meta}.
+		 * @param content the piece of the message
+		 */
 		public UserMessageChunk(ContentBlock content) {
 			this("user_message_chunk", content, null, null);
 		}
 
+		/**
+		 * Creates a chunk without {@code _meta}.
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 */
 		public UserMessageChunk(ContentBlock content, @Nullable String messageId) {
 			this("user_message_chunk", content, messageId, null);
 		}
 	}
 
 	/**
-	 * Agent message chunk
+	 * A piece of the agent's reply to the user, streamed as a session update. An agent sends its
+	 * reply as a run of these, each with one {@link ContentBlock}, usually a {@link TextContent},
+	 * and the client appends them to show the message as it grows.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendMessage(String)
+	 * PromptContext.sendMessage} sends one with a text block.
+	 *
+	 * <p>
+	 * Chunks with the same {@link #messageId()} belong to one message, and a new id starts a new
+	 * message. The id is optional and opaque; the SDK neither sets nor checks it, and
+	 * {@code sendMessage(text, messageId)} sends one the agent chose. Together with
+	 * {@link UserMessageChunk}s, an agent also sends these to replay a conversation before it
+	 * answers {@code session/load}.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "agent_message_chunk"}
+	 * @param content the piece of the message, one content block
+	 * @param messageId the id of the message the piece belongs to, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentMessageChunk(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates a chunk with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "agent_message_chunk"}.
+		 * @param sessionUpdate {@code null} or {@code "agent_message_chunk"}
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public AgentMessageChunk {
 			sessionUpdate = discriminator(sessionUpdate, "agent_message_chunk");
 		}
 
+		/**
+		 * Creates a chunk without a message id or {@code _meta}.
+		 * @param content the piece of the message
+		 */
 		public AgentMessageChunk(ContentBlock content) {
 			this("agent_message_chunk", content, null, null);
 		}
 
+		/**
+		 * Creates a chunk without {@code _meta}.
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 */
 		public AgentMessageChunk(ContentBlock content, @Nullable String messageId) {
 			this("agent_message_chunk", content, messageId, null);
 		}
 	}
 
 	/**
-	 * Agent thought chunk
+	 * A piece of the agent's reasoning, streamed as a session update: like an
+	 * {@link AgentMessageChunk}, but for what the agent thinks on the way to its reply, so a client
+	 * can show it apart from the reply, for example folded away.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendThought(String)
+	 * PromptContext.sendThought} sends one with a text block.
+	 *
+	 * <p>
+	 * It differs from {@link AgentMessageChunk} only in what it carries: the content and the
+	 * message id work the same way, and {@code sendThought(text, messageId)} sends one with an id.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "agent_thought_chunk"}
+	 * @param content the piece of the message, one content block
+	 * @param messageId the id of the message the piece belongs to, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentThoughtChunk(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("content") ContentBlock content, @JsonProperty("messageId") @Nullable String messageId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates a chunk with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "agent_thought_chunk"}.
+		 * @param sessionUpdate {@code null} or {@code "agent_thought_chunk"}
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public AgentThoughtChunk {
 			sessionUpdate = discriminator(sessionUpdate, "agent_thought_chunk");
 		}
 
+		/**
+		 * Creates a chunk without a message id or {@code _meta}.
+		 * @param content the piece of the message
+		 */
 		public AgentThoughtChunk(ContentBlock content) {
 			this("agent_thought_chunk", content, null, null);
 		}
 
+		/**
+		 * Creates a chunk without {@code _meta}.
+		 * @param content the piece of the message
+		 * @param messageId the message's id, or {@code null}
+		 */
 		public AgentThoughtChunk(ContentBlock content, @Nullable String messageId) {
 			this("agent_thought_chunk", content, messageId, null);
 		}
 	}
 
 	/**
-	 * Tool call. {@code name} is the programmatic name of the tool being invoked, if the
-	 * agent knows it ({@code title} is the human-readable label).
+	 * Announces a tool call, streamed as a session update: an action the agent takes for the
+	 * language model, such as reading a file, running a command or fetching a page, so the client
+	 * can show it. Later {@link ToolCallUpdateNotification}s with the same {@link #toolCallId()}
+	 * report its progress and results.
+	 *
+	 * <p>
+	 * Only {@code toolCallId}, unique within the session, and {@code title} are required. A tool
+	 * call without a status is pending in the protocol; this record reads it as {@code null}.
+	 * {@code name} is the tool's programmatic name, such as {@code read_file}: the protocol asks
+	 * agents to send it in the first report when they have it and not to change it later, and it
+	 * grants nothing. {@code kind} helps the client pick an icon, and a kind this SDK does not know
+	 * reads as {@link ToolKind#OTHER}. {@code rawInput} and {@code rawOutput} are any JSON value,
+	 * read as maps, lists, strings, numbers or booleans. There is no shorter constructor: pass
+	 * {@code null} for what you leave out.
+	 *
+	 * <p>
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askPermission(String)
+	 * PromptContext.askPermission} and {@code askChoice} send one of these themselves, with a new
+	 * random id and status pending, before they ask the user, and settle it with a
+	 * {@link ToolCallUpdateNotification} when the request ends.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "tool_call"}
+	 * @param toolCallId the tool call's id, unique within the session
+	 * @param title a human-readable description of what the tool is doing
+	 * @param name the tool's programmatic name, or {@code null}
+	 * @param kind the category of tool, or {@code null}
+	 * @param status the execution status, or {@code null} (pending)
+	 * @param content what the tool call produced, or {@code null}
+	 * @param locations the files the tool call reads or changes, or {@code null}
+	 * @param rawInput the raw input sent to the tool, or {@code null}
+	 * @param rawOutput the raw output the tool returned, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCall(
@@ -4043,6 +4244,22 @@ public final class AcpSchema {
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates a tool call with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes {@code "tool_call"}.
+		 * @param sessionUpdate {@code null} or {@code "tool_call"}
+		 * @param toolCallId the tool call's id
+		 * @param title what the tool is doing
+		 * @param name the tool's programmatic name, or {@code null}
+		 * @param kind the category of tool, or {@code null}
+		 * @param status the execution status, or {@code null}
+		 * @param content what the tool call produced, or {@code null}
+		 * @param locations the files the tool call affects, or {@code null}
+		 * @param rawInput the raw input sent to the tool, or {@code null}
+		 * @param rawOutput the raw output the tool returned, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public ToolCall {
 			sessionUpdate = discriminator(sessionUpdate, "tool_call");
 		}
@@ -4073,8 +4290,29 @@ public final class AcpSchema {
 	// CPD-ON
 
 	/**
-	 * Tool call update notification. Every field but {@code toolCallId} is optional;
-	 * {@code name} is the tool's programmatic name.
+	 * Changes a tool call the agent announced with a {@link ToolCall}, streamed as a session
+	 * update: its status, its results or any other field. Only {@link #toolCallId()} is required. A
+	 * field left out, {@code null} here, is unchanged; {@code content} and {@code locations}, when
+	 * present, replace the whole list.
+	 *
+	 * <p>
+	 * A tool call typically goes from pending to in progress to completed or failed
+	 * ({@link ToolCallStatus}), with an update at each step and the output in {@code content}. It
+	 * has the same fields as {@link ToolCallUpdate}, the form a permission request carries, plus
+	 * the discriminator. There is no shorter constructor: pass {@code null} for what does not
+	 * change.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "tool_call_update"}
+	 * @param toolCallId the id of the tool call to change
+	 * @param title a new human-readable title, or {@code null}
+	 * @param name a new programmatic name, or {@code null}
+	 * @param kind a new category, or {@code null}
+	 * @param status a new execution status, or {@code null}
+	 * @param content the content that replaces the tool call's content, or {@code null}
+	 * @param locations the locations that replace the tool call's locations, or {@code null}
+	 * @param rawInput a new raw input, or {@code null}
+	 * @param rawOutput a new raw output, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallUpdateNotification(
@@ -4085,114 +4323,258 @@ public final class AcpSchema {
 			@JsonProperty("locations") @Nullable List<ToolCallLocation> locations, @JsonProperty("rawInput") @Nullable Object rawInput,
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "tool_call_update"}.
+		 * @param sessionUpdate {@code null} or {@code "tool_call_update"}
+		 * @param toolCallId the id of the tool call to change
+		 * @param title a new title, or {@code null}
+		 * @param name the tool's programmatic name, or {@code null}
+		 * @param kind the category of tool, or {@code null}
+		 * @param status the execution status, or {@code null}
+		 * @param content what the tool call produced, or {@code null}
+		 * @param locations the files the tool call affects, or {@code null}
+		 * @param rawInput the raw input sent to the tool, or {@code null}
+		 * @param rawOutput the raw output the tool returned, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public ToolCallUpdateNotification {
 			sessionUpdate = discriminator(sessionUpdate, "tool_call_update");
 		}
 	}
 
 	/**
-	 * Plan update
+	 * The agent's plan for the task at hand, streamed as a session update: a list of
+	 * {@link PlanEntry} items, each with a priority and a status, so the client can show the steps
+	 * and their progress. Every update is the whole plan: the agent sends all entries with their
+	 * current status each time, and the client replaces the plan it shows.
+	 *
+	 * <p>
+	 * The protocol asks agents to report a plan when the model makes one, and to send another as
+	 * the work goes on. The SDK does not check the entries.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "plan"}
+	 * @param entries every entry of the plan, with its current status
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Plan(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("entries") List<PlanEntry> entries,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates a plan with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes {@code "plan"}.
+		 * @param sessionUpdate {@code null} or {@code "plan"}
+		 * @param entries every entry of the plan
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public Plan {
 			sessionUpdate = discriminator(sessionUpdate, "plan");
 		}
 
+		/**
+		 * Creates a plan without {@code _meta}.
+		 * @param entries every entry of the plan
+		 */
 		public Plan(List<PlanEntry> entries) {
 			this("plan", entries, null);
 		}
 	}
 
 	/**
-	 * Available commands update
+	 * The slash commands the agent offers in an ACP session, such as {@code /web} or {@code /test},
+	 * streamed as a session update so the client can offer them as the user types. The user runs
+	 * one by sending it as text in a prompt. Each update is the full list and replaces the previous
+	 * one: the agent can send it after creating the session and again whenever its commands change.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "available_commands_update"}
+	 * @param availableCommands every command the session offers now
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommandsUpdate(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("availableCommands") List<AvailableCommand> availableCommands,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "available_commands_update"}.
+		 * @param sessionUpdate {@code null} or {@code "available_commands_update"}
+		 * @param availableCommands every command the session offers
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public AvailableCommandsUpdate {
 			sessionUpdate = discriminator(sessionUpdate, "available_commands_update");
 		}
 
+		/**
+		 * Creates an update without {@code _meta}.
+		 * @param availableCommands every command the session offers
+		 */
 		public AvailableCommandsUpdate(List<AvailableCommand> availableCommands) {
 			this("available_commands_update", availableCommands, null);
 		}
 	}
 
 	/**
-	 * Current mode update
+	 * Tells the client that the agent switched an ACP session to another mode on its own, streamed
+	 * as a session update: for example from a planning mode to a coding mode when the model is
+	 * ready to change code. {@link #currentModeId()} is the {@link SessionMode#id()} of one of the
+	 * modes the agent offered in the session's {@link SessionModeState}.
+	 *
+	 * <p>
+	 * A switch the client asked for with {@link SetSessionModeRequest} is confirmed by that
+	 * request's answer. The SDK never sends this update by itself; the agent sends it.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "current_mode_update"}
+	 * @param currentModeId the id of the mode the session is in now
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CurrentModeUpdate(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("currentModeId") String currentModeId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "current_mode_update"}.
+		 * @param sessionUpdate {@code null} or {@code "current_mode_update"}
+		 * @param currentModeId the id of the mode the session is in now
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public CurrentModeUpdate {
 			sessionUpdate = discriminator(sessionUpdate, "current_mode_update");
 		}
 
+		/**
+		 * Creates an update without {@code _meta}.
+		 * @param currentModeId the id of the mode the session is in now
+		 */
 		public CurrentModeUpdate(String currentModeId) {
 			this("current_mode_update", currentModeId, null);
 		}
 	}
 
 	/**
-	 * Session info update - the agent changed the session's metadata (title, last
-	 * activity). Every field is optional: a field left out is unchanged.
+	 * New metadata for an ACP session, its title or the time of its last activity, streamed as a
+	 * session update so a client can show a current session name without asking
+	 * {@code session/list} again. Every field is optional: the agent sends only what changed, and a
+	 * field left out is unchanged. These are fields of the {@link SessionInfo} a
+	 * {@code session/list} answer carries; the session id is in the {@link SessionNotification}.
 	 *
 	 * <p>
-	 * The schema also lets a peer send {@code null} to clear a field. This record cannot
-	 * tell an explicit {@code null} from a missing field (both read as {@code null}) and
-	 * never writes {@code null}, so it can neither receive nor send a clear.
-	 * </p>
+	 * The protocol also lets a peer send {@code null} to clear a field. This record cannot tell an
+	 * explicit {@code null} from a missing field (both read as {@code null}) and never writes
+	 * {@code null}, so it can neither receive nor send a clear.
 	 *
 	 * @param sessionUpdate the discriminator, {@code "session_info_update"}
-	 * @param title human-readable title for the session
-	 * @param updatedAt ISO 8601 timestamp of the last activity
-	 * @param meta reserved metadata
+	 * @param title the session's new human-readable title, or {@code null} if unchanged
+	 * @param updatedAt the time of the session's last activity, an ISO 8601 timestamp, or
+	 * {@code null} if unchanged; the SDK does not check the format
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionInfoUpdate(@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("updatedAt") @Nullable String updatedAt,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "session_info_update"}.
+		 * @param sessionUpdate {@code null} or {@code "session_info_update"}
+		 * @param title the new title, or {@code null}
+		 * @param updatedAt the time of the last activity, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public SessionInfoUpdate {
 			sessionUpdate = discriminator(sessionUpdate, "session_info_update");
 		}
 
+		/**
+		 * Creates an update without {@code _meta}.
+		 * @param title the new title, or {@code null}
+		 * @param updatedAt the time of the last activity, or {@code null}
+		 */
 		public SessionInfoUpdate(@Nullable String title, @Nullable String updatedAt) {
 			this("session_info_update", title, updatedAt, null);
 		}
 	}
 
 	/**
-	 * Usage update - context window and cost update for the session (UNSTABLE)
+	 * How much of the model's context window an ACP session uses, and what the session has cost so
+	 * far, streamed as a session update so a client can show it. {@link #used()} is the number of
+	 * tokens now in the context and {@link #size()} the window's total size; both are required, and
+	 * {@link #cost()} is optional. The agent can send one whenever the numbers change.
+	 *
+	 * <p>
+	 * The protocol defines both counts as non-negative; the SDK does not check them.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "usage_update"}
+	 * @param used the number of tokens now in the context window
+	 * @param size the context window's total size, in tokens
+	 * @param cost the session's total cost so far, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UsageUpdate(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("used") Long used, @JsonProperty("size") Long size, @JsonProperty("cost") @Nullable Cost cost,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use a shorter constructor, and it becomes
+		 * {@code "usage_update"}.
+		 * @param sessionUpdate {@code null} or {@code "usage_update"}
+		 * @param used the tokens now in the context window
+		 * @param size the context window's size, in tokens
+		 * @param cost the session's total cost, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public UsageUpdate {
 			sessionUpdate = discriminator(sessionUpdate, "usage_update");
 		}
 
+		/**
+		 * Creates an update without a cost or {@code _meta}.
+		 * @param used the tokens now in the context window
+		 * @param size the context window's size, in tokens
+		 */
 		public UsageUpdate(Long used, Long size) {
 			this("usage_update", used, size, null, null);
 		}
 	}
 
 	/**
-	 * Cost information for a session (UNSTABLE)
+	 * The total cost of an ACP session so far: the {@link UsageUpdate#cost()} an agent reports with
+	 * its context-window usage. It is an amount and the currency it is in, both required.
+	 *
+	 * <p>
+	 * The amount adds up over the whole session; it is not the cost of one prompt turn. The
+	 * currency is an ISO 4217 code, such as {@code "USD"}; the SDK checks neither value.
+	 *
+	 * @param amount the session's total cost so far, in {@code currency}
+	 * @param currency the ISO 4217 currency code, such as {@code "USD"} or {@code "EUR"}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Cost(@JsonProperty("amount") Double amount,
 			@JsonProperty("currency") String currency,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a cost without {@code _meta}.
+		 * @param amount the session's total cost so far
+		 * @param currency the ISO 4217 currency code
+		 */
 		public Cost(Double amount, String currency) {
 			this(amount, currency, null);
 		}
