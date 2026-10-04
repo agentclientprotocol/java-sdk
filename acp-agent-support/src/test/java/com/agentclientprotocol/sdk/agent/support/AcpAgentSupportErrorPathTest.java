@@ -167,7 +167,8 @@ class AcpAgentSupportErrorPathTest {
 
 		assertThatThrownBy(() -> client.prompt(prompt("s1")).block(TIMEOUT))
 			.isInstanceOf(AcpError.class)
-			.hasMessageContaining("disk gone");
+			.hasMessage("Internal error")
+			.satisfies(e -> assertThat(((AcpError) e).getCode()).isEqualTo(AcpErrorCodes.INTERNAL_ERROR));
 	}
 
 	/** Keeps its sessions in a field, as the module README's complete example does. */
