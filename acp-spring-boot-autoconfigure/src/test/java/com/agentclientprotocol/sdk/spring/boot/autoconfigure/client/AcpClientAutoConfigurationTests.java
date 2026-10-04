@@ -217,7 +217,7 @@ class AcpClientAutoConfigurationTests {
 	@Test
 	void anApplicationConsumerReplacesTheDebugLoggingDefault() {
 		ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
-			.getLogger(AcpClientAutoConfiguration.class);
+			.getLogger(com.agentclientprotocol.sdk.integration.AcpClients.class);
 		ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logged = new ch.qos.logback.core.read.ListAppender<>();
 		logged.start();
 		ch.qos.logback.classic.Level level = logger.getLevel();
@@ -278,21 +278,6 @@ class AcpClientAutoConfigurationTests {
 			agent.closeGracefully();
 		}
 		return received;
-	}
-
-	@Test
-	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
-		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
-
-		assertThat(AcpClientAutoConfiguration.namingTheSettings(sdk, "spring.acp.client", true, true, true))
-			.hasMessageContaining("spring.acp.client.capabilities.read-text-file=true, "
-					+ "spring.acp.client.capabilities.write-text-file=true, spring.acp.client.capabilities.terminal=true")
-			.hasCause(sdk);
-		assertThat(AcpClientAutoConfiguration.namingTheSettings(sdk, "spring.acp.client", false, false, false))
-			.isSameAs(sdk);
-		IllegalStateException other = new IllegalStateException("Already connected");
-		assertThat(AcpClientAutoConfiguration.namingTheSettings(other, "spring.acp.client", true, true, true))
-			.isSameAs(other);
 	}
 
 	record OrderedCustomizer(int order, String name, List<String> applied) implements AcpClientCustomizer, Ordered {

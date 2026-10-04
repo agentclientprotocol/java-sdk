@@ -40,7 +40,8 @@ public class AcpClientAutoConfiguration {
 	@ConditionalOnMissingBean
 	AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientProperties properties,
 			ObjectProvider<AcpClientCustomizer> customizers) {
-		return AcpClients.async(transport, properties.toSettings(), customizers.orderedStream().toList());
+		return AcpClients.async(transport, properties.toSettings(), customizers.orderedStream().toList(),
+				AcpClientTransportAutoConfiguration.PREFIX);
 	}
 
 	/**

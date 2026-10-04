@@ -145,12 +145,12 @@ public record AcpClientSettings(@Nullable Duration requestTimeout, @Nullable Dur
 	}
 
 	/**
-	 * How long closing the client may wait: its request timeout (the SDK default, 30 seconds,
+	 * How long closing the client may wait: its request timeout (the SDK default, 60 seconds,
 	 * when unset), which bounds the delivery of pending notifications, plus a margin.
 	 * @return the close timeout
 	 */
 	public Duration closeTimeout() {
-		return (requestTimeout != null ? requestTimeout : Duration.ofSeconds(30)).plusSeconds(10);
+		return (requestTimeout != null ? requestTimeout : Duration.ofSeconds(60)).plusSeconds(10);
 	}
 
 	/**

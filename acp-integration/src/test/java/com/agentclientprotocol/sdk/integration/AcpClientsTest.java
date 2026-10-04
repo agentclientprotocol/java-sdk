@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AcpClientsTest {
 
@@ -35,7 +36,7 @@ class AcpClientsTest {
 		List<String> chunks = new CopyOnWriteArrayList<>();
 		AcpClientSettings settings = AcpClientSettings.builder()
 			.requestTimeout(Duration.ofSeconds(10))
-			.capabilities(new AcpClientSettings.Capabilities(false, false, true, false, false, false))
+			.capabilities(new AcpClientSettings.Capabilities(false, false, false, false, false, true))
 			.build();
 		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), settings,
 				List.of(spec -> customized.add("first"), spec -> {
@@ -82,6 +83,54 @@ class AcpClientsTest {
 		AcpAsyncClient async = AcpClients.async(stuck, AcpClientSettings.builder().build(), List.of());
 		new AcpClientHost(async).close(Duration.ofMillis(50));
 		assertThat(closes).hasPositiveValue();
+	}
+
+	@Test
+	void aCapabilityWithoutItsHandlerFailsNamingTheSetting() {
+		AcpClientSettings settings = AcpClientSettings.builder()
+			.capabilities(new AcpClientSettings.Capabilities(true, false, false, true, false, false))
+			.build();
+		assertThatThrownBy(() -> AcpClients.async(pair.clientTransport(), settings, List.of(), "my.acp.client"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("readTextFileHandler")
+			.hasMessageContaining("my.acp.client.capabilities.read-text-file=true, "
+					+ "my.acp.client.capabilities.elicitation-form=true")
+			.hasMessageNotContaining("write-text-file");
+	}
+
+	@Test
+	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
+		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler "
+				+ "for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; "
+				+ "terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
+		AcpClientSettings.Capabilities all = new AcpClientSettings.Capabilities(true, true, true, true, true, true);
+		assertThat(AcpClients.namingTheSettings(sdk, "q", all))
+			.hasMessageContaining("q.capabilities.read-text-file=true, q.capabilities.write-text-file=true, "
+					+ "q.capabilities.terminal=true, q.capabilities.elicitation-form=true, "
+					+ "q.capabilities.elicitation-url=true")
+			.hasCause(sdk);
+		assertThat(AcpClients.namingTheSettings(sdk, "q", AcpClientSettings.Capabilities.NONE)).isSameAs(sdk);
+		IllegalStateException other = new IllegalStateException("Already connected");
+		assertThat(AcpClients.namingTheSettings(other, "q", all)).isSameAs(other);
+	}
+
+	@Test
+	void aCustomizersConsumerReplacesTheDefault() {
+		AcpAgentSupport agent = agent();
+		agent.start();
+		List<String> chunks = new CopyOnWriteArrayList<>();
+		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(),
+				List.of(spec -> spec.sessionUpdateConsumer(notification -> {
+					chunks.add(notification.sessionId());
+					return Mono.empty();
+				})));
+		AcpSyncClient sync = AcpClients.sync(async);
+		sync.initialize();
+		String session = sync.newSession(new AcpSchema.NewSessionRequest("/", List.of())).sessionId();
+		sync.prompt(new AcpSchema.PromptRequest(session, List.of(new AcpSchema.TextContent("hello"))));
+		assertThat(chunks).containsExactly(session);
+		new AcpClientHost(async).close(Duration.ofSeconds(5));
+		agent.close();
 	}
 
 	private AcpAgentSupport agent() {
