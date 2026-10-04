@@ -1069,6 +1069,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Both use the new `AcpSchema.NewSessionResponse.withGeneratedId()`. A registered handler replaces
   the default, and `build()` still requires only a prompt handler.
 
+- **The agent checks the client's `terminal` capability for every terminal method.** ACP forbids
+  an agent to call any terminal method when the client did not advertise `terminal`. Only
+  `terminal/create` was checked; `terminal/output`, `terminal/wait_for_exit`, `terminal/kill` and
+  `terminal/release` were sent regardless, for example with a terminal ID from another connection.
+  All five now fail locally with `AcpCapabilityException` and send nothing, from the agent and
+  from a prompt context.
+
 - **A prompt's updates no longer follow its answer.** ACP requires an agent to send a prompt's
   `session/update` notifications before it answers the prompt, also after `session/cancel`. When
   the SDK answered a prompt itself (the cancel grace period or `maxPromptDuration` passed), a

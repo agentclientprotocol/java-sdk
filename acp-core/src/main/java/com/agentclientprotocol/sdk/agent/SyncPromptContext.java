@@ -35,7 +35,7 @@ import org.jspecify.annotations.Nullable;
  * }</pre>
  *
  * <p>Failures are thrown. Once the client has initialized, a call that needs a capability the
- * client did not advertise (reading or writing files, creating a terminal, an elicitation mode)
+ * client did not advertise (reading or writing files, any terminal method, an elicitation mode)
  * throws {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending anything;
  * check {@link #getClientCapabilities()} first. An error answer throws
  * {@link com.agentclientprotocol.sdk.spec.AcpError}. A call has no time limit of its own: a request
