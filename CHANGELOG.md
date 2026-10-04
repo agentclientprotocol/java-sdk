@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Builder handlers receive their agent.** Every typed request setter of `AcpAgent.async(..)`
+  and `AcpAgent.sync(..)` except `promptHandler` has an overload taking an
+  `AcpAgent.AgentAwareHandler<Request, Response>` (async, `(request, AcpAsyncAgent agent)`) or
+  `AcpAgent.SyncAgentAwareHandler<Request, Response>` (sync, `(request, AcpSyncAgent agent)`); a
+  two-argument lambda picks it. The agent is the one `build()` returned, so a `session/load`
+  replay or a `ConfigOptionUpdate` after `session/set_config_option` no longer needs an
+  `AtomicReference` holding the built agent:
+  `.setSessionConfigOptionHandler((request, agent) -> { agent.sendSessionUpdate(request.sessionId(), update); return response; })`.
+  One-argument handlers are unchanged.
+
 - **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
   `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;
   `AgentCapabilities.builder()` gains `loadSession()`, `promptImage()`, `promptAudio()`,

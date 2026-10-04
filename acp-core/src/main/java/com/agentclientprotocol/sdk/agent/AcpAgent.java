@@ -245,7 +245,8 @@ public interface AcpAgent {
 	 * use {@code session/resume} instead ({@link ResumeSessionHandler}).
 	 *
 	 * <p>Unlike {@link PromptHandler}, it receives no context for sending updates. Send the replay
-	 * as session updates through the built agent ({@link AcpAsyncAgent#sendSessionUpdate}), and
+	 * as session updates through the agent ({@link AcpAsyncAgent#sendSessionUpdate}), which an
+	 * {@link AgentAwareHandler} registered with the same setter receives, and
 	 * complete the {@code Mono} only after they have been sent: ACP requires every update to
 	 * precede the answer. Clients send {@code session/load} only to an agent that advertises
 	 * {@code loadSession}; the default {@code initialize} answer does when this handler is
@@ -764,8 +765,9 @@ public interface AcpAgent {
 	 * use {@code session/resume} instead ({@link SyncResumeSessionHandler}).
 	 *
 	 * <p>Unlike {@link SyncPromptHandler}, it receives no context for sending updates. Send the
-	 * replay as session updates through the built agent
-	 * ({@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}), and return only
+	 * replay as session updates through the agent
+	 * ({@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}), which a
+	 * {@link SyncAgentAwareHandler} registered with the same setter receives, and return only
 	 * after they have been sent: ACP requires every update to precede the answer. Clients send
 	 * {@code session/load} only to an agent that advertises {@code loadSession}; the default
 	 * {@code initialize} answer does when this handler is registered.
@@ -1163,6 +1165,75 @@ public interface AcpAgent {
 		 * @param params the notification's params; an omitted params arrives as an empty object
 		 */
 		void handle(T params);
+
+	}
+
+	/**
+	 * A request handler that also receives the agent it serves, so it can act back on the client
+	 * without capturing the built agent in a variable: send session updates (a
+	 * {@code session/load} replay, a {@link AcpSchema.ConfigOptionUpdate} after a config change),
+	 * or call the client. Every typed setter of {@link AsyncAgentBuilder} except
+	 * {@code promptHandler} (whose {@link PromptContext} already reaches the client) has an
+	 * overload that takes one, for the same request and response types as its own handler
+	 * interface; a two-argument lambda picks it.
+	 *
+	 * <pre>{@code
+	 * AcpAgent.async(transport)
+	 *     .setSessionConfigOptionHandler((request, agent) -> agent
+	 *         .sendSessionUpdate(request.sessionId(), new AcpSchema.ConfigOptionUpdate(options))
+	 *         .thenReturn(new AcpSchema.SetSessionConfigOptionResponse(options)))
+	 * }</pre>
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
+	 * @param <Q> the request type
+	 * @param <R> the response type
+	 */
+	@FunctionalInterface
+	interface AgentAwareHandler<Q, R> {
+
+		/**
+		 * Answers one request from the client.
+		 * @param request the request, as the client sent it; never null
+		 * @param agent the agent serving the request, the one {@code build()} returned
+		 * @return a {@code Mono} that emits the answer
+		 */
+		Mono<R> handle(Q request, AcpAsyncAgent agent);
+
+	}
+
+	/**
+	 * The blocking counterpart of {@link AgentAwareHandler}: a request handler on the
+	 * {@link SyncAgentBuilder} that also receives the agent it serves, the {@link AcpSyncAgent}
+	 * {@code build()} returned, so it can send session updates or call the client with blocking
+	 * calls. Every typed setter of the synchronous builder except {@code promptHandler} has an
+	 * overload that takes one; a two-argument lambda picks it.
+	 *
+	 * <pre>{@code
+	 * AcpAgent.sync(transport)
+	 *     .loadSessionHandler((request, agent) -> {
+	 *         for (AcpSchema.SessionUpdate update : history.get(request.sessionId())) {
+	 *             agent.sendSessionUpdate(request.sessionId(), update);   // the replay
+	 *         }
+	 *         return new AcpSchema.LoadSessionResponse(null, null);
+	 *     })
+	 * }</pre>
+	 *
+	 * <p>Implementations run on the builder's handler executor and may block.
+	 * @param <Q> the request type
+	 * @param <R> the response type
+	 */
+	@FunctionalInterface
+	interface SyncAgentAwareHandler<Q, R> {
+
+		/**
+		 * Answers one request from the client. It may block.
+		 * @param request the request, as the client sent it; never null
+		 * @param agent the agent serving the request, the one {@code build()} returned
+		 * @return the answer; {@code null} is answered {@code -32603}
+		 */
+		R handle(Q request, AcpSyncAgent agent);
 
 	}
 
@@ -1571,6 +1642,223 @@ public interface AcpAgent {
 			return extNotificationHandler(method, AgentHandlers.RAW_PARAMS, handler);
 		}
 
+
+		// Handlers that also receive the agent they serve (one per typed setter above)
+
+		/**
+		 * Sets the handler for {@code initialize}, as {@link #initializeHandler(InitializeHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder initializeHandler(
+				AgentAwareHandler<AcpSchema.InitializeRequest, AcpSchema.InitializeResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code authenticate}, as {@link #authenticateHandler(AuthenticateHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder authenticateHandler(
+				AgentAwareHandler<AcpSchema.AuthenticateRequest, AcpSchema.AuthenticateResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_AUTHENTICATE, new TypeRef<AcpSchema.AuthenticateRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code logout}, as {@link #logoutHandler(LogoutHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder logoutHandler(
+				AgentAwareHandler<AcpSchema.LogoutRequest, AcpSchema.LogoutResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_LOGOUT, new TypeRef<AcpSchema.LogoutRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/new}, as {@link #newSessionHandler(NewSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder newSessionHandler(
+				AgentAwareHandler<AcpSchema.NewSessionRequest, AcpSchema.NewSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_NEW, new TypeRef<AcpSchema.NewSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/load}, as {@link #loadSessionHandler(LoadSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder loadSessionHandler(
+				AgentAwareHandler<AcpSchema.LoadSessionRequest, AcpSchema.LoadSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_LOAD, new TypeRef<AcpSchema.LoadSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/set_mode}, as {@link #setSessionModeHandler(SetSessionModeHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder setSessionModeHandler(
+				AgentAwareHandler<AcpSchema.SetSessionModeRequest, AcpSchema.SetSessionModeResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_SET_MODE, new TypeRef<AcpSchema.SetSessionModeRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/list}, as {@link #listSessionsHandler(ListSessionsHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder listSessionsHandler(
+				AgentAwareHandler<AcpSchema.ListSessionsRequest, AcpSchema.ListSessionsResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_LIST, new TypeRef<AcpSchema.ListSessionsRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/close}, as {@link #closeSessionHandler(CloseSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder closeSessionHandler(
+				AgentAwareHandler<AcpSchema.CloseSessionRequest, AcpSchema.CloseSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_CLOSE, new TypeRef<AcpSchema.CloseSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/delete}, as {@link #deleteSessionHandler(DeleteSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder deleteSessionHandler(
+				AgentAwareHandler<AcpSchema.DeleteSessionRequest, AcpSchema.DeleteSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_DELETE, new TypeRef<AcpSchema.DeleteSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/resume}, as {@link #resumeSessionHandler(ResumeSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder resumeSessionHandler(
+				AgentAwareHandler<AcpSchema.ResumeSessionRequest, AcpSchema.ResumeSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_RESUME, new TypeRef<AcpSchema.ResumeSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/fork}, as {@link #forkSessionHandler(ForkSessionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder forkSessionHandler(
+				AgentAwareHandler<AcpSchema.ForkSessionRequest, AcpSchema.ForkSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_FORK, new TypeRef<AcpSchema.ForkSessionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code session/set_config_option}, as {@link #setSessionConfigOptionHandler(SetSessionConfigOptionHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public AsyncAgentBuilder setSessionConfigOptionHandler(
+				AgentAwareHandler<AcpSchema.SetSessionConfigOptionRequest, AcpSchema.SetSessionConfigOptionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_SESSION_SET_CONFIG_OPTION, new TypeRef<AcpSchema.SetSessionConfigOptionRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code providers/list}, as {@link #listProvidersHandler(ListProvidersHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder listProvidersHandler(
+				AgentAwareHandler<AcpSchema.ListProvidersRequest, AcpSchema.ListProvidersResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_PROVIDERS_LIST, new TypeRef<AcpSchema.ListProvidersRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code providers/set}, as {@link #setProviderHandler(SetProviderHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder setProviderHandler(
+				AgentAwareHandler<AcpSchema.SetProviderRequest, AcpSchema.SetProviderResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_PROVIDERS_SET, new TypeRef<AcpSchema.SetProviderRequest>() {
+			}, handler::handle);
+		}
+
+		/**
+		 * Sets the handler for {@code providers/disable}, as {@link #disableProviderHandler(DisableProviderHandler)} does, for a handler
+		 * that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpAsyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public AsyncAgentBuilder disableProviderHandler(
+				AgentAwareHandler<AcpSchema.DisableProviderRequest, AcpSchema.DisableProviderResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			return request(AcpSchema.METHOD_PROVIDERS_DISABLE, new TypeRef<AcpSchema.DisableProviderRequest>() {
+			}, handler::handle);
+		}
+
 		private <T> AsyncAgentBuilder request(String method, TypeRef<T> requestType,
 				AgentHandlers.RequestHandler<T> handler) {
 			handlers.request(method, requestType, handler);
@@ -1646,6 +1934,9 @@ public interface AcpAgent {
 
 		/** Where the handlers run; read when a handler is called. */
 		private Scheduler handlerScheduler = SyncHandlerScheduler.DEFAULT;
+
+		/** The agent {@link #build()} returned, handed to the agent-aware handlers. */
+		private volatile @Nullable AcpSyncAgent built;
 
 		SyncAgentBuilder(AcpAgentTransport transport) {
 			this.asyncBuilder = new AsyncAgentBuilder(transport);
@@ -2041,6 +2332,237 @@ public interface AcpAgent {
 			return extNotificationHandler(method, AgentHandlers.RAW_PARAMS, handler);
 		}
 
+		// Handlers that also receive the agent they serve (one per typed setter above)
+
+		/**
+		 * Sets the handler for {@code initialize}, as {@link #initializeHandler(SyncInitializeHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder initializeHandler(
+				SyncAgentAwareHandler<AcpSchema.InitializeRequest, AcpSchema.InitializeResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.initializeHandler((AcpSchema.InitializeRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code authenticate}, as {@link #authenticateHandler(SyncAuthenticateHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder authenticateHandler(
+				SyncAgentAwareHandler<AcpSchema.AuthenticateRequest, AcpSchema.AuthenticateResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.authenticateHandler((AcpSchema.AuthenticateRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code logout}, as {@link #logoutHandler(SyncLogoutHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder logoutHandler(
+				SyncAgentAwareHandler<AcpSchema.LogoutRequest, AcpSchema.LogoutResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.logoutHandler((AcpSchema.LogoutRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/new}, as {@link #newSessionHandler(SyncNewSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder newSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.NewSessionRequest, AcpSchema.NewSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.newSessionHandler((AcpSchema.NewSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/load}, as {@link #loadSessionHandler(SyncLoadSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder loadSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.LoadSessionRequest, AcpSchema.LoadSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.loadSessionHandler((AcpSchema.LoadSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/set_mode}, as {@link #setSessionModeHandler(SyncSetSessionModeHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder setSessionModeHandler(
+				SyncAgentAwareHandler<AcpSchema.SetSessionModeRequest, AcpSchema.SetSessionModeResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.setSessionModeHandler((AcpSchema.SetSessionModeRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/list}, as {@link #listSessionsHandler(SyncListSessionsHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder listSessionsHandler(
+				SyncAgentAwareHandler<AcpSchema.ListSessionsRequest, AcpSchema.ListSessionsResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.listSessionsHandler((AcpSchema.ListSessionsRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/close}, as {@link #closeSessionHandler(SyncCloseSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder closeSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.CloseSessionRequest, AcpSchema.CloseSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.closeSessionHandler((AcpSchema.CloseSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/delete}, as {@link #deleteSessionHandler(SyncDeleteSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder deleteSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.DeleteSessionRequest, AcpSchema.DeleteSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.deleteSessionHandler((AcpSchema.DeleteSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/resume}, as {@link #resumeSessionHandler(SyncResumeSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder resumeSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.ResumeSessionRequest, AcpSchema.ResumeSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.resumeSessionHandler((AcpSchema.ResumeSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/fork}, as {@link #forkSessionHandler(SyncForkSessionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder forkSessionHandler(
+				SyncAgentAwareHandler<AcpSchema.ForkSessionRequest, AcpSchema.ForkSessionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.forkSessionHandler((AcpSchema.ForkSessionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code session/set_config_option}, as {@link #setSessionConfigOptionHandler(SyncSetSessionConfigOptionHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		public SyncAgentBuilder setSessionConfigOptionHandler(
+				SyncAgentAwareHandler<AcpSchema.SetSessionConfigOptionRequest, AcpSchema.SetSessionConfigOptionResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.setSessionConfigOptionHandler((AcpSchema.SetSessionConfigOptionRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code providers/list}, as {@link #listProvidersHandler(SyncListProvidersHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder listProvidersHandler(
+				SyncAgentAwareHandler<AcpSchema.ListProvidersRequest, AcpSchema.ListProvidersResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.listProvidersHandler((AcpSchema.ListProvidersRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code providers/set}, as {@link #setProviderHandler(SyncSetProviderHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder setProviderHandler(
+				SyncAgentAwareHandler<AcpSchema.SetProviderRequest, AcpSchema.SetProviderResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.setProviderHandler((AcpSchema.SetProviderRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
+		/**
+		 * Sets the handler for {@code providers/disable}, as {@link #disableProviderHandler(SyncDisableProviderHandler)} does, for a
+		 * handler that also needs the agent it serves, for example to send session updates
+		 * ({@link AcpSyncAgent#sendSessionUpdate}) or call the client.
+		 * @param handler the handler; it receives the request and the agent; must not be null
+		 * @return this builder
+		 */
+		@UnstableAcpApi
+		public SyncAgentBuilder disableProviderHandler(
+				SyncAgentAwareHandler<AcpSchema.DisableProviderRequest, AcpSchema.DisableProviderResponse> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncBuilder.disableProviderHandler((AcpSchema.DisableProviderRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
+					() -> handler.handle(request, syncView(agent))));
+			return this;
+		}
+
 		/**
 		 * Builds the agent on the builder's transport, with the handlers registered so far;
 		 * handlers registered afterwards do not reach it. The agent does nothing until
@@ -2053,7 +2575,16 @@ public interface AcpAgent {
 		 * @throws IllegalStateException if no prompt handler is registered
 		 */
 		public AcpSyncAgent build() {
-			return new AcpSyncAgent(asyncBuilder.build());
+			AcpSyncAgent agent = new AcpSyncAgent(asyncBuilder.build());
+			this.built = agent;
+			return agent;
+		}
+
+		/** The synchronous agent this builder built around the given agent (the same instance). */
+		@SuppressWarnings("ReferenceEquality")
+		private AcpSyncAgent syncView(AcpAsyncAgent agent) {
+			AcpSyncAgent agentBuilt = this.built;
+			return (agentBuilt != null && agentBuilt.async() == agent) ? agentBuilt : new AcpSyncAgent(agent);
 		}
 
 		/**
