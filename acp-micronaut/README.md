@@ -59,8 +59,10 @@ public final class Application {
   `acp-agent-support`. The `initialize` answer is derived from the class's annotations
   (`agentInfo` from `@AcpAgent`, a capability for each declared handler), also when Micronaut
   AOP advice makes the bean a generated subclass, which is then invoked so its advice runs. One bean instance serves every session, and over HTTP every connection, so
-  keep per-session state keyed by session id. Handlers may also return a Reactive Streams
-  `Publisher` (a `Flux` included). Its first element is the response.
+  keep per-session state keyed by session id. Handlers may also return a `Mono`, a single-value
+  `Flux` or any Reactive Streams `Publisher` (its first element is the response), or a
+  `CompletionStage`. acp-micronaut does not bring `micronaut-core-reactive`, so Micronaut's
+  `Publishers` helper is on the classpath only if the application adds that dependency.
 - **Extension beans.** Beans of type `AcpInterceptor`, `ArgumentResolver` and
   `ReturnValueHandler` are added to the agent in bean order.
 - **Lifecycle.** The agent starts with the application context (`StartupEvent`) and closes
