@@ -16,8 +16,9 @@ import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
-import com.agentclientprotocol.sdk.quarkus.ClientTransportType;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,9 @@ class HostsAndProducersTest {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
 		AcpAgentAssembly assembly = mock(AcpAgentAssembly.class);
 		when(assembly.builder()).thenReturn(AcpAgentSupport.create(new PingAgent()));
-		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
-		when(config.agent().shutdownOnTransportEnd()).thenReturn(false);
+		when(assembly.settings()).thenReturn(AcpAgentSettings.builder().shutdownOnTransportEnd(false).build());
 
-		AcpStdioAgentHost host = new AcpStdioAgentHost(assembly, pair.agentTransport(), config);
+		AcpStdioAgentHost host = new AcpStdioAgentHost(assembly, pair.agentTransport());
 		assertThat(host.agent()).isNull();
 		host.start(null);
 		assertThat(host.agent()).isNotNull();
@@ -90,7 +90,8 @@ class HostsAndProducersTest {
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
 		when(config.client().requestTimeout()).thenReturn(Optional.of(Duration.ofSeconds(1)));
 		when(config.client().capabilities().readTextFile()).thenReturn(true);
-		when(config.client().transport().type()).thenReturn(Optional.of(ClientTransportType.HTTP));
+		when(config.client().transport().type()).thenReturn(Optional.of(AcpTransportType.HTTP));
+		when(config.client().transport().websocket().connectTimeout()).thenReturn(Duration.ofSeconds(10));
 		when(config.client().transport().http().uri()).thenReturn(Optional.of(java.net.URI.create("http://localhost:9/acp")));
 		AcpClientProducers producers = new AcpClientProducers(config);
 		assertThat(producers.acpClientTransport()).isNotNull();
@@ -219,7 +220,7 @@ class HostsAndProducersTest {
 	@Test
 	void capabilitiesFollowTheConfiguration() {
 		AcpRuntimeConfig.Capabilities none = mock(AcpRuntimeConfig.Capabilities.class);
-		AcpSchema.ClientCapabilities nothing = AcpClientProducers.capabilities(none);
+		AcpSchema.ClientCapabilities nothing = AcpSettings.capabilities(none).toClientCapabilities();
 		assertThat(nothing.fs().readTextFile()).isFalse();
 		assertThat(nothing.terminal()).isFalse();
 		assertThat(nothing.elicitation()).isNull();
@@ -231,7 +232,7 @@ class HostsAndProducersTest {
 		when(all.terminal()).thenReturn(true);
 		when(all.elicitationForm()).thenReturn(true);
 		when(all.booleanConfigOptions()).thenReturn(true);
-		AcpSchema.ClientCapabilities everything = AcpClientProducers.capabilities(all);
+		AcpSchema.ClientCapabilities everything = AcpSettings.capabilities(all).toClientCapabilities();
 		assertThat(everything.fs().writeTextFile()).isTrue();
 		assertThat(everything.terminal()).isTrue();
 		assertThat(everything.elicitation().form()).isNotNull();
@@ -240,7 +241,7 @@ class HostsAndProducersTest {
 
 		when(all.elicitationForm()).thenReturn(false);
 		when(all.elicitationUrl()).thenReturn(true);
-		assertThat(AcpClientProducers.capabilities(all).elicitation().url()).isNotNull();
+		assertThat(AcpSettings.capabilities(all).toClientCapabilities().elicitation().url()).isNotNull();
 	}
 
 	@AcpAgent

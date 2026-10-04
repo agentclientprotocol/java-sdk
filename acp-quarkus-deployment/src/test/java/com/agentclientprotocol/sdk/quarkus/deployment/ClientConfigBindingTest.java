@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
-import com.agentclientprotocol.sdk.quarkus.ClientTransportType;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioAgentHost;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import io.quarkus.arc.Arc;
@@ -58,7 +58,7 @@ class ClientConfigBindingTest {
 		AcpRuntimeConfig.Client client = config.client();
 		assertThat(client.requestTimeout()).contains(Duration.ofSeconds(9));
 		assertThat(client.promptTimeout()).contains(Duration.ofMinutes(10));
-		assertThat(client.transport().type()).contains(ClientTransportType.STDIO);
+		assertThat(client.transport().type()).contains(AcpTransportType.STDIO);
 		assertThat(client.transport().stdio().command()).contains("my-agent");
 		assertThat(client.transport().stdio().args()).contains(List.of("--acp", "--verbose"));
 		assertThat(client.transport().stdio().env()).isEqualTo(Map.of("AGENT_MODE", "test"));

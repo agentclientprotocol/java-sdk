@@ -4,7 +4,7 @@
 
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
-import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
+import com.agentclientprotocol.sdk.integration.AcpAgentTransports;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.inject.Produces;
@@ -28,7 +28,7 @@ public class AcpStdioTransportProducer {
 	@Singleton
 	@DefaultBean
 	public AcpAgentTransport stdioAgentTransport() {
-		return new StdioAcpAgentTransport();
+		return AcpAgentTransports.stdio();
 	}
 
 }
