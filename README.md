@@ -573,6 +573,10 @@ If you need a stable target, pin to an exact version.
 
 ## Releases
 
+A release candidate must have a green [framework smoke matrix](integration-testing/README.md#framework-smoke-matrix)
+(`framework-smoke.yml`: Spring Boot, Micronaut and Quarkus against the TypeScript SDK) on the
+commit being released before `release.yml` is dispatched.
+
 ### 0.18.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, contributed by
