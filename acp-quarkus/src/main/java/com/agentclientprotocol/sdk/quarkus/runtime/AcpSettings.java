@@ -12,9 +12,13 @@ import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 
 /**
- * Binds the {@code quarkus.acp.*} configuration mappings onto the SDK's framework-neutral
- * settings. The Quarkus HTTP server serves the endpoint, so the SDK listener's own settings
- * stay unset.
+ * Turns the {@code quarkus.acp.*} configuration ({@link AcpBuildTimeConfig},
+ * {@link AcpRuntimeConfig}) into the SDK's framework-neutral settings, {@link AcpAgentSettings} and
+ * {@link AcpClientSettings}, which the extension's beans hand to {@code acp-integration}. An unset
+ * optional property stays unset, so the SDK applies its default. The Quarkus HTTP server serves the
+ * endpoint, so the SDK listener's own settings (its port and HTTP/2 stream limit) keep their
+ * defaults and are not used. Part of the extension's wiring; an application does not use it
+ * directly.
  *
  * @author Mark Pollack
  */
@@ -27,7 +31,8 @@ public final class AcpSettings {
 	}
 
 	/**
-	 * The agent settings.
+	 * Returns the agent settings: the build-time ones (enabled, transport, path) with the run-time
+	 * ones (timeouts, shutdown on transport end, endpoint limits).
 	 * @param buildTime the settings fixed at build time
 	 * @param runtime the settings read at startup
 	 * @return the settings
@@ -64,7 +69,7 @@ public final class AcpSettings {
 	}
 
 	/**
-	 * The client settings.
+	 * Returns the client settings: timeouts, transport and capabilities.
 	 * @param client the client configuration
 	 * @return the settings
 	 */

@@ -44,41 +44,42 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Serves the application's {@code @AcpAgent} bean, from the application context's start to
- * its close. The agent class is a bean like any other: annotate it {@code @Singleton} (or
- * another bean-defining annotation) as well as {@code @AcpAgent}, and it is found from its
- * compile-time bean definition, with no classpath scan. Exactly one such bean is allowed;
- * with none, as in a client-only application, nothing is started.
+ * Serves the application's {@code @AcpAgent} bean, from the application context's start to its
+ * close. Add {@code acp-micronaut}, and annotate the agent class {@code @Singleton} (or another
+ * bean-defining annotation) as well as {@code @AcpAgent}: it is a bean like any other, found from
+ * its compile-time bean definition with no classpath scan. Exactly one such bean is allowed; with
+ * none, as in a client-only application, nothing is started. The application rarely calls this
+ * class itself; inject it for {@link #port()} in a test. The module's README walks through an
+ * agent.
  *
- * <p>
- * The transport comes from {@link AcpAgentConfiguration}:
+ * <p>The transport comes from {@link AcpAgentConfiguration}:
  * <ul>
- * <li>{@code stdio} (default): the agent reads standard input and writes standard output,
- * which therefore must carry nothing else: send logging to standard error and turn off the
- * banner ({@code Micronaut.build(args).banner(false)}). The SDK's threads are daemons, so the
- * runtime holds the JVM open until the transport ends; when the client closes the agent's
- * input and every answer is written, the runtime closes the application context
- * ({@code acp.agent.shutdown-on-transport-end}), and the process exits. An application bean
- * of type {@code AcpAgentTransport} replaces stdio, for tests among others.</li>
+ * <li>{@code stdio} (default): the agent reads standard input and writes standard output, which
+ * therefore must carry nothing else: send logging to standard error and turn off the banner
+ * ({@code Micronaut.build(args).banner(false)}). The SDK's threads are daemons, so the runtime
+ * holds the JVM open until the transport ends; when the client closes the agent's input and every
+ * answer is written, the runtime closes the application context
+ * ({@code acp.agent.shutdown-on-transport-end}), and the process exits. An application bean of type
+ * {@code AcpAgentTransport} replaces stdio, for tests among others.</li>
  * <li>{@code http} or {@code websocket}: the SDK's Streamable HTTP listener from
- * {@code acp-streamable-http-jetty}, on its own port, serving Streamable HTTP and WebSocket on
- * one path, with one agent per connection invoking the same bean, whose handlers must
- * therefore be thread-safe.</li>
+ * {@code acp-streamable-http-jetty}, on its own port, serving Streamable HTTP and WebSocket on one
+ * path, with one agent per connection invoking the same bean, whose handlers must therefore be
+ * thread-safe.</li>
  * </ul>
  *
- * <p>
- * {@code AcpInterceptor}, {@code ArgumentResolver} and {@code ReturnValueHandler} beans are
- * added to the agent, in their bean order. Handler methods run on Micronaut's virtual-thread
- * executor ({@code TaskExecutors.VIRTUAL}) on JDK 21 and later, else on the SDK's own pool. Handler methods may also return a
- * {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams {@code Publisher},
- * which {@code AcpAgentSupport} waits for.
+ * <p>The agent's timeouts come from {@link AcpAgentConfiguration}. {@code AcpInterceptor},
+ * {@code ArgumentResolver} and {@code ReturnValueHandler} beans are added to the agent, in their
+ * bean order. Handler methods run on Micronaut's virtual-thread executor
+ * ({@code TaskExecutors.VIRTUAL}) on JDK 21 and later, else on the SDK's own pool. Handler methods
+ * may also return a {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams
+ * {@code Publisher}, which {@code AcpAgentSupport} waits for.
  *
- * <p>
- * Stopping: closing the context closes the agent gracefully, and with
- * {@code micronaut.lifecycle.graceful-shutdown.enabled} the listener drains through
- * Micronaut's graceful shutdown first. An application without an embedded server has no
- * shutdown hook of Micronaut's, so the runtime registers one that closes the context on
- * SIGTERM.
+ * <p>Stopping: closing the context closes the agent gracefully, waiting at most
+ * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds, then at
+ * once. With {@code micronaut.lifecycle.graceful-shutdown.enabled} the listener drains through
+ * Micronaut's graceful shutdown first. An application without an embedded server has no shutdown
+ * hook of Micronaut's, so the runtime registers one that closes the agent and the context on
+ * SIGTERM. With {@code acp.agent.enabled=false} this bean does not exist.
  */
 @Singleton
 @Requires(property = AcpAgentConfiguration.PREFIX + ".enabled", notEquals = StringUtils.FALSE)
@@ -122,16 +123,24 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		this.returnValueHandlers = returnValueHandlers;
 	}
 
+	/**
+	 * Starts serving the agent ({@link #start()}) when Micronaut publishes the
+	 * {@code StartupEvent}, once the application context has started.
+	 * @param event the startup event
+	 */
 	@Override
 	public void onApplicationEvent(StartupEvent event) {
 		start();
 	}
 
 	/**
-	 * Starts serving the {@code @AcpAgent} bean, once; the application context's start does
-	 * this. Does nothing when the application has no such bean.
-	 * @throws IllegalStateException if the application has more than one {@code @AcpAgent}
-	 * bean, or asks for HTTP without {@code acp-streamable-http-jetty}
+	 * Starts serving the {@code @AcpAgent} bean, once; the application context's start does this.
+	 * Does nothing when the application has no such bean, when it has started already, or once
+	 * closing has begun. Returns once the transport or the listener has started. Over a single
+	 * transport (stdio) it also starts a non-daemon thread that keeps the JVM up until the
+	 * transport ends, since the SDK's own threads are daemons.
+	 * @throws IllegalStateException if the application has more than one {@code @AcpAgent} bean, or
+	 * asks for HTTP without {@code acp-streamable-http-jetty}
 	 */
 	public void start() {
 		synchronized (lock) {
@@ -170,8 +179,9 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	}
 
 	/**
-	 * The port the HTTP listener is bound to, useful with {@code acp.agent.transport.http.port=0}.
-	 * @return the port, or empty when no listener is running
+	 * Returns the port the HTTP listener is bound to, useful with
+	 * {@code acp.agent.transport.http.port=0}.
+	 * @return the port, or empty over stdio, before the start and after the close
 	 */
 	public OptionalInt port() {
 		AcpHost current = currentHost();
@@ -179,13 +189,19 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	}
 
 	/**
-	 * Whether an agent is being served.
-	 * @return true from a successful start until the close
+	 * Returns whether an agent is being served.
+	 * @return true from a successful start until the close or the graceful shutdown begins
 	 */
 	public boolean isRunning() {
 		return currentHost() != null && !closing;
 	}
 
+	/**
+	 * Stops the agent gracefully when Micronaut's graceful shutdown asks: in-flight requests are
+	 * answered or cancelled and the transport or listener closes. Completes at once when no agent
+	 * is served.
+	 * @return completes when the agent has stopped
+	 */
 	@Override
 	public CompletionStage<?> shutdownGracefully() {
 		AcpHost current = currentHost();
@@ -196,7 +212,11 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		return current.stopGracefully();
 	}
 
-	/** Closes the agent gracefully; the application context's close does this. */
+	/**
+	 * Closes the agent gracefully, waiting at most
+	 * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds, then
+	 * at once; the application context's close does this. Later calls do nothing.
+	 */
 	@PreDestroy
 	public void close() {
 		AcpHost current;

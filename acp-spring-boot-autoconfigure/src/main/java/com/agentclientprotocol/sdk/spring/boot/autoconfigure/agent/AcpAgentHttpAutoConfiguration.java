@@ -30,16 +30,29 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Serves the {@code @AcpAgent} bean over ACP Streamable HTTP when
- * {@code spring.acp.agent.transport.type=http} (or {@code websocket}, the same) and
- * {@code acp-streamable-http-jetty} is on the classpath. One agent runtime per remote
- * connection, from the {@link AcpAgentFactory}.
- * <p>
- * In a servlet web application the {@link StreamableHttpAcpServlet} is mounted on the
- * application's own server (HTTP/SSE). Otherwise the SDK's
- * {@link StreamableHttpAcpAgentTransport} runs its own listener on
- * {@code transport.http.listener.port}, which also accepts WebSocket upgrades on the same
- * path and cleartext HTTP/2.
+ * Serves the application's {@code @AcpAgent} bean over ACP Streamable HTTP when
+ * {@code spring.acp.agent.transport.type} is {@code http} (or {@code websocket}, the same) and
+ * {@code acp-streamable-http-jetty} is on the classpath. The starter does not bring that module, so
+ * add it yourself. Each client connection gets its own agent from the {@link AcpAgentFactory} that
+ * {@link AcpAgentAutoConfiguration} creates, and every one of them calls the same bean.
+ *
+ * <p>Where the endpoint is served depends on the kind of application:
+ * <ul>
+ * <li>A servlet web application mounts the {@link StreamableHttpAcpServlet} on its own server at
+ * {@code spring.acp.agent.transport.http.path}: HTTP and SSE, no WebSocket. A bean named
+ * {@code acpServletRegistration} of the application's own replaces the registration. Before the
+ * server's graceful shutdown, the servlet's connections are closed (waiting at most 30 seconds),
+ * since each holds an open SSE response that the shutdown would otherwise wait for.</li>
+ * <li>A non-web application gets the SDK's {@link StreamableHttpAcpAgentTransport}, listening on
+ * {@code spring.acp.agent.transport.http.listener.port} (default 8080) with HTTP/1.1, cleartext
+ * HTTP/2 and WebSocket upgrades on the same path. It starts with the context and stops with it,
+ * waiting at most 30 seconds. A {@code StreamableHttpAcpAgentTransport} bean of the application's
+ * own replaces it.</li>
+ * <li>A reactive web application gets neither.</li>
+ * </ul>
+ * The endpoint's limits come from {@code spring.acp.agent.transport.http.*}
+ * ({@link AcpAgentProperties.AgentHttpProperties}). Nothing here applies when
+ * {@code spring.acp.agent.enabled=false}.
  */
 @AutoConfiguration(after = AcpAgentAutoConfiguration.class)
 @ConditionalOnClass(StreamableHttpAcpServlet.class)

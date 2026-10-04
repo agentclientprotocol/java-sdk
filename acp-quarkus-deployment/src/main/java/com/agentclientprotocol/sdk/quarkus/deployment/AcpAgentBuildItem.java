@@ -8,8 +8,11 @@ import io.quarkus.builder.item.SimpleBuildItem;
 import org.jboss.jandex.DotName;
 
 /**
- * The application's one {@code @AcpAgent} class, present only when there is one and the
- * agent is enabled.
+ * The application's one {@code @AcpAgent} class, as the extension's build steps pass it between
+ * them: present only when there is one and {@code quarkus.acp.agent.enabled} is true. Its presence
+ * makes the build add the agent host for the configured transport; without it the application is a
+ * client only. A second {@code @AcpAgent} class fails the build, naming both. An application does
+ * not use it.
  *
  * @author Mark Pollack
  */
@@ -22,7 +25,7 @@ public final class AcpAgentBuildItem extends SimpleBuildItem {
 	}
 
 	/**
-	 * The annotated class.
+	 * Returns the name of the annotated class.
 	 * @return the class name
 	 */
 	public DotName agentClass() {

@@ -17,28 +17,34 @@ import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Singleton;
 
 /**
- * The configured client, when {@code acp.client.transport.*} is set: its transport, an
- * {@link AcpAsyncClient} and an {@link AcpSyncClient} facade over that same client (one
- * session on one transport connection). The client connects when the application calls
- * {@code initialize()}, and closes gracefully, once, with the application context.
+ * Creates the application's ACP client from {@code acp.client.*} ({@link AcpClientConfiguration})
+ * when any {@code acp.client.transport.*} property is set: its transport, an
+ * {@link AcpAsyncClient}, and an {@link AcpSyncClient} facade over that same client, so both share
+ * one transport connection. Inject either. An application without client properties gets none of
+ * these beans.
  *
- * <p>
- * The builder gets the configured request timeout and capabilities and a session-update
- * consumer that logs at DEBUG, then every {@link AcpClientCustomizer} bean in order. Replace
- * the transport with an application bean annotated
- * {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
+ * <p>The beans are singletons, created when first injected or looked up. Creating the client
+ * connects its transport (for stdio, starts the agent process); the application then calls
+ * {@code initialize()} and opens sessions. The client closes gracefully, once, with the application
+ * context, waiting at most its request timeout plus 10 seconds.
+ *
+ * <p>The builder gets the configured timeouts and capabilities and a session-update consumer that
+ * logs at DEBUG, then every {@link AcpClientCustomizer} bean in order; a session-update consumer a
+ * customizer registers replaces the logging one. Replace the transport with an application bean
+ * annotated {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
  */
 @Factory
 @Requires(property = AcpClientConfiguration.PREFIX + ".transport")
 public class AcpClientBeans {
 
 	/**
-	 * The transport {@code acp.client.transport} describes, by the SDK's rule
-	 * ({@link AcpClientTransports}).
+	 * Creates the transport {@code acp.client.transport.*} describes, by the SDK's rule
+	 * ({@link AcpClientTransports}): a {@code type} that is set wins; otherwise the one transport
+	 * whose command or URI is set. Not connected yet; the client connects it.
 	 * @param config the client settings
 	 * @return the transport
-	 * @throws IllegalStateException if the settings name no transport, several without a
-	 * type, or a type without its command or URI
+	 * @throws IllegalStateException if the settings name no transport, several without a type, or a
+	 * type without its command or URI
 	 */
 	@Singleton
 	public AcpClientTransport acpClientTransport(AcpClientConfiguration config) {
@@ -48,11 +54,14 @@ public class AcpClientBeans {
 	}
 
 	/**
-	 * The client, built once over the transport.
+	 * Creates the client, once, over the transport, which this connects. Its capabilities and
+	 * timeouts come from the configuration; then each customizer is applied to its builder.
 	 * @param transport the client transport
 	 * @param config the client settings
 	 * @param customizers every customizer bean, in bean order
 	 * @return the async client
+	 * @throws IllegalStateException if a capability property is true but no customizer registers
+	 * its handler; the message names the property
 	 */
 	@Singleton
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientConfiguration config,
@@ -61,7 +70,7 @@ public class AcpClientBeans {
 	}
 
 	/**
-	 * The sync facade over the one async client. Building it from the transport instead
+	 * Creates the sync facade over the one async client. Building it from the transport instead
 	 * would connect that transport a second time, which the SDK refuses.
 	 * @param client the async client
 	 * @return the sync client

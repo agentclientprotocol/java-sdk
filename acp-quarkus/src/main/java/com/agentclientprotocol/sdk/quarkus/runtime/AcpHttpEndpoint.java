@@ -12,9 +12,11 @@ import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import jakarta.inject.Singleton;
 
 /**
- * What the Streamable HTTP servlet and the WebSocket route share: one agent factory over
- * the {@code @AcpAgent} bean, the JSON mapper, and the endpoint limits from
- * {@code quarkus.acp.agent.transport.http.*}.
+ * What the Streamable HTTP servlet ({@link AcpHttpServlet}) and the WebSocket route
+ * ({@link AcpWebSocketRoute}) share: one agent factory over the {@code @AcpAgent} bean, the JSON
+ * mapper, and the endpoint limits from {@code quarkus.acp.agent.transport.http.*}. The extension
+ * adds it for an HTTP agent. Part of the extension's wiring; an application does not use it
+ * directly.
  *
  * @author Mark Pollack
  */
@@ -42,7 +44,8 @@ public class AcpHttpEndpoint {
 	}
 
 	/**
-	 * The JSON mapper of the endpoint (the SDK default, never the application's).
+	 * Returns the endpoint's JSON mapper: the SDK's default
+	 * ({@link AcpJsonMapper#createDefault()}), never a mapper of the application's.
 	 * @return the mapper
 	 */
 	public AcpJsonMapper jsonMapper() {
@@ -50,7 +53,7 @@ public class AcpHttpEndpoint {
 	}
 
 	/**
-	 * The factory creating one agent per connection, all on the {@code @AcpAgent} bean.
+	 * Returns the factory creating one agent per connection, all on the {@code @AcpAgent} bean.
 	 * @return the agent factory
 	 */
 	public AcpAgentFactory agentFactory() {
@@ -58,7 +61,7 @@ public class AcpHttpEndpoint {
 	}
 
 	/**
-	 * The endpoint limits, from the configuration.
+	 * Returns the endpoint limits, from the configuration; an unset limit has the SDK's default.
 	 * @return the transport options
 	 */
 	public StreamableHttpAcpAgentTransportOptions options() {

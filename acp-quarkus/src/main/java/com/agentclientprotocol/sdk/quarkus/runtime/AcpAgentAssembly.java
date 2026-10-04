@@ -24,16 +24,17 @@ import jakarta.inject.Singleton;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
- * Assembles the {@link AcpAgentSupport} builder for the application's {@code @AcpAgent}
- * bean ({@link AcpAgents}): the bean instance from the container, the configured timeouts,
- * and the interceptor, argument resolver and return value handler beans, then the Mutiny
- * return types. Handler methods block, so they run on the {@link ManagedExecutor}: Quarkus'
- * worker pool, where blocking work belongs (never the Vert.x event loop), with the
- * application's contexts propagated, rather than on a second pool of the SDK's.
- * <p>
- * Handlers are discovered on the user's class (from the build-time index), not on the
- * instance's class, so a container subclass of the bean does not hide them.
- * </p>
+ * Assembles the {@link AcpAgentSupport} builder for the application's {@code @AcpAgent} bean
+ * ({@link AcpAgents}): the bean instance from the container, the configured timeouts, and the
+ * interceptor, argument resolver and return value handler beans, then the Mutiny return types
+ * ({@code Uni}, and {@code Multi} from a prompt handler). The stdio host and the HTTP endpoint
+ * build their agents from it; it exists only when an agent is served. Part of the extension's
+ * wiring; an application does not use it directly.
+ * <p>Handler methods block, so they run on the {@link ManagedExecutor}: Quarkus' worker pool, where
+ * blocking work belongs (never the Vert.x event loop), with the application's contexts propagated,
+ * rather than on a second pool of the SDK's.
+ * <p>Handlers are discovered on the user's class (from the build-time index), not on the instance's
+ * class, so a container subclass of the bean does not hide them. </p>
  *
  * @author Mark Pollack
  */
@@ -64,7 +65,7 @@ public class AcpAgentAssembly {
 	}
 
 	/**
-	 * The agent settings, from the configuration.
+	 * Returns the agent settings, read from the configuration when this bean was created.
 	 * @return the settings
 	 */
 	public AcpAgentSettings settings() {
@@ -72,7 +73,8 @@ public class AcpAgentAssembly {
 	}
 
 	/**
-	 * A builder holding the agent bean and every setting except the transport.
+	 * Returns a new builder holding the agent bean and every setting except the transport. Each
+	 * call looks the bean up in the container again.
 	 * @return a new builder
 	 */
 	public AcpAgentSupport.Builder builder() {
@@ -80,8 +82,9 @@ public class AcpAgentAssembly {
 	}
 
 	/**
-	 * A factory serving one agent per remote connection, all on the one bean, for a
-	 * listener transport.
+	 * Returns a new factory serving one agent per remote connection, all on the one bean, for the
+	 * HTTP endpoint. Every connection's agent calls the same bean, so its handler methods must be
+	 * thread-safe.
 	 * @return the agent factory
 	 */
 	public AcpAgentFactory factory() {

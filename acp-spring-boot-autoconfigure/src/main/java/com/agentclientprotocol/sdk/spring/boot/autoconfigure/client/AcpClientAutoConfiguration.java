@@ -24,8 +24,23 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * An {@link AcpAsyncClient} on the client transport, built by {@link AcpClients} with every
- * {@link AcpClientCustomizer} bean in order, and an {@link AcpSyncClient} facade over it.
+ * Creates the application's ACP client on the client transport bean: an {@link AcpAsyncClient}, and
+ * an {@link AcpSyncClient} over that same client, so both share one connection. Inject either. It
+ * applies when there is an {@code AcpClientTransport} bean, which
+ * {@link AcpClientTransportAutoConfiguration} creates from {@code spring.acp.client.transport.*},
+ * or the application defines itself.
+ *
+ * <p>The client advertises the capabilities and uses the timeouts of {@link AcpClientProperties}.
+ * Every {@link AcpClientCustomizer} bean is applied to its builder, in bean order: register the
+ * session-update consumer, the permission handler, and the file system, terminal and elicitation
+ * handlers there. Without a session-update consumer of the application's own, session updates are
+ * logged at DEBUG. Creating the client connects the transport (for stdio, starts the agent process)
+ * when the context starts; the application then calls {@code initialize()} and opens sessions.
+ *
+ * <p>When the context closes, the client is closed once: pending notifications are delivered,
+ * waiting at most the request timeout plus 10 seconds, then the transport is closed. An
+ * {@code AcpAsyncClient} or {@code AcpSyncClient} bean of the application's own replaces the one
+ * created here.
  */
 @AutoConfiguration(after = AcpClientTransportAutoConfiguration.class)
 @ConditionalOnClass(AcpClient.class)

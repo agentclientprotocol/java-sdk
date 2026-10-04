@@ -11,11 +11,13 @@ import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
 
 /**
- * Defaults for an application that serves its agent over stdio, where standard output
- * carries the protocol: the console log goes to standard error, there is no banner, and
- * the HTTP listener is off. They are a low-ordinal source, so the application's own
- * configuration still wins. Added for static and runtime initialization alike, because the console log
- * handler is created during static initialization.
+ * Configuration defaults for an application that serves its agent over stdio, where standard output
+ * carries the protocol: {@code quarkus.log.console.stderr=true} (the console log goes to standard
+ * error), {@code quarkus.banner.enabled=false} and {@code quarkus.http.host-enabled=false} (no HTTP
+ * listener). They are a low-ordinal source (50), so the application's own configuration still wins.
+ * The extension adds it for a stdio agent, for static and runtime initialization alike, because the
+ * console log handler is created during static initialization. Part of the extension's wiring; an
+ * application does not use it directly.
  *
  * @author Mark Pollack
  */

@@ -19,10 +19,17 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.ConfigurationCondition;
 
 /**
- * The client transport {@code spring.acp.client.transport.*} describes, by the SDK's rule
- * ({@link AcpClientTransports}): an explicit {@code type} wins; otherwise the one of
- * {@code stdio.command}, {@code websocket.uri} and {@code http.uri} that is set; several
- * without a type fail at startup.
+ * Creates the client transport that {@code spring.acp.client.transport.*} describes, for
+ * {@link AcpClientAutoConfiguration} to build the client on. It applies when any of {@code type},
+ * {@code stdio.command}, {@code websocket.uri} or {@code http.uri} is set and the application has
+ * no {@code AcpClientTransport} bean of its own; with none of them set, the application gets no
+ * transport and no client.
+ *
+ * <p>The transport is chosen by the SDK's rule ({@link AcpClientTransports}), the same in every
+ * framework: a {@code type} that is set wins, and fails the startup when its command or URI is
+ * missing; otherwise the one transport whose command or URI is set is used, and more than one fails
+ * the startup, naming them. The errors name the {@code spring.acp.client} properties. The transport
+ * bean has no destroy method: the client closes it when it is closed.
  */
 @AutoConfiguration
 @ConditionalOnClass(AcpClient.class)

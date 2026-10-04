@@ -19,12 +19,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Serves the {@code @AcpAgent} bean over one agent transport, stdio unless the
- * application provides its own {@link AcpAgentTransport} bean, on an {@link AcpAgentHost}.
- * The agent starts with the application; when the transport ends (the client closed
- * standard input) the application exits, unless
- * {@code quarkus.acp.agent.shutdown-on-transport-end} is off; when the application stops,
- * the agent closes gracefully.
+ * Serves the {@code @AcpAgent} bean over one agent transport, stdio unless the application provides
+ * its own {@link AcpAgentTransport} bean, on an {@link AcpAgentHost}. The extension adds it when
+ * {@code quarkus.acp.agent.transport.type} is {@code stdio} and the application has an
+ * {@code @AcpAgent} class. The agent starts with the application; when the transport ends (the
+ * client closed standard input and every answer has been written) the application exits, unless
+ * {@code quarkus.acp.agent.shutdown-on-transport-end} is off; when the application stops, the agent
+ * closes gracefully, waiting at most 30 seconds. An application does not call it; a test can inject
+ * it to reach the running agent.
  *
  * @author Mark Pollack
  */
@@ -72,8 +74,8 @@ public class AcpStdioAgentHost {
 	}
 
 	/**
-	 * The running agent, once the application has started.
-	 * @return the agent, or null before startup
+	 * Returns the running agent, once the application has started.
+	 * @return the agent, or {@code null} before startup
 	 */
 	public @Nullable AcpAgentSupport agent() {
 		return agent;

@@ -37,9 +37,25 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.util.ClassUtils;
 
 /**
- * Serves the application's single {@code @AcpAgent} bean. The bean's handlers are found on its
- * user class (a CGLIB proxy keeps its advice), and {@code AcpInterceptor},
- * {@code ArgumentResolver} and {@code ReturnValueHandler} beans are added in their order.
+ * Serves the application's {@code @AcpAgent} bean: builds the agent from it, and starts and stops
+ * the agent with the application context. With {@code acp-spring-boot-starter} on the classpath,
+ * annotate one bean with {@code @AcpAgent} and this autoconfiguration does the rest. A client-only
+ * application, which has no such bean, gets nothing from it.
+ *
+ * <p>It creates an {@link AcpAgentFactory} bean, which builds one agent per connection for the
+ * Streamable HTTP endpoint ({@link AcpAgentHttpAutoConfiguration}); an {@code AcpAgentFactory} bean
+ * of the application's own replaces it. When there is an {@code AcpAgentTransport} bean (the stdio
+ * transport from {@link AcpAgentTransportAutoConfiguration}, or the application's own), it also
+ * serves one agent on that transport: started with the context, and stopped with it, waiting at
+ * most 30 seconds for a graceful stop. When that transport ends on its own, the context is closed,
+ * unless {@code spring.acp.agent.shutdown-on-transport-end=false}.
+ *
+ * <p>The handler methods are found on the bean's own class, so a bean proxied by Spring AOP (CGLIB)
+ * is served with its advice. {@code AcpInterceptor}, {@code ArgumentResolver} and
+ * {@code ReturnValueHandler} beans are added to the agent in their bean order, and the timeouts and
+ * the handler executor come from {@link AcpAgentProperties}. More than one {@code @AcpAgent} bean
+ * fails the startup with an error naming them. On the HTTP endpoint every connection's agent calls
+ * the same bean, so its handler methods must be thread-safe.
  */
 @AutoConfiguration(after = AcpAgentTransportAutoConfiguration.class)
 @ConditionalOnClass(AcpAgentSupport.class)

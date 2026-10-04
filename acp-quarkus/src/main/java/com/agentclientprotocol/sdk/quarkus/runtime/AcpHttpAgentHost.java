@@ -21,10 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Closes the HTTP and WebSocket connections first when the application stops: every
- * open SSE stream is an in-flight request, so a graceful HTTP shutdown would otherwise
- * wait for clients that never finish. In-flight prompts are cancelled and every stream
- * completes within the endpoint's shutdown timeout.
+ * Closes the HTTP and WebSocket connections first when the application stops: every open SSE stream
+ * is an in-flight request, so a graceful HTTP shutdown would otherwise wait for clients that never
+ * finish. In-flight prompts are cancelled and every stream completes within the endpoint's shutdown
+ * timeout ({@code quarkus.acp.agent.transport.http.shutdown-timeout}). The extension adds it for an
+ * HTTP agent. An application does not call it; a test can inject it to count the open connections.
  *
  * @author Mark Pollack
  */
@@ -62,7 +63,7 @@ public class AcpHttpAgentHost {
 	}
 
 	/**
-	 * The open HTTP and WebSocket connections.
+	 * Returns how many ACP connections are open: Streamable HTTP and WebSocket together.
 	 * @return the connection count
 	 */
 	public int activeConnectionCount() {

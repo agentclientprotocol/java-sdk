@@ -19,6 +19,22 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Creates the stdio transport that {@link AcpAgentAutoConfiguration} serves the application's
+ * {@code @AcpAgent} bean on. It applies when the application has an {@code @AcpAgent} bean and no
+ * {@code AcpAgentTransport} bean of its own, and {@code spring.acp.agent.transport.type} is
+ * {@code stdio} or unset. An application that defines its own transport bean, such as the agent
+ * side of an {@code InMemoryTransportPair} in a test, is served on that one instead.
+ *
+ * <p>The stdio transport reads the client's messages from standard input and writes its own to
+ * standard output, so nothing else may write to standard output: Spring Boot's banner and console
+ * logging do by default, so turn the banner off and send logging to standard error. The transport
+ * bean has no destroy method; the agent's lifecycle closes it when it stops the agent.
+ *
+ * <p>With {@code type} {@code http} or {@code websocket} but no {@code acp-streamable-http-jetty}
+ * on the classpath, the startup fails with an error naming the module. Nothing here applies when
+ * {@code spring.acp.agent.enabled=false}.
+ */
 @AutoConfiguration
 @ConditionalOnClass(AcpAgent.class)
 @ConditionalOnProperty(prefix = "spring.acp.agent", name = "enabled", havingValue = "true", matchIfMissing = true)

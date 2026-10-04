@@ -9,7 +9,9 @@ import java.util.function.Supplier;
 import io.quarkus.runtime.annotations.Recorder;
 
 /**
- * Carries what the build found into the running application.
+ * Carries what the build found into the running application: Quarkus records the calls made on it
+ * at build time and replays them at startup. It hands over the {@code @AcpAgent} class as an
+ * {@link AcpAgentClass} bean. Part of the extension's wiring; an application does not use it.
  *
  * @author Mark Pollack
  */
@@ -17,9 +19,11 @@ import io.quarkus.runtime.annotations.Recorder;
 public class AcpRecorder {
 
 	/**
-	 * The {@code @AcpAgent} class, loaded by the application's class loader.
+	 * Returns a supplier of the {@link AcpAgentClass} bean, which loads the {@code @AcpAgent} class
+	 * with the application's class loader when the bean is created.
 	 * @param className the class's binary name
-	 * @return a supplier of the agent class bean
+	 * @return a supplier of the agent class bean; it throws {@link IllegalStateException} if the
+	 * class cannot be loaded
 	 */
 	public Supplier<AcpAgentClass> agentClass(String className) {
 		return () -> {

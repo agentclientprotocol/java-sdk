@@ -28,10 +28,13 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * Accepts WebSocket upgrades on the Streamable HTTP endpoint's path, on the Quarkus HTTP
- * server itself: a request carrying {@code Upgrade: websocket} becomes an ACP connection,
- * and every other request goes on to the servlet. Each connection runs one agent from
- * the shared factory, as the SDK's own listener does.
+ * Accepts WebSocket upgrades on the Streamable HTTP endpoint's path, on the Quarkus HTTP server
+ * itself: a request carrying {@code Upgrade: websocket} becomes an ACP connection, and every other
+ * request goes on to the servlet. Each connection runs one agent from the shared factory, as the
+ * SDK's own listener does, and the upgrade response names the connection in an
+ * {@code Acp-Connection-Id} header. The path includes {@code quarkus.servlet.context-path}. The
+ * extension adds it for an HTTP agent. Part of the extension's wiring; an application does not use
+ * it directly.
  *
  * @author Mark Pollack
  */

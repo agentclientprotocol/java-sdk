@@ -17,19 +17,19 @@ import jakarta.servlet.http.HttpServletResponseWrapper;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The SDK's Streamable HTTP servlet as a bean, so the Quarkus servlet container (Undertow
- * on the Quarkus HTTP server) takes this instance, built over the application's agent.
- * <p>
- * <b>Non-blocking output on quarkus-http.</b> The SDK opens an SSE stream by setting a
- * {@link WriteListener} and, as the Servlet specification allows while
- * {@code isReady()} is true, writing at once on the request thread. quarkus-http (the
- * Undertow fork behind {@code quarkus-undertow}) reports {@code isReady()} true there,
- * but a write queued in the same cycle as the listener's registration fails the request
- * ({@code UT005080}: async IO resumed and dispatched in the same cycle). The output
- * stream given to the servlet therefore reports not ready until the container has called
- * {@code onWritePossible} once; the SDK then writes from that callback, as it does after
- * any incomplete write.
- * </p>
+ * The SDK's Streamable HTTP servlet as a bean, so the Quarkus servlet container (Undertow on the
+ * Quarkus HTTP server) takes this instance, built over the application's agent. The extension maps
+ * it at {@code quarkus.acp.agent.transport.http.path} for an HTTP agent; it serves HTTP and SSE,
+ * while {@link AcpWebSocketRoute} takes the WebSocket upgrades on the same path. Part of the
+ * extension's wiring; an application does not use it directly.
+ * <p><b>Non-blocking output on quarkus-http.</b> The SDK opens an SSE stream by setting a
+ * {@link WriteListener} and, as the Servlet specification allows while {@code isReady()} is true,
+ * writing at once on the request thread. quarkus-http (the Undertow fork behind
+ * {@code quarkus-undertow}) reports {@code isReady()} true there, but a write queued in the same
+ * cycle as the listener's registration fails the request ({@code UT005080}: async IO resumed and
+ * dispatched in the same cycle). The output stream given to the servlet therefore reports not ready
+ * until the container has called {@code onWritePossible} once; the SDK then writes from that
+ * callback, as it does after any incomplete write. </p>
  *
  * @author Mark Pollack
  */

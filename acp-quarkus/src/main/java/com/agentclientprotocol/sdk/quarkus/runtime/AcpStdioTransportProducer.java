@@ -11,8 +11,10 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * The stdio agent transport, unless the application provides its own
- * {@link AcpAgentTransport} bean (a test, for one, provides an in-memory transport).
+ * Produces the stdio agent transport that {@link AcpStdioAgentHost} serves the agent on. It is a
+ * default bean, so an {@link AcpAgentTransport} bean of the application's own replaces it (a test,
+ * for one, provides an in-memory transport). The extension adds it only for a stdio agent. Part of
+ * the extension's wiring; an application does not use it directly.
  *
  * @author Mark Pollack
  */
@@ -20,8 +22,8 @@ import jakarta.inject.Singleton;
 public class AcpStdioTransportProducer {
 
 	/**
-	 * The transport over the process's standard input and output. The agent host closes it
-	 * when it closes the agent.
+	 * Returns the transport over the process's standard input and output, which must then carry
+	 * nothing else. The agent host closes it when it closes the agent.
 	 * @return the stdio transport
 	 */
 	@Produces

@@ -11,10 +11,14 @@ import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
 
 /**
- * Defaults for an application that serves its agent over HTTP, so the Quarkus HTTP
- * server admits what the SDK's own listener admits: a 16 MB POST body and WebSocket
- * message, sent as one frame or many, and 1024 concurrent HTTP/2 streams per connection (every SSE stream is one,
- * and a client holds one per session). The application's own configuration still wins.
+ * Configuration defaults for an application that serves its agent over HTTP, so the Quarkus HTTP
+ * server admits what the SDK's own listener admits: a 16 MB POST body
+ * ({@code quarkus.http.limits.max-body-size=16M}) and WebSocket message, sent as one frame or many
+ * ({@code quarkus.http.websocket-server.max-message-size} and {@code max-frame-size}), and 1024
+ * concurrent HTTP/2 streams per connection ({@code quarkus.http.limits.max-concurrent-streams};
+ * every SSE stream is one, and a client holds one per session). They are a low-ordinal source, so
+ * the application's own configuration still wins. The extension adds it for an HTTP agent. Part of
+ * the extension's wiring; an application does not use it directly.
  *
  * @author Mark Pollack
  */
