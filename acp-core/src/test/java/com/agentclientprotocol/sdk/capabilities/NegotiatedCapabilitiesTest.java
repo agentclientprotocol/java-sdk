@@ -289,15 +289,12 @@ class NegotiatedCapabilitiesTest {
 	}
 
 	@Test
-	void capabilityExceptionConvertsToProtocolException() {
-		AcpCapabilityException exception = new AcpCapabilityException("terminal");
-
-		var protocolException = exception.toProtocolException();
-
-		// -32001 is in the ACP-reserved range and undefined there; the request is invalid for
-		// the negotiated capabilities.
-		assertThat(protocolException.getCode()).isEqualTo(-32600);
-		assertThat(protocolException.getData()).isEqualTo("terminal");
+	void aMissingCapabilityHasOneProtocolAnswer() {
+		// ACP's elicitation RFD names -32602 (Invalid params) for an elicitation mode the client
+		// did not declare, which is the one answer the SDK gives; there is no second converter
+		// that answers -32600.
+		assertThat(java.util.Arrays.stream(AcpCapabilityException.class.getMethods())
+			.map(java.lang.reflect.Method::getName)).doesNotContain("toProtocolException");
 	}
 
 }

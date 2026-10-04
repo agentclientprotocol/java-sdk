@@ -690,8 +690,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     concurrent prompt is an `INVALID_REQUEST`.
   - `CAPABILITY_NOT_SUPPORTED` (`-32001`), `NOT_INITIALIZED` (`-32003`) and `PERMISSION_DENIED`
     (`-32005`) are removed: the SDK made them up inside the range ACP reserves for itself.
-    `AcpCapabilityException.toProtocolException()` now answers `-32600` with the capability name as
-    data.
+    `AcpCapabilityException.toProtocolException()`, which answered `-32001`, is removed (see
+    Removed).
 - **Elicitation is stable (the ACP schema promoted it on 2026-07-24, in protocol v1.7.0), and its
   API is no longer `@UnstableAcpApi`:** `CreateElicitationRequest`, `CreateElicitationResponse`,
   `ElicitationAction`, `CompleteElicitationNotification`, `ElicitationSchema`, the property schemas,
@@ -959,6 +959,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advertises them).
 
 ### Removed
+
+- **Breaking: `AcpCapabilityException.toProtocolException()` is removed.** It answered `-32600`
+  (invalid request) for a missing capability, while the one refusal ACP specifies, a client asked
+  for an elicitation in a mode it did not declare, is `-32602` (invalid params; ACP's elicitation
+  RFD, "Error Handling"), which the SDK's client sends. The SDK never called the method, so it
+  only offered a second code for the same case. Migration: throw
+  `new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, e.getMessage(), e.getCapability())`.
 
 - **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public
   interfaces they were public `org.slf4j.Logger` constants, API by accident. Migration: use a
