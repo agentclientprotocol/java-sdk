@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`AcpTransportThreads` in `acp-integration`: the threads a framework's network transports run
+  on.** `AcpClientTransports.create(settings, prefix, threads)` and
+  `AcpListeners.listener(settings, factory, threads)` take one: `executor(Executor)` for the
+  framework's executor, `sdkDefault()` for the SDK's own threads (virtual on JDK 21 and later), or
+  `platform()` for platform threads on every JDK. The existing overloads use `sdkDefault()`. The
+  stdio transports keep their own threads, which block on the process's pipes.
+
 - **The network transports can run on the application's executor.**
   `StreamableHttpAcpClientTransportOptions.builder().executor(Executor)` runs the Streamable HTTP
   client's work (the default `HttpClient`, handing over HTTP results, reading each SSE stream) on

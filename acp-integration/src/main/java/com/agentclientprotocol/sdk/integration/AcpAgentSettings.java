@@ -148,6 +148,11 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	 * @throws IllegalArgumentException if a limit is out of the range the options accept
 	 */
 	public StreamableHttpAcpAgentTransportOptions toOptions(boolean listener) {
+		return toOptionsBuilder(listener).build();
+	}
+
+	/** The builder {@link #toOptions(boolean)} builds, for {@link AcpListeners} to add threads to. */
+	StreamableHttpAcpAgentTransportOptions.Builder toOptionsBuilder(boolean listener) {
 		Limits limits = http.limits();
 		StreamableHttpAcpAgentTransportOptions.Builder options = StreamableHttpAcpAgentTransportOptions.builder();
 		ifSet(limits.maxPostBodyBytes(), options::maxPostBodyBytes);
@@ -160,7 +165,7 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		if (listener) {
 			ifSet(http.listener().maxConcurrentStreamsPerConnection(), options::maxConcurrentStreamsPerConnection);
 		}
-		return options.build();
+		return options;
 	}
 
 	private static <T> void ifSet(@Nullable T value, Consumer<T> setter) {
