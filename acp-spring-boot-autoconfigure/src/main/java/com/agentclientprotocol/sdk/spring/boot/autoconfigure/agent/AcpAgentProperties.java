@@ -79,10 +79,9 @@ public class AcpAgentProperties {
 	 * ({@code spring.acp.agent.enabled}). Default {@code true}; maps to
 	 * {@link AcpAgentSettings#enabled()}.
 	 *
-	 * <p>With {@code false} the autoconfiguration creates no stdio transport and no HTTP endpoint.
-	 * {@link AcpAgentAutoConfiguration} still builds its agent factory from the {@code @AcpAgent}
-	 * bean, and still serves the bean on an {@code AcpAgentTransport} bean the application defines
-	 * itself.
+	 * <p>With {@code false} the agent autoconfiguration creates nothing: no agent factory, no stdio
+	 * transport, no HTTP endpoint, and no agent on an {@code AcpAgentTransport} bean the application
+	 * defines itself. More than one {@code @AcpAgent} bean is then no error.
 	 * @return whether the agent is served
 	 */
 	public boolean isEnabled() {

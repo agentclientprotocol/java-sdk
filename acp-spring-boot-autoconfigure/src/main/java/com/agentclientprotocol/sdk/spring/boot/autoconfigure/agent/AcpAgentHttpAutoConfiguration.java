@@ -48,7 +48,8 @@ import org.springframework.context.annotation.Configuration;
  * HTTP/2 and WebSocket upgrades on the same path. It starts with the context and stops with it,
  * waiting at most 30 seconds. A {@code StreamableHttpAcpAgentTransport} bean of the application's
  * own replaces it.</li>
- * <li>A reactive web application gets neither.</li>
+ * <li>A reactive (WebFlux) web application fails the startup: the endpoint needs a servlet web
+ * application or the standalone listener.</li>
  * </ul>
  * The endpoint's limits come from {@code spring.acp.agent.transport.http.*}
  * ({@link AcpAgentProperties.AgentHttpProperties}). Nothing here applies when
@@ -85,6 +86,17 @@ public class AcpAgentHttpAutoConfiguration {
 		AcpServletLifecycle acpServletLifecycle(
 				@Qualifier("acpServletRegistration") ServletRegistrationBean<?> acpServletRegistration) {
 			return new AcpServletLifecycle(acpServletRegistration);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+	static class ReactiveConfiguration {
+
+		ReactiveConfiguration() {
+			throw new IllegalStateException("The ACP HTTP transport needs a servlet web application or the "
+					+ "standalone listener (acp-streamable-http-jetty); WebFlux is not supported");
 		}
 
 	}

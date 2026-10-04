@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
@@ -103,6 +104,31 @@ class AcpAgentAutoConfigurationTests {
 			.run(context -> {
 				assertThat(context).doesNotHaveBean("acpAgentLifecycle");
 				assertThat(context).doesNotHaveBean(AcpAgentTransport.class);
+			});
+	}
+
+	@Test
+	void disabledServesNothingOnTheApplicationsOwnTransport() {
+		new ApplicationContextRunner()
+			.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class,
+					AcpAgentAutoConfiguration.class, AcpAgentHttpAutoConfiguration.class))
+			.withUserConfiguration(SingleAgentWithInMemoryTransportConfiguration.class)
+			.withPropertyValues("spring.acp.agent.enabled=false")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean(AcpAgentFactory.class);
+				assertThat(context).doesNotHaveBean("acpAgentLifecycle");
+			});
+	}
+
+	@Test
+	void disabledToleratesTwoAgentBeans() {
+		this.runner.withUserConfiguration(MultipleAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.enabled=false")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean(AcpAgentFactory.class);
+				assertThat(context).doesNotHaveBean("acpAgentLifecycle");
 			});
 	}
 
