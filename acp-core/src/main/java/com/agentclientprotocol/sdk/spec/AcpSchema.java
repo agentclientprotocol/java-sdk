@@ -1721,52 +1721,189 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Read text file request
+	 * The params of {@code fs/read_text_file}: the agent asks the client for the content of a text
+	 * file, including changes the user has not yet saved in the editor. An agent in a prompt turn
+	 * usually sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#readFile(String, Integer, Integer)
+	 * readFile}, which fills in the session;
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#readTextFile readTextFile(...)} on the
+	 * prompt context, and the methods of the same name on {@code AcpAsyncAgent} and
+	 * {@code AcpSyncAgent}, take the whole request. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#readTextFileHandler
+	 * readTextFileHandler} on the client builder, receives it and answers with a
+	 * {@link ReadTextFileResponse}.
+	 *
+	 * <p>
+	 * Only a client that advertises {@code fs.readTextFile} ({@link FileSystemCapability}) takes
+	 * it. The agent fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it when the
+	 * client did not advertise it, and a client builder that advertises it without registering the
+	 * handler fails at {@code build()}.
+	 *
+	 * <p>
+	 * {@code line} counts from 1, so the first line of the file is line 1, and {@code limit} is a
+	 * number of lines; leave both {@code null} to read the whole file. The path must be absolute.
+	 * The SDK checks neither the path nor the numbers on either side: they reach the client's
+	 * handler as the agent sent them, so a client handler that reads any path it is given lets the
+	 * agent read every file the client process can read.
+	 *
+	 * @param sessionId the ACP session the read is for
+	 * @param path the absolute path of the file
+	 * @param line the first line to read, counting from 1, or {@code null} to start at the first
+	 * line
+	 * @param limit the most lines to read, or {@code null} for the rest of the file
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReadTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
 			@JsonProperty("line") @Nullable Integer line, @JsonProperty("limit") @Nullable Integer limit,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the read is for
+		 * @param path the absolute path of the file
+		 * @param line the first line to read, counting from 1, or {@code null}
+		 * @param limit the most lines to read, or {@code null}
+		 */
 		public ReadTextFileRequest(String sessionId, String path, @Nullable Integer line, @Nullable Integer limit) {
 			this(sessionId, path, line, limit, null);
 		}
 	}
 
 	/**
-	 * Read text file response
+	 * The result of {@code fs/read_text_file}: the text the client read. The client's read handler
+	 * returns it; the agent's {@code readTextFile(...)} completes with it, and
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#readFile(String)
+	 * PromptContext.readFile} returns its {@link #content()}.
+	 *
+	 * <p>
+	 * Whether the content is the whole file or only the lines the request asked for is up to the
+	 * client's handler; the SDK does not check it.
+	 *
+	 * @param content the text read: the whole file, or the requested lines
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReadTextFileResponse(@JsonProperty("content") String content,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param content the text read
+		 */
 		public ReadTextFileResponse(String content) {
 			this(content, null);
 		}
 	}
 
 	/**
-	 * Write text file request
+	 * The params of {@code fs/write_text_file}: the agent asks the client to write text to a file.
+	 * An agent in a prompt turn usually sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#writeFile(String, String) writeFile},
+	 * which fills in the session;
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#writeTextFile writeTextFile(...)} on
+	 * the prompt context, and the methods of the same name on {@code AcpAsyncAgent} and
+	 * {@code AcpSyncAgent}, take the whole request. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#writeTextFileHandler
+	 * writeTextFileHandler} on the client builder, receives it and answers with a
+	 * {@link WriteTextFileResponse} once the file is written.
+	 *
+	 * <p>
+	 * Only a client that advertises {@code fs.writeTextFile} ({@link FileSystemCapability}) takes
+	 * it, with the same checks as {@link ReadTextFileRequest}: the agent does not send it to a
+	 * client that did not advertise it, and a client builder fails at {@code build()} if it
+	 * advertises it without the handler. The protocol requires the client to create the file if it
+	 * does not exist.
+	 *
+	 * <p>
+	 * The path must be absolute. The SDK checks neither the path nor the content on either side, so
+	 * a client handler that writes any path it is given lets the agent change every file the client
+	 * process can write.
+	 *
+	 * @param sessionId the ACP session the write is for
+	 * @param path the absolute path of the file
+	 * @param content the text to write
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WriteTextFileRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("path") String path,
 			@JsonProperty("content") String content,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the write is for
+		 * @param path the absolute path of the file
+		 * @param content the text to write
+		 */
 		public WriteTextFileRequest(String sessionId, String path, String content) {
 			this(sessionId, path, content, null);
 		}
 	}
 
 	/**
-	 * Write text file response
+	 * The result of {@code fs/write_text_file}: an empty answer that confirms the file was written.
+	 * The client's write handler returns it; the agent's {@code writeTextFile(...)} completes with
+	 * it, and {@link com.agentclientprotocol.sdk.agent.PromptContext#writeFile(String, String)
+	 * PromptContext.writeFile} completes. A failed write is an error answer, not this record.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WriteTextFileResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public WriteTextFileResponse() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Create terminal request
+	 * The params of {@code terminal/create}: the agent asks the client to start a command in a new
+	 * terminal. The client answers at once with the terminal's ID ({@link CreateTerminalResponse}),
+	 * without waiting for the command to end; the agent passes that ID to {@code terminal/output},
+	 * {@code terminal/wait_for_exit}, {@code terminal/kill} and {@code terminal/release}. Most
+	 * agents do not build this request:
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} on the
+	 * prompt context builds it from a {@link com.agentclientprotocol.sdk.agent.Command} and runs
+	 * the whole sequence. To send it yourself, use
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#createTerminal createTerminal(...)} on
+	 * the prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@code AcpSyncAgent}. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#createTerminalHandler
+	 * createTerminalHandler} on the client builder, receives it.
+	 *
+	 * <p>
+	 * Only a client that advertises {@code terminal} ({@link ClientCapabilities#terminal()}) takes
+	 * it. The agent fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it when the
+	 * client did not advertise it. A client builder that advertises {@code terminal} must register
+	 * all five terminal handlers, or {@code build()} fails.
+	 *
+	 * <p>
+	 * The protocol requires the agent to release every terminal it creates
+	 * ({@link ReleaseTerminalRequest}). {@code execute} does so in every case: after reading the
+	 * output, when a step fails, and when its {@code Mono} is cancelled, for example because the
+	 * prompt was cancelled. An agent that sends this request itself must release the terminal
+	 * itself. To show the output live in a tool call, add a {@link ToolCallTerminal} with the ID
+	 * before releasing the terminal.
+	 *
+	 * <p>
+	 * {@code cwd} must be an absolute path. With {@code outputByteLimit}, the client keeps at most
+	 * that many bytes of output, dropping output from the start, and the protocol requires it to
+	 * cut at a character boundary; {@link TerminalOutputResponse#truncated()} then says it did. The
+	 * SDK checks none of the values on either side, and runs nothing itself: a client handler that
+	 * runs every command it is given lets the agent run any program the client process can run.
+	 *
+	 * @param sessionId the ACP session the command is for
+	 * @param command the program to run
+	 * @param args the command's arguments, or {@code null} for none
+	 * @param cwd the absolute working directory, or {@code null} to leave it to the client
+	 * @param env environment variables to set for the command, or {@code null} for none
+	 * @param outputByteLimit the most bytes of output the client keeps, or {@code null} to leave it
+	 * to the client
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateTerminalRequest(@JsonProperty("sessionId") String sessionId,
@@ -1774,6 +1911,15 @@ public final class AcpSchema {
 			@JsonProperty("cwd") @Nullable String cwd, @JsonProperty("env") @Nullable List<EnvVariable> env,
 			@JsonProperty("outputByteLimit") @Nullable Long outputByteLimit,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the command is for
+		 * @param command the program to run
+		 * @param args the command's arguments, or {@code null}
+		 * @param cwd the absolute working directory, or {@code null}
+		 * @param env environment variables to set, or {@code null}
+		 * @param outputByteLimit the most bytes of output the client keeps, or {@code null}
+		 */
 		public CreateTerminalRequest(String sessionId, String command, @Nullable List<String> args,
 				@Nullable String cwd, @Nullable List<EnvVariable> env, @Nullable Long outputByteLimit) {
 			this(sessionId, command, args, cwd, env, outputByteLimit, null);
@@ -1781,103 +1927,301 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Create terminal response
+	 * The result of {@code terminal/create}: the ID of the new terminal, which the client returns
+	 * without waiting for the command to end. The client's create handler returns it; the agent's
+	 * {@code createTerminal(...)} completes with it. Pass {@link #terminalId()} to the other
+	 * terminal requests and, to show the output in a tool call, to a {@link ToolCallTerminal}.
+	 *
+	 * <p>
+	 * The ID is valid until the agent releases the terminal, and the agent must release it
+	 * ({@link ReleaseTerminalRequest}).
+	 *
+	 * @param terminalId the new terminal's ID
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateTerminalResponse(@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param terminalId the new terminal's ID
+		 */
 		public CreateTerminalResponse(String terminalId) {
 			this(terminalId, null);
 		}
 	}
 
 	/**
-	 * Terminal output request
+	 * The params of {@code terminal/output}: the agent asks for a terminal's output so far, without
+	 * waiting for the command to end. The answer, a {@link TerminalOutputResponse}, also says
+	 * whether the output was truncated and, once the command has ended, how it ended. The agent
+	 * sends it with {@link com.agentclientprotocol.sdk.agent.PromptContext#getTerminalOutput
+	 * getTerminalOutput(...)} on the prompt context, or the method of the same name on
+	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} sends it
+	 * once the command has ended. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#terminalOutputHandler
+	 * terminalOutputHandler} on the client builder, receives it.
+	 *
+	 * <p>
+	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
+	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
+	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 * After a {@code terminal/kill} the terminal can still be read.
+	 *
+	 * @param sessionId the ACP session the terminal belongs to
+	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the terminal belongs to
+		 * @param terminalId the terminal's ID
+		 */
 		public TerminalOutputRequest(String sessionId, String terminalId) {
 			this(sessionId, terminalId, null);
 		}
 	}
 
 	/**
-	 * Terminal output response
+	 * The result of {@code terminal/output}: a terminal's output so far, whether it was truncated,
+	 * and how the command ended once it has. The client's output handler returns it; the agent's
+	 * {@code getTerminalOutput(...)} completes with it, and
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} copies its
+	 * output and {@code truncated} into the
+	 * {@link com.agentclientprotocol.sdk.agent.CommandResult}.
+	 *
+	 * <p>
+	 * {@code truncated} is {@code true} when the client dropped output from the start to stay
+	 * within the {@code outputByteLimit} of the {@link CreateTerminalRequest}. {@code exitStatus}
+	 * is {@code null} while the command runs. Whether standard error is part of the output is up to
+	 * the client. An answer without {@code truncated}, or with {@code null}, reads as
+	 * {@code false}.
+	 *
+	 * @param output the output captured so far
+	 * @param truncated whether the client dropped output from the start to stay within the output
+	 * limit
+	 * @param exitStatus how the command ended, or {@code null} while it runs
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalOutputResponse(@JsonProperty("output") String output,
 			@JsonProperty("truncated") boolean truncated, @JsonProperty("exitStatus") @Nullable TerminalExitStatus exitStatus,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param output the output captured so far
+		 * @param truncated whether the client dropped output from the start
+		 * @param exitStatus how the command ended, or {@code null} while it runs
+		 */
 		public TerminalOutputResponse(String output, boolean truncated, @Nullable TerminalExitStatus exitStatus) {
 			this(output, truncated, exitStatus, null);
 		}
 	}
 
 	/**
-	 * Release terminal request
+	 * The params of {@code terminal/release}: the agent is done with a terminal. The client kills
+	 * the command if it is still running and frees the terminal; the ID is invalid afterwards for
+	 * every other terminal request. A tool call that shows the terminal ({@link ToolCallTerminal})
+	 * should keep showing its output. The agent sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#releaseTerminal releaseTerminal(...)}
+	 * on the prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@code AcpSyncAgent}. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#releaseTerminalHandler
+	 * releaseTerminalHandler} on the client builder, receives it and answers with a
+	 * {@link ReleaseTerminalResponse}.
+	 *
+	 * <p>
+	 * The protocol requires the agent to release every terminal it creates.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} sends this
+	 * request exactly once for each terminal it creates: after reading the output, after a step
+	 * fails, and when its {@code Mono} is cancelled, for example because the prompt was cancelled;
+	 * in that last case it sends the release on its own and logs a failure at WARN. An agent that
+	 * sends {@code terminal/create} itself must send this itself, also on errors and cancellation.
+	 * The SDK releases no terminal in any other case, not even when a session or the connection
+	 * ends.
+	 *
+	 * <p>
+	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
+	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
+	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 *
+	 * @param sessionId the ACP session the terminal belongs to
+	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReleaseTerminalRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the terminal belongs to
+		 * @param terminalId the terminal's ID
+		 */
 		public ReleaseTerminalRequest(String sessionId, String terminalId) {
 			this(sessionId, terminalId, null);
 		}
 	}
 
 	/**
-	 * Release terminal response
+	 * The result of {@code terminal/release}: an empty answer that confirms the terminal was
+	 * released. The client's release handler returns it; the agent's {@code releaseTerminal(...)}
+	 * completes with it.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ReleaseTerminalResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public ReleaseTerminalResponse() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Wait for terminal exit request
+	 * The params of {@code terminal/wait_for_exit}: the agent asks the client to answer once a
+	 * terminal's command has ended. The answer, a {@link WaitForTerminalExitResponse}, carries the
+	 * exit code or the signal that ended it. The agent sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#waitForTerminalExit
+	 * waitForTerminalExit(...)} on the prompt context, or the method of the same name on
+	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} sends it
+	 * right after creating the terminal. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#waitForTerminalExitHandler
+	 * waitForTerminalExitHandler} on the client builder, receives it.
+	 *
+	 * <p>
+	 * The wait counts against the agent's request timeout (its builder's {@code requestTimeout}): a
+	 * command that runs longer fails the call with a {@link java.util.concurrent.TimeoutException},
+	 * which the blocking API wraps in an
+	 * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}. The command keeps running
+	 * until the agent kills or releases the terminal. To give a command its own time limit, race
+	 * this request against a timer, then send {@code terminal/kill}, {@code terminal/output} and
+	 * {@code terminal/release}.
+	 *
+	 * <p>
+	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
+	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
+	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 *
+	 * @param sessionId the ACP session the terminal belongs to
+	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the terminal belongs to
+		 * @param terminalId the terminal's ID
+		 */
 		public WaitForTerminalExitRequest(String sessionId, String terminalId) {
 			this(sessionId, terminalId, null);
 		}
 	}
 
 	/**
-	 * Wait for terminal exit response
+	 * The result of {@code terminal/wait_for_exit}: how a terminal's command ended, with an exit
+	 * code or with the signal that ended it. The client's handler returns it once the command has
+	 * ended; the agent's {@code waitForTerminalExit(...)} completes with it, and
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} copies both
+	 * into the {@link com.agentclientprotocol.sdk.agent.CommandResult}. It carries the same two
+	 * values as a {@link TerminalExitStatus}.
+	 *
+	 * <p>
+	 * A process ends with an exit code or with a signal, so one of the two is normally
+	 * {@code null}. Both components are optional, so a peer that answers with an empty or
+	 * {@code null} result gives this record with both {@code null} (see {@link DefaultOnNull}). The
+	 * schema allows an exit code up to 4294967295 (an unsigned 32-bit number); one above
+	 * {@link Integer#MAX_VALUE} cannot be read into this record, and the answer that carries it
+	 * fails the agent's call with an {@link AcpError} of code {@code -32603}.
+	 *
+	 * @param exitCode the exit code, or {@code null} if a signal ended the process
+	 * @param signal the signal that ended the process, or {@code null} if it exited
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record WaitForTerminalExitResponse(@JsonProperty("exitCode") @Nullable Integer exitCode,
 			@JsonProperty("signal") @Nullable String signal,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param exitCode the exit code, or {@code null}
+		 * @param signal the signal that ended the process, or {@code null}
+		 */
 		public WaitForTerminalExitResponse(@Nullable Integer exitCode, @Nullable String signal) {
 			this(exitCode, signal, null);
 		}
 	}
 
 	/**
-	 * Kill terminal request
+	 * The params of {@code terminal/kill}: the agent asks the client to kill a terminal's command
+	 * but keep the terminal. Afterwards {@code terminal/output} still gives the final output and
+	 * {@code terminal/wait_for_exit} the exit status, and the agent must still release the terminal
+	 * ({@link ReleaseTerminalRequest}). The agent sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#killTerminal killTerminal(...)} on the
+	 * prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@code AcpSyncAgent}. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#killTerminalHandler
+	 * killTerminalHandler} on the client builder, receives it and answers with a
+	 * {@link KillTerminalCommandResponse}.
+	 *
+	 * <p>
+	 * Use it to stop a command that runs too long: race {@code terminal/wait_for_exit} against a
+	 * timer, kill the command when the timer fires, read the output, then release the terminal.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} does not
+	 * send it: when its wait fails or is cancelled, it releases the terminal, which kills the
+	 * command as well. The schema calls this type {@code KillTerminalRequest}.
+	 *
+	 * <p>
+	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
+	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
+	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 *
+	 * @param sessionId the ACP session the terminal belongs to
+	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record KillTerminalCommandRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session the terminal belongs to
+		 * @param terminalId the terminal's ID
+		 */
 		public KillTerminalCommandRequest(String sessionId, String terminalId) {
 			this(sessionId, terminalId, null);
 		}
 	}
 
 	/**
-	 * Kill terminal response
+	 * The result of {@code terminal/kill}: an empty answer that confirms the command was killed.
+	 * The client's kill handler returns it; the agent's {@code killTerminal(...)} completes with
+	 * it. The terminal stays valid until the agent releases it. The schema calls this type
+	 * {@code KillTerminalResponse}.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record KillTerminalCommandResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public KillTerminalCommandResponse() {
 			this(null);
 		}
@@ -5892,12 +6236,30 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Terminal exit status
+	 * How a terminal's command ended: its exit code, or the signal that ended it. It is the
+	 * {@link TerminalOutputResponse#exitStatus()} of a {@code terminal/output} answer, present once
+	 * the command has ended; {@code terminal/wait_for_exit} answers with the same two values in a
+	 * {@link WaitForTerminalExitResponse}.
+	 *
+	 * <p>
+	 * A process ends with an exit code or with a signal, so one of the two is normally
+	 * {@code null}. The schema allows an exit code up to 4294967295 (an unsigned 32-bit number);
+	 * one above {@link Integer#MAX_VALUE} cannot be read into this record, and the answer that
+	 * carries it fails the agent's call with an {@link AcpError} of code {@code -32603}.
+	 *
+	 * @param exitCode the exit code, or {@code null} if a signal ended the process
+	 * @param signal the signal that ended the process, or {@code null} if it exited
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TerminalExitStatus(@JsonProperty("exitCode") @Nullable Integer exitCode,
 			@JsonProperty("signal") @Nullable String signal,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a status without {@code _meta}.
+		 * @param exitCode the exit code, or {@code null}
+		 * @param signal the signal that ended the process, or {@code null}
+		 */
 		public TerminalExitStatus(@Nullable Integer exitCode, @Nullable String signal) {
 			this(exitCode, signal, null);
 		}
