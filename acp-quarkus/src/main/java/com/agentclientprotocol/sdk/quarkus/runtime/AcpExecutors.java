@@ -15,8 +15,9 @@ import jakarta.inject.Singleton;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
- * The executor {@code quarkus.acp.handler-executor} selects: Quarkus' virtual-thread executor
- * ({@code @VirtualThreads}) on JDK 21 and later by default, else its {@code ManagedExecutor}. The
+ * The executor {@code quarkus.acp.handler-executor} selects: Quarkus' {@code ManagedExecutor} by
+ * default, or with {@code virtual} its virtual-thread executor ({@code @VirtualThreads}) on JDK 21
+ * and later. The
  * agent's handler methods and the client's network transports run on it; Quarkus owns it and
  * shuts it down. Part of the extension's wiring.
  */

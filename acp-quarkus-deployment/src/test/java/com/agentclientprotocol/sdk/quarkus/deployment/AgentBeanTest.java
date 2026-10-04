@@ -85,16 +85,11 @@ class AgentBeanTest {
 		assertThat(transport.messages).containsExactly("HELLO!");
 		// The derived initialize and the default session/new run through the interceptor beans too.
 		assertThat(interceptor.methods).containsExactly("initialize", "session/new", "session/prompt");
-		// The handler ran on Quarkus' virtual-thread executor on JDK 21 and later, else on its
-		// worker pool through the ManagedExecutor; never on the SDK's own pool.
+		// quarkus.acp.handler-executor=managed, the default: the handler ran on Quarkus' worker pool
+		// through the ManagedExecutor on every JDK; never on the SDK's own pool.
 		assertThat(Arc.container().instance(EchoAgent.class).get().threads).singleElement().satisfies(thread -> {
-			if (VirtualThreads.isSupported()) {
-				assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isTrue();
-				assertThat(thread.getName()).startsWith("quarkus-virtual-thread-");
-			}
-			else {
-				assertThat(thread.getName()).startsWith("executor-thread-");
-			}
+			assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isFalse();
+			assertThat(thread.getName()).startsWith("executor-thread-");
 		});
 	}
 

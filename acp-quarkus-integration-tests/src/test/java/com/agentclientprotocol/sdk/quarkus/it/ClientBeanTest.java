@@ -46,16 +46,12 @@ class ClientBeanTest {
 		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 		assertThat(customizer.messages).containsExactly("Hello from Quarkus, bean! (prompt 1)");
 
-		// quarkus.acp.handler-executor=virtual, the default: on JDK 21 the handler ran on Quarkus'
-		// virtual-thread executor, and so does the client's transport, which created no pool of
-		// its own; before JDK 21 the ManagedExecutor's worker pool.
+		// quarkus.acp.handler-executor=managed, the default: the handler ran on the ManagedExecutor's
+		// worker pool on every JDK, and so does the client's transport, which created no pool of
+		// its own.
 		assertThat(interceptor.promptThreads).singleElement().satisfies(thread -> {
-			if (VirtualThreads.isSupported()) {
-				assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isTrue();
-			}
-			else {
-				assertThat(thread.getName()).startsWith("executor-thread-");
-			}
+			assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isFalse();
+			assertThat(thread.getName()).startsWith("executor-thread-");
 		});
 		// What remains of the SDK in this JVM is not a pool: the JDK's HttpClient keeps one selector
 		// thread, and the SDK's one JVM-wide timer serves every timeout. The agent is served by

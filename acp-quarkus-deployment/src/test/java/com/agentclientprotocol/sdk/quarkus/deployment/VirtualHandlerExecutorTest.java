@@ -22,29 +22,34 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code quarkus.acp.handler-executor=managed} keeps the handlers on Quarkus' worker pool, through
- * the {@code ManagedExecutor}, on every JDK, for handlers that need the contexts it propagates.
+ * {@code quarkus.acp.handler-executor=virtual} opts the handlers in to Quarkus' virtual-thread
+ * executor on JDK 21 and later; before JDK 21 they stay on its worker pool, as with {@code managed}.
  */
-class ManagedHandlerExecutorTest {
+class VirtualHandlerExecutorTest {
 
 	@RegisterExtension
 	static final QuarkusUnitTest app = new QuarkusUnitTest()
 		.withApplicationRoot(jar -> jar.addClasses(ThreadAgent.class, InMemoryAgentTransport.class))
 		.overrideConfigKey("quarkus.acp.agent.shutdown-on-transport-end", "false")
-		.overrideConfigKey("quarkus.acp.handler-executor", "managed");
+		.overrideConfigKey("quarkus.acp.handler-executor", "virtual");
 
 	@Inject
 	InMemoryAgentTransport transport;
 
 	@Test
-	void handlersRunOnTheManagedExecutor() {
+	void handlersRunOnQuarkusVirtualThreads() {
 		AcpSyncClient client = transport.client();
 		client.initialize();
 		String sessionId = client.newSession(InMemoryAgentTransport.newSession()).sessionId();
 		client.prompt(InMemoryAgentTransport.prompt(sessionId, "hello"));
 		assertThat(Arc.container().instance(ThreadAgent.class).get().threads).singleElement().satisfies(thread -> {
-			assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isFalse();
-			assertThat(thread.getName()).startsWith("executor-thread-");
+			if (VirtualThreads.isSupported()) {
+				assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isTrue();
+				assertThat(thread.getName()).startsWith("quarkus-virtual-thread-");
+			}
+			else {
+				assertThat(thread.getName()).startsWith("executor-thread-");
+			}
 		});
 	}
 

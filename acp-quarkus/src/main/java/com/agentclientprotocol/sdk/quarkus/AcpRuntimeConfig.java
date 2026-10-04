@@ -54,7 +54,10 @@ public interface AcpRuntimeConfig {
 	 * The executor the agent's handler methods and the client's WebSocket and Streamable HTTP
 	 * transports run on, {@code quarkus.acp.handler-executor}:
 	 * <ul>
-	 * <li>{@code virtual} (the default): on JDK 21 and later, Quarkus' virtual-thread executor
+	 * <li>{@code managed} (the default): Quarkus' {@code ManagedExecutor}, the worker pool, which
+	 * propagates the MicroProfile Context Propagation contexts of the submitting thread, as
+	 * Quarkus' own blocking work does.</li>
+	 * <li>{@code virtual}: on JDK 21 and later, Quarkus' virtual-thread executor
 	 * ({@code @VirtualThreads}), a virtual thread per handler call; before JDK 21, as
 	 * {@code managed}. It keeps the Vert.x context of the thread that submits the call, but
 	 * propagates no MicroProfile Context Propagation context: a handler has no CDI request
@@ -62,13 +65,11 @@ public interface AcpRuntimeConfig {
 	 * {@code @ActivateRequestContext} on the handler method), and no security identity,
 	 * transaction or OpenTelemetry context captured from the submitting thread. On JDK 21 to 23
 	 * a virtual thread that blocks inside a {@code synchronized} block pins its carrier thread
-	 * (JDK 24 removed that, JEP 491).</li>
-	 * <li>{@code managed}: Quarkus' {@code ManagedExecutor}, the worker pool, which propagates
-	 * those contexts.</li>
+	 * (JDK 24 removed that, JEP 491). Opt in, as with Quarkus' {@code @RunOnVirtualThread}.</li>
 	 * </ul>
 	 * @return the handler executor
 	 */
-	@WithDefault("virtual")
+	@WithDefault("managed")
 	HandlerExecutor handlerExecutor();
 
 	/** The values of {@code quarkus.acp.handler-executor}. */

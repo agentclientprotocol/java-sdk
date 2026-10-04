@@ -63,14 +63,15 @@ public class GreeterAgent {
 - Handlers may return Mutiny types: a `Uni` of what the handler could return directly, and from
   `@Prompt` a `Multi` of `String`, `ContentBlock` or `SessionUpdate` items, each sent as it is
   emitted, ending the turn when the stream completes. The handler's thread waits for them.
-- Handlers block, so they run off the event loop: by default on Quarkus' virtual-thread executor
-  on JDK 21 and later, a virtual thread per call, and on its `ManagedExecutor` worker pool before.
-  `quarkus.acp.handler-executor=managed` keeps the `ManagedExecutor` on JDK 21 too. Choose it when a
-  handler needs a context MicroProfile Context Propagation carries from the submitting thread: the
-  CDI request context (with `virtual`, a `@RequestScoped` bean needs `@ActivateRequestContext` on the
-  handler method), the security identity, a transaction or the OpenTelemetry context. Virtual
-  threads on JDK 21 to 23 pin their carrier when they block inside `synchronized`; JDK 24 removed
-  that (JEP 491). The client's WebSocket and Streamable HTTP transports run on the same executor.
+- Handlers block, so they run off the event loop: by default on Quarkus' `ManagedExecutor` worker
+  pool, which carries the contexts MicroProfile Context Propagation propagates from the submitting
+  thread (the CDI request context, the security identity, a transaction, the OpenTelemetry
+  context). `quarkus.acp.handler-executor=virtual` opts in to Quarkus' virtual-thread executor on
+  JDK 21 and later, a virtual thread per call (as `managed` before JDK 21). It propagates none of
+  those contexts: a `@RequestScoped` bean needs `@ActivateRequestContext` on the handler method.
+  Virtual threads on JDK 21 to 23 pin their carrier when they block inside `synchronized`; JDK 24
+  removed that (JEP 491). The client's WebSocket and Streamable HTTP transports run on the same
+  executor.
 - Package the application as usual (`quarkus-run.jar`) and point the editor at
   `java -jar target/quarkus-app/quarkus-run.jar`.
 
@@ -139,7 +140,7 @@ Run time:
 
 | Property | Default | |
 |---|---|---|
-| `quarkus.acp.handler-executor` | `virtual` | `virtual` (JDK 21+, else as `managed`) or `managed`: where handlers and client transports run |
+| `quarkus.acp.handler-executor` | `managed` | `managed` or `virtual` (JDK 21+, else as `managed`): where handlers and client transports run |
 | `quarkus.acp.agent.request-timeout` | SDK default | agent requests to the client |
 | `quarkus.acp.agent.cancel-grace-period` | SDK default | |
 | `quarkus.acp.agent.max-prompt-duration` | none | |

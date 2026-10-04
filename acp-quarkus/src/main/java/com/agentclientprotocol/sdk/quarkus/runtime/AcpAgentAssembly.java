@@ -31,8 +31,8 @@ import jakarta.inject.Singleton;
  * wiring; an application does not use it directly.
  * <p>Handler methods block, so they run on the executor {@code quarkus.acp.handler-executor}
  * selects, never the Vert.x event loop and never a second pool of the SDK's: Quarkus'
- * virtual-thread executor on JDK 21 and later by default, else its {@code ManagedExecutor} worker
- * pool, which propagates the application's contexts.
+ * {@code ManagedExecutor} worker pool by default, which propagates the application's contexts, or
+ * with {@code virtual} its virtual-thread executor on JDK 21 and later.
  * <p>Handlers are discovered on the user's class (from the build-time index), not on the instance's
  * class, so a container subclass of the bean does not hide them. </p>
  *
