@@ -25,6 +25,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -108,8 +109,10 @@ public class AcpAgentHttpAutoConfiguration {
 		@Bean
 		@ConditionalOnMissingBean
 		StreamableHttpAcpAgentTransport streamableHttpAcpAgentTransport(AcpAgentFactory agentFactory,
-				AcpAgentProperties properties) {
-			return AcpListeners.listener(properties.toSettings(), agentFactory);
+				AcpAgentProperties properties, ApplicationContext context) {
+			// Virtual threads only when the application opted in, on the same executor as the
+			// handlers by default; otherwise Jetty's platform pool.
+			return AcpListeners.listener(properties.toSettings(), agentFactory, HandlerExecutors.listenerThreads(context));
 		}
 
 		@Bean

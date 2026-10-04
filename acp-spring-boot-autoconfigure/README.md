@@ -257,15 +257,24 @@ each property means the same there.
 
 `spring.acp.agent.handler-executor` chooses the threads the agent's handler methods run on:
 
-- **Unset (the default).** With `spring.threads.virtual.enabled=true`, the context's
-  `applicationTaskExecutor`, which starts a virtual thread per handler call. Otherwise the SDK's own
-  pool. Without virtual threads, Spring Boot's `applicationTaskExecutor` is a pool of 8 threads by
-  default, which would cap the prompts served at once.
+- **Unset (the default).** With `spring.threads.virtual.enabled=true` (JDK 21 and later), the
+  context's `applicationTaskExecutor`, which starts a virtual thread per handler call. Otherwise the
+  SDK's pool of platform threads, on every JDK: the starter follows Spring Boot's opt-in, not the
+  SDK's own default of virtual threads on JDK 21. Without virtual threads, Spring Boot's
+  `applicationTaskExecutor` is a pool of 8 threads by default, which would cap the prompts served at
+  once.
 - **The name of an `Executor` bean.** That bean. A plain `Executor`, such as a `TaskExecutor`, is
   adapted to an `ExecutorService`, and cancelling a handler still interrupts its thread. Handler
   methods block, so the executor must allow blocking. A name that matches no bean, or a bean that
   is no `Executor`, fails the startup.
-- **`none`, in any case.** The SDK's own pool.
+- **`none`, in any case.** The SDK's pool of platform threads.
+
+The same opt-in decides the threads of the SDK's listener and of the WebSocket and Streamable HTTP
+client transports: with virtual threads on, they run on the `applicationTaskExecutor` and create no
+pool of their own (a JDK `HttpClient` keeps its one selector thread, Jetty's virtual-thread pool one
+parked platform thread, and the SDK one JVM-wide timer thread, `acp-timeout`); otherwise they keep
+their pools of platform threads. On JDK 21 to 23 a virtual thread that blocks inside a
+`synchronized` block pins its carrier thread; JDK 24 removed that (JEP 491).
 
 ## Limitations
 

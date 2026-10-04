@@ -67,8 +67,9 @@ public class AcpAgentProperties {
 
 	/**
 	 * The executor the agent's handler methods run on: the name of an Executor bean, or
-	 * "none" for the SDK's own pool. Unset: the context's applicationTaskExecutor when
-	 * spring.threads.virtual.enabled=true (virtual threads), else the SDK's own pool.
+	 * "none" for the SDK's pool of platform threads. Unset: the context's
+	 * applicationTaskExecutor when spring.threads.virtual.enabled=true (virtual threads, JDK 21
+	 * and later), else the SDK's pool of platform threads.
 	 */
 	private @Nullable String handlerExecutor;
 
@@ -189,12 +190,13 @@ public class AcpAgentProperties {
 	 * <li>The name of an {@code Executor} bean: that bean. A plain {@code Executor}, such as a
 	 * {@code TaskExecutor}, is adapted to an {@code ExecutorService}; cancelling a handler still
 	 * interrupts its thread. The executor must allow blocking.</li>
-	 * <li>{@code none}, in any case: the SDK's own pool.</li>
+	 * <li>{@code none}, in any case: the SDK's pool of platform threads.</li>
 	 * <li>Unset (the default): the context's {@code applicationTaskExecutor} when
-	 * {@code spring.threads.virtual.enabled=true}, which starts a virtual thread per handler call;
-	 * otherwise the SDK's own pool. Without virtual threads Spring Boot's
-	 * {@code applicationTaskExecutor} is a pool of 8 threads by default, which would cap the
-	 * prompts served at once; name it here to use it anyway.</li>
+	 * {@code spring.threads.virtual.enabled=true} on JDK 21 and later, which starts a virtual
+	 * thread per handler call; otherwise the SDK's pool of platform threads, on every JDK: the SDK
+	 * follows Spring Boot's opt-in rather than its own default of virtual threads. Without
+	 * virtual threads Spring Boot's {@code applicationTaskExecutor} is a pool of 8 threads by
+	 * default, which would cap the prompts served at once; name it here to use it anyway.</li>
 	 * </ul>
 	 * A name that matches no bean, or a bean that is no {@code Executor}, fails the application's
 	 * startup.

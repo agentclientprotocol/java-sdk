@@ -4,19 +4,27 @@
 
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
+import java.util.concurrent.Executor;
+
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.integration.AcpClientTransports;
+import com.agentclientprotocol.sdk.integration.AcpTransportThreads;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.thread.Threading;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.ConfigurationCondition;
+import org.springframework.core.env.Environment;
 
 /**
  * Creates the client transport that {@code spring.acp.client.transport.*} describes, for
@@ -29,7 +37,9 @@ import org.springframework.context.annotation.ConfigurationCondition;
  * framework: a {@code type} that is set wins, and fails the startup when its command or URI is
  * missing; otherwise the one transport whose command or URI is set is used, and more than one fails
  * the startup, naming them. The errors name the {@code spring.acp.client} properties. The transport
- * bean has no destroy method: the client closes it when it is closed.
+ * bean has no destroy method: the client closes it when it is closed. The WebSocket and HTTP
+ * transports run on the virtual-thread {@code applicationTaskExecutor} when
+ * {@code spring.threads.virtual.enabled=true}, and on platform threads otherwise.
  */
 @AutoConfiguration
 @ConditionalOnClass(AcpClient.class)
@@ -42,9 +52,21 @@ public class AcpClientTransportAutoConfiguration {
 	@Bean(destroyMethod = "")
 	@ConditionalOnMissingBean(AcpClientTransport.class)
 	@Conditional(OnClientTransportCondition.class)
-	AcpClientTransport acpClientTransport(AcpClientProperties properties) {
-		return AcpClientTransports.create(properties.toSettings(), PREFIX)
+	AcpClientTransport acpClientTransport(AcpClientProperties properties, Environment environment,
+			@Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
+			ObjectProvider<Executor> applicationTaskExecutor) {
+		return AcpClientTransports.create(properties.toSettings(), PREFIX, threads(environment, applicationTaskExecutor))
 			.orElseThrow(() -> new IllegalStateException("No ACP client transport is configured"));
+	}
+
+	/**
+	 * Spring Boot's opt-in decides: with {@code spring.threads.virtual.enabled=true} (JDK 21 and
+	 * later) the WebSocket and HTTP transports run on the virtual-thread
+	 * {@code applicationTaskExecutor}; otherwise on platform threads, on every JDK.
+	 */
+	static AcpTransportThreads threads(Environment environment, ObjectProvider<Executor> applicationTaskExecutor) {
+		Executor executor = Threading.VIRTUAL.isActive(environment) ? applicationTaskExecutor.getIfAvailable() : null;
+		return (executor != null) ? AcpTransportThreads.executor(executor) : AcpTransportThreads.platform();
 	}
 
 	/** Any client transport property: a type, a command or a URI. */

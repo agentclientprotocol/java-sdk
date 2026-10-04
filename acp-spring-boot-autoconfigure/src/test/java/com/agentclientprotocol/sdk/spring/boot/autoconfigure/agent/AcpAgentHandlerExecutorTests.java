@@ -52,11 +52,18 @@ class AcpAgentHandlerExecutorTests {
 		}
 	}
 
+	/** Spring Boot's own rule: the property takes effect on JDK 21 and later only. */
 	@Test
 	void theApplicationTaskExecutorWithVirtualThreads() {
-		assertThat(promptThread(this.runner.withBean("applicationTaskExecutor", SimpleAsyncTaskExecutor.class,
+		String thread = promptThread(this.runner.withBean("applicationTaskExecutor", SimpleAsyncTaskExecutor.class,
 				() -> new SimpleAsyncTaskExecutor("app-task-"))
-			.withPropertyValues("spring.threads.virtual.enabled=true"))).startsWith("app-task-");
+			.withPropertyValues("spring.threads.virtual.enabled=true"));
+		if (Runtime.version().feature() >= 21) {
+			assertThat(thread).startsWith("app-task-");
+		}
+		else {
+			assertThat(thread).isEqualTo("acp-agent-sync-handler");
+		}
 	}
 
 	@Test

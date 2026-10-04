@@ -406,6 +406,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Spring Boot follows its own virtual-thread opt-in for every ACP thread.** With
+  `spring.threads.virtual.enabled=true` (JDK 21 and later), the agent's handlers (as before), the
+  SDK's listener and the auto-configured WebSocket and Streamable HTTP client transports all run on
+  the `applicationTaskExecutor`, so the SDK creates no pool of its own. Without it, they all stay on
+  platform threads on every JDK: the handlers on the SDK's pool (`acp-agent-sync-handler`), the
+  listener on Jetty's pool and the client transports on their platform pools, rather than taking the
+  SDK's new virtual-thread default. The virtual-thread check is now Boot's own
+  (`Threading.VIRTUAL`), so the property set on JDK 17 no longer hands the handlers Boot's 8-thread
+  `applicationTaskExecutor`. Migration: none; set `spring.threads.virtual.enabled=true` for virtual
+  threads.
+
 - **The network transports use virtual threads by default on JDK 21 and later.** Without an
   executor, the Streamable HTTP client runs its work on a virtual thread per task
   (`acp-streamable-http`) instead of its three bounded pools (`acp-streamable-http-client`,
