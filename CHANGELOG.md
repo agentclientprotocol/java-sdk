@@ -379,6 +379,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: the client sends `additionalDirectories` only to an agent that advertises them, and
+  an annotated agent can advertise them.** ACP lets a client send additional workspace
+  directories only when the agent advertises `sessionCapabilities.additionalDirectories`, but
+  `newSession`, `loadSession`, `resumeSession` and `forkSession` sent them to any agent. A call
+  whose request names a non-empty `additionalDirectories` now fails with
+  `AcpCapabilityException` (capability `sessionCapabilities.additionalDirectories`) without being
+  sent, as other capability-gated calls do; no list or an empty one needs nothing. On the agent
+  side, `@AcpAgent(additionalDirectories = true)` advertises the capability; it needs a
+  `@NewSession` method, since the default `session/new` answer would drop the directories, which
+  ACP forbids. A builder agent advertises it from its `initializeHandler`. Migration: a client
+  check `getAgentCapabilities().supportsAdditionalDirectories()` before naming directories; an
+  annotated agent that uses them add `additionalDirectories = true` to `@AcpAgent` (an
+  `@Initialize` method that advertised them keeps working).
+
 - **`AcpAgentSupport.Builder.cancelGracePeriod(..)` and `maxPromptDuration(..)` reject a negative
   or null value where it is set.** They stored any value: `build()` failed later, and
   `buildFactory()` built a factory whose every connection then failed to build its agent. Both

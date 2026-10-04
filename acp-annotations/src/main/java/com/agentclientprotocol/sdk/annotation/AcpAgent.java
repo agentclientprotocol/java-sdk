@@ -46,7 +46,8 @@ import java.lang.annotation.Target;
  * sets {@code auth.logout}, and so on; each annotation names its own), {@link #name()},
  * {@link #version()} and {@link #title()} become {@code agentInfo}, {@link #authMethods()} become
  * {@code authMethods}, and {@link #mcpHttp()}, {@link #mcpSse()} and the attributes of
- * {@link Prompt} declare the MCP transports and the prompt content the agent accepts. The protocol
+ * {@link Prompt} declare the MCP transports and the prompt content the agent accepts, and
+ * {@link #additionalDirectories()} declares {@code sessionCapabilities.additionalDirectories}. The protocol
  * version answered is the client's when the SDK speaks it, otherwise the latest it speaks. An
  * {@link Initialize} method, when present, adds to the derived response (see {@link Initialize}).
  *
@@ -166,5 +167,17 @@ public @interface AcpAgent {
 	 * @return false by default
 	 */
 	boolean mcpSse() default false;
+
+	/**
+	 * Whether the agent accepts additional workspace directories, advertised as
+	 * {@code agentCapabilities.sessionCapabilities.additionalDirectories}: a client then may send
+	 * {@code additionalDirectories} in {@code session/new}, {@code session/load},
+	 * {@code session/resume} and {@code session/fork}, and the SDK's client refuses to send them
+	 * to an agent that does not advertise it. Declare it only when the agent's handlers use the
+	 * directories they receive: ACP forbids an agent to drop them silently. The agent needs a
+	 * {@link NewSession} method to receive them; building one without it fails.
+	 * @return false by default
+	 */
+	boolean additionalDirectories() default false;
 
 }

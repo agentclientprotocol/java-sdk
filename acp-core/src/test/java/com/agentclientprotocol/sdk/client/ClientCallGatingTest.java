@@ -150,6 +150,65 @@ class ClientCallGatingTest {
 		client.close();
 	}
 
+	static Stream<Arguments> callsWithAdditionalDirectories() {
+		List<String> dirs = List.of("/home/me/shared-lib");
+		return Stream.of(
+				call("newSession", c -> c.newSession(new AcpSchema.NewSessionRequest("/", List.of(), dirs))),
+				call("loadSession", c -> c.loadSession(new AcpSchema.LoadSessionRequest(SESSION, "/", List.of(), dirs))),
+				call("resumeSession",
+						c -> c.resumeSession(new AcpSchema.ResumeSessionRequest(SESSION, "/", List.of(), dirs))),
+				call("forkSession", c -> c.forkSession(new AcpSchema.ForkSessionRequest(SESSION, "/", List.of(), dirs))));
+	}
+
+	/** Every session capability but additionalDirectories. */
+	private static final Map<String, Object> SESSIONS_WITHOUT_DIRECTORIES = Map.of("loadSession", true,
+			"sessionCapabilities", Map.of("resume", Map.of(), "fork", Map.of()));
+
+	@ParameterizedTest
+	@MethodSource("callsWithAdditionalDirectories")
+	void additionalDirectoriesAreNotSentToAnAgentThatDidNotAdvertiseThem(Function<AcpAsyncClient, Mono<?>> call) {
+		MockAcpClientTransport transport = agentAdvertising(SESSIONS_WITHOUT_DIRECTORIES);
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
+		transport.clearSentMessages();
+
+		assertThatThrownBy(() -> call.apply(client).block(TIMEOUT)).isInstanceOf(AcpCapabilityException.class)
+			.satisfies(e -> assertThat(((AcpCapabilityException) e).getCapability())
+				.isEqualTo("sessionCapabilities.additionalDirectories"));
+		assertThat(transport.getSentMessages()).isEmpty();
+		client.close();
+	}
+
+	@ParameterizedTest
+	@MethodSource("callsWithAdditionalDirectories")
+	void additionalDirectoriesAreSentToAnAgentThatAdvertisedThem(Function<AcpAsyncClient, Mono<?>> call) {
+		MockAcpClientTransport transport = agentAdvertising(Map.of("loadSession", true, "sessionCapabilities",
+				Map.of("resume", Map.of(), "fork", Map.of(), "additionalDirectories", Map.of())));
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
+		transport.clearSentMessages();
+
+		call.apply(client).subscribe(result -> {
+		}, error -> {
+		});
+
+		assertThat(transport.getSentMessages()).singleElement().isInstanceOf(AcpSchema.JSONRPCRequest.class);
+		client.close();
+	}
+
+	@Test
+	void noOrEmptyAdditionalDirectoriesNeedNoCapability() {
+		MockAcpClientTransport transport = agentAdvertising(SESSIONS_WITHOUT_DIRECTORIES);
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
+
+		assertThat(client.newSession(new AcpSchema.NewSessionRequest("/", List.of(), null)).block(TIMEOUT).sessionId())
+			.isEqualTo(SESSION);
+		assertThat(client.newSession(new AcpSchema.NewSessionRequest("/", List.of(), List.of())).block(TIMEOUT)
+			.sessionId()).isEqualTo(SESSION);
+		client.close();
+	}
+
 	/** A transport whose agent answers initialize with the given capabilities and session/new. */
 	private static MockAcpClientTransport agentAdvertising(Map<String, Object> agentCapabilities) {
 		return new MockAcpClientTransport((t, message) -> {
