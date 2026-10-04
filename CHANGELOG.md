@@ -737,9 +737,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Migration: compare with `equals`, not `==`, and replace a `switch` over the enum with `if`/`else`
   or a switch over `action().value()`.
 - **Elicitation form properties of an unknown type and multi-select items of an unknown shape no
-  longer fail the request:** they read as `UnknownElicitationPropertySchema` (keeping `type` and
-  every other field) and `UnknownMultiSelectItems`, and are written back unchanged, as for the
-  other discriminated unions. The five property schemas now write their own `type` discriminator:
+  longer fail the request.** A property of an unknown type reads as
+  `UnknownElicitationPropertySchema`, keeping `type` and every other field, and is written back
+  unchanged, as for the other discriminated unions. Multi-select items have no shared
+  discriminator, so the SDK tells their shapes apart by their members: items with a `type` or an
+  `enum` member read as `UntitledMultiSelectItems` and items with an `anyOf` member as
+  `TitledMultiSelectItems`, whatever the `type`, and lose the members that record does not have.
+  Only items with none of these members read as `UnknownMultiSelectItems`, which keeps every
+  field and writes it back unchanged. The five property schemas now write their own `type` discriminator:
   their canonical constructors accept `null` for it (it becomes the record's type) and reject a
   different type, which they used to accept and ignore.
 - **Breaking: `StringPropertySchema` and `MultiSelectPropertySchema` have only their canonical
