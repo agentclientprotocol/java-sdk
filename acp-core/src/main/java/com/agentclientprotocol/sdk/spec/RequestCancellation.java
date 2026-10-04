@@ -32,7 +32,9 @@ import reactor.util.context.ContextView;
  *
  * <p>Disposing a request's subscription, directly or through a timeout, also sends
  * {@code $/cancel_request}, but stops listening: the peer's answer is discarded. To stop a prompt
- * turn the way ACP intends, send {@code session/cancel} with {@code AcpAsyncClient.cancel(..)};
+ * turn the way ACP intends, with {@code session/cancel}, pass a
+ * {@link com.agentclientprotocol.sdk.client.CancellationSignal} to the client's
+ * {@code prompt(request, stop)} (async or sync), or call {@code AcpAsyncClient.cancel(..)};
  * this class cancels any one request, in either direction. The sync API cannot carry a trigger:
  * {@code AcpSyncClient.async()} gives the asynchronous client to use it with.
  *

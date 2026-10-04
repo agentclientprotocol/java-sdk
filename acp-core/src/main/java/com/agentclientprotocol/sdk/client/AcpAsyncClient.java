@@ -23,6 +23,7 @@ import com.agentclientprotocol.sdk.util.Assert;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 
 /**
@@ -58,7 +59,9 @@ import reactor.core.publisher.Mono;
  * seconds by default), the {@code Mono} fails with a {@link java.util.concurrent.TimeoutException};
  * then, or when the caller disposes the {@code Mono} first, the client sends the agent a
  * {@code $/cancel_request}. {@link #prompt} is the exception: a turn has no time limit unless the
- * builder's {@code promptTimeout} sets one. To send one and still wait for the answer, put
+ * builder's {@code promptTimeout} sets one; to stop a turn and still get its answer, pass a
+ * {@link CancellationSignal} to {@link #prompt(AcpSchema.PromptRequest, CancellationSignal)}. To
+ * send a {@code $/cancel_request} and still wait for the answer, put
  * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context.
  * Every call but {@link #initialize()} and the extension methods fails with
  * {@link IllegalStateException} until the agent has answered {@code initialize}, and a call that
@@ -560,6 +563,46 @@ public class AcpAsyncClient {
 						PROMPT_RESPONSE_TYPE_REF, this.promptTimeout);
 			}
 			return session.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, request, PROMPT_RESPONSE_TYPE_REF);
+		});
+	}
+
+	/**
+	 * Sends a prompt as {@link #prompt(AcpSchema.PromptRequest)} does, and stops its turn when
+	 * {@code stop} is cancelled: the client then sends {@code session/cancel} for the prompt's
+	 * session ({@link #cancel}), once, and keeps waiting for the agent's answer, which ACP requires
+	 * to be stop reason {@code cancelled}. A Java agent answers it itself once its cancel grace
+	 * period has passed. Cancelling {@code stop} after the answer has arrived sends nothing.
+	 * Disposing the returned {@code Mono} still gives up on the prompt with
+	 * {@code $/cancel_request}, as for the one-argument method.
+	 *
+	 * <pre>{@code
+	 * CancellationSignal stop = new CancellationSignal();
+	 * client.prompt(request, stop).subscribe(response -> show(response.stopReason()));
+	 * // when the user presses Stop:
+	 * stop.cancel();
+	 * }</pre>
+	 * @param request the session ID and the prompt's content blocks
+	 * @param stop the signal that stops the turn
+	 * @return a {@code Mono} emitting the agent's answer, with the stop reason
+	 * @see CancellationSignal
+	 */
+	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest request, CancellationSignal stop) {
+		Assert.notNull(request, "Prompt request must not be null");
+		Assert.notNull(stop, "Cancellation signal must not be null");
+		return Mono.create(sink -> {
+			// The prompt is subscribed first, so its request is handed to the transport before
+			// a session/cancel the signal triggers.
+			Disposable prompt = prompt(request).contextWrite(sink.contextView())
+				.subscribe(sink::success, sink::error, () -> sink.success());
+			Disposable cancel = stop.whenCancelled()
+				.then(Mono.defer(() -> cancel(new AcpSchema.CancelNotification(request.sessionId()))))
+				.subscribe(v -> {
+				}, error -> logger.debug("No session/cancel sent for session {}: {}", request.sessionId(),
+						error.getMessage()));
+			sink.onDispose(() -> {
+				cancel.dispose();
+				prompt.dispose();
+			});
 		});
 	}
 

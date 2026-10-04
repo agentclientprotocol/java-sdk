@@ -102,9 +102,11 @@ import reactor.core.scheduler.Schedulers;
  * the turn takes unless the builder's {@code promptTimeout} sets a limit. When a timeout passes, or
  * the caller disposes a request's {@code Mono}, the client sends the agent a
  * {@code $/cancel_request} and the call fails; a Java agent then cancels the handler, which for a
- * prompt ends the turn. To stop a turn and still receive its answer, send {@code session/cancel}
- * with {@code cancel(...)}, or put
- * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context.
+ * prompt ends the turn. To stop a turn and still receive its answer, pass a
+ * {@link CancellationSignal} to {@code prompt(request, stop)} and cancel it, which sends
+ * {@code session/cancel}; {@code cancel(...)} sends one directly. For any other request,
+ * {@link com.agentclientprotocol.sdk.spec.RequestCancellation#cancelWhen} in the request's context
+ * sends {@code $/cancel_request} and still waits for the answer.
  *
  * @author Mark Pollack
  * @author Christian Tzolov

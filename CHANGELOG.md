@@ -72,6 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport's platform-thread pools on every JDK, for an application that has not opted into
   virtual threads.
 
+- **Client prompt cancellation in the completion menu: `prompt(request, CancellationSignal)`.**
+  `AcpAsyncClient.prompt(request, stop)` and `AcpSyncClient.prompt(request, stop)` take a new
+  `com.agentclientprotocol.sdk.client.CancellationSignal`; calling `stop.cancel()`, from any thread,
+  sends `session/cancel` for the prompt's session, once, and the prompt still returns the agent's
+  answer (stop reason `cancelled`) with the turn's updates. Cancelling after the answer sends
+  nothing. Before, stopping a turn and keeping its answer took
+  `contextWrite(RequestCancellation.cancelWhen(trigger))`, which no completion menu offers and the
+  sync client could not use; `RequestCancellation` stays, for `$/cancel_request` on any request.
+
 - **Builder handlers receive their agent.** Every typed request setter of `AcpAgent.async(..)`
   and `AcpAgent.sync(..)` except `promptHandler` has an overload taking an
   `AgentAwareHandler<Request, Response>` (async, `(request, AcpAsyncAgent agent)`) or

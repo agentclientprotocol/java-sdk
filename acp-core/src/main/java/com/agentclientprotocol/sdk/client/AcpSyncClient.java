@@ -411,6 +411,27 @@ public class AcpSyncClient implements AutoCloseable {
 	}
 
 	/**
+	 * Sends a prompt as {@link #prompt(AcpSchema.PromptRequest)} does, and stops its turn when
+	 * another thread cancels {@code stop}: the client then sends {@code session/cancel} for the
+	 * prompt's session, once, and this call keeps blocking until the agent's answer arrives,
+	 * which ACP requires to be stop reason {@code cancelled}. Cancelling {@code stop} after the
+	 * answer has arrived sends nothing.
+	 *
+	 * <pre>{@code
+	 * CancellationSignal stop = new CancellationSignal();
+	 * stopButton.onClick(stop::cancel);
+	 * AcpSchema.PromptResponse response = client.prompt(request, stop);
+	 * }</pre>
+	 * @param request the session ID and the prompt's content blocks
+	 * @param stop the signal that stops the turn
+	 * @return the agent's answer, with the stop reason
+	 * @see CancellationSignal
+	 */
+	public AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, CancellationSignal stop) {
+		return awaitResponse(this.delegate.prompt(request, stop));
+	}
+
+	/**
 	 * Asks the agent to stop a session's prompt turn ({@code session/cancel}). It is a
 	 * notification: the agent does not answer it.
 	 *
