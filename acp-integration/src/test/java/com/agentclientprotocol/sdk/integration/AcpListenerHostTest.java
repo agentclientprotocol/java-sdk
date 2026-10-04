@@ -7,7 +7,11 @@ package com.agentclientprotocol.sdk.integration;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
@@ -15,6 +19,8 @@ import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTrans
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.spec.AcpClientTransport;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
@@ -52,6 +58,45 @@ class AcpListenerHostTest {
 		assertThat(host.stopGracefully()).isSameAs(host.stopGracefully());
 		host.termination().toCompletableFuture().get(5, TimeUnit.SECONDS);
 		host.start(); // not after the stop
+	}
+
+	/**
+	 * The framework's executor reaches the listener (on JDK 21 and later) and both network client
+	 * transports: their work runs on it, and none of them shuts it down.
+	 */
+	@Test
+	void theListenerAndTheClientTransportsRunOnTheFrameworksExecutor() throws Exception {
+		AtomicInteger tasks = new AtomicInteger();
+		ExecutorService pool = Executors.newCachedThreadPool(r -> {
+			Thread thread = new Thread(r, "framework-worker");
+			thread.setDaemon(true);
+			return thread;
+		});
+		Executor framework = task -> {
+			tasks.incrementAndGet();
+			pool.execute(task);
+		};
+		AcpListenerHost host = new AcpListenerHost(AcpListeners.listener(SETTINGS, factory(), AcpTransportThreads.executor(framework)));
+		try {
+			host.start();
+			int listenerTasks = tasks.get();
+			assertThat(listenerTasks > 0).isEqualTo(VirtualThreads.isSupported());
+			int port = host.port().orElseThrow();
+			for (AcpClientSettings settings : List.of(
+					AcpClientSettings.builder().httpUri(URI.create("http://localhost:" + port + "/agents/echo")).build(),
+					AcpClientSettings.builder().websocketUri(URI.create("ws://localhost:" + port + "/agents/echo")).build())) {
+				int before = tasks.get();
+				AcpClientTransport transport = AcpClientTransports.create(settings, "acp.client", AcpTransportThreads.executor(framework))
+					.orElseThrow();
+				assertThat(TestAgents.roundTrip(transport)).containsExactly("echo: hello!");
+				assertThat(tasks.get()).as(settings.toString()).isGreaterThan(before);
+			}
+		}
+		finally {
+			host.stop(Duration.ofSeconds(10));
+		}
+		assertThat(pool.isShutdown()).isFalse();
+		pool.shutdownNow();
 	}
 
 	@Test

@@ -4,10 +4,14 @@
 
 package com.agentclientprotocol.sdk.integration;
 
+import java.util.concurrent.Executor;
+
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 
 /**
  * Creates the SDK's Streamable HTTP endpoints, which come from the optional
@@ -59,8 +63,8 @@ public final class AcpListeners {
 	/**
 	 * Returns the SDK's listener on the settings' listener port and path: HTTP/1.1, cleartext
 	 * HTTP/2 and WebSocket upgrades on that one path, with the settings' limits and the
-	 * listener's stream limit, and the default JSON mapper. It is not started; give it to an
-	 * {@link AcpListenerHost}.
+	 * listener's stream limit, and the default JSON mapper, on the SDK's own threads (virtual
+	 * threads on JDK 21 and later). It is not started; give it to an {@link AcpListenerHost}.
 	 * @param settings the agent settings
 	 * @param factory the factory creating one agent per connection
 	 * @return the listener, not started
@@ -68,13 +72,39 @@ public final class AcpListeners {
 	 * not on the classpath; the message names the module
 	 */
 	public static StreamableHttpAcpAgentTransport listener(AcpAgentSettings settings, AcpAgentFactory factory) {
+		return listener(settings, factory, AcpTransportThreads.sdkDefault());
+	}
+
+	/**
+	 * Returns the SDK's listener as {@link #listener(AcpAgentSettings, AcpAgentFactory)} does,
+	 * on the given threads. On JDK 21 and later the listener serves on Jetty's
+	 * {@code VirtualThreadPool}: its tasks on the framework's executor when one is given, else on
+	 * virtual threads of its own; with {@link AcpTransportThreads#platform()}, and on every JDK
+	 * before 21, on Jetty's pool of platform threads. Give an executor that starts a thread per
+	 * task (virtual threads), not a bounded pool: Jetty's selectors and acceptors hold their
+	 * tasks for as long as the listener runs. The listener never shuts it down.
+	 * @param settings the agent settings
+	 * @param factory the factory creating one agent per connection
+	 * @param threads the threads the listener serves on
+	 * @return the listener, not started
+	 * @throws IllegalStateException if {@code acp-streamable-http-jetty} or its Jetty server is
+	 * not on the classpath; the message names the module
+	 */
+	public static StreamableHttpAcpAgentTransport listener(AcpAgentSettings settings, AcpAgentFactory factory,
+			AcpTransportThreads threads) {
 		if (!isListenerAvailable()) {
 			throw new IllegalStateException("An ACP agent served over " + settings.transport().value() + " needs "
 					+ MODULE + " (and its Jetty server) on the classpath");
 		}
 		AcpAgentSettings.Http http = settings.http();
+		StreamableHttpAcpAgentTransportOptions.Builder options = settings.toOptionsBuilder(true)
+			.virtualThreads(threads.virtualThreads());
+		Executor executor = threads.executor();
+		if (executor != null && VirtualThreads.isSupported()) {
+			options.executor(executor);
+		}
 		return new StreamableHttpAcpAgentTransport(http.listener().port(), http.path(), AcpJsonMapper.createDefault(),
-				factory, settings.toOptions(true));
+				factory, options.build());
 	}
 
 	/**

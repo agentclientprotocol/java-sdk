@@ -4,15 +4,20 @@
 
 package com.agentclientprotocol.sdk.integration;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 
 import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransportOptions;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
+import com.agentclientprotocol.sdk.util.PlatformThreads;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -54,7 +59,8 @@ public final class AcpClientTransports {
 	}
 
 	/**
-	 * Returns the transport the settings describe, by the rule above. Empty exactly when
+	 * Returns the transport the settings describe, by the rule above, on the SDK's own threads
+	 * ({@link AcpTransportThreads#sdkDefault()}). Empty exactly when
 	 * {@link AcpClientSettings#hasTransport()} is false.
 	 * @param settings the client settings
 	 * @param prefix the framework's prefix of the client keys, such as {@code spring.acp.client},
@@ -65,17 +71,54 @@ public final class AcpClientTransports {
 	 * message names the missing key)
 	 */
 	public static Optional<AcpClientTransport> create(AcpClientSettings settings, String prefix) {
+		return create(settings, prefix, AcpTransportThreads.sdkDefault());
+	}
+
+	/**
+	 * Returns the transport the settings describe, by the rule above, with the WebSocket and
+	 * Streamable HTTP transports on the given threads: the framework's executor, the SDK's own
+	 * threads (virtual on JDK 21 and later), or platform threads on every JDK. A transport never
+	 * shuts down an executor it is given. The stdio transport keeps its own reader and writer
+	 * threads either way.
+	 * @param settings the client settings
+	 * @param prefix the framework's prefix of the client keys, which error messages name
+	 * @param threads the threads the network transports run on
+	 * @return the transport, not connected, or empty when no transport is configured
+	 * @throws IllegalStateException as {@link #create(AcpClientSettings, String)} does
+	 */
+	public static Optional<AcpClientTransport> create(AcpClientSettings settings, String prefix,
+			AcpTransportThreads threads) {
 		AcpTransportType type = type(settings, prefix);
 		if (type == null) {
 			return Optional.empty();
 		}
 		return Optional.of(switch (type) {
 			case STDIO -> stdio(settings.stdio(), prefix);
-			case WEBSOCKET -> new WebSocketAcpClientTransport(
-					required(settings.websocket().uri(), type, prefix, "websocket.uri"))
+			case WEBSOCKET -> webSocket(required(settings.websocket().uri(), type, prefix, "websocket.uri"), threads)
 				.connectTimeout(settings.websocket().connectTimeout());
-			case HTTP -> new StreamableHttpAcpClientTransport(required(settings.http().uri(), type, prefix, "http.uri"));
+			case HTTP -> http(required(settings.http().uri(), type, prefix, "http.uri"), threads);
 		});
+	}
+
+	private static WebSocketAcpClientTransport webSocket(URI uri, AcpTransportThreads threads) {
+		Executor executor = threads.executor();
+		if (executor == null && !threads.virtualThreads()) {
+			// The WebSocket transport's own pool before JDK 21; its idle threads end after a
+			// minute, so the transport not shutting it down leaves nothing running.
+			executor = PlatformThreads.newCachedPool("acp-ws-client");
+		}
+		return (executor != null) ? new WebSocketAcpClientTransport(uri, AcpJsonMapper.createDefault(), executor)
+				: new WebSocketAcpClientTransport(uri);
+	}
+
+	private static StreamableHttpAcpClientTransport http(URI uri, AcpTransportThreads threads) {
+		StreamableHttpAcpClientTransportOptions.Builder options = StreamableHttpAcpClientTransportOptions.builder()
+			.virtualThreads(threads.virtualThreads());
+		Executor executor = threads.executor();
+		if (executor != null) {
+			options.executor(executor);
+		}
+		return new StreamableHttpAcpClientTransport(uri, AcpJsonMapper.createDefault(), options.build());
 	}
 
 	/**
