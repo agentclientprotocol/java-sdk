@@ -27,7 +27,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.agentclientprotocol.sdk.AcpTestFixtures;
@@ -1276,6 +1278,124 @@ class StreamableHttpAcpClientTransportTest {
 			Thread.currentThread().interrupt();
 		}
 		return bytes.toString(StandardCharsets.UTF_8);
+	}
+
+	/**
+	 * The JDK's HttpClient has no default headers, so before the request customizer there was
+	 * no way to send an API key or a bearer token to an agent behind authentication. Every
+	 * request passes through it, it is read again for each one (a refreshed token reaches the
+	 * next request), and the transport's own headers replace any the customizer set.
+	 */
+	@Test
+	void theRequestCustomizerReachesEveryRequestWithoutOverridingProtocolHeaders() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		List<HttpRequest> sent = new CopyOnWriteArrayList<>();
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		CountDownLatch connectionStreamOpened = new CountDownLatch(1);
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			sent.add(request);
+			if ("POST".equals(request.method()) && sent.size() == 1) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method())) {
+				connectionStreamOpened.countDown();
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+		AtomicReference<String> token = new AtomicReference<>("first");
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient)
+			.requestCustomizer(builder -> builder.header("Authorization", "Bearer " + token.get())
+				.header("Acp-Connection-Id", "forged")
+				.header("Accept", "text/plain"));
+		try {
+			transport.setExceptionHandler(error -> {
+			});
+			transport.connect(message -> Mono.empty()).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+			assertThat(connectionStreamOpened.await(1, TimeUnit.SECONDS)).isTrue();
+
+			token.set("second");
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_SESSION_NEW, "new-1",
+					AcpTestFixtures.createNewSessionRequest()))
+				.block();
+		}
+		finally {
+			transport.close();
+			connectionStreamWriter.close();
+		}
+
+		assertThat(sent).extracting(HttpRequest::method).containsExactly("POST", "GET", "POST", "DELETE");
+		assertThat(sent).allSatisfy(request -> assertThat(request.headers().allValues("Authorization")).hasSize(1));
+		assertThat(sent.get(0).headers().allValues("Authorization")).containsExactly("Bearer first");
+		assertThat(sent.get(2).headers().allValues("Authorization")).containsExactly("Bearer second");
+		// The bootstrap POST has no connection yet; every later request names the real one.
+		assertThat(sent.get(0).headers().allValues("Acp-Connection-Id")).isEmpty();
+		assertThat(sent.subList(1, 4))
+			.allSatisfy(request -> assertThat(request.headers().allValues("Acp-Connection-Id")).containsExactly("conn-1"));
+		assertThat(sent.get(0).headers().allValues("Accept")).containsExactly("application/json");
+		assertThat(sent.get(1).headers().allValues("Accept")).containsExactly("text/event-stream");
+	}
+
+	/**
+	 * A customizer that throws, say because no token is available yet, fails the request's
+	 * Mono instead of throwing out of {@code sendMessage}, and a failed {@code initialize} may
+	 * be sent again.
+	 */
+	@Test
+	void aRequestCustomizerThatThrowsFailsTheMonoAndInitializeMayBeRetried() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		String body = jsonMapper.writeValueAsString(
+				AcpTestFixtures.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+			}
+			return CompletableFuture.completedFuture(
+					response(200, Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), body));
+		});
+		AtomicBoolean signedIn = new AtomicBoolean();
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient)
+			.requestCustomizer(builder -> {
+				if (!signedIn.get()) {
+					throw new IllegalStateException("not signed in");
+				}
+				builder.header("Authorization", "Bearer token");
+			});
+		transport.setExceptionHandler(error -> {
+		});
+		AcpSchema.JSONRPCRequest initialize = AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE,
+				"init-1", AcpTestFixtures.createInitializeRequest());
+		try {
+			Mono<Void> first = transport.sendMessage(initialize);
+			assertThatThrownBy(first::block).isInstanceOf(IllegalStateException.class).hasMessage("not signed in");
+
+			signedIn.set(true);
+			transport.sendMessage(initialize).block();
+		}
+		finally {
+			transport.close();
+		}
+	}
+
+	@Test
+	void requestCustomizerRejectsNull() {
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, mock(HttpClient.class));
+
+		assertThatThrownBy(() -> transport.requestCustomizer(null)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private InputStream emptyBody() {

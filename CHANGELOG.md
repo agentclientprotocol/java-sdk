@@ -28,6 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Micronaut client configuration hard-coded the three as not advertised, so a Micronaut client
   could not advertise elicitation or boolean config options from its settings.
 
+- **Headers on the remote client transports: `WebSocketAcpClientTransport.webSocketCustomizer(...)`
+  and `StreamableHttpAcpClientTransport.requestCustomizer(...)`.** The JDK's `HttpClient` has no
+  default headers, so neither transport could send an `Authorization` header, an API key or any
+  other header an agent's endpoint requires; an application had to write its own transport.
+  `goose serve`, for one, refuses every connection without its `X-Secret-Key`. The WebSocket
+  customizer receives the `WebSocket.Builder` of each connect attempt; the HTTP one receives the
+  `HttpRequest.Builder` of every request the transport sends (the cleartext probe, `initialize`,
+  each POST, every SSE stream it opens or reopens, and the closing `DELETE`), so a token that
+  expires is read again for each. The HTTP transport keeps the method, body, URI and its own
+  headers (Content-Type, Accept, Acp-Connection-Id, Acp-Session-Id): a customizer's values for
+  them are dropped. A customizer that throws, or sets a header the JDK restricts, fails that
+  connect or that request's Mono rather than the caller, and a failed connect or `initialize` may
+  be tried again. The HTTP transport now also builds each request inside its Mono, so a failure
+  building one is reported there too.
+
 - **Transport constructors without a JSON mapper:** `StreamableHttpAcpClientTransport(URI)`,
   `WebSocketAcpClientTransport(URI)`, `StreamableHttpAcpAgentTransport(int port, AcpAgentFactory)`
   and `StreamableHttpAcpServlet(AcpAgentFactory)` use `AcpJsonMapper.createDefault()`, as the stdio

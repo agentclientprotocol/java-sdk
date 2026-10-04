@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -20,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
@@ -30,8 +32,8 @@ import reactor.core.publisher.Mono;
 
 /**
  * The HTTP exchanges of a Streamable HTTP client connection: the scope headers, the HTTP
- * version settled by the cleartext probe, and the POST, GET and DELETE requests with the
- * status and content type each must answer with. Completion signals are delivered on a
+ * version settled by the cleartext probe, the application's request customizer, and the
+ * POST, GET and DELETE requests with the status and content type each must answer with. Completion signals are delivered on a
  * bounded executor of their own, never on the HTTP client's.
  */
 final class StreamableHttpRequests {
@@ -47,6 +49,14 @@ final class StreamableHttpRequests {
 	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
 	static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
+
+	/**
+	 * The headers this transport owns, lower-cased. A request customizer's values for them are
+	 * dropped, including on the bootstrap {@code initialize}, which carries no connection id
+	 * of the transport's own for one set by the customizer to be replaced by.
+	 */
+	private static final Set<String> PROTOCOL_HEADERS = Set.of("content-type", "accept",
+			HEADER_CONNECTION_ID.toLowerCase(Locale.ROOT), HEADER_SESSION_ID.toLowerCase(Locale.ROOT));
 
 	/** An HTTP client and the executor this transport created for it, if any. */
 	record HttpClientBundle(HttpClient httpClient, @Nullable ExecutorService ownedExecutor) {
@@ -74,6 +84,9 @@ final class StreamableHttpRequests {
 	private final ExecutorService httpSignalExecutor;
 
 	private volatile @Nullable String connectionId;
+
+	private volatile Consumer<HttpRequest.Builder> requestCustomizer = builder -> {
+	};
 
 	/**
 	 * HTTP version pinned for every request after the cleartext probe, or {@code null} to
@@ -106,6 +119,10 @@ final class StreamableHttpRequests {
 		};
 	}
 
+	void requestCustomizer(Consumer<HttpRequest.Builder> requestCustomizer) {
+		this.requestCustomizer = requestCustomizer;
+	}
+
 	@Nullable String connectionId() {
 		return connectionId;
 	}
@@ -129,9 +146,10 @@ final class StreamableHttpRequests {
 		if (!"http".equalsIgnoreCase(endpointUri.getScheme()) || httpClient.version() != HttpClient.Version.HTTP_2) {
 			return Mono.empty();
 		}
-		HttpRequest probe = HttpRequest.newBuilder(endpointUri).GET().build();
-		// Cancelling the Mono on timeout cancels the HTTP exchange (see sendAsync).
-		return sendAsync(probe, HttpResponse.BodyHandlers.discarding())
+		// Customized like every other request: a gateway in front of the agent may refuse the
+		// probe without the application's credentials. Cancelling the Mono on timeout cancels
+		// the HTTP exchange (see sendAsync).
+		return Mono.defer(() -> sendAsync(customized().GET().build(), HttpResponse.BodyHandlers.discarding()))
 			.timeout(PROBE_TIMEOUT, AcpSchedulers.timeouts())
 			.doOnNext(response -> {
 				logger.debug("Cleartext probe to {} negotiated {}", endpointUri, response.version());
@@ -148,17 +166,9 @@ final class StreamableHttpRequests {
 			});
 	}
 
-	/** Re-stamps a request built before the probe with the version the probe settled on. */
-	HttpRequest pinned(HttpRequest request) {
-		HttpClient.Version version = this.pinnedVersion;
-		if (version == null) {
-			return request;
-		}
-		return HttpRequest.newBuilder(request, (name, value) -> true).version(version).build();
-	}
-
+	/** A customized builder for the endpoint, with the version the probe settled on. */
 	private HttpRequest.Builder newRequest() {
-		HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpointUri);
+		HttpRequest.Builder requestBuilder = customized();
 		HttpClient.Version version = this.pinnedVersion;
 		if (version != null) {
 			requestBuilder.version(version);
@@ -166,25 +176,46 @@ final class StreamableHttpRequests {
 		return requestBuilder;
 	}
 
-	/** A JSON POST of {@code json} in {@code scope}, not yet sent. */
+	/**
+	 * A builder for the endpoint carrying what the application's customizer set, less the
+	 * protocol headers and with the endpoint's URI whatever the customizer did. The
+	 * customizer runs on a builder of its own and the result is copied, because a builder
+	 * can replace a header but never remove one. The transport sets the method, the body and
+	 * its own headers afterwards.
+	 */
+	private HttpRequest.Builder customized() {
+		HttpRequest.Builder scratch = HttpRequest.newBuilder(endpointUri);
+		requestCustomizer.accept(scratch);
+		return HttpRequest
+			.newBuilder(scratch.build(), (name, value) -> !PROTOCOL_HEADERS.contains(name.toLowerCase(Locale.ROOT)))
+			.uri(endpointUri);
+	}
+
+	/**
+	 * A JSON POST of {@code json} in {@code scope}, not yet sent. Builds the request, so it
+	 * throws whatever the request customizer throws; the Monos below build inside
+	 * {@code defer} and fail with it instead.
+	 */
 	HttpRequest jsonPost(RouteScope scope, String json) {
-		HttpRequest.Builder builder = newRequest().header("Content-Type", CONTENT_TYPE_JSON)
-			.header("Accept", CONTENT_TYPE_JSON);
+		HttpRequest.Builder builder = newRequest().setHeader("Content-Type", CONTENT_TYPE_JSON)
+			.setHeader("Accept", CONTENT_TYPE_JSON);
 		addScopeHeaders(builder, scope);
 		return builder.POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
 	}
 
 	/** Posts a message that the server must accept with 202. */
 	Mono<Void> postAccepted(RouteScope scope, String json) {
-		return sendAsync(jsonPost(scope, json), HttpResponse.BodyHandlers.discarding())
+		return Mono.defer(() -> sendAsync(jsonPost(scope, json), HttpResponse.BodyHandlers.discarding()))
 			.flatMap(response -> expectStatus(response, 202, "for POST"));
 	}
 
 	/** Opens the SSE stream of {@code scope}; emits its body or an error, never completes empty. */
 	Mono<InputStream> openEventStream(RouteScope scope) {
-		HttpRequest.Builder builder = newRequest().GET().header("Accept", CONTENT_TYPE_EVENT_STREAM);
-		addScopeHeaders(builder, scope);
-		return sendAsync(builder.build(), HttpResponse.BodyHandlers.ofInputStream())
+		return Mono.defer(() -> {
+			HttpRequest.Builder builder = newRequest().GET().setHeader("Accept", CONTENT_TYPE_EVENT_STREAM);
+			addScopeHeaders(builder, scope);
+			return sendAsync(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+		})
 			.flatMap(response -> expectStatus(response, 200, "when opening SSE stream")
 				.then(expectContentType(response, CONTENT_TYPE_EVENT_STREAM, "response"))
 				.then(Mono.fromSupplier(response::body)));
@@ -192,8 +223,9 @@ final class StreamableHttpRequests {
 
 	/** Deletes the connection; the server must accept with 202. */
 	Mono<Void> deleteConnection(String id) {
-		HttpRequest request = newRequest().DELETE().header(HEADER_CONNECTION_ID, id).build();
-		return sendAsync(request, HttpResponse.BodyHandlers.discarding())
+		return Mono
+			.defer(() -> sendAsync(newRequest().DELETE().setHeader(HEADER_CONNECTION_ID, id).build(),
+					HttpResponse.BodyHandlers.discarding()))
 			.flatMap(response -> expectStatus(response, 202, "for DELETE"));
 	}
 
@@ -215,10 +247,10 @@ final class StreamableHttpRequests {
 
 	private void addScopeHeaders(HttpRequest.Builder builder, RouteScope scope) {
 		if (!scope.isBootstrap()) {
-			builder.header(HEADER_CONNECTION_ID, requireConnectionId());
+			builder.setHeader(HEADER_CONNECTION_ID, requireConnectionId());
 		}
 		if (scope.isSession()) {
-			builder.header(HEADER_SESSION_ID, scope.boundSessionId());
+			builder.setHeader(HEADER_SESSION_ID, scope.boundSessionId());
 		}
 	}
 
