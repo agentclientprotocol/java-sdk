@@ -14,6 +14,7 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.ConfigValue;
+import com.agentclientprotocol.sdk.annotation.ExtNotification;
 import com.agentclientprotocol.sdk.annotation.ExtRequest;
 import com.agentclientprotocol.sdk.annotation.ListSessions;
 import com.agentclientprotocol.sdk.annotation.NewSession;
@@ -134,6 +135,31 @@ class RegistrationErrorTest {
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("SessionIdOnAnExtension.ping")
 			.hasMessageContaining("@SessionId");
+	}
+
+	@AcpAgent
+	static class ValueFromAnExtNotification {
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
+		@ExtNotification("_example/file_opened")
+		String fileOpened(Map<String, Object> params) {
+			return "dropped";
+		}
+
+	}
+
+	/** A notification has no answer: a value its method returns used to be dropped silently. */
+	@Test
+	void aValueReturnedFromAnExtNotification() {
+		assertThatThrownBy(() -> AcpAgentSupport.create(new ValueFromAnExtNotification()).buildFactory())
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("ValueFromAnExtNotification.fileOpened")
+			.hasMessageContaining("java.lang.String")
+			.hasMessageContaining("void");
 	}
 
 	@AcpAgent

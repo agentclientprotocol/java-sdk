@@ -379,6 +379,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: an `@ExtNotification` method must return `void`.** A notification gets no answer,
+  and a value the method returned was dropped without a word, while a `void` `@ExtRequest` was
+  already rejected. Building the agent now rejects a non-`void` `@ExtNotification` method with an
+  `IllegalStateException` naming the method. Migration: return `void`, or make it an
+  `@ExtRequest` if the client expects an answer.
+
 - **An extension notification without a handler is logged at DEBUG, not WARN.** ACP asks
   implementations to ignore notifications they do not recognize, and a peer can send many
   (`_auth/status_update` from some agents), each of which logged a warning on both sides. A
