@@ -56,7 +56,8 @@ import reactor.core.scheduler.Schedulers;
  * (method not found), so register at least {@code initialize}, {@code session/new} and
  * {@code session/prompt}. A handler that fails is answered with an error: an
  * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with its own code and message,
- * anything else with {@code -32603} (internal error). A notification without a handler, or whose
+ * an {@link com.agentclientprotocol.sdk.spec.AcpError} from a call to the client with the error it
+ * carries, anything else with {@code -32603} (internal error, message "Internal error"). A notification without a handler, or whose
  * handler fails, is logged and dropped.
  *
  * <h2>Prompt turns and cancellation</h2>

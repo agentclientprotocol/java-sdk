@@ -379,6 +379,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: a peer's error that escapes a handler is passed on unchanged.** A handler that called
+  the other side and let the resulting `AcpError` escape answered its own request `-32603`, losing
+  the peer's code (a `-32601` or `-32002` became an internal error). The `AcpError`'s JSON-RPC
+  error, code, message and data, is now the answer, so a handler with nothing to add can let the
+  failure propagate; `getError().toException()` is no longer needed for that. Migration: a handler
+  that relied on such a failure being reported as `-32603` catches the `AcpError` and throws
+  `AcpProtocolException` with the code it wants.
+
 - **Breaking: an interceptor's `onError` can answer with an error of its own, and reaches only the
   interceptors that saw the call.** What `onError` threw used to be logged and ignored, so the
   client got the original failure, and the migration note for the removed `@AcpExceptionHandler`

@@ -13,15 +13,14 @@ import org.jspecify.annotations.Nullable;
  * {@code Mono} with it, for a failure the caller should see, with a code from
  * {@link AcpErrorCodes}; this works the same in agent and client handlers, builder lambdas and
  * annotated methods. Its message and data go to the peer as they are, so keep secrets out of them.
- * Any other exception from a handler is answered {@code -32603} (internal error) with the generic
+ * An {@code AcpError} that escapes a handler passes on the error it carries. Any other exception
+ * from a handler is answered {@code -32603} (internal error) with the generic
  * message "Internal error"; that exception is logged on the handling side and not sent.
  *
  * <p>The caller of the request never receives this type. On the caller's side the error response
  * fails the request with {@link com.agentclientprotocol.sdk.spec.AcpError}, which carries the same
- * code, message and data. A handler that calls the peer and wants to pass an {@code AcpError} it
- * received on unchanged throws {@code e.getError().toException()} (see
- * {@link com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCError#toException()}); an
- * {@code AcpError} that escapes a handler as it is gets {@code -32603} like any other exception.
+ * code, message and data. A handler that calls the peer and lets an {@code AcpError} it received
+ * escape passes that error on unchanged; it need not convert it.
  *
  * <p>Codes a handler commonly answers with:
  * <ul>
