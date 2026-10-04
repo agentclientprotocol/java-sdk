@@ -101,7 +101,12 @@ jobs:
   # -Dlincheck.scale.
   lincheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # One job per module: at scale 10 the acp-core models alone take about 17 minutes.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [acp-core, acp-streamable-http-jetty]
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -124,4 +129,4 @@ jobs:
         run: ./mvnw -B -q install -DskipTests -Dpmd.skip -Dcpd.skip
 
       - name: Lincheck model checking, extended budget
-        run: ./mvnw -B -pl acp-core,acp-streamable-http-jetty test -Dtest='*LincheckTest' -Dlincheck.scale=10
+        run: ./mvnw -B -pl ${{ matrix.module }} test -Dtest='*LincheckTest' -Dlincheck.scale=10
