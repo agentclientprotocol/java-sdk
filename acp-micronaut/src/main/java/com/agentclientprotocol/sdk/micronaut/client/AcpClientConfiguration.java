@@ -11,7 +11,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.agentclientprotocol.sdk.micronaut.TransportType;
+import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientSettings;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.micronaut.context.annotation.ConfigurationProperties;
 import io.micronaut.core.convert.format.MapFormat;
 import io.micronaut.core.naming.conventions.StringConvention;
@@ -94,11 +96,31 @@ public class AcpClientConfiguration {
 		this.capabilities = capabilities;
 	}
 
+	/**
+	 * These settings as the SDK's framework-neutral settings.
+	 * @return the settings
+	 */
+	public AcpClientSettings toSettings() {
+		Transport.Stdio stdio = transport.getStdio();
+		return AcpClientSettings.builder()
+			.requestTimeout(requestTimeout)
+			.transport(transport.getType())
+			.stdioCommand(stdio.getCommand())
+			.stdioArgs(stdio.getArgs())
+			.stdioEnv(stdio.getEnv())
+			.websocketUri(transport.getWebsocket().getUri())
+			.websocketConnectTimeout(transport.getWebsocket().getConnectTimeout())
+			.httpUri(transport.getHttp().getUri())
+			.capabilities(new AcpClientSettings.Capabilities(capabilities.isReadTextFile(),
+					capabilities.isWriteTextFile(), capabilities.isTerminal(), false, false, false))
+			.build();
+	}
+
 	/** The client transport, bound from {@code acp.client.transport.*}. */
 	@ConfigurationProperties("transport")
 	public static class Transport {
 
-		private @Nullable TransportType type;
+		private @Nullable AcpTransportType type;
 
 		private Stdio stdio = new Stdio();
 
@@ -111,7 +133,7 @@ public class AcpClientConfiguration {
 		 * one set, this must be given.
 		 * @return the type, or null to infer it
 		 */
-		public @Nullable TransportType getType() {
+		public @Nullable AcpTransportType getType() {
 			return type;
 		}
 
@@ -119,7 +141,7 @@ public class AcpClientConfiguration {
 		 * Sets the transport type.
 		 * @param type the transport type
 		 */
-		public void setType(@Nullable TransportType type) {
+		public void setType(@Nullable AcpTransportType type) {
 			this.type = type;
 		}
 
@@ -238,7 +260,7 @@ public class AcpClientConfiguration {
 
 			private @Nullable URI uri;
 
-			private Duration connectTimeout = Duration.ofSeconds(10);
+			private Duration connectTimeout = AcpClientSettings.DEFAULT_CONNECT_TIMEOUT;
 
 			/**
 			 * The agent's endpoint, such as {@code ws://localhost:8080/acp}.
