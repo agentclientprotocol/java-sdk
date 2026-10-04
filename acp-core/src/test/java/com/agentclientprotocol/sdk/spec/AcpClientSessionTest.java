@@ -251,7 +251,7 @@ class AcpClientSessionTest {
 		AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) sentMessage;
 		assertThat(response.error()).isNotNull();
 		assertThat(response.error().code()).isEqualTo(-32603);
-		assertThat(response.error().message()).isEqualTo("Something went wrong");
+		assertThat(response.error().message()).isEqualTo("Internal error");
 
 		session.close();
 	}
@@ -282,13 +282,13 @@ class AcpClientSessionTest {
 			Thread.currentThread().interrupt();
 		}
 
-		// Verify: The response should contain INTERNAL_ERROR with exception message
+		// Verify: The response should contain INTERNAL_ERROR, without the exception's message
 		AcpSchema.JSONRPCMessage sentMessage = transport.getLastSentMessage();
 		assertThat(sentMessage).isInstanceOf(AcpSchema.JSONRPCResponse.class);
 		AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) sentMessage;
 		assertThat(response.error()).isNotNull();
 		assertThat(response.error().code()).isEqualTo(-32603);
-		assertThat(response.error().message()).isEqualTo("Top level message");
+		assertThat(response.error().message()).isEqualTo("Internal error");
 
 		session.close();
 	}
@@ -492,7 +492,8 @@ class AcpClientSessionTest {
 
 	@Test
 	void handlerErrorWithoutMessageStillSendsAnErrorMessage() throws Exception {
-		// JSON-RPC requires error.message; an exception without one used to send none.
+		// JSON-RPC requires error.message; an exception without one used to send none. Every
+		// unexpected exception is now answered with the generic message.
 		Map<String, AcpClientSession.RequestHandler<?>> requestHandlers = Map.of(ECHO_METHOD,
 				params -> Mono.error(new IllegalStateException()));
 		var transport = new MockAcpClientTransport();
@@ -503,7 +504,7 @@ class AcpClientSessionTest {
 
 		AcpSchema.JSONRPCResponse response = awaitSentResponse(transport);
 		assertThat(response.error()).isNotNull();
-		assertThat(response.error().message()).isEqualTo("java.lang.IllegalStateException");
+		assertThat(response.error().message()).isEqualTo("Internal error");
 		session.close();
 	}
 

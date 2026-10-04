@@ -54,7 +54,7 @@ public interface ReturnValueHandler {
 	 * @param context the call's context
 	 * @return the response
 	 * @throws ReturnValueHandlingException if the value cannot be turned into a response; the call
-	 * fails with an internal error ({@code -32603}) carrying its message
+	 * fails with an internal error ({@code -32603}), and the exception is logged at the agent
 	 */
 	@Nullable Object handleReturnValue(@Nullable Object returnValue, AcpMethodParameter returnType,
 			AcpInvocationContext context);

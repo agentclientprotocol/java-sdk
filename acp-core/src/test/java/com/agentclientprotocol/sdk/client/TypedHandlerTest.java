@@ -258,7 +258,7 @@ class TypedHandlerTest {
 		AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) sentMessage;
 		assertThat(response.error()).isNotNull();
 		assertThat(response.error().code()).isEqualTo(-32603); // Internal error
-		assertThat(response.error().message()).isEqualTo(errorMessage);
+		assertThat(response.error().message()).isEqualTo("Internal error");
 
 		client.close();
 	}

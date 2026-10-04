@@ -514,11 +514,11 @@ class AcpAgentSupportTest {
 
 		client.newSession(new NewSessionRequest("/", List.of())).block(TIMEOUT);
 		assertThatThrownBy(() -> client.loadSession(new LoadSessionRequest("s", "/", List.of())).block(TIMEOUT))
-			.hasMessageContaining("handler failed");
+			.hasMessage("Internal error");
 		assertThatThrownBy(() -> client.setSessionMode(new SetSessionModeRequest("s", "code")).block(TIMEOUT))
 			.hasMessageContaining("produced no response");
 		assertThatThrownBy(() -> client.closeSession(new CloseSessionRequest("s")).block(TIMEOUT))
-			.hasMessageContaining("preInvoke failed");
+			.hasMessage("Internal error");
 
 		assertThat(completions).containsOnlyKeys("initialize", "session/new", "session/load", "session/set_mode",
 				"session/close");

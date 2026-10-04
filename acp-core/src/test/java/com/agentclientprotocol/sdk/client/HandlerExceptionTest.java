@@ -57,7 +57,8 @@ class HandlerExceptionTest {
         assertThat(response.result()).isNull();
         assertThat(response.error()).isNotNull();
         assertThat(response.error().code()).isEqualTo(-32603); // Internal Error
-        assertThat(response.error().message()).contains(errorMessage);
+        // The exception's message stays at the client: the agent gets the generic message.
+        assertThat(response.error().message()).isEqualTo("Internal error");
 
         client.close();
     }
@@ -92,7 +93,7 @@ class HandlerExceptionTest {
         AcpSchema.JSONRPCResponse response = (AcpSchema.JSONRPCResponse) transport.getSentMessages().get(0);
         assertThat(response.error()).isNotNull();
         assertThat(response.error().code()).isEqualTo(-32603);
-        assertThat(response.error().message()).contains("Permission denied");
+        assertThat(response.error().message()).isEqualTo("Internal error");
 
         client.close();
     }

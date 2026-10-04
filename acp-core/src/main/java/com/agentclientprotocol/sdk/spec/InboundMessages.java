@@ -25,6 +25,9 @@ final class InboundMessages {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(InboundMessages.class);
 
+	/** The message of the internal error a handler's unexpected exception is answered with. */
+	static final String INTERNAL_ERROR_MESSAGE = "Internal error";
+
 	private InboundMessages() {
 	}
 
@@ -86,12 +89,15 @@ final class InboundMessages {
 
 	/**
 	 * The response to a request whose handling failed: an {@link AcpProtocolException} keeps
-	 * its code and data, a cancellation ({@link #isCancellation}) is the handler cancelling
-	 * its own work (ACP v1 internal cancellation: the same {@code -32800} as a cancel from the
-	 * caller), anything else is an internal error. A handler that failed with an
+	 * its code, message and data (it is the handler's intended answer), a cancellation
+	 * ({@link #isCancellation}) is the handler cancelling its own work (ACP v1 internal
+	 * cancellation: the same {@code -32800} as a cancel from the caller), anything else is an
+	 * internal error with the generic message {@value #INTERNAL_ERROR_MESSAGE}: an exception's
+	 * message can carry paths, queries or credentials the peer must not see, so it is logged
+	 * here, at WARN with its stack trace, and not sent. A handler that failed with an
 	 * {@link Error} ({@link HandlerFailures}) is answered with an internal error that names
-	 * the method and the error's type only, never its message or stack trace, and the error
-	 * is logged at ERROR with its stack trace.
+	 * the method and the error's type only, and the error is logged at ERROR with its stack
+	 * trace.
 	 */
 	static AcpSchema.JSONRPCResponse error(AcpSchema.JSONRPCRequest request, Throwable error) {
 		if (HandlerFailures.contain(error) instanceof HandlerFailures.HandlerError handlerError) {
@@ -111,7 +117,9 @@ final class InboundMessages {
 			return error(request, AcpErrorCodes.REQUEST_CANCELLED,
 					(message != null) ? message : InboundRequests.CANCELLED_MESSAGE, null);
 		}
-		return error(request, AcpErrorCodes.INTERNAL_ERROR, errorMessage(error), null);
+		LOGGER.warn("The {} handler failed; answered {} ({})", request.method(), AcpErrorCodes.INTERNAL_ERROR,
+				INTERNAL_ERROR_MESSAGE, error);
+		return error(request, AcpErrorCodes.INTERNAL_ERROR, INTERNAL_ERROR_MESSAGE, null);
 	}
 
 	/**
@@ -124,12 +132,6 @@ final class InboundMessages {
 		return unwrapped instanceof CancellationException || unwrapped instanceof InterruptedException
 				|| (error instanceof AcpProtocolException protocolException
 						&& protocolException.getCode() == AcpErrorCodes.REQUEST_CANCELLED);
-	}
-
-	/** JSON-RPC requires an error message; an exception without one is named by its type. */
-	private static String errorMessage(Throwable error) {
-		String message = error.getMessage();
-		return (message != null) ? message : error.getClass().getName();
 	}
 
 }

@@ -53,7 +53,8 @@ class MutinyReturnTypesTest {
 
 		assertThatThrownBy(() -> client.sendExtRequest("_quarkus/multi", Map.of()))
 			.isInstanceOf(AcpError.class)
-			.hasMessageContaining("Only an @Prompt handler may return a Multi");
+			// The handler's ReturnValueHandlingException is logged at the agent, not sent.
+			.hasMessage("Internal error");
 	}
 
 	@AcpAgent

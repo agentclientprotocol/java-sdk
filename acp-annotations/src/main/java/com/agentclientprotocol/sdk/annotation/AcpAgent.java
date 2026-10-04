@@ -80,9 +80,9 @@ import java.lang.annotation.Target;
  *
  * <p><b>Errors.</b> To answer a request with an error, throw an {@code AcpProtocolException} (from
  * {@code acp-core}) with a code from {@code AcpErrorCodes}: the client receives its code, message
- * and data. Any other exception is answered with an internal error ({@code -32603}) that carries
- * the exception's message, so keep secrets out of exception messages. An exception from a
- * notification handler is logged and dropped.
+ * and data, so keep secrets out of what you put in it. Any other exception is answered with an
+ * internal error ({@code -32603}) whose message is only "Internal error"; the exception itself is
+ * logged at the agent. An exception from a notification handler is logged and dropped.
  *
  * <p><b>Threads and state.</b> One instance of the class serves every request: from every session,
  * and, with {@code AcpAgentSupport.Builder.buildFactory()}, from every connection. Its handler
