@@ -180,6 +180,23 @@ public interface AcpClient {
 		private static final TypeRef<Object> RAW_PARAMS = new TypeRef<>() {
 		};
 
+		/** The typed setter of each agent-to-client request the SDK models. */
+		private static final Map<String, String> TYPED_REQUEST_SETTERS = Map.of(
+				AcpSchema.METHOD_FS_READ_TEXT_FILE, "readTextFileHandler",
+				AcpSchema.METHOD_FS_WRITE_TEXT_FILE, "writeTextFileHandler",
+				AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, "requestPermissionHandler",
+				AcpSchema.METHOD_TERMINAL_CREATE, "createTerminalHandler",
+				AcpSchema.METHOD_TERMINAL_OUTPUT, "terminalOutputHandler",
+				AcpSchema.METHOD_TERMINAL_RELEASE, "releaseTerminalHandler",
+				AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, "waitForTerminalExitHandler",
+				AcpSchema.METHOD_TERMINAL_KILL, "killTerminalHandler",
+				AcpSchema.METHOD_ELICITATION_CREATE, "createElicitationHandler");
+
+		/** The typed setter of each agent-to-client notification the SDK models. */
+		private static final Map<String, String> TYPED_NOTIFICATION_SETTERS = Map.of(
+				AcpSchema.METHOD_SESSION_UPDATE, "sessionUpdateConsumer",
+				AcpSchema.METHOD_ELICITATION_COMPLETE, "completeElicitationHandler");
+
 		private final AcpClientTransport transport;
 
 		/** The SDK's one default request timeout, the same as the agent builders'. */
@@ -437,8 +454,7 @@ public interface AcpClient {
 		public AsyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
-			if (this.createElicitationHandler != null
-					|| this.requestHandlers.containsKey(AcpSchema.METHOD_ELICITATION_CREATE)) {
+			if (this.createElicitationHandler != null) {
 				throw alreadyRegistered(AcpSchema.METHOD_ELICITATION_CREATE, "createElicitationHandler");
 			}
 			this.createElicitationHandler = handler;
@@ -488,21 +504,24 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers a handler for any agent-to-client request method, with the params as the
-		 * transport read them. The method name is not checked: prefer the typed setters for ACP
-		 * methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension methods.
+		 * Registers a handler for an agent-to-client request method the SDK does not model, with
+		 * the params as the transport read them: the escape hatch for a method newer than this
+		 * SDK. A method with a typed setter ({@code fs/*}, {@code terminal/*},
+		 * {@code session/request_permission}, {@code elicitation/create}) is refused, since the
+		 * raw handler would bypass its typed params and checks; use the setter the exception
+		 * names. For extension methods prefer
+		 * {@link #extRequestHandler(String, TypeRef, Function)}.
 		 * @param method the method name
 		 * @param handler the handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null, or the
+		 * method has a typed setter
 		 * @throws IllegalStateException if the method already has a handler
 		 */
 		public AsyncSpec requestHandler(String method, AcpClientSession.RequestHandler<?> handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			if (AcpSchema.METHOD_ELICITATION_CREATE.equals(method) && this.createElicitationHandler != null) {
-				throw alreadyRegistered(method, "requestHandler");
-			}
+			refuseTyped(method, TYPED_REQUEST_SETTERS, "requestHandler");
 			if (this.requestHandlers.putIfAbsent(method, handler) != null) {
 				throw alreadyRegistered(method, "requestHandler");
 			}
@@ -510,19 +529,23 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers a handler for any agent-to-client notification method, with the params as the
-		 * transport read them. It is delivered in order with the session updates, and it is called
-		 * on the delivering thread, so it must not block. If a session update consumer is added,
-		 * {@code build()} replaces a handler registered here for {@code session/update}. The method
-		 * name is not checked: prefer {@code extNotificationHandler} for extension methods.
+		 * Registers a handler for an agent-to-client notification method the SDK does not model,
+		 * with the params as the transport read them. It is delivered in order with the session
+		 * updates, and it is called on the delivering thread, so it must not block. A method with
+		 * a typed setter ({@code session/update}, {@code elicitation/complete}) is refused; use
+		 * the setter the exception names. For extension methods prefer
+		 * {@code extNotificationHandler}.
 		 * @param method the method name
 		 * @param handler the handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null, or the
+		 * method has a typed setter
+		 * @throws IllegalStateException if the method already has a handler
 		 */
 		public AsyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
+			refuseTyped(method, TYPED_NOTIFICATION_SETTERS, "notificationHandler");
 			return notification("notificationHandler", method, handler);
 		}
 
@@ -622,6 +645,15 @@ public interface AcpClient {
 			return this;
 		}
 
+		/** The raw setters are for methods the SDK does not model; a modelled one has its setter. */
+		private static void refuseTyped(String method, Map<String, String> typedSetters, String rawSetter) {
+			String setter = typedSetters.get(method);
+			if (setter != null) {
+				throw new IllegalArgumentException(method + " has a typed setter: use " + setter + " instead of "
+						+ rawSetter + ", which is for methods the SDK does not model");
+			}
+		}
+
 		/** A second handler for a method: a mistake, which would silently replace the first. */
 		private static IllegalStateException alreadyRegistered(String method, String setter) {
 			return new IllegalStateException("A handler for " + method + " is already registered on this builder; "
@@ -708,9 +740,9 @@ public interface AcpClient {
 	 * session updates before it have been handled, without waiting for other handlers, so several
 	 * handlers can run at the same time and state they share must be thread-safe. A request handler
 	 * that returns {@code null} is answered {@code -32603}. The builder turns each handler into its
-	 * asynchronous counterpart on an {@link AsyncSpec}, so the rules described there apply; the raw
-	 * {@link #notificationHandler} is passed on as it is and must not block. {@link #build()}
-	 * connects the transport. A builder is not thread-safe; configure it on one thread.
+	 * asynchronous counterpart on an {@link AsyncSpec}, so the rules described there apply.
+	 * {@link #build()} connects the transport. A builder is not thread-safe; configure it on one
+	 * thread.
 	 */
 	class SyncSpec {
 
@@ -1061,18 +1093,24 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Registers a handler for any agent-to-client notification method, with the params as the
-		 * transport read them. It is delivered in order with the session updates, and it is called
-		 * on the delivering thread, so it must not block. If a session update consumer is added,
-		 * {@code build()} replaces a handler registered here for {@code session/update}. The method
-		 * name is not checked: prefer {@code extNotificationHandler} for extension methods.
+		 * Registers a blocking handler for an agent-to-client notification method the SDK does
+		 * not model, with the params as the transport read them. It runs on the handler executor,
+		 * like the other sync handlers, and is delivered
+		 * in order with the session updates. A method with a typed setter ({@code session/update},
+		 * {@code elicitation/complete}) is refused; use the setter the exception names. For
+		 * extension methods prefer {@code extNotificationHandler}.
 		 * @param method the method name
 		 * @param handler the handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
+		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null, or the
+		 * method has a typed setter
+		 * @throws IllegalStateException if the method already has a handler
 		 */
-		public SyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
-			asyncSpec.notificationHandler(method, handler);
+		public SyncSpec notificationHandler(String method, Consumer<Object> handler) {
+			Assert.notNull(handler, "Handler must not be null");
+			asyncSpec.notificationHandler(method, params -> Mono
+				.<Void>fromRunnable(HandlerFailures.guard(() -> handler.accept(params)))
+				.subscribeOn(this.handlerScheduler));
 			return this;
 		}
 

@@ -769,6 +769,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sessionUpdateConsumer` stays additive. **Migration:** register each method once; to compose
   behaviour, do it inside one handler.
 
+- **Breaking: the raw client handlers are for methods the SDK does not model.**
+  `AcpClient.AsyncSpec`/`SyncSpec.requestHandler(method, ..)` now throws `IllegalArgumentException`
+  for a method that has a typed setter (`fs/read_text_file`, `fs/write_text_file`,
+  `session/request_permission`, the five `terminal/*` methods, `elicitation/create`), and
+  `notificationHandler(method, ..)` for `session/update` and `elicitation/complete`, naming the
+  setter to use: the raw handler bypassed the typed params and the elicitation mode check, and a
+  raw `session/update` handler was silently replaced by the session update consumers.
+  `SyncSpec.notificationHandler` now takes a blocking `Consumer<Object>` run on the sync handler
+  threads, like the sync builder's other handlers, instead of the async `NotificationHandler`
+  returning a `Mono`. **Migration:** use the typed setter the exception names; on the sync
+  builder, drop the `Mono` from a raw notification handler (`params -> { ... }`).
+
 ### Removed
 
 - **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public

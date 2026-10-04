@@ -289,22 +289,10 @@ class ElicitationTest {
 	}
 
 	@Test
-	void aRawRequestHandlerCannotReplaceTheTypedOne() {
-		AcpClient.AsyncSpec spec = AcpClient.async(new MockAcpClientTransport())
-			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline()));
-
-		assertThatThrownBy(() -> spec.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw")))
-			.isInstanceOf(IllegalStateException.class)
-			.hasMessageContaining(AcpSchema.METHOD_ELICITATION_CREATE);
-	}
-
-	@Test
-	void theTypedHandlerCannotReplaceARawOne() {
-		AcpClient.AsyncSpec spec = AcpClient.async(new MockAcpClientTransport())
-			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw"));
-
-		assertThatThrownBy(() -> spec.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline())))
-			.isInstanceOf(IllegalStateException.class)
+	void aRawRequestHandlerCannotBypassTheTypedOne() {
+		assertThatThrownBy(() -> AcpClient.async(new MockAcpClientTransport())
+			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw")))
+			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("createElicitationHandler");
 	}
 
