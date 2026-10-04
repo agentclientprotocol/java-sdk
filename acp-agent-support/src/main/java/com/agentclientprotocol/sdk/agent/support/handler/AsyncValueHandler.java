@@ -31,7 +31,9 @@ import reactor.core.publisher.Mono;
  * {@code Publisher} that emits more than one value fails the call with an internal error too, and a
  * value that fails fails the call as an exception from the method would. Building the agent checks
  * the value type where it can read it: a {@code Mono<NewSessionResponse>} or a {@code Mono<Void>}
- * from a {@code @Prompt} method is rejected. The wait has no time limit of its own.
+ * from a {@code @Prompt} method is rejected. The wait has no time limit of its own. For a prompt
+ * method, once {@code session/cancel} was received the agent sends stop reason {@code cancelled},
+ * whatever value or failure arrives.
  *
  * <p>There is one built-in return value handler for each kind of return value:
  * {@link DirectResponseHandler}, {@link StringToPromptResponseHandler}, {@link VoidHandler}, this

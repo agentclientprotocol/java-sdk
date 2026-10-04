@@ -21,8 +21,9 @@ import java.lang.annotation.Target;
  * the prompt method, such as stopping a job the prompt started elsewhere.
  *
  * <p>The cancel does not end the turn. The prompt method should stop, send any last updates, and
- * return stop reason {@code cancelled}; until it returns, a new prompt on the session is answered
- * with {@code -32600} (Invalid request). If it has not returned when the cancel grace period ends
+ * return; the SDK answers the prompt {@code cancelled} once {@code session/cancel} was received,
+ * whatever the method returns or throws. Until it returns, a new prompt on the session is
+ * answered with {@code -32600} (Invalid request). If it has not returned when the cancel grace period ends
  * (60 seconds unless set with {@code AcpAgentSupport.Builder.cancelGracePeriod}), the SDK answers
  * the prompt {@code cancelled} itself and interrupts the prompt method's thread. The grace period
  * is SDK policy; ACP sets no time limit.

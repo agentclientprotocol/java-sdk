@@ -22,9 +22,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>It works as {@link AsyncValueHandler} does, for a declared {@code String} return type; a
  * {@code Mono} or {@code CompletionStage} of {@code String} reaches the same conversion through
- * {@code AsyncValueHandler}. The turn ends with stop reason {@code end_turn} also after a
- * {@code session/cancel}; to answer {@code cancelled}, return {@code PromptResponse.cancelled()}
- * instead. If the agent has already answered the prompt, because the cancel grace period or the
+ * {@code AsyncValueHandler}. After {@code session/cancel} the agent sends stop reason
+ * {@code cancelled} instead of {@code end_turn}, as ACP requires: the SDK answers
+ * {@code cancelled} once the cancel was received. If the agent has already answered the prompt, because the cancel grace period or the
  * maximum prompt duration passed, the text is dropped. Outside a prompt method the string passes
  * through unchanged: an {@code @ExtRequest} method's string is its result, a notification method's
  * is ignored, and building the agent rejects a {@code String} return type on any other request

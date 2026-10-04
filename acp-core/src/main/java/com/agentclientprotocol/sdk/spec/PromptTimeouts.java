@@ -29,8 +29,9 @@ import com.agentclientprotocol.sdk.util.Assert;
  *
  * <ul>
  * <li>The cancel grace period starts when {@code session/cancel} arrives, not with the prompt. When
- * it passes, the answer is stop reason {@code cancelled}, which ends the turn. On by default, 60
- * seconds ({@link #DEFAULT_CANCEL_GRACE_PERIOD}).</li>
+ * it passes, the answer is stop reason {@code cancelled}, which ends the turn. A handler that
+ * answers or fails within it is answered {@code cancelled} too, whatever it returned. On by
+ * default, 60 seconds ({@link #DEFAULT_CANCEL_GRACE_PERIOD}).</li>
  * <li>The maximum prompt duration starts with the prompt. When it passes, the answer is error
  * {@code -32800} (request cancelled; ACP v1, Cancellation: an internally cancelled request, such as
  * one that hit an internal timeout, answers as if the request had been cancelled), with message

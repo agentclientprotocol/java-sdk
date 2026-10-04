@@ -92,6 +92,85 @@ class AnnotatedPromptCancellationTest {
 
 	}
 
+	/** A void prompt: the SDK answers end_turn for it, unless session/cancel arrived. */
+	@AcpAgent
+	static class VoidAgent {
+
+		final CountDownLatch running = new CountDownLatch(1);
+
+		@NewSession
+		AcpSchema.NewSessionResponse newSession() {
+			return new AcpSchema.NewSessionResponse(SESSION, null, null);
+		}
+
+		@Prompt
+		void prompt(SyncPromptContext context) {
+			running.countDown();
+			while (!context.isCancelled()) {
+				Thread.interrupted();
+				pause();
+			}
+		}
+
+	}
+
+	/** A prompt whose work fails once cancelled, with an exception that is no cancellation. */
+	@AcpAgent
+	static class FailingAgent {
+
+		final CountDownLatch running = new CountDownLatch(1);
+
+		@NewSession
+		AcpSchema.NewSessionResponse newSession() {
+			return new AcpSchema.NewSessionResponse(SESSION, null, null);
+		}
+
+		@Prompt
+		String prompt(SyncPromptContext context) {
+			running.countDown();
+			while (!context.isCancelled()) {
+				Thread.interrupted();
+				pause();
+			}
+			throw new IllegalStateException("model stream closed");
+		}
+
+	}
+
+	// ACP spec 7628b153: prompt-turn.mdx:354, "the Agent MUST respond to the original
+	// session/prompt request with the cancelled stop reason"
+	@Test
+	void aVoidPromptReturningAfterSessionCancelIsAnsweredCancelled() throws Exception {
+		VoidAgent bean = new VoidAgent();
+		run(bean, client -> {
+			Mono<PromptResponse> response = client.prompt(prompt()).cache();
+			response.subscribe(r -> {
+			}, e -> {
+			});
+			await(bean.running);
+			client.cancel(new AcpSchema.CancelNotification(SESSION)).block(TIMEOUT);
+
+			assertThat(response.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
+		});
+	}
+
+	// ACP spec 7628b153: prompt-turn.mdx:361, "Agents MUST catch these errors and return the
+	// semantically meaningful cancelled stop reason"
+	@Test
+	void aPromptFailingAfterSessionCancelIsAnsweredCancelled() throws Exception {
+		FailingAgent bean = new FailingAgent();
+		run(bean, client -> {
+			Mono<PromptResponse> response = client.prompt(prompt()).cache();
+			response.subscribe(r -> {
+			}, e -> {
+			});
+			await(bean.running);
+			client.cancel(new AcpSchema.CancelNotification(SESSION)).block(TIMEOUT);
+
+			assertThat(response.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
+		});
+	}
+
 	@Test
 	void aPollingPromptAnswersCancelledPromptlyOnSessionCancel() throws Exception {
 		PollingAgent bean = new PollingAgent();

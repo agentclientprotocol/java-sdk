@@ -97,8 +97,12 @@ class AcpAgentSessionPromptTimeoutsTest {
 		cancel();
 		this.clock.advanceTimeBy(Duration.ofSeconds(30));
 
-		this.handlerAnswer.tryEmitValue(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN));
-		assertThat(stopReason(answered(response))).isEqualTo(AcpSchema.StopReason.END_TURN);
+		// The handler's answer, its _meta kept; after session/cancel its stop reason is cancelled
+		// (ACP spec 7628b153: prompt-turn.mdx:354).
+		this.handlerAnswer
+			.tryEmitValue(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN, Map.of("by", "handler")));
+		assertThat(answered(response).result())
+			.isEqualTo(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED, Map.of("by", "handler")));
 		assertThat(session.hasActivePrompt("s1")).isFalse();
 
 		Mono<AcpSchema.JSONRPCMessage> next = prompt("p2");
