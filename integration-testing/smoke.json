@@ -1,0 +1,62 @@
+{
+  "comment": "The framework smoke matrix: a release gate that runs the SDK hosted by Spring Boot, Micronaut and Quarkus against the TypeScript SDK. GenConfigs.java writes configs/fw-*.json and configs/load-10-*.json from this file and steps.json (README.md, 'Framework smoke matrix'). agentSteps run against each framework-hosted agent, clientSteps on each framework-built client, in steps.json order and filtered by each step's transports; init.initialize and conn.close are always included.",
+  "peer": "typescript",
+  "agentSteps": [
+    "init.initialize",
+    "init.agent-capabilities",
+    "init.agent-info",
+    "session.new",
+    "session.load",
+    "session.multi",
+    "update.agent_message_chunk",
+    "perm.selected",
+    "elicit.form",
+    "cancel.prompt",
+    "ext.client-request",
+    "error.method-not-found",
+    "http.reconnect",
+    "stdio.eof-exit",
+    "conn.close"
+  ],
+  "clientSteps": [
+    "init.initialize",
+    "init.agent-info",
+    "session.new",
+    "update.agent_message_chunk",
+    "perm.selected",
+    "fs.read",
+    "elicit.form",
+    "cancel.prompt",
+    "ext.client-request",
+    "conn.close"
+  ],
+  "frameworks": {
+    "spring": {
+      "dir": "programs/spring",
+      "agentTransports": [
+        "stdio",
+        "http"
+      ],
+      "clientTransports": [
+        "http"
+      ],
+      "readyTimeoutSec": 90,
+      "pendingAgentTransports": [
+        "ws"
+      ],
+      "comment": "http is the SDK servlet mounted on server.port in a servlet web application. TODO ws: add \"ws\" to agentTransports once the servlet + Jakarta WebSocket host serves WebSocket upgrades on server.port; pendingAgentTransports only documents it and generates nothing."
+    }
+  },
+  "load": {
+    "clients": 10,
+    "prompts": 10,
+    "serverJavaOpts": "-Xmx512m",
+    "checks": [
+      "clients RESULT errors == 0",
+      "clients RESULT ok == expected",
+      "clients RESULT expected == 100",
+      "clients RESULT updates == 2*ok",
+      "clients RESULT close_errors == 0"
+    ]
+  }
+}
