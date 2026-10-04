@@ -11,6 +11,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DefaultSessionUpdateLoggingTest {
 
-	private final Logger logger = (Logger) LoggerFactory.getLogger(AcpClientBeans.class);
+	private final Logger logger = (Logger) LoggerFactory.getLogger(com.agentclientprotocol.sdk.integration.AcpClients.class);
 
 	private final ListAppender<ILoggingEvent> logged = new ListAppender<>();
 

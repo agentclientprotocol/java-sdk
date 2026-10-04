@@ -126,7 +126,7 @@ class HostsAndProducersTest {
 	@Test
 	void anApplicationConsumerReplacesTheDebugLoggingDefault() {
 		org.jboss.logmanager.Logger logger = org.jboss.logmanager.LogContext.getLogContext()
-			.getLogger(AcpClientProducers.class.getName());
+			.getLogger(com.agentclientprotocol.sdk.integration.AcpClients.class.getName());
 		List<String> logged = new java.util.concurrent.CopyOnWriteArrayList<>();
 		java.util.logging.Handler handler = new java.util.logging.Handler() {
 			@Override
@@ -169,7 +169,7 @@ class HostsAndProducersTest {
 
 	/** The client bean, customized, prompts an agent that sends one session update. */
 	private static void promptWith(
-			List<com.agentclientprotocol.sdk.quarkus.AcpClientCustomizer> customizers) {
+			List<com.agentclientprotocol.sdk.integration.AcpClientCustomizer> customizers) {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
 		com.agentclientprotocol.sdk.agent.AcpSyncAgent agent = com.agentclientprotocol.sdk.agent.AcpAgent
 			.sync(pair.agentTransport())
@@ -192,29 +192,6 @@ class HostsAndProducersTest {
 			client.close();
 			agent.closeGracefully();
 		}
-	}
-
-	@Test
-	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
-		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
-		AcpRuntimeConfig.Capabilities all = mock(AcpRuntimeConfig.Capabilities.class);
-		when(all.readTextFile()).thenReturn(true);
-		when(all.writeTextFile()).thenReturn(true);
-		when(all.terminal()).thenReturn(true);
-		when(all.elicitationForm()).thenReturn(true);
-		when(all.elicitationUrl()).thenReturn(true);
-
-		assertThat(AcpClientProducers.namingTheSettings(sdk, all))
-			.hasMessageContaining("quarkus.acp.client.capabilities.read-text-file=true, "
-					+ "quarkus.acp.client.capabilities.write-text-file=true, "
-					+ "quarkus.acp.client.capabilities.terminal=true, "
-					+ "quarkus.acp.client.capabilities.elicitation-form=true, "
-					+ "quarkus.acp.client.capabilities.elicitation-url=true")
-			.hasCause(sdk);
-		assertThat(AcpClientProducers.namingTheSettings(sdk, mock(AcpRuntimeConfig.Capabilities.class)))
-			.isSameAs(sdk);
-		IllegalStateException other = new IllegalStateException("Already connected");
-		assertThat(AcpClientProducers.namingTheSettings(other, all)).isSameAs(other);
 	}
 
 	@Test

@@ -76,9 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `spring.acp.client.capabilities.read-text-file` and `write-text-file` now default to `false`;
     - a client-only application no longer gets an agent transport bean;
     - session updates with no consumer of your own are logged at DEBUG instead of a WARN;
-    - `spring.acp.agent.request-timeout` and `spring.acp.client.request-timeout` have no default of their own
-      (they were 60 s and 30 s): unset, they keep the SDK default, 30 s today. **An agent's requests to its client
-      now time out after 30 s instead of 60 s**; set `spring.acp.agent.request-timeout=60s` to keep the old bound;
+    - `spring.acp.agent.request-timeout` and `spring.acp.client.request-timeout` have no default of their own:
+      unset, they keep the SDK's one default request timeout (60 s), so the property follows the SDK;
     - several client transports set with no `spring.acp.client.transport.type` fail at startup, naming them; the
       websocket, then http, then stdio one used to win silently. Set the type, or leave only one set;
     - the listener-only agent properties move: `spring.acp.agent.transport.http.port` becomes

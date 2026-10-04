@@ -31,7 +31,7 @@ class AcpClientSettingsTest {
 		assertThat(settings.http().uri()).isNull();
 		assertThat(settings.capabilities()).isEqualTo(AcpClientSettings.Capabilities.NONE);
 		assertThat(settings.hasTransport()).isFalse();
-		assertThat(settings.closeTimeout()).isEqualTo(Duration.ofSeconds(40));
+		assertThat(settings.closeTimeout()).isEqualTo(Duration.ofSeconds(70));
 		assertThat(AcpClientSettings.from(MapSettingsSource.of(), "acp.client")).isEqualTo(settings);
 	}
 

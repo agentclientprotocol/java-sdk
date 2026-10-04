@@ -57,7 +57,7 @@ public class AcpClientBeans {
 	@Singleton
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientConfiguration config,
 			List<AcpClientCustomizer> customizers) {
-		return AcpClients.async(transport, config.toSettings(), customizers);
+		return AcpClients.async(transport, config.toSettings(), customizers, AcpClientConfiguration.PREFIX);
 	}
 
 	/**
