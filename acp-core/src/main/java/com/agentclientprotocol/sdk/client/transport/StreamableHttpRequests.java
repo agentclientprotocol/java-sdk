@@ -13,8 +13,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
@@ -23,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +34,9 @@ import reactor.core.publisher.Mono;
 /**
  * The HTTP exchanges of a Streamable HTTP client connection: the scope headers, the HTTP
  * version settled by the cleartext probe, and the POST, GET and DELETE requests with the
- * status and content type each must answer with. Completion signals are delivered on a
- * bounded executor of their own, never on the HTTP client's.
+ * status and content type each must answer with. Completion signals are delivered on the
+ * transport's work executor (the application's, or virtual threads on JDK 21 and later), else
+ * on a bounded executor of their own rather than the HTTP client's.
  */
 final class StreamableHttpRequests {
 
@@ -48,21 +52,52 @@ final class StreamableHttpRequests {
 
 	static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
 
-	/** An HTTP client and the executor this transport created for it, if any. */
-	record HttpClientBundle(HttpClient httpClient, @Nullable ExecutorService ownedExecutor) {
+	/**
+	 * An HTTP client, the executor the transport's own work runs on, and the executor this
+	 * transport created and so shuts down, if any.
+	 * @param httpClient the client the requests are sent with
+	 * @param ownedExecutor the executor the transport created, shut down when it closes
+	 * @param workExecutor what hands over HTTP results and reads the SSE streams: the
+	 * application's executor, or a virtual-thread executor of the transport's own; null for
+	 * the transport's bounded platform pools (JDK 17)
+	 */
+	record HttpClientBundle(HttpClient httpClient, @Nullable ExecutorService ownedExecutor,
+			@Nullable Executor workExecutor) {
 
-		/** The default JDK client: HTTP/2, an internal cookie manager, a bounded executor. */
+		/**
+		 * The default JDK client: HTTP/2, an internal cookie manager, and the options'
+		 * executor; without one, a virtual thread per task on JDK 21 and later, else a
+		 * bounded pool of daemon threads.
+		 */
 		static HttpClientBundle createDefault(StreamableHttpAcpClientTransportOptions options) {
-			ExecutorService executor = boundedExecutor(options.httpWorkerThreads(), options.httpQueueCapacity(),
-					"acp-streamable-http-client");
+			Executor supplied = options.executor();
+			ExecutorService virtual = (supplied != null) ? null : ownVirtualExecutor(options);
+			Executor work = (supplied != null) ? supplied : virtual;
+			ExecutorService owned = (work != null) ? virtual : boundedExecutor(options.httpWorkerThreads(),
+					options.httpQueueCapacity(), "acp-streamable-http-client");
 			HttpClient client = HttpClient.newBuilder()
 				.version(HttpClient.Version.HTTP_2)
 				.cookieHandler(new CookieManager())
-				.executor(executor)
+				.executor((work != null) ? work : Objects.requireNonNull(owned))
 				.build();
-			return new HttpClientBundle(client, executor);
+			return new HttpClientBundle(client, owned, work);
 		}
 
+		/**
+		 * The application's client, with the transport's own work on the options' executor;
+		 * without one, a virtual thread per task on JDK 21 and later, else bounded pools.
+		 */
+		static HttpClientBundle of(HttpClient httpClient, StreamableHttpAcpClientTransportOptions options) {
+			Executor supplied = options.executor();
+			ExecutorService virtual = (supplied != null) ? null : ownVirtualExecutor(options);
+			return new HttpClientBundle(httpClient, virtual, (supplied != null) ? supplied : virtual);
+		}
+
+	}
+
+	/** A virtual thread per task, unless the options say platform threads or the JDK has none. */
+	private static @Nullable ExecutorService ownVirtualExecutor(StreamableHttpAcpClientTransportOptions options) {
+		return options.virtualThreads() ? VirtualThreads.newPerTaskExecutor("acp-streamable-http") : null;
 	}
 
 	private final URI endpointUri;
@@ -71,7 +106,10 @@ final class StreamableHttpRequests {
 
 	private final @Nullable ExecutorService ownedHttpExecutor;
 
-	private final ExecutorService httpSignalExecutor;
+	/** Delivers the results of HTTP calls: the options' executor, or a bounded pool of our own. */
+	private final Executor httpSignalExecutor;
+
+	private final @Nullable ExecutorService ownedSignalExecutor;
 
 	private volatile @Nullable String connectionId;
 
@@ -88,8 +126,10 @@ final class StreamableHttpRequests {
 		this.endpointUri = endpointUri;
 		this.httpClient = bundle.httpClient();
 		this.ownedHttpExecutor = bundle.ownedExecutor();
-		this.httpSignalExecutor = boundedExecutor(options.httpSignalThreads(), options.httpQueueCapacity(),
-				"acp-streamable-http-signal");
+		Executor work = bundle.workExecutor();
+		this.ownedSignalExecutor = (work != null) ? null
+				: boundedExecutor(options.httpSignalThreads(), options.httpQueueCapacity(), "acp-streamable-http-signal");
+		this.httpSignalExecutor = (work != null) ? work : Objects.requireNonNull(this.ownedSignalExecutor);
 	}
 
 	static ExecutorService boundedExecutor(int threads, int queueCapacity, String threadName) {
@@ -256,10 +296,12 @@ final class StreamableHttpRequests {
 		});
 	}
 
-	/** Releases the executors this transport owns. */
+	/** Releases the executors this transport owns; never the application's. */
 	void shutdown() {
 		connectionId = null;
-		httpSignalExecutor.shutdownNow();
+		if (ownedSignalExecutor != null) {
+			ownedSignalExecutor.shutdownNow();
+		}
 		if (ownedHttpExecutor != null) {
 			ownedHttpExecutor.shutdownNow();
 		}

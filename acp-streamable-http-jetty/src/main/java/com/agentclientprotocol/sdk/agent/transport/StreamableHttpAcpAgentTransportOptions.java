@@ -5,8 +5,10 @@
 package com.agentclientprotocol.sdk.agent.transport;
 
 import java.time.Duration;
+import java.util.concurrent.Executor;
 
 import com.agentclientprotocol.sdk.util.Assert;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The limits and timings of an ACP Streamable HTTP and WebSocket endpoint, for
@@ -47,11 +49,27 @@ import com.agentclientprotocol.sdk.util.Assert;
  * {@link StreamableHttpAcpServlet#destroy()}) waits for its connections'
  * agents to close before it closes the rest at once; closing never waits for a client, since
  * the SSE responses are completed, not drained; default 5 seconds
+ * @param executor the application's executor that the listener's Jetty server runs its tasks
+ * on, or null (the default) for virtual threads of the listener's own on JDK 21 and later, and
+ * Jetty's own pool of platform threads ({@code qtp*}) before. On JDK 21 and later the listener
+ * serves on Jetty's {@code VirtualThreadPool} either way, so it creates no pool, and times on
+ * a virtual thread; Jetty still parks one platform thread
+ * ({@code jetty-virtual-thread-pool-keepalive}) while the server runs. An executor needs JDK 21
+ * or later, and must be meant for virtual threads, such as
+ * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's virtual-thread
+ * executor: Jetty's selectors and acceptors hold their tasks for as long as the server runs.
+ * The application owns it; the listener does not shut it down. Applied by the listener only;
+ * the servlet runs on its container's threads
+ * @param virtualThreads whether the listener serves on virtual threads where the JDK has them
+ * (21 and later); false keeps Jetty's pool of platform threads on every JDK, for an
+ * application that has not opted into virtual threads, and then no executor may be set;
+ * default true. Applied by the listener only
  * @author Mark Pollack
  */
 public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int mailboxCapacity,
 		int maxPendingSseEvents, int maxWebSocketPendingFrames, int maxProvisionalSessions,
-		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection, Duration shutdownTimeout) {
+		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection, Duration shutdownTimeout,
+		@Nullable Executor executor, boolean virtualThreads) {
 
 	private static final long DEFAULT_MAX_POST_BODY_BYTES = 16L * 1024 * 1024;
 
@@ -80,8 +98,12 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 	 * @param keepAliveInterval the interval between SSE keep-alive comments
 	 * @param maxConcurrentStreamsPerConnection the HTTP/2 streams one connection may hold
 	 * @param shutdownTimeout how long closing waits for the connections' agents
+	 * @param executor the executor the listener's Jetty server runs on, or null for Jetty's
+	 * own pool
+	 * @param virtualThreads whether the listener serves on virtual threads where the JDK has them
 	 * @throws IllegalArgumentException if a count or {@code shutdownTimeout} is not positive,
-	 * or {@code keepAliveInterval} is negative or null
+	 * {@code keepAliveInterval} is negative or null, or an executor is set with
+	 * {@code virtualThreads} false
 	 */
 	public StreamableHttpAcpAgentTransportOptions {
 		Assert.isTrue(maxPostBodyBytes > 0, "maxPostBodyBytes must be positive");
@@ -94,6 +116,7 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		Assert.isTrue(maxConcurrentStreamsPerConnection > 0, "maxConcurrentStreamsPerConnection must be positive");
 		Assert.notNull(shutdownTimeout, "shutdownTimeout must not be null");
 		Assert.isTrue(!shutdownTimeout.isNegative() && !shutdownTimeout.isZero(), "shutdownTimeout must be positive");
+		Assert.isTrue(executor == null || virtualThreads, "An executor needs virtualThreads");
 	}
 
 	/**
@@ -128,6 +151,10 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		private int maxWebSocketPendingFrames = DEFAULT_MAX_WEBSOCKET_PENDING_FRAMES;
 
 		private int maxProvisionalSessions = DEFAULT_MAX_PROVISIONAL_SESSIONS;
+
+		private @Nullable Executor executor;
+
+		private boolean virtualThreads = true;
 
 		private Duration keepAliveInterval = DEFAULT_KEEP_ALIVE_INTERVAL;
 
@@ -224,6 +251,31 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		}
 
 		/**
+		 * Sets the application's executor that the listener's Jetty server runs on, in place
+		 * of Jetty's own thread pool; the listener does not shut it down. It needs JDK 21 or
+		 * later; see {@link StreamableHttpAcpAgentTransportOptions#executor()}. The servlet
+		 * ignores it.
+		 * @param executor the executor, such as a virtual-thread executor
+		 * @return this builder
+		 */
+		public Builder executor(Executor executor) {
+			Assert.notNull(executor, "executor must not be null");
+			this.executor = executor;
+			return this;
+		}
+
+		/**
+		 * Sets whether the listener serves on virtual threads where the JDK has them; default
+		 * true. False keeps Jetty's pool of platform threads on every JDK.
+		 * @param virtualThreads false for platform threads
+		 * @return this builder
+		 */
+		public Builder virtualThreads(boolean virtualThreads) {
+			this.virtualThreads = virtualThreads;
+			return this;
+		}
+
+		/**
 		 * Returns the options.
 		 * @return the options
 		 * @throws IllegalArgumentException if a value is out of range
@@ -231,7 +283,7 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		public StreamableHttpAcpAgentTransportOptions build() {
 			return new StreamableHttpAcpAgentTransportOptions(maxPostBodyBytes, mailboxCapacity, maxPendingSseEvents,
 					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval,
-					maxConcurrentStreamsPerConnection, shutdownTimeout);
+					maxConcurrentStreamsPerConnection, shutdownTimeout, executor, virtualThreads);
 		}
 
 	}

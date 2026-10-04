@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -19,6 +21,7 @@ import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
@@ -27,6 +30,8 @@ import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.Callback;
+import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
+import org.eclipse.jetty.util.thread.VirtualThreadPool;
 import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.jspecify.annotations.Nullable;
@@ -67,6 +72,15 @@ import reactor.core.publisher.Sinks;
  * For TLS, put a proxy that terminates it in front, or mount the servlet in a container that
  * has TLS. Close it with {@link #closeGracefully()}; it registers no JVM shutdown hook.
  *
+ * <p>On JDK 21 and later it serves on Jetty's {@code VirtualThreadPool}: every task on a
+ * virtual thread ({@code acp-listener-*}), or on the application's executor when the options
+ * name one ({@link StreamableHttpAcpAgentTransportOptions.Builder#executor}), and its timer on a
+ * virtual thread too; Jetty parks one platform thread
+ * ({@code jetty-virtual-thread-pool-keepalive}) while the server runs. Before JDK 21, or with
+ * {@link StreamableHttpAcpAgentTransportOptions.Builder#virtualThreads virtualThreads(false)},
+ * it serves on Jetty's default pool of platform threads ({@code qtp*}) and its scheduler
+ * thread.
+ *
  * @author Kaiser Dandangi
  */
 public class StreamableHttpAcpAgentTransport {
@@ -101,6 +115,9 @@ public class StreamableHttpAcpAgentTransport {
 	private final Sinks.One<Void> terminationSink = Sinks.one();
 
 	private volatile @Nullable Server server;
+
+	/** The timer of a server on the application's executor; Jetty does not stop it. */
+	private volatile @Nullable ScheduledThreadPoolExecutor ownTimer;
 
 	/** The port the listener bound when it started; 0 until then. */
 	private volatile int boundPort;
@@ -158,8 +175,8 @@ public class StreamableHttpAcpAgentTransport {
 	 * @param jsonMapper the mapper that reads and writes the messages
 	 * @param agentFactory creates the agent for each connection
 	 * @param options the endpoint's limits and timings
-	 * @throws IllegalArgumentException if the port is outside 0 to 65535, the path is empty
-	 * or an argument is null
+	 * @throws IllegalArgumentException if the port is outside 0 to 65535, the path is empty,
+	 * an argument is null, or the options name an executor before JDK 21
 	 */
 	public StreamableHttpAcpAgentTransport(int port, String path, AcpJsonMapper jsonMapper,
 			AcpAgentFactory agentFactory, StreamableHttpAcpAgentTransportOptions options) {
@@ -168,6 +185,8 @@ public class StreamableHttpAcpAgentTransport {
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(agentFactory, "The agentFactory can not be null");
 		Assert.notNull(options, "The options can not be null");
+		Assert.isTrue(options.executor() == null || VirtualThreads.isSupported(),
+				"A listener on an executor of the application's needs JDK 21 or later (Jetty's VirtualThreadPool)");
 		this.configuredPort = port;
 		this.path = path;
 		this.jsonMapper = jsonMapper;
@@ -191,17 +210,56 @@ public class StreamableHttpAcpAgentTransport {
 			if (!started.compareAndSet(false, true)) {
 				throw new IllegalStateException("Already started");
 			}
-			Server jettyServer = new Server();
+			Server jettyServer = createServer();
 			ServerConnector jettyConnector = createConnector(jettyServer);
 			jettyServer.addConnector(jettyConnector);
 			jettyServer.setHandler(createContext(jettyServer));
 
-			jettyServer.start();
+			try {
+				jettyServer.start();
+			}
+			catch (Exception e) {
+				stopOwnTimer();
+				throw e;
+			}
 			this.server = jettyServer;
 			this.boundPort = jettyConnector.getLocalPort();
 			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
 			return null;
 		}).then();
+	}
+
+	/**
+	 * Before JDK 21, Jetty's default server. From JDK 21, a server on Jetty's
+	 * {@link VirtualThreadPool}, every task on a virtual thread of its own or on the
+	 * application's executor, and a timer on a virtual thread of the listener's.
+	 */
+	private Server createServer() {
+		Executor executor = options.executor();
+		if (!VirtualThreads.isSupported() || !options.virtualThreads()) {
+			return new Server();
+		}
+		VirtualThreadPool threadPool = new VirtualThreadPool();
+		if (executor != null) {
+			// Jetty does not shut down an executor it was given.
+			threadPool.setVirtualThreadsExecutor(executor);
+		}
+		else {
+			threadPool.setName("acp-listener");
+		}
+		ScheduledThreadPoolExecutor timer = new ScheduledThreadPoolExecutor(1,
+				VirtualThreads.factoryOrDaemon("acp-listener-timer"));
+		timer.setRemoveOnCancelPolicy(true);
+		this.ownTimer = timer;
+		// Given its executor, Jetty's scheduler does not shut it down either: stopServer does.
+		return new Server(threadPool, new ScheduledExecutorScheduler(timer), null);
+	}
+
+	private void stopOwnTimer() {
+		ScheduledThreadPoolExecutor timer = this.ownTimer;
+		if (timer != null) {
+			timer.shutdownNow();
+		}
 	}
 
 	/** HTTP/1.1 and cleartext HTTP/2 on the configured port. */
@@ -323,6 +381,9 @@ public class StreamableHttpAcpAgentTransport {
 			}
 			catch (Exception e) {
 				throw new AcpConnectionException("Failed to stop Streamable HTTP listener", e);
+			}
+			finally {
+				stopOwnTimer();
 			}
 		}
 	}

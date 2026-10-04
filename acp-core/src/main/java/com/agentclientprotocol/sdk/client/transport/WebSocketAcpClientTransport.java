@@ -10,6 +10,7 @@ import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,6 +23,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.util.OutboundSinks;
+import com.agentclientprotocol.sdk.util.SerialExecutor;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.jspecify.annotations.Nullable;
@@ -56,9 +59,15 @@ import reactor.core.scheduler.Schedulers;
  * skipped. When the agent closes the connection, or it fails, {@link #awaitTermination()} ends
  * and the client's pending requests fail.
  *
- * <p>The transport is thread-safe: messages may be sent from any thread, and one daemon thread
- * of its own ({@code acp-ws-client-outbound}) sends them one frame at a time. The default
- * HTTP client runs on a pool of daemon threads named {@code acp-ws-client}.
+ * <p>The transport is thread-safe: messages may be sent from any thread, and a writer sends
+ * them one frame at a time. On JDK 21 and later the transport's HTTP client and its writer run
+ * on a virtual thread per task ({@code acp-ws-client}). Before, the HTTP client runs on a pool
+ * of daemon threads named {@code acp-ws-client}, and the writer on a daemon thread of its own
+ * ({@code acp-ws-client-outbound}). Given an executor of the application's
+ * ({@link #WebSocketAcpClientTransport(URI, AcpJsonMapper, Executor)}), both run on it instead,
+ * and the transport creates no thread of its own; a JDK {@code HttpClient} still keeps one
+ * selector thread. With an {@code HttpClient} of the application's, the writer keeps its own
+ * daemon thread.
  *
  * @author Mark Pollack
  */
@@ -128,21 +137,57 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper) {
-		this(serverUri, jsonMapper, Executors.newCachedThreadPool(r -> {
+		this(serverUri, jsonMapper, defaultExecutor(), true);
+	}
+
+	/** A virtual thread per task on JDK 21 and later, else a cached pool of daemon threads. */
+	private static ExecutorService defaultExecutor() {
+		ExecutorService virtual = VirtualThreads.newPerTaskExecutor("acp-ws-client");
+		if (virtual != null) {
+			return virtual;
+		}
+		return Executors.newCachedThreadPool(r -> {
 			Thread t = new Thread(r, "acp-ws-client");
 			t.setDaemon(true);
 			return t;
-		}));
+		});
 	}
 
-	private WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, ExecutorService executor) {
-		this(serverUri, jsonMapper, HttpClient.newBuilder().executor(executor).build(), executor);
+	/**
+	 * Creates a transport for the WebSocket endpoint at {@code serverUri} that runs on the
+	 * application's {@code executor}: the HTTP client it creates runs there, and so does the
+	 * writer, one frame at a time, so the transport starts no thread of its own beyond the
+	 * one selector thread every JDK {@code HttpClient} has. The transport does not shut the
+	 * executor down. The writer waits for each frame to be sent, so the executor must allow
+	 * blocking: a virtual-thread executor or a framework's worker pool.
+	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
+	 * path
+	 * @param jsonMapper the mapper that reads and writes the messages
+	 * @param executor the executor the transport runs on; the application owns it
+	 * @throws IllegalArgumentException if an argument is null
+	 */
+	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, Executor executor) {
+		this(serverUri, jsonMapper, executor, false);
+	}
+
+	private WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, Executor executor, boolean owned) {
+		this(serverUri, jsonMapper, HttpClient.newBuilder().executor(requireExecutor(executor)).build(),
+				writerExecutor(executor, owned), owned ? (ExecutorService) executor : null);
+	}
+
+	/**
+	 * Where frames are written: the application's executor, or the transport's own when it
+	 * starts virtual threads; null for a platform thread of the writer's own.
+	 */
+	private static @Nullable Executor writerExecutor(Executor executor, boolean owned) {
+		return (!owned || VirtualThreads.isSupported()) ? executor : null;
 	}
 
 	/**
 	 * Creates a transport for the WebSocket endpoint at {@code serverUri} that opens its
 	 * connection with {@code httpClient}, for TLS, proxy or authentication settings of your
-	 * own.
+	 * own. The transport does not close the client or its executor; it writes frames on a
+	 * daemon thread of its own.
 	 * @param serverUri the agent's endpoint: a {@code ws} or {@code wss} URI including its
 	 * path
 	 * @param jsonMapper the mapper that reads and writes the messages
@@ -150,11 +195,11 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	 * @throws IllegalArgumentException if an argument is null
 	 */
 	public WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient) {
-		this(serverUri, jsonMapper, httpClient, null);
+		this(serverUri, jsonMapper, httpClient, null, null);
 	}
 
 	private WebSocketAcpClientTransport(URI serverUri, AcpJsonMapper jsonMapper, HttpClient httpClient,
-			@Nullable ExecutorService ownExecutor) {
+			@Nullable Executor writerExecutor, @Nullable ExecutorService ownExecutor) {
 		Assert.notNull(serverUri, "The serverUri can not be null");
 		Assert.notNull(jsonMapper, "The JsonMapper can not be null");
 		Assert.notNull(httpClient, "The HttpClient can not be null");
@@ -166,13 +211,24 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 		this.inboundSink = Sinks.many().unicast().onBackpressureBuffer();
 		this.outboundSink = Sinks.many().unicast().onBackpressureBuffer();
-		// Use daemon thread so JVM can exit if closeGracefully() isn't called
-		this.outboundScheduler = Schedulers.fromExecutorService(
-			Executors.newSingleThreadExecutor(r -> {
-				Thread t = new Thread(r, "acp-ws-client-outbound");
-				t.setDaemon(true);
-				return t;
-			}), "ws-client-outbound");
+		if (writerExecutor != null) {
+			// The application's executor: disposing this scheduler leaves it running.
+			this.outboundScheduler = Schedulers.fromExecutor(new SerialExecutor(writerExecutor));
+		}
+		else {
+			// Use daemon thread so JVM can exit if closeGracefully() isn't called
+			this.outboundScheduler = Schedulers.fromExecutorService(
+				Executors.newSingleThreadExecutor(r -> {
+					Thread t = new Thread(r, "acp-ws-client-outbound");
+					t.setDaemon(true);
+					return t;
+				}), "ws-client-outbound");
+		}
+	}
+
+	private static Executor requireExecutor(Executor executor) {
+		Assert.notNull(executor, "The executor can not be null");
+		return executor;
 	}
 
 	/**
@@ -278,8 +334,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	/**
 	 * {@inheritDoc}
 	 * <p>Stops delivering and sending messages, completes {@link #awaitTermination()}, sends a
-	 * normal close frame (1000) when the connection is open, and stops the writer thread and, if
-	 * the transport created its own HTTP client, that client's threads. It does not wait for the
+	 * normal close frame (1000) when the connection is open, and stops the writer and, if the
+	 * transport created its own HTTP client, that client's threads; an executor of the
+	 * application's keeps running. It does not wait for the
 	 * agent's close frame. Only the first call closes; a later call completes when that close has
 	 * finished.
 	 */
