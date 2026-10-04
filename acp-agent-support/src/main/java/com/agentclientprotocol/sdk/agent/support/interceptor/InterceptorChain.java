@@ -110,14 +110,14 @@ public class InterceptorChain {
 	 * returned {@code true}, and resets the chain, so a second call does nothing. Never throws:
 	 * what an interceptor throws is logged.
 	 * @param context the call's context
-	 * @param ex the exception that ended the call, or null; it is not passed to the interceptors
+	 * @param ex the exception the call failed with, or null; it is passed to each interceptor
 	 */
 	public void triggerAfterCompletion(AcpInvocationContext context, @Nullable Throwable ex) {
 		int started = this.interceptorIndex;
 		this.interceptorIndex = -1;
 		for (int i = started; i >= 0; i--) {
 			try {
-				interceptors.get(i).afterCompletion(context);
+				interceptors.get(i).afterCompletion(context, ex);
 			}
 			catch (Throwable t) {
 				log.warn("Interceptor afterCompletion threw exception", t);

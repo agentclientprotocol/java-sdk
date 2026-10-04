@@ -379,6 +379,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: `AcpInterceptor.afterCompletion` receives the exception the call failed with.** It
+  took only the context, and the runtime dropped the exception it had, so cleanup that must know
+  how a call ended (a span status, a failure metric) had to stash the exception from `onError` in
+  an attribute. The method is now `afterCompletion(AcpInvocationContext context, Throwable ex)`:
+  `ex` is what the call failed with (what a step threw, or what `onError` threw in its place), and
+  `null` when it produced a result, when `onError` returned a replacement, and when a `preInvoke`
+  returned `false`. Migration: add the `Throwable` parameter to an `afterCompletion` override. An
+  override without `@Override` keeps compiling but is no longer called, so add `@Override`.
+
 - **The default `session/new` answer passes through the interceptors.** An annotated agent without
   a `@NewSession` method answers `session/new` with a random session id; that answer skipped the
   interceptors, while the `initialize` answer derived from the annotations went through them, so a
