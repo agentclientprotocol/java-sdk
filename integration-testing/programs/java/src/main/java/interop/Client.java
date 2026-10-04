@@ -32,6 +32,8 @@ import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransportOptions;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
+import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.error.AcpCapabilityException;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -1088,6 +1090,18 @@ public class Client {
 
 	static String methodNotFound() {
 		Conn c = main();
+		NegotiatedCapabilities caps = c.client.getAgentCapabilities();
+		if (caps == null || !caps.supportsProviders()) {
+			// The SDK refuses a call the agent did not advertise without sending it.
+			try {
+				block(c.client.listProviders(new AcpSchema.ListProvidersRequest(null)));
+				throw new StepFailure("providers/list was sent to an agent that does not advertise providers");
+			}
+			catch (AcpCapabilityException e) {
+				String sid = c.newSession();
+				return "providers/list refused locally (not advertised); session/new after it: " + sid;
+			}
+		}
 		try {
 			Object r = block(c.client.listProviders(new AcpSchema.ListProvidersRequest(null)));
 			throw new StepFailure("providers/list answered " + r);

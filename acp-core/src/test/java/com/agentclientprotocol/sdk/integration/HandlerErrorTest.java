@@ -191,7 +191,6 @@ class HandlerErrorTest {
 	void syncAgentNonPromptHandlerThrowingNoSuchMethodErrorIsAnswered() {
 		AcpSyncAgent agent = AcpAgent.sync(transportPair.agentTransport())
 			.requestTimeout(REQUEST_TIMEOUT)
-			.initializeHandler(request -> InitializeResponse.ok())
 			.newSessionHandler(request -> {
 				throw new NoSuchMethodError("secret payload");
 			})

@@ -54,7 +54,6 @@ class SessionCloseCancelsPromptTest {
 		Sinks.Empty<Void> cancelled = Sinks.empty();
 		this.agent = AcpAgent.async(this.pair.agentTransport())
 			.requestTimeout(TIMEOUT)
-			.initializeHandler(request -> Mono.just(AcpSchema.InitializeResponse.ok()))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("s-1", null)))
 			.promptHandler((request, context) -> {
 				promptStarted.tryEmitEmpty();
@@ -96,7 +95,6 @@ class SessionCloseCancelsPromptTest {
 	void closingAnIdleSessionClosesItAndTellsTheCancelHandler() {
 		this.agent = AcpAgent.async(this.pair.agentTransport())
 			.requestTimeout(TIMEOUT)
-			.initializeHandler(request -> Mono.just(AcpSchema.InitializeResponse.ok()))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse("s-1", null)))
 			.cancelHandler(notification -> Mono.fromRunnable(() -> this.events.add("cancel " + notification.sessionId())))
 			.closeSessionHandler(request -> Mono.fromCallable(() -> {

@@ -45,12 +45,27 @@ class SyncFacadeTimeoutTest {
 	@Test
 	void syncClientRequestTimeoutIsAnSdkException() {
 		MockAcpClientTransport silentAgent = new MockAcpClientTransport();
-		AcpSyncClient client = AcpClient.sync(silentAgent).requestTimeout(SHORT).build();
+		AcpSyncClient silent = AcpClient.sync(silentAgent).requestTimeout(SHORT).build();
 		try {
+			assertSdkTimeout(catchThrowable(() -> silent.initialize()));
+			assertSdkTimeout(catchThrowable(() -> silent.sendExtRequest("_x/ping", Map.of())));
+		}
+		finally {
+			silent.close();
+		}
+		// An agent that answers initialize, then nothing else
+		MockAcpClientTransport initializedAgent = new MockAcpClientTransport((t, message) -> {
+			if (message instanceof AcpSchema.JSONRPCRequest request
+					&& AcpSchema.METHOD_INITIALIZE.equals(request.method())) {
+				t.simulateIncomingMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(),
+						AcpSchema.InitializeResponse.ok(), null));
+			}
+		});
+		AcpSyncClient client = AcpClient.sync(initializedAgent).requestTimeout(SHORT).build();
+		try {
+			client.initialize();
 			assertSdkTimeout(catchThrowable(
 					() -> client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))));
-			assertSdkTimeout(catchThrowable(() -> client.sendExtRequest("_x/ping", Map.of())));
-			assertSdkTimeout(catchThrowable(() -> client.initialize()));
 		}
 		finally {
 			client.close();

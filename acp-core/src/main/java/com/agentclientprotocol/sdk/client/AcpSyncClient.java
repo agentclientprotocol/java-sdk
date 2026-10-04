@@ -49,8 +49,10 @@ import reactor.core.publisher.Mono;
  * {@link java.util.concurrent.TimeoutException}, when no answer came in time, after the client has
  * sent the agent a {@code $/cancel_request}; {@link java.util.concurrent.CancellationException}
  * when the waiting thread is interrupted (the request is cancelled and the interrupt flag stays
- * set); and {@link IllegalArgumentException} for a null argument. The client does not check the
- * agent's capabilities before a call; see {@link #getAgentCapabilities()}. Methods may be called
+ * set); {@link IllegalStateException} for a call before {@link #initialize()} (extension methods
+ * excepted); {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} for a call the agent
+ * did not advertise (see {@link #getAgentCapabilities()}), neither of which is sent; and
+ * {@link IllegalArgumentException} for a null argument. Methods may be called
  * from several threads at once, but not from a thread that must not block, and not from a session
  * update consumer waiting for a prompt in flight (see {@link #prompt}).
  *
@@ -179,8 +181,9 @@ public class AcpSyncClient implements AutoCloseable {
 	/**
 	 * Returns the agent's capabilities from its {@code initialize} answer. Check them before calls
 	 * that need them, for example {@code supportsLoadSession()} before {@link #loadSession} or
-	 * {@code supportsLogout()} before {@link #logout}: the client sends every call without
-	 * checking.
+	 * {@code supportsLogout()} before {@link #logout}: a call the agent did not advertise
+	 * fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being
+	 * sent.
 	 * @return the agent's capabilities, or {@code null} before an {@code initialize} answer arrived
 	 */
 	public com.agentclientprotocol.sdk.capabilities.@Nullable NegotiatedCapabilities getAgentCapabilities() {
@@ -208,7 +211,8 @@ public class AcpSyncClient implements AutoCloseable {
 	 * must authenticate again where the agent requires it. Only an agent that advertises
 	 * {@code auth.logout} supports it: check
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities#supportsLogout()}
-	 * first, since the client does not.
+	 * first: otherwise the call fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
 	 * @param logoutRequest the logout request
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_LOGOUT
@@ -236,8 +240,8 @@ public class AcpSyncClient implements AutoCloseable {
 	/**
 	 * Reopens a session the agent kept ({@code session/load}). The agent replays the conversation
 	 * as session updates, which reach the session update consumers before this call completes, then
-	 * answers. Only an agent that advertises {@code loadSession} supports it; the client does not
-	 * check.
+	 * answers. Only an agent that advertises {@code loadSession} supports it; for any other the call
+	 * fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
 	 * @param loadSessionRequest the session ID, the working directory and the MCP servers
 	 * @return the agent's answer, once the history has been replayed
 	 * @see AcpSchema#METHOD_SESSION_LOAD
@@ -284,7 +288,8 @@ public class AcpSyncClient implements AutoCloseable {
 	 * Deletes a stored session ({@code session/delete}). Unlike {@link #closeSession}, which frees
 	 * an active session, it removes the session from the agent's storage, so that it no longer
 	 * appears in {@code session/list}. Only an agent that advertises
-	 * {@code sessionCapabilities.delete} supports it; the client does not check.
+	 * {@code sessionCapabilities.delete} supports it; for any other the call fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
 	 * @param deleteSessionRequest the session ID
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_SESSION_DELETE

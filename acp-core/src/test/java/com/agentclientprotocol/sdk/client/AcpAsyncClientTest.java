@@ -30,7 +30,7 @@ class AcpAsyncClientTest {
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
 	private static final AcpSchema.InitializeResponse MOCK_INIT_RESPONSE = new AcpSchema.InitializeResponse(1,
-			new AcpSchema.AgentCapabilities(null, null, null), List.of());
+			new AcpSchema.AgentCapabilities(true, null, null), List.of());
 
 	@Test
 	void testConstructorWithNullSession() {
@@ -94,6 +94,7 @@ class AcpAsyncClientTest {
 		var transport = createMockTransportWithAuthMethods();
 
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.AuthenticateRequest authRequest = new AcpSchema.AuthenticateRequest("bearer");
 
@@ -120,6 +121,7 @@ class AcpAsyncClientTest {
 		var transport = createMockTransportWithSession();
 
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.NewSessionRequest sessionRequest = new AcpSchema.NewSessionRequest("/workspace", List.of());
 
@@ -147,6 +149,7 @@ class AcpAsyncClientTest {
 		var transport = createMockTransportWithLoadSession();
 
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.LoadSessionRequest loadRequest = new AcpSchema.LoadSessionRequest("session-123", null, List.of());
 
@@ -173,6 +176,7 @@ class AcpAsyncClientTest {
 		var transport = createMockTransportWithSetMode();
 
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.SetSessionModeRequest modeRequest = new AcpSchema.SetSessionModeRequest("session-123", "code");
 
@@ -199,6 +203,7 @@ class AcpAsyncClientTest {
 		var transport = createMockTransportWithPrompt();
 
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.PromptRequest promptRequest = new AcpSchema.PromptRequest("session-123",
 				List.of(new AcpSchema.TextContent("Fix the bug")));
@@ -224,8 +229,9 @@ class AcpAsyncClientTest {
 
 	@Test
 	void testCancel() {
-		var transport = new MockAcpClientTransport();
+		var transport = createMockTransportWithInitialize();
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
+		client.initialize().block(TIMEOUT);
 
 		AcpSchema.CancelNotification cancelNotification = new AcpSchema.CancelNotification("session-123");
 
@@ -328,8 +334,23 @@ class AcpAsyncClientTest {
 		});
 	}
 
-	private MockAcpClientTransport createMockTransportWithAuthMethods() {
+	/** A transport that answers initialize, then lets the handler answer the rest. */
+	private MockAcpClientTransport answeringInitialize(
+			java.util.function.BiConsumer<MockAcpClientTransport, AcpSchema.JSONRPCMessage> rest) {
 		return new MockAcpClientTransport((t, msg) -> {
+			if (msg instanceof AcpSchema.JSONRPCRequest request
+					&& AcpSchema.METHOD_INITIALIZE.equals(request.method())) {
+				t.simulateIncomingMessage(
+						new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), MOCK_INIT_RESPONSE, null));
+			}
+			else {
+				rest.accept(t, msg);
+			}
+		});
+	}
+
+	private MockAcpClientTransport createMockTransportWithAuthMethods() {
+		return answeringInitialize((t, msg) -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				if (AcpSchema.METHOD_AUTHENTICATE.equals(request.method())) {
 					AcpSchema.AuthenticateResponse authResponse = new AcpSchema.AuthenticateResponse();
@@ -341,7 +362,7 @@ class AcpAsyncClientTest {
 	}
 
 	private MockAcpClientTransport createMockTransportWithSession() {
-		return new MockAcpClientTransport((t, msg) -> {
+		return answeringInitialize((t, msg) -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				if (AcpSchema.METHOD_SESSION_NEW.equals(request.method())) {
 					AcpSchema.NewSessionResponse sessionResponse = new AcpSchema.NewSessionResponse("session-abc123", null,
@@ -354,7 +375,7 @@ class AcpAsyncClientTest {
 	}
 
 	private MockAcpClientTransport createMockTransportWithLoadSession() {
-		return new MockAcpClientTransport((t, msg) -> {
+		return answeringInitialize((t, msg) -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				if (AcpSchema.METHOD_SESSION_LOAD.equals(request.method())) {
 					AcpSchema.LoadSessionResponse loadResponse = new AcpSchema.LoadSessionResponse(null, null);
@@ -366,7 +387,7 @@ class AcpAsyncClientTest {
 	}
 
 	private MockAcpClientTransport createMockTransportWithSetMode() {
-		return new MockAcpClientTransport((t, msg) -> {
+		return answeringInitialize((t, msg) -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				if (AcpSchema.METHOD_SESSION_SET_MODE.equals(request.method())) {
 					AcpSchema.SetSessionModeResponse modeResponse = new AcpSchema.SetSessionModeResponse();
@@ -378,7 +399,7 @@ class AcpAsyncClientTest {
 	}
 
 	private MockAcpClientTransport createMockTransportWithPrompt() {
-		return new MockAcpClientTransport((t, msg) -> {
+		return answeringInitialize((t, msg) -> {
 			if (msg instanceof AcpSchema.JSONRPCRequest request) {
 				if (AcpSchema.METHOD_SESSION_PROMPT.equals(request.method())) {
 					AcpSchema.PromptResponse promptResponse = new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN);

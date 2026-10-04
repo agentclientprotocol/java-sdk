@@ -28,9 +28,14 @@ class PromptTimeoutTest {
 
 	private static final Duration TURN = Duration.ofMillis(800);
 
-	/** Answers every session/prompt after {@link #TURN}, and other requests at once. */
+	/** Answers initialize at once and every session/prompt after {@link #TURN}. */
 	private static MockAcpClientTransport slowPromptAgent() {
 		return new MockAcpClientTransport((t, msg) -> {
+			if (msg instanceof AcpSchema.JSONRPCRequest request
+					&& AcpSchema.METHOD_INITIALIZE.equals(request.method())) {
+				t.simulateIncomingMessage(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(),
+						AcpSchema.InitializeResponse.ok(), null));
+			}
 			if (msg instanceof AcpSchema.JSONRPCRequest request
 					&& AcpSchema.METHOD_SESSION_PROMPT.equals(request.method())) {
 				Mono.delay(TURN, Schedulers.parallel())
@@ -63,6 +68,7 @@ class PromptTimeoutTest {
 		MockAcpClientTransport transport = slowPromptAgent();
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(REQUEST_TIMEOUT).build();
 		try {
+			client.initialize().block(Duration.ofSeconds(10));
 			AcpSchema.PromptResponse response = client.prompt(prompt()).block(Duration.ofSeconds(10));
 			assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 			assertThat(sentCancelRequest(transport)).as("no $/cancel_request for a prompt").isFalse();
@@ -77,6 +83,7 @@ class PromptTimeoutTest {
 		MockAcpClientTransport transport = slowPromptAgent();
 		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(REQUEST_TIMEOUT).build();
 		try {
+			client.initialize();
 			assertThat(client.prompt(prompt()).stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 			assertThat(sentCancelRequest(transport)).isFalse();
 		}
@@ -93,6 +100,7 @@ class PromptTimeoutTest {
 			.promptTimeout(REQUEST_TIMEOUT)
 			.build();
 		try {
+			client.initialize().block(Duration.ofSeconds(10));
 			assertThatThrownBy(() -> client.prompt(prompt()).block(Duration.ofSeconds(10)))
 				.hasCauseInstanceOf(TimeoutException.class);
 			long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
@@ -111,6 +119,7 @@ class PromptTimeoutTest {
 		MockAcpClientTransport transport = slowPromptAgent();
 		AcpSyncClient client = AcpClient.sync(transport).promptTimeout(REQUEST_TIMEOUT).build();
 		try {
+			client.initialize();
 			assertThatThrownBy(() -> client.prompt(prompt())).hasRootCauseInstanceOf(TimeoutException.class);
 		}
 		finally {

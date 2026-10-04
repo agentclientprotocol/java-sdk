@@ -1079,7 +1079,11 @@ class StreamableHttpAcpAgentTransportIntegrationTest {
 			AtomicInteger sessionCounter = new AtomicInteger();
 			AcpAgentFactory agentFactory = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
 				.initializeHandler(request -> Mono.just(new AcpSchema.InitializeResponse(
-						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true, null, null), null)))
+						AcpSchema.LATEST_PROTOCOL_VERSION, new AcpSchema.AgentCapabilities(true,
+						// what the handlers serve: a client calls only what is advertised
+						new AcpSchema.SessionCapabilities(java.util.Map.of(), null, java.util.Map.of(), java.util.Map.of(),
+								null, null),
+						new AcpSchema.McpCapabilities(), new AcpSchema.PromptCapabilities(), null, null, null), null)))
 				.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(
 						"sess-" + sessionCounter.incrementAndGet(), null, null)))
 				.loadSessionHandler(request -> Mono.just(new AcpSchema.LoadSessionResponse(null, null)))

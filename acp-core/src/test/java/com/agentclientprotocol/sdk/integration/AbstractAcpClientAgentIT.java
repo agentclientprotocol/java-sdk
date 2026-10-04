@@ -526,8 +526,6 @@ public abstract class AbstractAcpClientAgentIT {
 		try {
 			AcpAsyncAgent agent = AcpAgent.async(agentTransport)
 				.requestTimeout(TIMEOUT)
-				.initializeHandler(request -> Mono
-					.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 				.newSessionHandler(
 						request -> Mono.just(new AcpSchema.NewSessionResponse("session-original", null, null)))
 				.forkSessionHandler(request -> {

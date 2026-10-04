@@ -72,7 +72,11 @@ CLIENT_INIT = {
 }
 AGENT_INIT = {
     "protocolVersion": 1,
-    "agentCapabilities": {"loadSession": True, "sessionCapabilities": {"delete": {}}},
+    # Advertises what the catalogue steps call: an SDK client sends nothing the agent did not
+    # advertise. providers is advertised so error.method-not-found reaches the wire and gets the
+    # message-less -32601 this agent answers it with.
+    "agentCapabilities": {"loadSession": True, "sessionCapabilities": {"delete": {}},
+                          "auth": {"logout": {}}, "providers": {}},
     "authMethods": [{"id": "interop-auth", "name": "Interop auth", "description": "Accepts any authenticate call"}],
     "agentInfo": {"name": "interop-raw-agent", "version": "1"},
 }

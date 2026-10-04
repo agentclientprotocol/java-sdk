@@ -804,6 +804,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AcpClientCustomizer` when the capabilities come from properties), or stop advertising the
   capability.
 
+- **Breaking (behaviour): a client initializes first, and calls only what the agent advertised.**
+  Every `AcpAsyncClient`/`AcpSyncClient` ACP call but `initialize` now fails with
+  `IllegalStateException` ("Call initialize() first") until the agent has answered `initialize`;
+  it used to be sent. `loadSession`, `listSessions`, `closeSession`, `deleteSession`,
+  `resumeSession`, `forkSession`, `logout` and the `providers/*` calls fail with
+  `AcpCapabilityException` (naming the capability, such as `sessionCapabilities.close`) when the
+  agent's `initialize` answer did not advertise it, as the agent side already does for the
+  client's capabilities. Neither sends anything. The check runs when the call is subscribed, so
+  `client.initialize().then(client.newSession(..))` works. Extension methods (`sendExtRequest`,
+  `sendExtNotification`) are outside ACP's lifecycle and are not checked. **Migration:** call
+  `initialize()` first; check `getAgentCapabilities()` before an optional call, or catch
+  `AcpCapabilityException`. A test agent with its own `initializeHandler` must advertise the
+  capabilities its handlers serve (or drop the handler: a builder agent's default `initialize`
+  advertises them).
+
 ### Removed
 
 - **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public
