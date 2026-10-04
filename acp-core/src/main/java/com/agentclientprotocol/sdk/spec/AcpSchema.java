@@ -616,17 +616,19 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A response payload whose fields are all optional, so that a peer may answer with
-	 * {@code "result": null} (legal JSON-RPC, and what the Python SDK sends when a handler
-	 * returns {@code None}) or omit the result. Either reads as if the peer had sent
-	 * {@code {}}. A response type that does not implement this interface still fails a
-	 * request answered with no result.
+	 * Marks a response whose every component is optional, so that a peer may answer the request
+	 * without a result. A received response with {@code "result": null}, which JSON-RPC 2.0 allows,
+	 * or without a {@code result} member reads as if the peer had sent {@code {}}: the call
+	 * completes with a record whose components are all {@code null}. Some peers answer this way
+	 * when their handler returns nothing.
 	 *
 	 * <p>
-	 * This is the rule of the Rust SDK's {@code default_on_null} payloads
-	 * (agent-client-protocol-schema 1.9.1): opt-in per type, and declared exactly by the
-	 * response types whose every component is optional.
-	 * </p>
+	 * For a response type that does not implement it, a missing result fails the call with an
+	 * {@link AcpError} of code {@code -32603} (Internal error); only the call of an extension
+	 * method completes empty instead. In this class exactly the response types whose every
+	 * component is optional implement it, such as {@link WriteTextFileResponse} and
+	 * {@link AuthenticateResponse}. It has no methods, and it changes only how a received response
+	 * is read, not what the SDK sends.
 	 */
 	public interface DefaultOnNull {
 
@@ -3873,9 +3875,36 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Content block - base type for all content. A block of a type this SDK does not know
-	 * reads as an {@link UnknownContentBlock} (see {@link AcpSchema} on forward
-	 * compatibility).
+	 * One piece of what a user or an agent says: text, an image, audio, or a resource, linked or
+	 * embedded. A user's message is a list of them, the {@link PromptRequest#prompt()} of
+	 * {@code session/prompt}; an agent streams messages one block per session update
+	 * ({@link AgentMessageChunk}, {@link AgentThoughtChunk}, {@link UserMessageChunk}), and a tool
+	 * call shows its output in a {@link ToolCallContentBlock}. Create one of the variant records;
+	 * when reading, check the variant with {@code instanceof}.
+	 *
+	 * <p>
+	 * The variants: {@link TextContent}, plain text or Markdown, the usual block;
+	 * {@link ImageContent} and {@link AudioContent}, base64-encoded media; {@link ResourceLink}, a
+	 * reference to a resource the agent reads itself; {@link Resource}, a resource's contents
+	 * embedded in the message. Each can carry {@link Annotations} for the client. The blocks have
+	 * the same shape as the Model Context Protocol's, so an agent can pass on an MCP tool's content
+	 * without converting it.
+	 *
+	 * <p>
+	 * In a prompt, every agent accepts text and resource links. A client may send images, audio or
+	 * embedded resources only when the agent advertises them in its {@link PromptCapabilities}, as
+	 * {@code image}, {@code audio} and {@code embeddedContext}; an annotated agent declares them on
+	 * its {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt} method. The SDK checks
+	 * prompt content on neither side: a client checks
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} before it sends such blocks.
+	 *
+	 * <p>
+	 * On the wire the {@code type} member names the variant, and each variant record has it as its
+	 * first component. A block of a kind this SDK does not know, or without {@code type}, reads as
+	 * an {@link UnknownContentBlock}, so the message that carries it is still read. The interface
+	 * is not sealed: end an {@code instanceof} chain with a branch for anything else
+	 * (see {@link AcpSchema} on forward compatibility).
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownContentBlock.class)
@@ -3889,65 +3918,173 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A content block of a kind this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
-	 * and every other field, and writes them back unchanged.
+	 * A content block of a kind this SDK does not know, kept as received: the peer is on a newer
+	 * protocol version or sent an extension. A receiver that does not understand it should ignore
+	 * it; a proxy can forward it unchanged. The other blocks of the same prompt are still read.
 	 *
-	 * @param type the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code type} discriminator ({@code null} when the block had none) and every
+	 * other member in {@link #fields()}, an unmodifiable map in wire order, and writes them back
+	 * unchanged. Names are case sensitive: {@code "TEXT"} is an unknown block, not a
+	 * {@link TextContent}.
+	 *
+	 * @param type the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownContentBlock(@JsonProperty("type") @Nullable String type,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements ContentBlock {
+		/**
+		 * Creates an unknown block. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param type the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownContentBlock {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * Text content
+	 * Text in a message, plain or Markdown: the most common content block. A user's prompt is
+	 * usually one {@code TextContent}, and an agent streams its reply as text blocks, one per
+	 * {@link AgentMessageChunk}. Create one with {@code new TextContent("...")};
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendMessage(String)
+	 * PromptContext.sendMessage} and {@code sendThought} wrap their text in one.
+	 *
+	 * <p>
+	 * The protocol requires every agent to accept text blocks in a prompt, and asks clients to
+	 * render the text as Markdown; the SDK passes the text on as it is.
+	 *
+	 * @param type the discriminator, {@code "text"}
+	 * @param text the text, plain or Markdown
+	 * @param annotations hints for the client on how to use or show the block, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TextContent(@JsonProperty("type") String type,
 			@JsonProperty("text") String text, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		/**
+		 * Creates a text block with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use the shorter constructor, and it becomes {@code "text"}.
+		 * @param type {@code null} or {@code "text"}
+		 * @param text the text
+		 * @param annotations the annotations, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public TextContent {
 			type = discriminator(type, "text");
 		}
 
+		/**
+		 * Creates a text block without annotations or metadata.
+		 * @param text the text, plain or Markdown
+		 */
 		public TextContent(String text) {
 			this("text", text, null, null);
 		}
 	}
 
 	/**
-	 * Image content
+	 * An image in a message, as base64-encoded data with its MIME type, such as a screenshot the
+	 * user attaches to a prompt. A client sends one in a prompt only when the agent advertises
+	 * {@code promptCapabilities.image} (see {@link ContentBlock}); an agent may also send images in
+	 * its reply or in a tool call's content.
+	 *
+	 * <p>
+	 * It differs from {@link TextContent} in what it carries: {@link #data()} is the image's bytes
+	 * in base64, which the SDK neither encodes nor checks, and {@link #uri()} may name where the
+	 * image came from. It has no shorter constructor: pass {@code null} for the type and for the
+	 * optional components.
+	 *
+	 * @param type the discriminator, {@code "image"}
+	 * @param data the image's bytes, base64-encoded
+	 * @param mimeType the image's MIME type, such as {@code "image/png"}
+	 * @param uri where the image came from, or {@code null}
+	 * @param annotations hints for the client on how to use or show the block, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ImageContent(@JsonProperty("type") String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
 			@JsonProperty("uri") @Nullable String uri, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		/**
+		 * Creates an image block with every component, as the JSON mapper does. Pass {@code null}
+		 * for {@code type} and it becomes {@code "image"}.
+		 * @param type {@code null} or {@code "image"}
+		 * @param data the image's bytes, base64-encoded
+		 * @param mimeType the image's MIME type
+		 * @param uri where the image came from, or {@code null}
+		 * @param annotations the annotations, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ImageContent {
 			type = discriminator(type, "image");
 		}
 	}
 
 	/**
-	 * Audio content
+	 * Audio in a message, as base64-encoded data with its MIME type, such as a voice recording for
+	 * the agent to transcribe. A client sends one in a prompt only when the agent advertises
+	 * {@code promptCapabilities.audio} (see {@link ContentBlock}).
+	 *
+	 * <p>
+	 * Like {@link ImageContent}, it carries base64 data, which the SDK neither encodes nor checks,
+	 * and a MIME type, but it has no {@code uri}. It has no shorter constructor: pass {@code null}
+	 * for the type and for the optional components.
+	 *
+	 * @param type the discriminator, {@code "audio"}
+	 * @param data the audio's bytes, base64-encoded
+	 * @param mimeType the audio's MIME type, such as {@code "audio/wav"}
+	 * @param annotations hints for the client on how to use or show the block, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AudioContent(@JsonProperty("type") String type,
 			@JsonProperty("data") String data, @JsonProperty("mimeType") String mimeType,
 			@JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		/**
+		 * Creates an audio block with every component, as the JSON mapper does. Pass {@code null}
+		 * for {@code type} and it becomes {@code "audio"}.
+		 * @param type {@code null} or {@code "audio"}
+		 * @param data the audio's bytes, base64-encoded
+		 * @param mimeType the audio's MIME type
+		 * @param annotations the annotations, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public AudioContent {
 			type = discriminator(type, "audio");
 		}
 	}
 
 	/**
-	 * Resource link
+	 * A reference to a resource, such as a file, by its URI and a name, for the agent to read
+	 * itself: the block carries no contents. A client puts one in a prompt to point the agent at a
+	 * file the user mentioned; every agent must accept resource links in a prompt. A tool call's
+	 * content can carry them too.
+	 *
+	 * <p>
+	 * Unlike an embedded {@link Resource}, it leaves reading the resource to the agent, which must
+	 * be able to reach it. The optional components describe the resource for display: a title, a
+	 * description, its MIME type and its size. The SDK checks none of them and reads nothing from
+	 * the URI. It has no shorter constructor: pass {@code null} for the type and for the optional
+	 * components.
+	 *
+	 * @param type the discriminator, {@code "resource_link"}
+	 * @param name a human-readable name for the resource, such as its file name
+	 * @param uri the resource's URI, such as {@code "file:///home/user/document.pdf"}
+	 * @param title a title to show the user, or {@code null}
+	 * @param description a human-readable description of the resource, or {@code null}
+	 * @param mimeType the resource's MIME type, or {@code null}
+	 * @param size the resource's size in bytes, or {@code null} if unknown
+	 * @param annotations hints for the client on how to use or show the block, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResourceLink(@JsonProperty("type") String type,
@@ -3955,26 +4092,74 @@ public final class AcpSchema {
 			@JsonProperty("description") @Nullable String description, @JsonProperty("mimeType") @Nullable String mimeType,
 			@JsonProperty("size") @Nullable Long size, @JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		/**
+		 * Creates a resource link with every component, as the JSON mapper does. Pass {@code null}
+		 * for {@code type} and it becomes {@code "resource_link"}.
+		 * @param type {@code null} or {@code "resource_link"}
+		 * @param name a human-readable name for the resource
+		 * @param uri the resource's URI
+		 * @param title a title to show the user, or {@code null}
+		 * @param description a description of the resource, or {@code null}
+		 * @param mimeType the resource's MIME type, or {@code null}
+		 * @param size the resource's size in bytes, or {@code null}
+		 * @param annotations the annotations, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ResourceLink {
 			type = discriminator(type, "resource_link");
 		}
 	}
 
 	/**
-	 * Embedded resource
+	 * A resource's contents embedded in the message, such as the text of a file the user mentioned.
+	 * It is the preferred way to give an agent context in a prompt: the agent need not read
+	 * anything, and the client can include context the agent cannot reach. The schema calls this
+	 * block {@code EmbeddedResource}; its {@code type} is {@code "resource"}.
+	 *
+	 * <p>
+	 * A client sends one in a prompt only when the agent advertises
+	 * {@code promptCapabilities.embeddedContext} (see {@link ContentBlock}). Unlike a
+	 * {@link ResourceLink}, it carries the contents themselves: a {@link TextResourceContents} for
+	 * text, or a {@link BlobResourceContents} for binary data. It has no shorter constructor: pass
+	 * {@code null} for the type and for the optional components.
+	 *
+	 * @param type the discriminator, {@code "resource"}
+	 * @param resource the resource's URI and contents
+	 * @param annotations hints for the client on how to use or show the block, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Resource(@JsonProperty("type") String type,
 			@JsonProperty("resource") EmbeddedResourceResource resource,
 			@JsonProperty("annotations") @Nullable Annotations annotations,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ContentBlock {
+		/**
+		 * Creates an embedded resource with every component, as the JSON mapper does. Pass
+		 * {@code null} for {@code type} and it becomes {@code "resource"}.
+		 * @param type {@code null} or {@code "resource"}
+		 * @param resource the resource's URI and contents
+		 * @param annotations the annotations, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public Resource {
 			type = discriminator(type, "resource");
 		}
 	}
 
 	/**
-	 * Embedded resource content
+	 * The contents of an embedded {@link Resource}: its URI and either text or binary data. Create
+	 * a {@link TextResourceContents} or a {@link BlobResourceContents}; when reading, check which
+	 * one with {@code instanceof}.
+	 *
+	 * <p>
+	 * The wire form has no discriminator: contents with a {@code text} member read as
+	 * {@code TextResourceContents}, and contents with a {@code blob} member as
+	 * {@code BlobResourceContents}. There is no unknown variant. Contents with neither member
+	 * cannot be read, so a prompt that carries them is answered with {@code -32602}
+	 * (Invalid params) and a session update that carries them is skipped; contents with both read
+	 * as text, and the blob is dropped.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = TextResourceContents.class),
@@ -3984,36 +4169,89 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Text resource contents
+	 * The contents of a text resource, such as a source file, embedded in a {@link Resource}: its
+	 * URI, its text and, optionally, its MIME type.
+	 *
+	 * <p>
+	 * It differs from {@link BlobResourceContents} only in carrying text instead of base64 data.
+	 *
+	 * @param text the resource's text
+	 * @param uri the resource's URI, such as {@code "file:///home/user/script.py"}
+	 * @param mimeType the text's MIME type, such as {@code "text/x-python"}, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TextResourceContents(@JsonProperty("text") String text, @JsonProperty("uri") String uri,
 			@JsonProperty("mimeType") @Nullable String mimeType,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements EmbeddedResourceResource {
+		/**
+		 * Creates text contents without {@code _meta}.
+		 * @param text the resource's text
+		 * @param uri the resource's URI
+		 * @param mimeType the text's MIME type, or {@code null}
+		 */
 		public TextResourceContents(String text, String uri, @Nullable String mimeType) {
 			this(text, uri, mimeType, null);
 		}
 	}
 
 	/**
-	 * Blob resource contents
+	 * The contents of a binary resource, such as an image or a PDF file, embedded in a
+	 * {@link Resource}: its URI, its bytes in base64 and, optionally, its MIME type.
+	 *
+	 * <p>
+	 * Like {@link TextResourceContents}, but {@link #blob()} holds the bytes, base64-encoded; the
+	 * SDK neither encodes nor checks them.
+	 *
+	 * @param blob the resource's bytes, base64-encoded
+	 * @param uri the resource's URI
+	 * @param mimeType the resource's MIME type, such as {@code "application/pdf"}, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BlobResourceContents(@JsonProperty("blob") String blob, @JsonProperty("uri") String uri,
 			@JsonProperty("mimeType") @Nullable String mimeType,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements EmbeddedResourceResource {
+		/**
+		 * Creates binary contents without {@code _meta}.
+		 * @param blob the resource's bytes, base64-encoded
+		 * @param uri the resource's URI
+		 * @param mimeType the resource's MIME type, or {@code null}
+		 */
 		public BlobResourceContents(String blob, String uri, @Nullable String mimeType) {
 			this(blob, uri, mimeType, null);
 		}
 	}
 
 	/**
-	 * Annotations for content
+	 * Optional hints on a content block for the client: whom the content is for, how important it
+	 * is, and when the resource behind it last changed. Text, image, audio and resource blocks
+	 * carry them as their {@code annotations} component, usually {@code null}; a client may use
+	 * them to decide how to show or route the content.
+	 *
+	 * <p>
+	 * {@link #audience()} lists the {@link Role}s the content is meant for, such as only the user;
+	 * {@link #priority()} is its relative importance when the client chooses what to show;
+	 * {@link #lastModified()} is a timestamp, which the SDK keeps as a string and does not parse.
+	 * The SDK neither sets nor acts on any of them, and a role this SDK does not know is kept. A
+	 * member of the wrong JSON type, such as a priority that is not a number, fails the message
+	 * that carries it.
+	 *
+	 * @param audience the roles the content is meant for, or {@code null}
+	 * @param priority the content's relative importance, or {@code null}
+	 * @param lastModified when the resource behind the content last changed, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Annotations(@JsonProperty("audience") @Nullable List<Role> audience, @JsonProperty("priority") @Nullable Double priority,
 			@JsonProperty("lastModified") @Nullable String lastModified,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates annotations without {@code _meta}.
+		 * @param audience the roles the content is meant for, or {@code null}
+		 * @param priority the content's relative importance, or {@code null}
+		 * @param lastModified when the resource last changed, or {@code null}
+		 */
 		public Annotations(@Nullable List<Role> audience, @Nullable Double priority, @Nullable String lastModified) {
 			this(audience, priority, lastModified, null);
 		}
@@ -5135,31 +5373,45 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A conversation role, as named in content annotations. An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * A side of a conversation, the user or the assistant: an entry of
+	 * {@link Annotations#audience()}, which says whom a piece of content is meant for. Senders use
+	 * the constants; receivers compare the value they receive with {@code equals}, or switch on
+	 * {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "user"}
 	 */
 	public record Role(@JsonValue String value) {
 
-		/** {@code "assistant"}. */
+		/** {@code "assistant"}: the assistant side of a conversation. */
 		public static final Role ASSISTANT = new Role("assistant");
 
-		/** {@code "user"}. */
+		/** {@code "user"}: the user side of a conversation. */
 		public static final Role USER = new Role("user");
 
 		private static final List<Role> KNOWN = List.of(ASSISTANT, USER);
 
+		/**
+		 * Creates a role for a wire value. Prefer {@link #of}, which returns the constant for a
+		 * known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public Role {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns a role for a wire value: the constant when ACP v1 defines the value, and
+		 * otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static Role of(String value) {
@@ -5167,21 +5419,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<Role> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code user}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
