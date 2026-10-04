@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.integration;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -31,9 +32,11 @@ import org.jspecify.annotations.Nullable;
  * shutdown-on-transport-end                             true
  * transport.type                                        stdio | http | websocket (same as http)
  * transport.http.path                                   /acp
+ * transport.http.allowed-origins                        none (loopback origins only)
  * transport.http.max-post-body-size, keep-alive-interval, mailbox-capacity,
  *     max-pending-sse-events, max-web-socket-pending-frames, max-provisional-sessions,
  *     shutdown-timeout                                  SDK defaults
+ * transport.http.listener.host                          loopback (127.0.0.1 and ::1)
  * transport.http.listener.port                          8080 (0: ephemeral)
  * transport.http.listener.max-concurrent-streams-per-connection   SDK default
  * </pre>
@@ -82,8 +85,12 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	 * @param path the endpoint path, such as {@value AcpAgentSettings#DEFAULT_PATH}
 	 * @param limits the message and stream bounds
 	 * @param listener the SDK listener's own settings
+	 * @param allowedOrigins the browser origins accepted besides the loopback ones, such as
+	 * {@code https://app.example.com}, or {@code *} for any; empty by default. A request from any
+	 * other origin is answered 403, over HTTP and on the WebSocket handshake; see
+	 * {@link StreamableHttpAcpAgentTransportOptions#allowedOrigins()}
 	 */
-	public record Http(String path, Limits limits, Listener listener) {
+	public record Http(String path, Limits limits, Listener listener, List<String> allowedOrigins) {
 
 		/**
 		 * Creates an endpoint, checking each part.
@@ -93,6 +100,7 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 			Objects.requireNonNull(path, "path");
 			Objects.requireNonNull(limits, "limits");
 			Objects.requireNonNull(listener, "listener");
+			allowedOrigins = List.copyOf(allowedOrigins);
 		}
 
 	}
@@ -119,12 +127,15 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 
 	/**
 	 * The settings of the SDK's own listener; a framework's own server ignores them.
+	 * @param host the address the listener binds, or null (the default) for the loopback
+	 * interface only; {@code 0.0.0.0} exposes the agent on every interface, an explicit opt-in
+	 * (the endpoint has no authentication of its own)
 	 * @param port the port, {@value AcpAgentSettings#DEFAULT_LISTENER_PORT} by default; 0 for an
 	 * ephemeral one, which {@link AcpHost#port()} reports once started
 	 * @param maxConcurrentStreamsPerConnection the HTTP/2 streams one client connection may hold
 	 * open; null for the SDK default
 	 */
-	public record Listener(int port, @Nullable Integer maxConcurrentStreamsPerConnection) {
+	public record Listener(@Nullable String host, int port, @Nullable Integer maxConcurrentStreamsPerConnection) {
 	}
 
 	/**
@@ -162,8 +173,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		ifSet(limits.maxWebSocketPendingFrames(), options::maxWebSocketPendingFrames);
 		ifSet(limits.maxProvisionalSessions(), options::maxProvisionalSessions);
 		ifSet(limits.shutdownTimeout(), options::shutdownTimeout);
+		options.allowedOrigins(http.allowedOrigins());
 		if (listener) {
 			ifSet(http.listener().maxConcurrentStreamsPerConnection(), options::maxConcurrentStreamsPerConnection);
+			options.host(http.listener().host());
 		}
 		return options;
 	}
@@ -223,6 +236,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		if (path != null) {
 			builder.path(path);
 		}
+		builder.listenerHost(read.string("transport.http.listener.host"));
+		builder.allowedOrigins(read.list("transport.http.allowed-origins"));
 		Integer port = read.integer("transport.http.listener.port");
 		if (port != null) {
 			builder.listenerPort(port);
@@ -266,6 +281,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		private @Nullable Duration shutdownTimeout;
 
 		private int listenerPort = DEFAULT_LISTENER_PORT;
+
+		private @Nullable String listenerHost;
+
+		private List<String> allowedOrigins = List.of();
 
 		private @Nullable Integer maxConcurrentStreamsPerConnection;
 
@@ -442,6 +461,28 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
+		 * Sets the address the SDK listener binds; a framework's own server ignores it. Default
+		 * (null) the loopback interface only; {@code 0.0.0.0} exposes the agent on every
+		 * interface.
+		 * @param listenerHost a host name or address, or null for loopback only
+		 * @return this builder
+		 */
+		public Builder listenerHost(@Nullable String listenerHost) {
+			this.listenerHost = listenerHost;
+			return this;
+		}
+
+		/**
+		 * Sets the browser origins the endpoint accepts besides the loopback ones; default none.
+		 * @param allowedOrigins origins such as {@code https://app.example.com}, or {@code *}
+		 * @return this builder
+		 */
+		public Builder allowedOrigins(List<String> allowedOrigins) {
+			this.allowedOrigins = List.copyOf(allowedOrigins);
+			return this;
+		}
+
+		/**
 		 * Sets how many HTTP/2 streams one client connection to the SDK listener may hold open;
 		 * a framework's own server ignores it.
 		 * @param maxConcurrentStreamsPerConnection the limit, or null for the SDK default (1024)
@@ -461,7 +502,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 					maxWebSocketPendingFrames, maxProvisionalSessions, shutdownTimeout);
 			return new AcpAgentSettings(enabled, requestTimeout, cancelGracePeriod, maxPromptDuration,
 					shutdownOnTransportEnd, transport,
-					new Http(path, limits, new Listener(listenerPort, maxConcurrentStreamsPerConnection)));
+					new Http(path, limits, new Listener(listenerHost, listenerPort, maxConcurrentStreamsPerConnection),
+							allowedOrigins));
 		}
 
 	}

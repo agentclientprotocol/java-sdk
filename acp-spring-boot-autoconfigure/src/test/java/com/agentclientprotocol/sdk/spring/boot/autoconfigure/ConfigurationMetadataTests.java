@@ -40,7 +40,7 @@ class ConfigurationMetadataTests {
 			names.add(name);
 			assertThat(property.path("description").asString()).as(name).isNotBlank();
 		}
-		assertThat(names).hasSize(32).allMatch(name -> name.startsWith("spring.acp."));
+		assertThat(names).hasSize(34).allMatch(name -> name.startsWith("spring.acp."));
 		assertThat(names).contains("spring.acp.agent.transport.http.shutdown-timeout",
 				"spring.acp.client.transport.websocket.connect-timeout", "spring.acp.client.transport.stdio.env");
 	}

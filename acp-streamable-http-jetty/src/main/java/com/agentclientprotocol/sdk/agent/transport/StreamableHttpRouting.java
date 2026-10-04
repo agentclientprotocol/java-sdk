@@ -36,6 +36,8 @@ final class StreamableHttpRouting {
 
 	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
+	static final String HEADER_ORIGIN = "Origin";
+
 	/** How long a new connection may take to answer {@code initialize}. */
 	static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 

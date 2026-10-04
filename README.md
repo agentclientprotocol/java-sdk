@@ -432,6 +432,12 @@ var server = new StreamableHttpAcpAgentTransport(8080, AcpJsonMapper.createDefau
 server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/acp
 ```
 
+The listener binds the loopback interface (`127.0.0.1` and `::1`) by default and has no
+authentication of its own, so only programs on the same machine can reach it. Exposing it is an
+explicit opt-in, `StreamableHttpAcpAgentTransportOptions.builder().host("0.0.0.0")`; put a proxy
+that authenticates in front. Browser requests whose `Origin` is not a loopback one are refused with
+403 unless listed with `allowedOrigins(...)`.
+
 ---
 
 ## API Reference

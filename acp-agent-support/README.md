@@ -450,7 +450,9 @@ server.start().block();  // http://localhost:8080/acp and ws://localhost:8080/ac
 Every connection's agent invokes the same `MyAgent` instance, the way every request to a Spring
 controller reaches one bean: its handler methods run concurrently across connections and sessions,
 so they must be thread-safe, with per-session state keyed by session id. Port `0` listens on an
-ephemeral port; `server.getPort()` returns it once started.
+ephemeral port; `server.getPort()` returns it once started. The listener binds the loopback
+interface only unless `StreamableHttpAcpAgentTransportOptions.builder().host(...)` says otherwise,
+and refuses browser requests from foreign origins.
 
 ### InMemory Transport (For Testing)
 

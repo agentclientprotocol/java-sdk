@@ -72,7 +72,9 @@ import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.
  * and {@link #destroy()} closes every connection, cancelling in-flight prompts. HTTP/2 and TLS
  * are the container's to configure. Agents from one factory run concurrently, so whatever they
  * share must be thread-safe. The servlet has no authentication of its own: protect its path
- * as you would any other endpoint.
+ * as you would any other endpoint. It refuses, with 403, a browser request from an origin
+ * other than a loopback one unless that origin is listed in
+ * {@link StreamableHttpAcpAgentTransportOptions.Builder#allowedOrigins allowedOrigins}.
  *
  * <p><b>Shutting down.</b> Closing ({@link #closeGracefully()}, or {@link #destroy()} when the
  * container takes the servlet out of service) refuses new connections, answers an
@@ -283,6 +285,21 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		return new StreamableHttpConnection(UUID.randomUUID().toString(), jsonMapper, agentFactory, routing, options,
 				new StreamableHttpConnection.Owner(connection -> connections.remove(connection.id(), connection),
 						this::reportException));
+	}
+
+	/**
+	 * Refuses, with 403, a request whose {@code Origin} header names neither a loopback origin
+	 * nor one of the {@linkplain StreamableHttpAcpAgentTransportOptions#allowedOrigins() allowed
+	 * origins}, before any method handles it; a request without the header is served.
+	 */
+	@Override
+	protected void service(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		if (!options.isOriginAllowed(request.getHeader(StreamableHttpRouting.HEADER_ORIGIN))) {
+			writeText(response, HttpServletResponse.SC_FORBIDDEN, "Origin not allowed");
+			return;
+		}
+		super.service(request, response);
 	}
 
 	/**

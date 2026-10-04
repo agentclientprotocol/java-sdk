@@ -215,6 +215,8 @@ value the SDK refuses, such as a negative duration, fails the startup.
 | `transport.http.max-web-socket-pending-frames` | `1024` (SDK) | Frames queued for one WebSocket connection. One more closes it. Transport option `maxWebSocketPendingFrames`. |
 | `transport.http.max-provisional-sessions` | `64` (SDK) | Session streams a connection may open before the agent knows the session, as before `session/load`. A further one is refused. Transport option `maxProvisionalSessions`. |
 | `transport.http.shutdown-timeout` | `5s` (SDK) | How long closing the endpoint waits for its connections to close gracefully before closing the rest at once. Transport option `shutdownTimeout`. |
+| `transport.http.allowed-origins` | none | Browser origins accepted besides `http(s)://localhost`, `127.0.0.1` and `[::1]` (any port), such as `https://app.example.com`; `*` for any. Any other `Origin` is answered 403, over HTTP and on the WebSocket handshake; a request without one is served. Transport option `allowedOrigins`. |
+| `transport.http.listener.host` | loopback | The address the SDK listener binds. Unset binds `127.0.0.1` and `::1` only; `0.0.0.0` exposes the agent on every interface, an explicit opt-in, since the endpoint has no authentication of its own. Ignored in a servlet web application, which uses `server.address`. Transport option `host`. |
 | `transport.http.listener.port` | `8080` | The SDK listener's port. `0` picks a free one. Ignored in a servlet web application, which uses `server.port`. |
 | `transport.http.listener.max-concurrent-streams-per-connection` | `1024` (SDK) | HTTP/2 streams one client connection may hold open on the listener; each open SSE stream holds one. Transport option `maxConcurrentStreamsPerConnection`. |
 

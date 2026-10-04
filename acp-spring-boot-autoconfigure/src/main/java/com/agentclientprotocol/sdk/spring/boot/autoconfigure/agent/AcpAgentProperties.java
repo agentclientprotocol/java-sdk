@@ -5,6 +5,8 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
@@ -257,6 +259,8 @@ public class AcpAgentProperties {
 			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
 			.maxProvisionalSessions(http.getMaxProvisionalSessions())
 			.shutdownTimeout(http.getShutdownTimeout())
+			.allowedOrigins(http.getAllowedOrigins())
+			.listenerHost(http.getListener().getHost())
 			.listenerPort(http.getListener().getPort())
 			.maxConcurrentStreamsPerConnection(http.getListener().getMaxConcurrentStreamsPerConnection())
 			.build();
@@ -384,7 +388,35 @@ public class AcpAgentProperties {
 		 */
 		private @Nullable Duration shutdownTimeout;
 
+		/**
+		 * Browser origins accepted besides the loopback ones, such as https://app.example.com, or
+		 * * for any. A request from any other origin is refused with 403. Default none.
+		 */
+		private List<String> allowedOrigins = new ArrayList<>();
+
 		private ListenerProperties listener = new ListenerProperties();
+
+		/**
+		 * Returns the browser origins the endpoint accepts besides the loopback ones
+		 * ({@code spring.acp.agent.transport.http.allowed-origins}). A request without an
+		 * {@code Origin} header, or from {@code http(s)://localhost}, {@code 127.0.0.1} or
+		 * {@code [::1]} on any port, is always accepted; any other origin is answered 403, over
+		 * HTTP and on the WebSocket handshake, unless listed here. {@code *} accepts any origin.
+		 * Default empty. Maps to {@link AcpAgentSettings.Http#allowedOrigins()}.
+		 * @return the origins
+		 */
+		public List<String> getAllowedOrigins() {
+			return allowedOrigins;
+		}
+
+		/**
+		 * Sets {@code spring.acp.agent.transport.http.allowed-origins}; see
+		 * {@link #getAllowedOrigins()}.
+		 * @param allowedOrigins the origins
+		 */
+		public void setAllowedOrigins(List<String> allowedOrigins) {
+			this.allowedOrigins = allowedOrigins;
+		}
 
 		/**
 		 * Returns the endpoint's path ({@code spring.acp.agent.transport.http.path}). Default
@@ -580,6 +612,12 @@ public class AcpAgentProperties {
 	public static class ListenerProperties {
 
 		/**
+		 * Address the standalone listener binds. Unset binds the loopback interface only
+		 * (127.0.0.1 and ::1); 0.0.0.0 exposes the agent on every interface.
+		 */
+		private @Nullable String host;
+
+		/**
 		 * Port of the standalone listener; 0 for an ephemeral port. Default 8080.
 		 */
 		private int port = AcpAgentSettings.DEFAULT_LISTENER_PORT;
@@ -588,6 +626,29 @@ public class AcpAgentProperties {
 		 * HTTP/2 streams one client connection may hold open. Unset keeps the SDK default, 1024.
 		 */
 		private @Nullable Integer maxConcurrentStreamsPerConnection;
+
+		/**
+		 * Returns the address the listener binds
+		 * ({@code spring.acp.agent.transport.http.listener.host}). Default: unset, which binds the
+		 * loopback interface only ({@code 127.0.0.1}, and {@code ::1} where the machine has IPv6),
+		 * so only programs on the same machine can connect. {@code 0.0.0.0} exposes the agent on
+		 * every interface; the endpoint has no authentication of its own, so do that only behind a
+		 * proxy or firewall that controls who connects. A servlet web application's own server
+		 * ignores it ({@code server.address} applies there). Maps to
+		 * {@link AcpAgentSettings.Listener#host()}.
+		 * @return the host, or {@code null} for loopback only
+		 */
+		public @Nullable String getHost() {
+			return host;
+		}
+
+		/**
+		 * Sets {@code spring.acp.agent.transport.http.listener.host}; see {@link #getHost()}.
+		 * @param host a host name or address, or {@code null} for loopback only
+		 */
+		public void setHost(@Nullable String host) {
+			this.host = host;
+		}
 
 		/**
 		 * Returns the listener's port ({@code spring.acp.agent.transport.http.listener.port}).
