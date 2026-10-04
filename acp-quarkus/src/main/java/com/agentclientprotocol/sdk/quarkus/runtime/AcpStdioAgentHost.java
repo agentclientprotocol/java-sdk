@@ -4,10 +4,10 @@
 
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.Duration;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
-import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
+import com.agentclientprotocol.sdk.integration.AcpAgentHost;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.ShutdownEvent;
@@ -20,10 +20,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Serves the {@code @AcpAgent} bean over one agent transport, stdio unless the
- * application provides its own {@link AcpAgentTransport} bean. The agent starts with the
- * application; when the transport ends (the client closed standard input) the
- * application exits, unless {@code quarkus.acp.agent.shutdown-on-transport-end} is off;
- * when the application stops, the agent closes gracefully.
+ * application provides its own {@link AcpAgentTransport} bean, on an {@link AcpAgentHost}.
+ * The agent starts with the application; when the transport ends (the client closed
+ * standard input) the application exits, unless
+ * {@code quarkus.acp.agent.shutdown-on-transport-end} is off; when the application stops,
+ * the agent closes gracefully.
  *
  * @author Mark Pollack
  */
@@ -32,46 +33,42 @@ public class AcpStdioAgentHost {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpStdioAgentHost.class);
 
+	/** How long stopping waits for the agent's graceful close. */
+	private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
+
 	private final AcpAgentAssembly assembly;
 
 	private final AcpAgentTransport transport;
 
-	private final AcpRuntimeConfig config;
-
-	private final AtomicBoolean stopping = new AtomicBoolean(false);
-
 	private volatile @Nullable AcpAgentSupport agent;
 
-	AcpStdioAgentHost(AcpAgentAssembly assembly, AcpAgentTransport transport, AcpRuntimeConfig config) {
+	private volatile @Nullable AcpAgentHost host;
+
+	AcpStdioAgentHost(AcpAgentAssembly assembly, AcpAgentTransport transport) {
 		this.assembly = assembly;
 		this.transport = transport;
-		this.config = config;
 	}
 
 	void start(@Observes StartupEvent event) {
 		AcpAgentSupport support = assembly.builder().transport(transport).build();
+		Runnable onTransportEnd = assembly.settings().shutdownOnTransportEnd() ? AcpStdioAgentHost::exit : () -> {
+		};
+		AcpAgentHost started = new AcpAgentHost(support, transport, onTransportEnd);
 		this.agent = support;
-		support.start();
-		if (config.agent().shutdownOnTransportEnd()) {
-			transport.awaitTermination().subscribe(ignored -> {
-			}, error -> transportEnded(), this::transportEnded);
-		}
-	}
-
-	private void transportEnded() {
-		if (!stopping.get()) {
-			logger.info("ACP agent transport ended; stopping the application");
-			Quarkus.asyncExit();
-		}
+		this.host = started;
+		started.start();
 	}
 
 	void stop(@Observes ShutdownEvent event) {
-		if (stopping.compareAndSet(false, true)) {
-			AcpAgentSupport support = this.agent;
-			if (support != null) {
-				support.close();
-			}
+		AcpAgentHost current = this.host;
+		if (current != null) {
+			current.stop(STOP_TIMEOUT);
 		}
+	}
+
+	private static void exit() {
+		logger.info("ACP agent transport ended; stopping the application");
+		Quarkus.asyncExit();
 	}
 
 	/**

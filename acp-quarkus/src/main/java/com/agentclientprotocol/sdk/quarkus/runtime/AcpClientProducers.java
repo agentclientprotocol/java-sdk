@@ -4,40 +4,36 @@
 
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
-import java.time.Duration;
 import java.util.List;
 
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
-import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
-import com.agentclientprotocol.sdk.quarkus.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientHost;
+import com.agentclientprotocol.sdk.integration.AcpClientSettings;
+import com.agentclientprotocol.sdk.integration.AcpClientTransports;
+import com.agentclientprotocol.sdk.integration.AcpClients;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
-import com.agentclientprotocol.sdk.spec.AcpSchema;
 import io.quarkus.arc.All;
 import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.inject.Disposes;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
 /**
  * The ACP client beans: a transport from {@code quarkus.acp.client.transport.*}, one
  * {@link AcpAsyncClient} on it with the configured request timeout and capabilities,
  * then every {@link AcpClientCustomizer}, and an {@link AcpSyncClient} over that same
- * client. Each is created when first injected, so an application that injects none
- * needs no client configuration, and an application bean of any of these types replaces
- * the default. The client (and with it its transport) is closed once, gracefully, when
- * the application stops.
+ * client ({@link AcpClients}). Each is created when first injected, so an application that
+ * injects none needs no client configuration, and an application bean of any of these types
+ * replaces the default. The client (and with it its transport) is closed once, gracefully,
+ * when the application stops.
  *
  * @author Mark Pollack
  */
 @Singleton
 public class AcpClientProducers {
-
-	private static final Logger logger = LoggerFactory.getLogger(AcpClientProducers.class);
 
 	private final AcpRuntimeConfig config;
 
@@ -46,14 +42,18 @@ public class AcpClientProducers {
 	}
 
 	/**
-	 * The transport the configuration selects.
+	 * The transport the configuration selects, by the SDK's rule ({@link AcpClientTransports}).
 	 * @return the client transport
+	 * @throws IllegalStateException when no transport, or several without a type, are configured
 	 */
 	@Produces
 	@Singleton
 	@DefaultBean
 	public AcpClientTransport acpClientTransport() {
-		return AcpClientTransports.create(config.client().transport());
+		String prefix = AcpSettings.CLIENT_PREFIX + ".transport.";
+		return AcpClientTransports.create(settings(), AcpSettings.CLIENT_PREFIX)
+			.orElseThrow(() -> new IllegalStateException("No ACP client transport is configured: set " + prefix
+					+ "stdio.command, " + prefix + "websocket.uri or " + prefix + "http.uri"));
 	}
 
 	/**
@@ -67,12 +67,7 @@ public class AcpClientProducers {
 	@Singleton
 	@DefaultBean
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, @All List<AcpClientCustomizer> customizers) {
-		AcpClient.AsyncSpec spec = AcpClient.async(transport)
-			.clientCapabilities(capabilities(config.client().capabilities()))
-			.sessionUpdateConsumer(AcpClientProducers::logSessionUpdate);
-		config.client().requestTimeout().ifPresent(spec::requestTimeout);
-		customizers.forEach(customizer -> customizer.customize(spec));
-		return spec.build();
+		return AcpClients.async(transport, settings(), customizers);
 	}
 
 	/**
@@ -84,43 +79,15 @@ public class AcpClientProducers {
 	@Singleton
 	@DefaultBean
 	public AcpSyncClient acpSyncClient(AcpAsyncClient client) {
-		return new AcpSyncClient(client);
-	}
-
-	/**
-	 * The capabilities to advertise, from the configuration.
-	 * @param capabilities the configured capabilities
-	 * @return the client capabilities
-	 */
-	static AcpSchema.ClientCapabilities capabilities(AcpRuntimeConfig.Capabilities capabilities) {
-		AcpSchema.ElicitationCapabilities elicitation = null;
-		if (capabilities.elicitationForm() || capabilities.elicitationUrl()) {
-			elicitation = new AcpSchema.ElicitationCapabilities(
-					capabilities.elicitationForm() ? new AcpSchema.ElicitationFormCapabilities() : null,
-					capabilities.elicitationUrl() ? new AcpSchema.ElicitationUrlCapabilities() : null, null);
-		}
-		return new AcpSchema.ClientCapabilities(
-				new AcpSchema.FileSystemCapability(capabilities.readTextFile(), capabilities.writeTextFile()),
-				capabilities.terminal(),
-				capabilities.booleanConfigOptions() ? AcpSchema.ClientSessionCapabilities.withBooleanConfigOptions()
-						: null,
-				null, elicitation, null);
+		return AcpClients.sync(client);
 	}
 
 	void close(@Disposes AcpAsyncClient client) {
-		Duration timeout = config.client().requestTimeout().orElse(Duration.ofSeconds(30)).plusSeconds(5);
-		try {
-			client.closeGracefully().block(timeout);
-		}
-		catch (RuntimeException e) {
-			logger.warn("ACP client did not close within {}: {}", timeout, e.getMessage());
-			client.close();
-		}
+		new AcpClientHost(client).close(settings().closeTimeout());
 	}
 
-	private static Mono<Void> logSessionUpdate(AcpSchema.SessionNotification notification) {
-		logger.debug("Session update for {}: {}", notification.sessionId(), notification.update().getClass().getSimpleName());
-		return Mono.empty();
+	private AcpClientSettings settings() {
+		return AcpSettings.client(config.client());
 	}
 
 }

@@ -5,6 +5,12 @@
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import com.agentclientprotocol.sdk.integration.AcpServletHost;
 
 import io.quarkus.runtime.ShutdownEvent;
 import jakarta.annotation.Priority;
@@ -12,7 +18,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
 /**
  * Closes the HTTP and WebSocket connections first when the application stops: every
@@ -41,11 +46,17 @@ public class AcpHttpAgentHost {
 
 	void stop(@Observes @Priority(0) ShutdownEvent event) {
 		Duration timeout = endpoint.options().shutdownTimeout().plusSeconds(1);
+		// Both at once: the WebSocket connections close while the servlet's do.
+		CompletableFuture<Void> webSocketsClosed = webSockets.closeGracefully().toFuture();
+		AcpServletHost.closeBeforeShutdown(servlet, timeout);
 		try {
-			Mono.whenDelayError(servlet.closeGracefully(), webSockets.closeGracefully()).block(timeout);
+			webSocketsClosed.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 		}
-		catch (RuntimeException e) {
-			logger.warn("ACP HTTP connections did not close within {}: {}", timeout, e.getMessage());
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		catch (ExecutionException | TimeoutException e) {
+			logger.warn("ACP WebSocket connections did not close within {}: {}", timeout, e.toString());
 		}
 	}
 

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.configuration.MemorySize;
@@ -152,6 +153,13 @@ public interface AcpRuntimeConfig {
 		Optional<Duration> requestTimeout();
 
 		/**
+		 * How long a prompt may wait for its answer, apart from the request timeout. Unset:
+		 * none.
+		 * @return the prompt timeout
+		 */
+		Optional<Duration> promptTimeout();
+
+		/**
 		 * The client transport.
 		 * @return the transport settings
 		 */
@@ -169,11 +177,11 @@ public interface AcpRuntimeConfig {
 	interface ClientTransport {
 
 		/**
-		 * The transport. Unset, it is inferred: WebSocket when {@code websocket.uri} is set,
-		 * else HTTP when {@code http.uri} is set, else stdio when {@code stdio.command} is set.
+		 * The transport. Unset, it is the one of {@code stdio.command}, {@code websocket.uri}
+		 * and {@code http.uri} that is set; with several set, it must be given.
 		 * @return the transport type
 		 */
-		Optional<ClientTransportType> type();
+		Optional<AcpTransportType> type();
 
 		/**
 		 * The agent process to launch.

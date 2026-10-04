@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
@@ -11,6 +12,10 @@ import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
+import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
+import com.agentclientprotocol.sdk.integration.AcpAgents;
+import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import io.quarkus.arc.All;
 import io.quarkus.arc.Arc;
@@ -19,9 +24,9 @@ import jakarta.inject.Singleton;
 
 /**
  * Assembles the {@link AcpAgentSupport} builder for the application's {@code @AcpAgent}
- * bean: the bean instance from the container, the configured timeouts, and the
- * interceptor, argument resolver and return value handler beans, then the Mutiny return
- * types.
+ * bean ({@link AcpAgents}): the bean instance from the container, the configured timeouts,
+ * and the interceptor, argument resolver and return value handler beans, then the Mutiny
+ * return types.
  * <p>
  * Handlers are discovered on the user's class (from the build-time index), not on the
  * instance's class, so a container subclass of the bean does not hide them.
@@ -34,7 +39,7 @@ public class AcpAgentAssembly {
 
 	private final AcpAgentClass agentClass;
 
-	private final AcpRuntimeConfig config;
+	private final AcpAgentSettings settings;
 
 	private final List<AcpInterceptor> interceptors;
 
@@ -42,13 +47,25 @@ public class AcpAgentAssembly {
 
 	private final List<ReturnValueHandler> returnValueHandlers;
 
-	AcpAgentAssembly(AcpAgentClass agentClass, AcpRuntimeConfig config, @All List<AcpInterceptor> interceptors,
-			@All List<ArgumentResolver> argumentResolvers, @All List<ReturnValueHandler> returnValueHandlers) {
+	AcpAgentAssembly(AcpAgentClass agentClass, AcpBuildTimeConfig buildTime, AcpRuntimeConfig runtime,
+			@All List<AcpInterceptor> interceptors, @All List<ArgumentResolver> argumentResolvers,
+			@All List<ReturnValueHandler> returnValueHandlers) {
 		this.agentClass = agentClass;
-		this.config = config;
+		this.settings = AcpSettings.agent(buildTime, runtime);
 		this.interceptors = interceptors;
 		this.argumentResolvers = argumentResolvers;
-		this.returnValueHandlers = returnValueHandlers;
+		List<ReturnValueHandler> handlers = new ArrayList<>(returnValueHandlers);
+		handlers.add(new UniReturnValueHandler());
+		handlers.add(new MultiReturnValueHandler());
+		this.returnValueHandlers = handlers;
+	}
+
+	/**
+	 * The agent settings, from the configuration.
+	 * @return the settings
+	 */
+	public AcpAgentSettings settings() {
+		return settings;
 	}
 
 	/**
@@ -70,17 +87,8 @@ public class AcpAgentAssembly {
 
 	private <T> AcpAgentSupport.Builder builder(Class<T> type) {
 		T bean = Arc.container().select(type, Any.Literal.INSTANCE).get();
-		AcpRuntimeConfig.Agent agent = config.agent();
-		AcpAgentSupport.Builder builder = AcpAgentSupport.builder().agent(type, () -> bean);
-		agent.requestTimeout().ifPresent(builder::requestTimeout);
-		agent.cancelGracePeriod().ifPresent(builder::cancelGracePeriod);
-		agent.maxPromptDuration().ifPresent(builder::maxPromptDuration);
-		interceptors.forEach(builder::interceptor);
-		argumentResolvers.forEach(builder::argumentResolver);
-		returnValueHandlers.forEach(builder::returnValueHandler);
-		builder.returnValueHandler(new UniReturnValueHandler());
-		builder.returnValueHandler(new MultiReturnValueHandler());
-		return builder;
+		return AcpAgents.builder(new AgentCandidate<>(type.getName(), type, () -> bean), settings, interceptors,
+				argumentResolvers, returnValueHandlers);
 	}
 
 }

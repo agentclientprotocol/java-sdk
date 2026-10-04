@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
-import com.agentclientprotocol.sdk.quarkus.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import jakarta.annotation.Priority;
 import jakarta.inject.Singleton;
