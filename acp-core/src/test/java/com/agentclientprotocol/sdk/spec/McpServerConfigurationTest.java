@@ -26,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <li>HTTP transport: type="http"</li>
  * <li>SSE transport: type="sse"</li>
  * </ul>
- * </p>
  *
  * @author Mark Pollack
  */

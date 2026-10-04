@@ -169,7 +169,9 @@ class AgentParametersTest {
 	void testDefaultEnvironmentVariablesIncluded() {
 		AgentParameters params = AgentParameters.builder("gemini").build();
 
-		// Should include safe default environment variables like PATH, HOME, USER, etc.
+		// getEnv() starts with the default variables copied from the client's environment (PATH,
+		// HOME, USER, ...), not the whole environment: the process inherits that separately,
+		// unless inheritEnvironment(false)
 		assertThat(params.getEnv()).isNotEmpty();
 
 		// PATH should always be included
@@ -179,7 +181,7 @@ class AgentParametersTest {
 			assertThat(params.getEnv()).containsKey("PATH");
 		}
 		else {
-			// Unix-like systems should have PATH and HOME
+			// Unix-like systems should have PATH (HOME is copied only when it is set)
 			assertThat(params.getEnv()).containsKey("PATH");
 		}
 	}
