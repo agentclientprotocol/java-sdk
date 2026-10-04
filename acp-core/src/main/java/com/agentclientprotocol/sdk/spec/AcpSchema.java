@@ -2977,6 +2977,7 @@ public final class AcpSchema {
 		 * {@code null}
 		 * @param fork {@code {}} for {@code session/fork}, or {@code null}
 		 */
+		@UnstableAcpApi
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
 				@Nullable Object delete, @Nullable Object additionalDirectories, @Nullable Object fork) {
 			this(list, close, resume, delete, additionalDirectories, fork, null);
@@ -3001,6 +3002,7 @@ public final class AcpSchema {
 		 * @param resume {@code {}} for {@code session/resume}, or {@code null}
 		 * @param fork {@code {}} for {@code session/fork}, or {@code null}
 		 */
+		@UnstableAcpApi
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
 				@Nullable Object fork) {
 			this(list, close, resume, null, null, fork);

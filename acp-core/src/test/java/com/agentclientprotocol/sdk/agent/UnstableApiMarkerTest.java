@@ -160,6 +160,48 @@ class UnstableApiMarkerTest {
 		assertThat(violations).isEmpty();
 	}
 
+	/**
+	 * A convenience constructor that sets an unstable component is unstable too, although the
+	 * record is not. Which parameter feeds which component is found by building the record with
+	 * a value in one parameter and nulls elsewhere.
+	 */
+	@Test
+	void constructorsSettingAnUnstableComponentAreMarked() throws Exception {
+		List<String> violations = new ArrayList<>();
+		for (String component : unstableComponents()) {
+			String[] parts = component.split("#");
+			Class<?> record = recordNamed(parts[0]);
+			Method accessor = record.getMethod(parts[1]);
+			Class<?>[] canonical = Arrays.stream(record.getRecordComponents())
+				.map(RecordComponent::getType)
+				.toArray(Class<?>[]::new);
+			for (java.lang.reflect.Constructor<?> constructor : record.getConstructors()) {
+				if (Arrays.equals(constructor.getParameterTypes(), canonical)) {
+					continue;
+				}
+				for (int i = 0; i < constructor.getParameterCount(); i++) {
+					if (!constructor.getParameterTypes()[i].isAssignableFrom(Map.class)) {
+						continue;
+					}
+					Object[] args = new Object[constructor.getParameterCount()];
+					args[i] = Map.of();
+					Object built;
+					try {
+						built = constructor.newInstance(args);
+					}
+					catch (ReflectiveOperationException | RuntimeException ex) {
+						continue;
+					}
+					JavaMember member = CLASSES.get(record).getConstructor(constructor.getParameterTypes());
+					if (accessor.invoke(built) != null && !isMarked(member)) {
+						violations.add(constructor + " sets " + component);
+					}
+				}
+			}
+		}
+		assertThat(violations).isEmpty();
+	}
+
 	@Test
 	void negotiatedCapabilitiesForUnstableComponentsAreMarked() {
 		Set<String> unstableNames = new TreeSet<>();

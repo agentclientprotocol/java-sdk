@@ -384,6 +384,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`SessionCapabilities`' six- and four-argument constructors are `@UnstableAcpApi`.** Both take
+  the unstable `fork` component (the four-argument one exists only to set it) but were not marked,
+  so stable code could reach an unstable capability without a marker. `UnstableApiMarkerTest`
+  now also checks constructors that set an unstable component. Migration: none; code that must
+  avoid unstable API sets `additionalDirectories` through the canonical constructor or a builder
+  answer.
+
 - **Breaking: the client sends `additionalDirectories` only to an agent that advertises them, and
   an annotated agent can advertise them.** ACP lets a client send additional workspace
   directories only when the agent advertises `sessionCapabilities.additionalDirectories`, but
