@@ -126,7 +126,7 @@ class ConvenienceApiTest {
 
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				receivedUpdates.add(notification);
 				latch.countDown();
 				return Mono.empty();
@@ -167,7 +167,7 @@ class ConvenienceApiTest {
 
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				receivedUpdates.add(notification);
 				latch.countDown();
 				return Mono.empty();
@@ -209,7 +209,7 @@ class ConvenienceApiTest {
 
 		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				receivedUpdates.add(notification);
 				latch.countDown();
 				return Mono.empty();

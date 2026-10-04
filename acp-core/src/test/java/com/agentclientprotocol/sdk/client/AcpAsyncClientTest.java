@@ -263,7 +263,7 @@ class AcpAsyncClientTest {
 		var transport = new MockAcpClientTransport();
 		AcpAsyncClient client = AcpClient.async(transport)
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				receivedNotification.tryEmitValue(notification);
 				return Mono.empty();
 			})
@@ -277,7 +277,7 @@ class AcpAsyncClientTest {
 
 		transport.simulateIncomingMessage(notification);
 
-		// Verify the consumer received the notification
+		// Verify the update handler received the notification
 		AcpSchema.SessionNotification received = receivedNotification.asMono().block(Duration.ofSeconds(1));
 		assertThat(received).isNotNull();
 		assertThat(received.sessionId()).isEqualTo("session-123");
@@ -289,7 +289,7 @@ class AcpAsyncClientTest {
 	void unknownSessionUpdateReachesTheConsumerAndTheNextUpdateFollows() throws Exception {
 		Sinks.Many<AcpSchema.SessionNotification> received = Sinks.many().replay().all();
 		var transport = new MockAcpClientTransport();
-		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(n -> {
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateHandler(n -> {
 			received.tryEmitNext(n);
 			return Mono.empty();
 		}).build();

@@ -81,7 +81,7 @@ class AcpWebSocketRouteTest {
 		AcpSyncClient client = AcpClient.sync(new WebSocketAcpClientTransport(
 				URI.create("ws://localhost:" + server.actualPort() + "/acp"), AcpJsonMapper.createDefault()))
 			.requestTimeout(Duration.ofSeconds(10))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					messages.add(text.text());

@@ -36,8 +36,8 @@ import jakarta.inject.Singleton;
  * {@code initialize()} and opens sessions. The client closes gracefully, once, with the application
  * context, waiting at most its request timeout plus 10 seconds.
  *
- * <p>The builder gets the configured timeouts and capabilities and a session-update consumer that
- * logs at DEBUG, then every {@link AcpClientCustomizer} bean in order; a session-update consumer a
+ * <p>The builder gets the configured timeouts and capabilities and a session-update handler that
+ * logs at DEBUG, then every {@link AcpClientCustomizer} bean in order; a session-update handler a
  * customizer registers replaces the logging one. Replace the transport with an application bean
  * annotated {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
  */

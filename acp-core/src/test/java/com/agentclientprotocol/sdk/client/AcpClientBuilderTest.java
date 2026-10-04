@@ -40,11 +40,11 @@ class AcpClientBuilderTest {
 	}
 
 	@Test
-	void asyncBuilderWithSessionUpdateConsumer() {
+	void asyncBuilderWithSessionUpdateHandler() {
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 
 		AcpAsyncClient client = AcpClient.async(transport)
-			.sessionUpdateConsumer(notification -> Mono.empty())
+			.sessionUpdateHandler(notification -> Mono.empty())
 			.build();
 
 		assertThat(client).isNotNull();

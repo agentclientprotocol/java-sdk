@@ -16,7 +16,7 @@ import reactor.core.publisher.Mono;
  * and every call returns a Reactor {@code Mono}. Handlers on the synchronous builder receive a
  * {@link SyncPromptContext} instead, whose calls block.
  *
- * <p>It has two levels. The protocol calls ({@link #sendUpdate}, {@link #readTextFile},
+ * <p>It has two levels. The protocol calls ({@link #sendSessionUpdate}, {@link #readTextFile},
  * {@link #createTerminal}, {@link #requestPermission} and the rest) take ACP request records and
  * return the client's answers. The convenience calls fill in the session ID for you:
  * {@link #sendMessage(String)} and {@link #sendThought(String)} send text chunks,
@@ -46,7 +46,7 @@ import reactor.core.publisher.Mono;
  * SDK cancels the handler (after the cancel grace period, or for a {@code $/cancel_request}), it
  * disposes the handler's {@code Mono}: requests still waiting inside it are cancelled, and the
  * client is sent a {@code $/cancel_request} for each. Once the prompt has been answered, its
- * updates are dropped (see {@link #sendUpdate}); its other calls are not checked against the
+ * updates are dropped (see {@link #sendSessionUpdate}); its other calls are not checked against the
  * turn. Its methods may be called from several threads at once.
  *
  * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
@@ -67,7 +67,7 @@ public interface PromptContext {
 	 * Sends a {@code session/update} notification to the client, carrying one
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
 	 * plan, and so on, for this prompt's session ({@link #getSessionId()}). The Java client hands a
-	 * turn's updates to its consumers in order, before the prompt's answer. Once the prompt has
+	 * turn's updates to its update handlers in order, before the prompt's answer. Once the prompt has
 	 * been answered, by the handler or by the SDK when a prompt deadline passed, the SDK's context
 	 * drops further updates (logged at DEBUG) and the {@code Mono} completes empty: ACP requires a
 	 * prompt's updates to precede its answer. To update another
@@ -75,7 +75,7 @@ public interface PromptContext {
 	 * @param update the update
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 */
-	Mono<Void> sendUpdate(AcpSchema.SessionUpdate update);
+	Mono<Void> sendSessionUpdate(AcpSchema.SessionUpdate update);
 
 	// ========================================================================
 	// File System Operations
@@ -260,14 +260,14 @@ public interface PromptContext {
 	 * with the same {@code messageId} make up one message; a new {@code messageId} starts a new
 	 * message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with an
+	 * <p>Implementations get a default that calls {@link #sendSessionUpdate} with an
 	 * {@link AcpSchema.AgentMessageChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendMessage(String text, @Nullable String messageId) {
-		return sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
+		return sendSessionUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**
@@ -282,13 +282,13 @@ public interface PromptContext {
 	 * Sends text to the client as an agent thought chunk that belongs to the given message. Chunks
 	 * with the same {@code messageId} make up one message.
 	 *
-	 * <p>Implementations get a default that calls {@link #sendUpdate} with an {@link AcpSchema.AgentThoughtChunk} holding the text.
+	 * <p>Implementations get a default that calls {@link #sendSessionUpdate} with an {@link AcpSchema.AgentThoughtChunk} holding the text.
 	 * @param text the text
 	 * @param messageId the message ID, or {@code null} for none
 	 * @return a {@code Mono} that completes when the update has been handed to the transport
 	 */
 	default Mono<Void> sendThought(String text, @Nullable String messageId) {
-		return sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
+		return sendSessionUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent(text), messageId));
 	}
 
 	/**

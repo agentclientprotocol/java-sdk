@@ -126,7 +126,7 @@ integration), applied in `@Order`:
 @Singleton
 class Updates implements AcpClientCustomizer {
     public void customize(AcpClient.AsyncSpec spec) {
-        spec.sessionUpdateConsumer(notification -> { /* ... */ return Mono.empty(); });
+        spec.sessionUpdateHandler(notification -> { /* ... */ return Mono.empty(); });
     }
 }
 ```

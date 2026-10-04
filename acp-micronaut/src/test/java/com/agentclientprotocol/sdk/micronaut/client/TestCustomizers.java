@@ -46,7 +46,7 @@ public final class TestCustomizers {
 
 	}
 
-	/** Runs second, and adds the session-update consumer that records chunks. */
+	/** Runs second, and adds the session-update handler that records chunks. */
 	@Singleton
 	@Order(20)
 	@Requires(property = RECORDING, value = "true")
@@ -61,7 +61,7 @@ public final class TestCustomizers {
 		@Override
 		public void customize(com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec spec) {
 			record.customizers.add("second");
-			spec.sessionUpdateConsumer(notification -> {
+			spec.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					record.chunks.add(text.text());

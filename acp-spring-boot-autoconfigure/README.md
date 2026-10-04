@@ -103,7 +103,7 @@ spring.acp.client.transport.stdio.args=--acp
 class SessionUpdates implements AcpClientCustomizer {
     @Override
     public void customize(AcpClient.AsyncSpec spec) {
-        spec.sessionUpdateConsumer(notification -> {
+        spec.sessionUpdateHandler(notification -> {
             if (notification.update() instanceof AgentMessageChunk chunk
                     && chunk.content() instanceof TextContent text) {
                 System.out.print(text.text());
@@ -134,8 +134,8 @@ class Ask implements CommandLineRunner {
   process. `initialize()` then performs the ACP handshake.
 - **Customizers.** `AcpClientCustomizer` beans (`com.agentclientprotocol.sdk.integration`, the same
   type in the Micronaut and Quarkus integrations) are applied to the client's builder in bean order.
-  Register the session-update consumer, the permission handler, and the file system, terminal and
-  elicitation handlers there. Without a session-update consumer of your own, session updates are
+  Register the session-update handler, the permission handler, and the file system, terminal and
+  elicitation handlers there. Without a session-update handler of your own, session updates are
   logged at DEBUG.
 - **Capabilities.** The client advertises none by default. Turn one on with its
   `spring.acp.client.capabilities.*` property and register its handler in a customizer. A

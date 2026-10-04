@@ -256,7 +256,7 @@ class AcpAgentHttpAutoConfigurationTests {
 
 	static void assertRoundTrip(AcpClientTransport transport) {
 		List<String> messages = new CopyOnWriteArrayList<>();
-		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
+		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(TIMEOUT).sessionUpdateHandler(notification -> {
 			if (notification.update() instanceof AgentMessageChunk chunk
 					&& chunk.content() instanceof TextContent text) {
 				messages.add(text.text());

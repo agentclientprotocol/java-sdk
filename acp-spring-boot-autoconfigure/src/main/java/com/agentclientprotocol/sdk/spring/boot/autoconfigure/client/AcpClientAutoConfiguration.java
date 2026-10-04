@@ -32,8 +32,8 @@ import org.springframework.context.annotation.Bean;
  *
  * <p>The client advertises the capabilities and uses the timeouts of {@link AcpClientProperties}.
  * Every {@link AcpClientCustomizer} bean is applied to its builder, in bean order: register the
- * session-update consumer, the permission handler, and the file system, terminal and elicitation
- * handlers there. Without a session-update consumer of the application's own, session updates are
+ * session-update handler, the permission handler, and the file system, terminal and elicitation
+ * handlers there. Without a session-update handler of the application's own, session updates are
  * logged at DEBUG. Creating the client connects the transport (for stdio, starts the agent process)
  * when the context starts; the application then calls {@code initialize()} and opens sessions.
  *

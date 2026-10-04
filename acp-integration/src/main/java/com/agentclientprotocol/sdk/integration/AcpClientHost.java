@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>The graceful close is {@link AcpAsyncClient#closeGracefully()}: requests still waiting for
  * an answer fail, the agent's requests being handled are cancelled, session updates already
- * received still reach the consumers (bounded by the client's request timeout), and then the
+ * received still reach the update handlers (bounded by the client's request timeout), and then the
  * transport closes. For stdio the transport closes the agent's input first, so the agent process
  * can exit by itself, and stops it if it does not. That one close covers the sync facade from
  * {@link AcpClients#sync} and the transport too, so the framework must not close either of them

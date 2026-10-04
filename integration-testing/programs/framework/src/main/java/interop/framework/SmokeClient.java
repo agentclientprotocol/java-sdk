@@ -58,7 +58,7 @@ public final class SmokeClient {
 
 	/** Registers the handlers the steps need; called from the framework's customizer bean. */
 	public void customize(AcpClient.AsyncSpec spec) {
-		spec.sessionUpdateConsumer(n -> {
+		spec.sessionUpdateHandler(n -> {
 			updatesTotal.incrementAndGet();
 			String kind = n.update() == null ? "other"
 					: n.update().getClass().getSimpleName().replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();

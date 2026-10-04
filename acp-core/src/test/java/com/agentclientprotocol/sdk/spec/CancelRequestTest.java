@@ -360,7 +360,7 @@ class CancelRequestTest {
 		AcpClientSession session = new AcpClientSession(TIMEOUT, transport,
 				Map.of(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
 						params -> Mono.never().doOnSubscribe(s -> handlerCalled.set(true))),
-				// A slow session/update consumer holds the ordered notification drain.
+				// A slow session/update handler holds the ordered notification drain.
 				Map.of(AcpSchema.METHOD_SESSION_UPDATE, params -> releaseUpdate.asMono()), Function.identity());
 		try {
 			transport.simulateIncomingMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION,

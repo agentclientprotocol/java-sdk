@@ -107,7 +107,7 @@ class HttpTransportTest {
 
 	private static void roundTrip(AcpClientTransport transport, boolean close, String prompt) {
 		List<String> messages = new CopyOnWriteArrayList<>();
-		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
+		AcpSyncClient client = AcpClient.sync(transport).requestTimeout(TIMEOUT).sessionUpdateHandler(notification -> {
 			if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 					&& chunk.content() instanceof AcpSchema.TextContent text) {
 				messages.add(text.text());

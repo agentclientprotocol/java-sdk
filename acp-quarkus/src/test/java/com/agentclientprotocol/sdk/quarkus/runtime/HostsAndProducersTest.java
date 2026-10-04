@@ -147,14 +147,14 @@ class HostsAndProducersTest {
 		logger.setLevel(java.util.logging.Level.FINE);
 		logger.addHandler(handler);
 		try {
-			// Without an application consumer, the default logs each update at DEBUG.
+			// Without an application update handler, the default logs each update at DEBUG.
 			promptWith(List.of());
 			assertThat(logged).anySatisfy(message -> assertThat(message).startsWith("Session update for"));
 
 			// With one, the default is replaced, not run beside it.
 			logged.clear();
 			List<AcpSchema.SessionNotification> received = new java.util.concurrent.CopyOnWriteArrayList<>();
-			promptWith(List.of(spec -> spec.sessionUpdateConsumer(notification -> {
+			promptWith(List.of(spec -> spec.sessionUpdateHandler(notification -> {
 				received.add(notification);
 				return Mono.empty();
 			})));

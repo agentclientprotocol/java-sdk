@@ -18,11 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * A framework sets a default session update consumer, for example one that logs at DEBUG; the
- * application's own consumer replaces it rather than running beside it, whichever is registered
+ * A framework sets a default session update handler, for example one that logs at DEBUG; the
+ * application's own handler replaces it rather than running beside it, whichever is registered
  * first.
  */
-class DefaultSessionUpdateConsumerTest {
+class DefaultSessionUpdateHandlerTest {
 
 	private static final AcpSchema.JSONRPCNotification UPDATE = new AcpSchema.JSONRPCNotification(
 			AcpSchema.JSONRPC_VERSION, AcpSchema.METHOD_SESSION_UPDATE,
@@ -34,7 +34,7 @@ class DefaultSessionUpdateConsumerTest {
 		List<String> received = new CopyOnWriteArrayList<>();
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 		AcpAsyncClient client = AcpClient.async(transport)
-			.defaultSessionUpdateConsumer(record(received, "default"))
+			.defaultSessionUpdateHandler(record(received, "default"))
 			.build();
 
 		transport.simulateIncomingMessage(UPDATE);
@@ -48,8 +48,8 @@ class DefaultSessionUpdateConsumerTest {
 		List<String> received = new CopyOnWriteArrayList<>();
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 		AcpAsyncClient client = AcpClient.async(transport)
-			.defaultSessionUpdateConsumer(record(received, "default"))
-			.sessionUpdateConsumer(record(received, "app"))
+			.defaultSessionUpdateHandler(record(received, "default"))
+			.sessionUpdateHandler(record(received, "app"))
 			.build();
 
 		transport.simulateIncomingMessage(UPDATE);
@@ -64,8 +64,8 @@ class DefaultSessionUpdateConsumerTest {
 		List<String> received = new CopyOnWriteArrayList<>();
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 		AcpAsyncClient client = AcpClient.async(transport)
-			.sessionUpdateConsumer(record(received, "app"))
-			.defaultSessionUpdateConsumer(record(received, "default"))
+			.sessionUpdateHandler(record(received, "app"))
+			.defaultSessionUpdateHandler(record(received, "default"))
 			.build();
 
 		transport.simulateIncomingMessage(UPDATE);
@@ -79,7 +79,7 @@ class DefaultSessionUpdateConsumerTest {
 		List<String> received = new CopyOnWriteArrayList<>();
 		MockAcpClientTransport transport = new MockAcpClientTransport();
 		Consumer<AcpSchema.SessionNotification> defaultConsumer = notification -> received.add("default");
-		AcpSyncClient defaultOnly = AcpClient.sync(transport).defaultSessionUpdateConsumer(defaultConsumer).build();
+		AcpSyncClient defaultOnly = AcpClient.sync(transport).defaultSessionUpdateHandler(defaultConsumer).build();
 		transport.simulateIncomingMessage(UPDATE);
 		eventually(() -> assertThat(received).containsExactly("default"));
 		defaultOnly.close();
@@ -87,8 +87,8 @@ class DefaultSessionUpdateConsumerTest {
 		received.clear();
 		MockAcpClientTransport other = new MockAcpClientTransport();
 		AcpSyncClient replaced = AcpClient.sync(other)
-			.defaultSessionUpdateConsumer(defaultConsumer)
-			.sessionUpdateConsumer(notification -> received.add("app"))
+			.defaultSessionUpdateHandler(defaultConsumer)
+			.sessionUpdateHandler(notification -> received.add("app"))
 			.build();
 		other.simulateIncomingMessage(UPDATE);
 		eventually(() -> assertThat(received).containsExactly("app"));
@@ -98,12 +98,12 @@ class DefaultSessionUpdateConsumerTest {
 	@Test
 	void aSecondDefaultIsRefused() {
 		AcpClient.AsyncSpec spec = AcpClient.async(new MockAcpClientTransport())
-			.defaultSessionUpdateConsumer(notification -> Mono.empty());
+			.defaultSessionUpdateHandler(notification -> Mono.empty());
 
-		assertThatThrownBy(() -> spec.defaultSessionUpdateConsumer(notification -> Mono.empty()))
+		assertThatThrownBy(() -> spec.defaultSessionUpdateHandler(notification -> Mono.empty()))
 			.isInstanceOf(IllegalStateException.class)
-			.hasMessageContaining("defaultSessionUpdateConsumer");
-		assertThatThrownBy(() -> spec.defaultSessionUpdateConsumer(null)).isInstanceOf(IllegalArgumentException.class);
+			.hasMessageContaining("defaultSessionUpdateHandler");
+		assertThatThrownBy(() -> spec.defaultSessionUpdateHandler(null)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	/** Retries the assertion for up to five seconds: updates are delivered asynchronously. */

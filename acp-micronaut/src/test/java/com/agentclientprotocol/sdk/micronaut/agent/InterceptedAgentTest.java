@@ -68,7 +68,7 @@ class InterceptedAgentTest {
 		List<String> chunks = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
 			.requestTimeout(Duration.ofSeconds(10))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					chunks.add(text.text());

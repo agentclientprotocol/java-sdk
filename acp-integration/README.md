@@ -110,7 +110,7 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
 ## The client
 
 `AcpClients.async(transport, settings, customizers)` builds the one async client: capabilities,
-request and prompt timeouts, a session-update consumer that logs at DEBUG, then the
+request and prompt timeouts, a session-update handler that logs at DEBUG, then the
 `AcpClientCustomizer`s in order. Building the client connects the transport (for stdio, it starts
 the agent process); a stdio command that cannot be started, or a transport already connected,
 fails the build. The ACP handshake waits for the application's `initialize()`.

@@ -680,7 +680,7 @@ public class Agent {
 		if (updates == null) {
 			return Mono.error(new AcpProtocolException(-32602, "unknown directive: #emit " + kind));
 		}
-		return Flux.fromIterable(updates).concatMap(u -> context.sendUpdate(u)).then(Mono.just(endTurn()));
+		return Flux.fromIterable(updates).concatMap(u -> context.sendSessionUpdate(u)).then(Mono.just(endTurn()));
 	}
 
 	/**
@@ -699,7 +699,7 @@ public class Agent {
 						"kind", "interop_future_kind", "status", FUTURE_STATUS))
 				: new AcpSchema.Plan(List.of(new AcpSchema.PlanEntry("future entry",
 						new AcpSchema.PlanEntryPriority("interop_future_priority"), new AcpSchema.PlanEntryStatus(FUTURE_STATUS))));
-		return context.sendUpdate(update).then(context.sendMessage("after-enum")).thenReturn(endTurn());
+		return context.sendSessionUpdate(update).then(context.sendMessage("after-enum")).thenReturn(endTurn());
 	}
 
 	/** {@code #enum audience}: the first block's annotations.audience, one Role unknown to v1. */
@@ -722,7 +722,7 @@ public class Agent {
 	static Mono<AcpSchema.PromptResponse> configGrouped(SessionState s, PromptContext context,
 			AcpSchema.InitializeRequest init) {
 		s.grouped = true;
-		return context.sendUpdate(new AcpSchema.ConfigOptionUpdate(configOptions(s, init)))
+		return context.sendSessionUpdate(new AcpSchema.ConfigOptionUpdate(configOptions(s, init)))
 			.thenReturn(endTurn());
 	}
 
@@ -890,7 +890,7 @@ public class Agent {
 	static Mono<AcpSchema.PromptResponse> meta(PromptContext context, AcpSchema.PromptRequest request) {
 		Map<String, Object> meta = request.meta() == null ? null : new HashMap<>(request.meta());
 		return context
-			.sendUpdate(new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent("meta"), null, meta))
+			.sendSessionUpdate(new AcpSchema.AgentMessageChunk("agent_message_chunk", new AcpSchema.TextContent("meta"), null, meta))
 			.thenReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN, meta));
 	}
 

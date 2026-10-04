@@ -144,7 +144,7 @@ public final class SmokeClient {
 			.requestTimeout(PROMPT_TIMEOUT)
 			.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
 			.clientInfo(new AcpSchema.Implementation("acp-java-smoke", "1"))
-			.sessionUpdateConsumer(n -> {
+			.sessionUpdateHandler(n -> {
 				onUpdate(n);
 				return Mono.empty();
 			})

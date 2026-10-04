@@ -24,7 +24,7 @@ public class RecordingCustomizer implements AcpClientCustomizer {
 	@Override
 	public void customize(AcpClient.AsyncSpec spec) {
 		spec.clientInfo(new AcpSchema.Implementation("quarkus-it-client", "1.0.0", null))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					messages.add(text.text());

@@ -141,7 +141,7 @@ class AsyncReturnTypesTest {
 		agent.start();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> {
+			.sessionUpdateHandler(notification -> Mono.fromRunnable(() -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					chunks.add(text.text());

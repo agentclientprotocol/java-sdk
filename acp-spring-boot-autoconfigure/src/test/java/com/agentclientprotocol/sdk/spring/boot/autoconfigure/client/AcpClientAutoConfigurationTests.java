@@ -196,7 +196,7 @@ class AcpClientAutoConfigurationTests {
 		List<AcpSchema.SessionNotification> received = new CopyOnWriteArrayList<>();
 		try {
 			this.runner.withBean(AcpClientTransport.class, pair::clientTransport)
-				.withBean(AcpClientCustomizer.class, () -> spec -> spec.sessionUpdateConsumer(notification -> {
+				.withBean(AcpClientCustomizer.class, () -> spec -> spec.sessionUpdateHandler(notification -> {
 					received.add(notification);
 					return Mono.empty();
 				}))
@@ -224,7 +224,7 @@ class AcpClientAutoConfigurationTests {
 		logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
 		logger.addAppender(logged);
 		try {
-			// Without an application consumer, the default logs each update at DEBUG.
+			// Without an application handler, the default logs each update at DEBUG.
 			assertThat(promptAndCollect(null)).isEmpty();
 			assertThat(logged.list).anySatisfy(event -> assertThat(event.getFormattedMessage())
 				.startsWith("Session update for session-1"));
@@ -261,7 +261,7 @@ class AcpClientAutoConfigurationTests {
 		ApplicationContextRunner contextRunner = this.runner.withBean(AcpClientTransport.class, pair::clientTransport);
 		if (customizer != null) {
 			contextRunner = contextRunner.withBean(AcpClientCustomizer.class,
-					() -> spec -> spec.sessionUpdateConsumer(notification -> {
+					() -> spec -> spec.sessionUpdateHandler(notification -> {
 						received.add(notification);
 						return Mono.empty();
 					}));

@@ -115,7 +115,7 @@ class MicronautClientOverStdioTest implements TestPropertyProvider {
 
 		@Override
 		public void customize(com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec spec) {
-			spec.sessionUpdateConsumer(notification -> {
+			spec.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					texts.add(text.text());

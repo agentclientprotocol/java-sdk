@@ -61,10 +61,10 @@ class GeminiCliIT {
 		// Create transport
 		StdioAcpClientTransport transport = new StdioAcpClientTransport(params, jsonMapper);
 
-		// Build client with session update consumer
+		// Build client with session update handler
 		AcpAsyncClient client = AcpClient.async(transport)
 			.requestTimeout(Duration.ofSeconds(30))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				logger.info("Received session update: sessionId={}, updateType={}", notification.sessionId(),
 						notification.update().getClass().getSimpleName());
 				return Mono.empty();
@@ -140,7 +140,7 @@ class GeminiCliIT {
 					true // permissions
 			))
 			.requestTimeout(Duration.ofSeconds(60))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				AcpSchema.SessionUpdate update = notification.update();
 				String updateType = update.getClass().getSimpleName();
 				updateTypeCounts.computeIfAbsent(updateType, k -> new AtomicInteger(0)).incrementAndGet();
@@ -261,7 +261,7 @@ class GeminiCliIT {
 
 		AcpAsyncClient client = AcpClient.async(transport)
 			.requestTimeout(Duration.ofSeconds(30))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				allUpdates.add(notification.update());
 				return Mono.empty();
 			})
@@ -340,7 +340,7 @@ class GeminiCliIT {
 
 		AcpAsyncClient client = AcpClient.async(transport)
 			.requestTimeout(Duration.ofSeconds(60))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				updateCount.incrementAndGet();
 				logger.info("Update received: {}", notification.update().getClass().getSimpleName());
 				return Mono.empty();
@@ -425,7 +425,7 @@ class GeminiCliIT {
 					true // permissions
 			))
 			.requestTimeout(Duration.ofSeconds(60))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				logger.info("Update: {}", notification.update().getClass().getSimpleName());
 				return Mono.empty();
 			})

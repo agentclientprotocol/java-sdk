@@ -1329,7 +1329,7 @@ public class Client {
 				.requestTimeout(T)
 				.clientCapabilities(capabilities())
 				.clientInfo(new AcpSchema.Implementation("interop-java-client", "1"))
-				.sessionUpdateConsumer(n -> {
+				.sessionUpdateHandler(n -> {
 					this.updates.computeIfAbsent(n.sessionId(), k -> new CopyOnWriteArrayList<>()).add(n.update());
 					updatesTotal.incrementAndGet();
 					updatesByKind.computeIfAbsent(kind(n.update()), k -> new AtomicInteger()).incrementAndGet();

@@ -59,7 +59,7 @@ class PromptCancellationTest {
 				// The first prompt runs until cancelled, sends a last update, and answers cancelled.
 				return cancelReceived.asMono()
 					.then(finishAborting.asMono())
-					.then(context.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("aborted"))))
+					.then(context.sendSessionUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("aborted"))))
 					.thenReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED));
 			})
 			.build();
@@ -68,7 +68,7 @@ class PromptCancellationTest {
 		List<String> updates = new CopyOnWriteArrayList<>();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> updates.add(
+			.sessionUpdateHandler(notification -> Mono.fromRunnable(() -> updates.add(
 					((AcpSchema.TextContent) ((AcpSchema.AgentMessageChunk) notification.update()).content()).text())))
 			.build();
 		try {
@@ -119,7 +119,7 @@ class PromptCancellationTest {
 				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(SESSION, null, null)))
 			.promptHandler((request, context) -> context
-				.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("working")))
+				.sendSessionUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("working")))
 				.doOnSuccess(v -> updateSent.tryEmitEmpty())
 				.then(Mono.never()))
 			.build();
@@ -128,7 +128,7 @@ class PromptCancellationTest {
 		List<String> received = new CopyOnWriteArrayList<>();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> received.add("update")))
+			.sessionUpdateHandler(notification -> Mono.fromRunnable(() -> received.add("update")))
 			.build();
 		try {
 			client.initialize().block(TIMEOUT);
@@ -188,7 +188,7 @@ class PromptCancellationTest {
 		List<String> afterAnswer = new CopyOnWriteArrayList<>();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> {
+			.sessionUpdateHandler(notification -> Mono.fromRunnable(() -> {
 				if (answered.get()) {
 					afterAnswer.add(notification.update().toString());
 				}
@@ -210,7 +210,7 @@ class PromptCancellationTest {
 			// The handler, still running, keeps sending through its prompt context.
 			PromptContext context = contextRef.get();
 			context.sendMessage("late message").block(TIMEOUT);
-			context.sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("late thought")))
+			context.sendSessionUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("late thought")))
 				.block(TIMEOUT);
 			// Anything sent arrives before the answer to a later request on the same connection.
 			client.sendExtRequest("_x/probe", java.util.Map.of()).onErrorResume(e -> Mono.empty()).block(TIMEOUT);
@@ -244,7 +244,7 @@ class PromptCancellationTest {
 		List<String> seen = new CopyOnWriteArrayList<>();
 		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.fromRunnable(
+			.sessionUpdateHandler(notification -> Mono.fromRunnable(
 					() -> seen.add((answered.get() ? "after " : "before ") + notification.update().getClass().getSimpleName())))
 			.build();
 		try {

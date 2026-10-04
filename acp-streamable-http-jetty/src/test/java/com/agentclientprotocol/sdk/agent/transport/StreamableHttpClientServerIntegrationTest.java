@@ -89,7 +89,7 @@ class StreamableHttpClientServerIntegrationTest {
 	void happyPathStreamsUpdatesAndResponses() throws Exception {
 		StreamableHttpAcpAgentTransport server = startServer(StreamableHttpAcpAgentTransportOptions.defaults());
 		List<String> updates = new CopyOnWriteArrayList<>();
-		AcpAsyncClient client = client(server).sessionUpdateConsumer(notification -> {
+		AcpAsyncClient client = client(server).sessionUpdateHandler(notification -> {
 			updates.add(notification.sessionId());
 			return Mono.empty();
 		}).build();

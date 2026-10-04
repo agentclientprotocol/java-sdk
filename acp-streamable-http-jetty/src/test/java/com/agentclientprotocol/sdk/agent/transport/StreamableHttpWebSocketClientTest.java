@@ -189,7 +189,7 @@ class StreamableHttpWebSocketClientTest {
 		List<String> agentMessages = new CopyOnWriteArrayList<>();
 		client = AcpClient.async(clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					agentMessages.add(text.text());

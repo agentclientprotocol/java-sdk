@@ -49,7 +49,7 @@ class HttpAgentTest {
 		List<String> messages = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(transport)
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					messages.add(text.text());

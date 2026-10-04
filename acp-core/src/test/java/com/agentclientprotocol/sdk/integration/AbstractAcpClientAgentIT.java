@@ -262,16 +262,16 @@ public abstract class AbstractAcpClientAgentIT {
 				.promptHandler((request, updater) -> {
 					// Send streaming updates during prompt processing
 					return updater
-						.sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("Analyzing code...")))
-						.then(updater.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Found the issue"))))
+						.sendSessionUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("Analyzing code...")))
+						.then(updater.sendSessionUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("Found the issue"))))
 						.then(Mono.just(new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN)));
 				})
 				.build();
 
-			// Build client with session update consumer
+			// Build client with session update handler
 			AcpAsyncClient client = AcpClient.async(clientTransport)
 				.requestTimeout(TIMEOUT)
-				.sessionUpdateConsumer(notification -> {
+				.sessionUpdateHandler(notification -> {
 					receivedUpdates.add(notification);
 					updateLatch.countDown();
 					return Mono.empty();

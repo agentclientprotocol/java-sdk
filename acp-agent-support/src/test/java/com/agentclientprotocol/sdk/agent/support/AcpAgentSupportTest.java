@@ -221,7 +221,7 @@ class AcpAgentSupportTest {
 		List<SessionNotification> updates = new CopyOnWriteArrayList<>();
 		client = AcpClient.async(transportPair.clientTransport())
 				.requestTimeout(TIMEOUT)
-				.sessionUpdateConsumer(notification -> {
+				.sessionUpdateHandler(notification -> {
 					updates.add(notification);
 					return Mono.empty();
 				})
@@ -751,7 +751,7 @@ class AcpAgentSupportTest {
 
 		client = AcpClient.async(transportPair.clientTransport())
 				.requestTimeout(TIMEOUT)
-				.sessionUpdateConsumer(notification -> {
+				.sessionUpdateHandler(notification -> {
 					updates.add(notification.update().toString());
 					return Mono.empty();
 				})

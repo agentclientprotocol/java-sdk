@@ -41,7 +41,7 @@ class RawClientHandlerTest {
 	}
 
 	static Stream<Arguments> typedNotifications() {
-		return Stream.of(Arguments.of(AcpSchema.METHOD_SESSION_UPDATE, "sessionUpdateConsumer"),
+		return Stream.of(Arguments.of(AcpSchema.METHOD_SESSION_UPDATE, "sessionUpdateHandler"),
 				Arguments.of(AcpSchema.METHOD_ELICITATION_COMPLETE, "completeElicitationHandler"));
 	}
 

@@ -81,7 +81,7 @@ class DefaultPromptContext implements PromptContext {
 	// ========================================================================
 
 	@Override
-	public Mono<Void> sendUpdate(AcpSchema.SessionUpdate update) {
+	public Mono<Void> sendSessionUpdate(AcpSchema.SessionUpdate update) {
 		return Mono.defer(() -> {
 			if (this.answered.getAsBoolean()) {
 				// ACP: a prompt's session/update notifications must precede its answer.
@@ -175,12 +175,12 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Void> sendMessage(String text) {
-		return sendUpdate(new AgentMessageChunk(new TextContent(text)));
+		return sendSessionUpdate(new AgentMessageChunk(new TextContent(text)));
 	}
 
 	@Override
 	public Mono<Void> sendThought(String text) {
-		return sendUpdate(new AgentThoughtChunk(new TextContent(text)));
+		return sendSessionUpdate(new AgentThoughtChunk(new TextContent(text)));
 	}
 
 	@Override
@@ -227,12 +227,12 @@ class DefaultPromptContext implements PromptContext {
 			ToolCall announce = new ToolCall("tool_call", toolCallId, title, null, kind, ToolCallStatus.PENDING, null, null,
 					null, null, null);
 			ToolCallUpdate toolCall = new ToolCallUpdate(toolCallId, title, kind, ToolCallStatus.PENDING);
-			return sendUpdate(announce)
+			return sendSessionUpdate(announce)
 				.then(requestPermission(new RequestPermissionRequest(sessionId, toolCall, options)))
 				.flatMap(response -> {
 					ToolCallStatus status = (response.outcome() instanceof PermissionSelected) ? ToolCallStatus.COMPLETED
 							: ToolCallStatus.FAILED;
-					return sendUpdate(new ToolCallUpdateNotification("tool_call_update", toolCallId, null, null, null,
+					return sendSessionUpdate(new ToolCallUpdateNotification("tool_call_update", toolCallId, null, null, null,
 							status, null, null, null, null, null))
 						.thenReturn(response);
 				});

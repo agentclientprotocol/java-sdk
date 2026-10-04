@@ -116,7 +116,7 @@ final class TestAgents {
 		List<String> messages = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(transport)
 			.requestTimeout(Duration.ofSeconds(10))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					messages.add(text.text());

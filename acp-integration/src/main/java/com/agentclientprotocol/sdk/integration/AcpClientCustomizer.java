@@ -7,7 +7,7 @@ package com.agentclientprotocol.sdk.integration;
 import com.agentclientprotocol.sdk.client.AcpClient;
 
 /**
- * Lets the application add to the ACP client a framework builds: a session-update consumer, a
+ * Lets the application add to the ACP client a framework builds: a session-update handler, a
  * permission handler, file system, terminal or elicitation handlers, or anything else the SDK's
  * {@link AcpClient.AsyncSpec} takes. The application declares customizers as beans; the
  * framework passes every one, in its bean order, to {@link AcpClients#async}, which applies them
@@ -15,9 +15,9 @@ import com.agentclientprotocol.sdk.client.AcpClient;
  * package an application on Spring Boot, Micronaut or Quarkus uses directly.
  *
  * <p>A capability turned on in the settings ({@link AcpClientSettings.Capabilities}) needs its
- * handler registered here, or building the client fails. A session-update consumer added here
+ * handler registered here, or building the client fails. A session-update handler added here
  * replaces the default one that only logs. The builder already has a default session-update
- * consumer, so a customizer must not call {@code defaultSessionUpdateConsumer}, which then
+ * handler, so a customizer must not call {@code defaultSessionUpdateHandler}, which then
  * fails.
  */
 @FunctionalInterface

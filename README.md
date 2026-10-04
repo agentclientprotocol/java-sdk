@@ -143,9 +143,9 @@ import java.util.List;
 var params = AgentParameters.builder("gemini").arg("--experimental-acp").build();
 var transport = new StdioAcpClientTransport(params);
 
-// Create client — sessionUpdateConsumer prints the agent's streamed response
+// Create client — sessionUpdateHandler prints the agent's streamed response
 AcpSyncClient client = AcpClient.sync(transport)
-    .sessionUpdateConsumer(notification -> {
+    .sessionUpdateHandler(notification -> {
         if (notification.update() instanceof AgentMessageChunk msg) {
             System.out.print(((TextContent) msg.content()).text());
         }
@@ -296,7 +296,7 @@ PromptResponse prompt(PromptRequest req, SyncPromptContext ctx) {
 **Client - receiving updates:**
 ```java
 AcpSyncClient client = AcpClient.sync(transport)
-    .sessionUpdateConsumer(notification -> {
+    .sessionUpdateHandler(notification -> {
         var update = notification.update();
         if (update instanceof AgentMessageChunk msg) {
             System.out.print(((TextContent) msg.content()).text());

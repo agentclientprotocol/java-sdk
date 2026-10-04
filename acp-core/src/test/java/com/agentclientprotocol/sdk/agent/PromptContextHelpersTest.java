@@ -203,7 +203,7 @@ class PromptContextHelpersTest {
 			.requestTimeout(TIMEOUT)
 			.requestPermissionHandler(req -> Mono
 				.just(new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionSelected("1"))))
-			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> {
+			.sessionUpdateHandler(n -> Mono.fromRunnable(() -> {
 				if (n.update() instanceof AcpSchema.AgentMessageChunk chunk) {
 					messages.add(((TextContent) chunk.content()).text());
 				}
@@ -293,7 +293,7 @@ class PromptContextHelpersTest {
 			.build();
 		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> updates.add(n.update())))
+			.sessionUpdateHandler(n -> Mono.fromRunnable(() -> updates.add(n.update())))
 			.requestPermissionHandler(req -> {
 				asked.set(req.toolCall());
 				updates.stream()
@@ -357,7 +357,7 @@ class PromptContextHelpersTest {
 		agent.closeGracefully();
 	}
 
-	/** {@code sendUpdate(update)} sends the update for the context's own session. */
+	/** {@code sendSessionUpdate(update)} sends the update for the context's own session. */
 	@Test
 	void sendUpdateUsesTheContextsSession() {
 		List<String> sessions = new CopyOnWriteArrayList<>();
@@ -366,14 +366,14 @@ class PromptContextHelpersTest {
 			.initializeHandler(req -> InitializeResponse.ok())
 			.newSessionHandler(req -> new NewSessionResponse("s1", null, null))
 			.promptHandler((request, context) -> {
-				context.sendUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("sync")));
-				context.async().sendUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("async"))).block(TIMEOUT);
+				context.sendSessionUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("sync")));
+				context.async().sendSessionUpdate(new AcpSchema.AgentThoughtChunk(new TextContent("async"))).block(TIMEOUT);
 				return PromptResponse.endTurn();
 			})
 			.build();
 		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(n -> Mono.fromRunnable(() -> sessions.add(n.sessionId())))
+			.sessionUpdateHandler(n -> Mono.fromRunnable(() -> sessions.add(n.sessionId())))
 			.build();
 		agent.start();
 		connect(client);

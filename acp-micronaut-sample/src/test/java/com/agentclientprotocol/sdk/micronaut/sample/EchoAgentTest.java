@@ -38,7 +38,7 @@ class EchoAgentTest {
 		URI uri = URI.create("ws://localhost:" + runtime.port().orElseThrow() + "/acp");
 		AcpSyncClient client = AcpClient.sync(new WebSocketAcpClientTransport(uri, AcpJsonMapper.createDefault()))
 			.requestTimeout(Duration.ofSeconds(10))
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					chunks.add(text.text());

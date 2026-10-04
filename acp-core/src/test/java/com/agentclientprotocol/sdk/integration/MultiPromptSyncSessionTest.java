@@ -63,7 +63,7 @@ class MultiPromptSyncSessionTest {
 			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-14", null, null))
 			.promptHandler((request, context) -> {
 				for (int chunk = 0; chunk < 3; chunk++) {
-					context.sendUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("chunk " + chunk)));
+					context.sendSessionUpdate(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("chunk " + chunk)));
 				}
 				return new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN);
 			})
@@ -73,7 +73,7 @@ class MultiPromptSyncSessionTest {
 		List<String> updates = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> updates.add(notification.update().getClass().getSimpleName()))
+			.sessionUpdateHandler(notification -> updates.add(notification.update().getClass().getSimpleName()))
 			.build();
 		try {
 			client.initialize();

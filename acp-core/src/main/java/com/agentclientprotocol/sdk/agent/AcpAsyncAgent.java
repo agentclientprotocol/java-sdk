@@ -89,7 +89,7 @@ public interface AcpAsyncAgent {
 	 * Sends a {@code session/update} notification to the client, carrying one
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call, a plan, a config
 	 * option change and so on. During a prompt turn the Java client hands the updates to its
-	 * consumers in order, before the prompt's answer. Updates may also be sent between turns.
+	 * update handlers in order, before the prompt's answer. Updates may also be sent between turns.
 	 * @param sessionId the ACP session the update belongs to
 	 * @param update the update
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport

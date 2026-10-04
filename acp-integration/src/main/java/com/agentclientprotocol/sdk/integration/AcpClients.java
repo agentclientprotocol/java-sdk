@@ -27,7 +27,7 @@ import reactor.core.publisher.Mono;
  * closes the async one through an {@link AcpClientHost} when the container shuts down.
  *
  * <p>What the shared code does: it advertises the settings' capabilities, applies the request
- * and prompt timeouts, sets a default session-update consumer that logs each update at DEBUG
+ * and prompt timeouts, sets a default session-update handler that logs each update at DEBUG
  * (so the SDK does not warn about updates nobody handles), applies the customizers in order,
  * and turns a missing-handler error into one that names the framework's capability settings.
  * What the framework does: create the transport, collect the customizer beans in its bean
@@ -59,9 +59,9 @@ public final class AcpClients {
 	/**
 	 * Returns the async client on the transport: the settings' capabilities, their request
 	 * timeout (unset keeps the SDK default, 60 seconds) and prompt timeout (unset: none), a
-	 * default session-update consumer, then the customizers in order. The default consumer logs
-	 * each update at DEBUG; the first consumer a customizer adds with
-	 * {@code sessionUpdateConsumer} replaces it, rather than running beside it. Building the
+	 * default session-update handler, then the customizers in order. The default update handler logs
+	 * each update at DEBUG; the first update handler a customizer adds with
+	 * {@code sessionUpdateHandler} replaces it, rather than running beside it. Building the
 	 * client connects the transport (for stdio, starts the agent process); the ACP handshake
 	 * waits for the application's {@code initialize()}.
 	 * @param transport the client transport, not yet used by another client
@@ -73,7 +73,7 @@ public final class AcpClients {
 	 * @throws IllegalStateException if a capability setting is true but no customizer registers
 	 * the handlers that serve it; the message names the SDK's missing setters and the settings,
 	 * such as {@code spring.acp.client.capabilities.terminal=true}. A customizer that calls
-	 * {@code defaultSessionUpdateConsumer} also fails, since the default is already set, and so
+	 * {@code defaultSessionUpdateHandler} also fails, since the default is already set, and so
 	 * does a transport that refuses to connect: one already connected, or a stdio command that
 	 * cannot be started
 	 */
@@ -81,9 +81,9 @@ public final class AcpClients {
 			List<? extends AcpClientCustomizer> customizers, String prefix) {
 		AcpClient.AsyncSpec spec = AcpClient.async(transport)
 			.clientCapabilities(settings.capabilities().toClientCapabilities())
-			// Session updates always have a consumer, so the SDK does not warn about an unhandled
-			// one. This one only logs; a consumer a customizer adds replaces it.
-			.defaultSessionUpdateConsumer(AcpClients::logSessionUpdate);
+			// Session updates always have a update handler, so the SDK does not warn about an unhandled
+			// one. This one only logs; a update handler a customizer adds replaces it.
+			.defaultSessionUpdateHandler(AcpClients::logSessionUpdate);
 		Duration requestTimeout = settings.requestTimeout();
 		if (requestTimeout != null) {
 			spec.requestTimeout(requestTimeout);

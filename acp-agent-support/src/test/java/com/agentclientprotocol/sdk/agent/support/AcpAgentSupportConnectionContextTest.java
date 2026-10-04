@@ -158,7 +158,7 @@ class AcpAgentSupportConnectionContextTest {
 			.requestTimeout(TIMEOUT)
 			.build();
 		agentSupport.start();
-		client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).sessionUpdateConsumer(update -> {
+		client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).sessionUpdateHandler(update -> {
 			updates.add(update);
 			return Mono.empty();
 		}).build();
@@ -292,7 +292,7 @@ class AcpAgentSupportConnectionContextTest {
 		if (Boolean.TRUE.equals(capabilities.fs().readTextFile())) {
 			spec.readTextFileHandler(request -> Mono.empty());
 		}
-		return spec.sessionUpdateConsumer(notification -> {
+		return spec.sessionUpdateHandler(notification -> {
 			if (notification.update() instanceof AgentMessageChunk chunk && chunk.content() instanceof TextContent text) {
 				updates.add(text.text());
 			}

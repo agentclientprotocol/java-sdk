@@ -27,9 +27,9 @@ import reactor.core.publisher.Mono;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code prompt()} returns only once the session-update consumer has handled every update the
+ * {@code prompt()} returns only once the session-update handler has handled every update the
  * agent sent before its prompt response, so the updates a caller collects are complete when
- * the stop reason arrives. The consumers here are slow on purpose: before, {@code prompt()}
+ * the stop reason arrives. The update handlers here are slow on purpose: before, {@code prompt()}
  * returned while they were still running.
  */
 class PromptUpdateOrderTest {
@@ -83,7 +83,7 @@ class PromptUpdateOrderTest {
 		List<String> handled = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				sleep(100);
 				handled.add(text(notification));
 			})
@@ -108,7 +108,7 @@ class PromptUpdateOrderTest {
 		List<String> handled = new CopyOnWriteArrayList<>();
 		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> Mono.delay(Duration.ofMillis(100))
+			.sessionUpdateHandler(notification -> Mono.delay(Duration.ofMillis(100))
 				.then(Mono.fromRunnable(() -> handled.add(text(notification)))))
 			.build();
 		try {
@@ -126,8 +126,8 @@ class PromptUpdateOrderTest {
 	}
 
 	/**
-	 * A consumer that calls the agent and waits for the answer, while the agent's later
-	 * updates arrive first: that answer is not held behind the consumer that waits for it.
+	 * A update handler that calls the agent and waits for the answer, while the agent's later
+	 * updates arrive first: that answer is not held behind the update handler that waits for it.
 	 */
 	@Test
 	void aConsumerThatWaitsForARequestOfItsOwnDoesNotDeadlockThePrompt() {
@@ -136,7 +136,7 @@ class PromptUpdateOrderTest {
 		AtomicReference<AcpSyncClient> self = new AtomicReference<>();
 		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (handled.isEmpty()) {
 					self.get().setSessionMode(new AcpSchema.SetSessionModeRequest(SESSION, "code"));
 				}
@@ -161,7 +161,7 @@ class PromptUpdateOrderTest {
 
 	/**
 	 * The agent announces a tool call with a {@code tool_call} update, then asks permission for
-	 * it: the permission handler runs only after the session update consumer handled the
+	 * it: the permission handler runs only after the session update handler handled the
 	 * announcement, so a client can look the tool call up when it asks the user.
 	 */
 	@Test
@@ -171,7 +171,7 @@ class PromptUpdateOrderTest {
 			.initializeHandler(request -> InitializeResponse.ok())
 			.newSessionHandler(request -> new NewSessionResponse(SESSION, null, null))
 			.promptHandler((request, context) -> {
-				context.sendUpdate(new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
+				context.sendSessionUpdate(new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
 						AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null));
 				context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
 						new AcpSchema.ToolCallUpdate("call-1", "Edit file", AcpSchema.ToolKind.EDIT,
@@ -186,7 +186,7 @@ class PromptUpdateOrderTest {
 		List<Boolean> knownWhenAsked = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				sleep(300);
 				if (notification.update() instanceof AcpSchema.ToolCall toolCall) {
 					announced.add(toolCall.toolCallId());
@@ -211,8 +211,8 @@ class PromptUpdateOrderTest {
 	}
 
 	/**
-	 * A consumer that waits for a prompt of its own, during which the agent asks the client
-	 * something: the agent's request is not held behind the consumer that waits for it.
+	 * A update handler that waits for a prompt of its own, during which the agent asks the client
+	 * something: the agent's request is not held behind the update handler that waits for it.
 	 */
 	@Test
 	void aConsumerWaitingForAPromptDoesNotHoldTheAgentsRequestsOfThatPrompt() {
@@ -241,7 +241,7 @@ class PromptUpdateOrderTest {
 		List<String> nested = new CopyOnWriteArrayList<>();
 		AcpSyncClient client = AcpClient.sync(this.transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (nested.isEmpty()) {
 					nested.add("asking");
 					// The agent answers only after the client answered its permission request.

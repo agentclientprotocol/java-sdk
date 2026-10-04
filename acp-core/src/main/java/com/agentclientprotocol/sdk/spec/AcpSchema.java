@@ -998,7 +998,7 @@ public final class AcpSchema {
 	 * <p>
 	 * Only an agent that advertises {@code loadSession} supports it: for any other agent the client
 	 * fails the call with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
-	 * without sending it. The replayed session updates reach the client's session update consumers
+	 * without sending it. The replayed session updates reach the client's session update handlers
 	 * before its call completes. To reopen a session without the replay, use
 	 * {@link ResumeSessionRequest}. The protocol requires absolute paths for {@code cwd} and
 	 * {@code additionalDirectories}; the SDK does not check them. A non-empty
@@ -1821,18 +1821,18 @@ public final class AcpSchema {
 	 * The params of {@code session/update}: one {@link SessionUpdate} for an ACP session. The agent
 	 * sends it to show the client its work as it happens, such as its reply, its tool calls and its
 	 * plan. During a prompt turn the agent sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate}
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendSessionUpdate PromptContext.sendSessionUpdate}
 	 * or a shortcut such as {@code sendMessage}; at other times with
 	 * {@link com.agentclientprotocol.sdk.agent.AcpSyncAgent#sendSessionUpdate
 	 * AcpSyncAgent.sendSessionUpdate} or the {@code AcpAsyncAgent} method of the same name. Both
-	 * wrap the update in this record. The client's session-update consumers
-	 * ({@link com.agentclientprotocol.sdk.client.AcpClient.SyncSpec#sessionUpdateConsumer
-	 * sessionUpdateConsumer} on the client builder) receive it. It is a notification, so it gets no
+	 * wrap the update in this record. The client's session-update handlers
+	 * ({@link com.agentclientprotocol.sdk.client.AcpClient.SyncSpec#sessionUpdateHandler
+	 * sessionUpdateHandler} on the client builder) receive it. It is a notification, so it gets no
 	 * answer of its own.
 	 *
 	 * <p>
-	 * The Java client hands notifications to its consumers one at a time, in the order the agent
-	 * sent them, and a response from the agent completes its caller only after the consumers have
+	 * The Java client hands notifications to its update handlers one at a time, in the order the agent
+	 * sent them, and a response from the agent completes its caller only after the update handlers have
 	 * handled every notification sent before it: when {@code prompt(...)} returns, that turn's
 	 * updates have all been handled. Updates are not limited to prompt turns. An agent replays a
 	 * loaded session's conversation as updates before it answers {@code session/load}, and can send
@@ -1849,7 +1849,7 @@ public final class AcpSchema {
 	 * that lacks a required member at any depth: an update without its content, a plan entry
 	 * without its text. The whole notification is skipped, not only the bad part. An update of a
 	 * kind this SDK does not know is not skipped: it reads as an {@link UnknownSessionUpdate}. A
-	 * client without a session-update consumer ignores {@code session/update}, also with a warning.
+	 * client without a session-update handler ignores {@code session/update}, also with a warning.
 	 *
 	 * @param sessionId the ACP session the update belongs to
 	 * @param update the update
@@ -5092,7 +5092,7 @@ public final class AcpSchema {
 	 * <p>
 	 * A change the client asked for with {@link SetSessionConfigOptionRequest} is confirmed by that
 	 * request's answer. The SDK never sends this update by itself; the agent sends it, with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate}
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendSessionUpdate PromptContext.sendSessionUpdate}
 	 * in a prompt turn or {@link com.agentclientprotocol.sdk.agent.AcpAsyncAgent#sendSessionUpdate
 	 * AcpAsyncAgent.sendSessionUpdate} outside one.
 	 *
@@ -5654,8 +5654,8 @@ public final class AcpSchema {
 	 * One update that an agent streams to the client in a {@link SessionNotification}: a piece of
 	 * its reply or reasoning, a tool call or a change to one, its plan, or a change to the session.
 	 * An agent creates one of the variant records and sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate};
-	 * a client checks the variant with {@code instanceof} in its session-update consumer and shows
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendSessionUpdate PromptContext.sendSessionUpdate};
+	 * a client checks the variant with {@code instanceof} in its session-update handler and shows
 	 * what it understands.
 	 *
 	 * <p>
@@ -5672,7 +5672,7 @@ public final class AcpSchema {
 	 * On the wire the {@code sessionUpdate} member names the variant, and each variant record has
 	 * it as its first component. An update of a kind this SDK does not know, or one without
 	 * {@code sessionUpdate}, reads as an {@link UnknownSessionUpdate}, so the notification that
-	 * carries it still reaches the consumers. The interface is not sealed: end an
+	 * carries it still reaches the update handlers. The interface is not sealed: end an
 	 * {@code instanceof} chain with a branch for anything else (see {@link AcpSchema} on forward
 	 * compatibility).
 	 */
@@ -5695,7 +5695,7 @@ public final class AcpSchema {
 
 	/**
 	 * A session update of a kind this SDK does not know, kept as received: the agent is on a newer
-	 * protocol version or sent an extension. A client consumer that does not understand it should
+	 * protocol version or sent an extension. A client that does not understand it should
 	 * ignore it; a proxy can forward it unchanged.
 	 *
 	 * <p>
@@ -5730,7 +5730,7 @@ public final class AcpSchema {
 	 * <p>
 	 * It differs from {@link AgentMessageChunk} only in whose message it carries: the content and
 	 * the message id work the same way. The prompt context has no shortcut for it; send it with
-	 * {@code PromptContext.sendUpdate} or {@code AcpSyncAgent.sendSessionUpdate}.
+	 * {@code PromptContext.sendSessionUpdate} or {@code AcpSyncAgent.sendSessionUpdate}.
 	 *
 	 * @param sessionUpdate the discriminator, {@code "user_message_chunk"}
 	 * @param content the piece of the message, one content block

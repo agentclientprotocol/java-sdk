@@ -42,7 +42,7 @@ class StdioAgentIT {
 		StdioAcpClientTransport transport = new StdioAcpClientTransport(launch(exitCode, log));
 		AcpSyncClient client = AcpClient.sync(transport)
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(notification -> {
+			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 						&& chunk.content() instanceof AcpSchema.TextContent text) {
 					messages.add(text.text());

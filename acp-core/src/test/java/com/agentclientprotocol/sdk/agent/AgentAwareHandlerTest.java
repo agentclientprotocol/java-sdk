@@ -45,7 +45,7 @@ class AgentAwareHandlerTest {
 	private AcpSyncClient client() {
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(n -> updates.add(n.sessionId() + ":" + text(n)))
+			.sessionUpdateHandler(n -> updates.add(n.sessionId() + ":" + text(n)))
 			.build();
 		client.initialize();
 		return client;

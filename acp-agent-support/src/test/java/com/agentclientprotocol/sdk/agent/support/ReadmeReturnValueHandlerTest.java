@@ -124,7 +124,7 @@ class ReadmeReturnValueHandlerTest {
 		agentSupport.start();
 		client = AcpClient.async(transportPair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(update -> {
+			.sessionUpdateHandler(update -> {
 				updates.add(update);
 				return reactor.core.publisher.Mono.empty();
 			})

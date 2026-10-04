@@ -41,7 +41,7 @@ class AcpClientsTest {
 		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), settings,
 				List.of(spec -> customized.add("first"), spec -> {
 					customized.add("second");
-					spec.sessionUpdateConsumer(notification -> {
+					spec.sessionUpdateHandler(notification -> {
 						if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 								&& chunk.content() instanceof AcpSchema.TextContent text) {
 							chunks.add(text.text());
@@ -120,7 +120,7 @@ class AcpClientsTest {
 		agent.start();
 		List<String> chunks = new CopyOnWriteArrayList<>();
 		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(),
-				List.of(spec -> spec.sessionUpdateConsumer(notification -> {
+				List.of(spec -> spec.sessionUpdateHandler(notification -> {
 					chunks.add(notification.sessionId());
 					return Mono.empty();
 				})));

@@ -111,7 +111,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		try (FixtureServer server = FixtureServer.start(simpleAgentFactory())) {
 			AcpAsyncClient client = AcpClient
 				.async(new WebSocketAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
-				.sessionUpdateConsumer(update -> {
+				.sessionUpdateHandler(update -> {
 					receivedUpdate.set(update);
 					return Mono.empty();
 				})
@@ -233,7 +233,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 		try (FixtureServer server = FixtureServer.start(agentFactory)) {
 			AcpAsyncClient client = AcpClient
 				.async(new WebSocketAcpClientTransport(server.endpoint(), AcpJsonMapper.createDefault()))
-				.sessionUpdateConsumer(update -> {
+				.sessionUpdateHandler(update -> {
 					receivedUpdates.incrementAndGet();
 					return Mono.empty();
 				})

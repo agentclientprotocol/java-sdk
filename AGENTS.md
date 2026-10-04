@@ -25,7 +25,7 @@ key passes Jackson-based peers and breaks strict ones. Unstable protocol methods
 
 Client-session notifications are delivered in order through a single sink drained by `concatMap`,
 and `closeGracefully()` waits for that drain, bounded by the request timeout, while `close()`
-interrupts. Sync clients always have async handlers, because every sync consumer is wrapped in
+interrupts. Sync clients always have async handlers, because every sync handler is wrapped in
 `subscribeOn`. Keep both properties when touching `AcpClientSession` or a transport, and add the
 test that would have caught their loss.
 

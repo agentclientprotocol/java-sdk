@@ -250,7 +250,7 @@ public class AcpClientSession implements AcpSession {
 		else if (message instanceof AcpSchema.JSONRPCNotification notification) {
 			if (AcpSchema.METHOD_CANCEL_REQUEST.equals(notification.method())) {
 				// Not queued behind the ordered notification drain: a slow session/update
-				// consumer must not delay cancelling a pending request.
+				// handler must not delay cancelling a pending request.
 				this.inbound.cancel(notification);
 			}
 			else {

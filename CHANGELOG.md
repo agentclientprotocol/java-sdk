@@ -527,6 +527,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one daemon platform thread per JVM, so that handlers pinning every carrier thread cannot also
   stop the timeouts meant to end them. On JDK 17 nothing changes. Migration: none.
 
+- **Breaking: one vocabulary for session updates.** The client builders' setters are handlers,
+  like every other setter, and the prompt context sends session updates with the same verb as
+  the agent and the test kit (`AcpAsyncAgent.sendSessionUpdate`, `AcpSyncAgent.sendSessionUpdate`,
+  `MockAcpAgent.sendSessionUpdate`). Renamed outright, without deprecated aliases:
+  `AcpClient.AsyncSpec`/`SyncSpec.sessionUpdateConsumer(..)` → `sessionUpdateHandler(..)`,
+  `defaultSessionUpdateConsumer(..)` → `defaultSessionUpdateHandler(..)`, and
+  `PromptContext.sendUpdate(update)` / `SyncPromptContext.sendUpdate(update)` →
+  `sendSessionUpdate(update)`. Behaviour and parameter types are unchanged, and so is the
+  registration error a raw `notificationHandler("session/update", ..)` gets, which now names
+  `sessionUpdateHandler`. Migration: rename the calls —
+  `.sessionUpdateConsumer(n -> ...)` → `.sessionUpdateHandler(n -> ...)`,
+  `.defaultSessionUpdateConsumer(n -> ...)` → `.defaultSessionUpdateHandler(n -> ...)`,
+  `context.sendUpdate(update)` → `context.sendSessionUpdate(update)`.
+
 - **`SessionCapabilities`' six- and four-argument constructors are `@UnstableAcpApi`.** Both take
   the unstable `fork` component (the four-argument one exists only to set it) but were not marked,
   so stable code could reach an unstable capability without a marker. `UnstableApiMarkerTest`

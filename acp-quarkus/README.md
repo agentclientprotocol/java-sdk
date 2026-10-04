@@ -116,7 +116,7 @@ quarkus.acp.client.transport.stdio.args=--acp
 @Singleton
 class Updates implements AcpClientCustomizer {        // optional; @Priority orders several
     public void customize(AcpClient.AsyncSpec spec) {
-        spec.sessionUpdateConsumer(notification -> { /* ... */ return Mono.empty(); });
+        spec.sessionUpdateHandler(notification -> { /* ... */ return Mono.empty(); });
     }
 }
 ```

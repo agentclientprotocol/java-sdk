@@ -102,10 +102,10 @@ class ClientDuplicateHandlerTest {
 		AcpClient.SyncSpec sync = AcpClient.sync(new MockAcpClientTransport());
 		List<Runnable> nullRegistrations = List.of(() -> async.readTextFileHandler(null),
 				() -> async.createElicitationHandler(null), () -> async.completeElicitationHandler(null),
-				() -> async.sessionUpdateConsumer(null), () -> async.requestHandler("_x/a", null),
+				() -> async.sessionUpdateHandler(null), () -> async.requestHandler("_x/a", null),
 				() -> async.notificationHandler("_x/b", null), () -> async.extRequestHandler("_x/c", null),
 				() -> async.extNotificationHandler("_x/d", null), () -> sync.readTextFileHandler(null),
-				() -> sync.killTerminalHandler(null), () -> sync.sessionUpdateConsumer(null),
+				() -> sync.killTerminalHandler(null), () -> sync.sessionUpdateHandler(null),
 				() -> sync.requestHandler("_x/e", null), () -> sync.extRequestHandler("_x/f", null),
 				() -> sync.extNotificationHandler("_x/g", null));
 		for (Runnable registration : nullRegistrations) {

@@ -52,7 +52,7 @@ import reactor.core.scheduler.Schedulers;
  * var transport = new StdioAcpClientTransport(params, AcpJsonMapper.createDefault());
  * try (AcpSyncClient client = AcpClient.sync(transport)
  *         .requestTimeout(Duration.ofMinutes(5))
- *         .sessionUpdateConsumer(notification -> System.out.println(notification.update()))
+ *         .sessionUpdateHandler(notification -> System.out.println(notification.update()))
  *         .build()) {
  *     client.initialize();
  *     String sessionId = client
@@ -83,13 +83,13 @@ import reactor.core.scheduler.Schedulers;
  *
  * <h2>Session updates and ordering</h2>
  *
- * <p>{@code session/update} notifications go to the session update consumers one at a time, in the
+ * <p>{@code session/update} notifications go to the session update handlers one at a time, in the
  * order the agent sent them. A response completes its caller only after every notification received
  * before it has been handled, so when {@code prompt} returns, the turn's updates have all been
  * handled. In the same way, a request from the agent reaches its handler only after the updates the
  * agent sent before it, so a permission request comes after the {@code tool_call} update that
- * announced the tool call. A consumer must therefore not wait for a prompt in flight to complete.
- * The one exception: a consumer that is itself waiting for an answer to a request it sent does not
+ * announced the tool call. A handler must therefore not wait for a prompt in flight to complete.
+ * The one exception: a handler that is itself waiting for an answer to a request it sent does not
  * hold back the agent's requests or that answer.
  *
  * <h2>Timeouts and cancellation</h2>
@@ -164,7 +164,7 @@ public interface AcpClient {
 
 	/**
 	 * Configures and builds an {@link AcpAsyncClient}: the client's capabilities and info, the
-	 * request timeout, the session update consumers, and the handlers for the agent's requests and
+	 * request timeout, the session update handlers, and the handlers for the agent's requests and
 	 * notifications, each returning a Reactor {@code Mono}. Get one from
 	 * {@link AcpClient#async(AcpClientTransport)}. For blocking handlers, use {@link SyncSpec}.
 	 *
@@ -198,7 +198,7 @@ public interface AcpClient {
 
 		/** The typed setter of each agent-to-client notification the SDK models. */
 		private static final Map<String, String> TYPED_NOTIFICATION_SETTERS = Map.of(
-				AcpSchema.METHOD_SESSION_UPDATE, "sessionUpdateConsumer",
+				AcpSchema.METHOD_SESSION_UPDATE, "sessionUpdateHandler",
 				AcpSchema.METHOD_ELICITATION_COMPLETE, "completeElicitationHandler");
 
 		private final AcpClientTransport transport;
@@ -219,10 +219,10 @@ public interface AcpClient {
 
 		private final Map<String, AcpClientSession.NotificationHandler> notificationHandlers = new HashMap<>();
 
-		private final List<Function<AcpSchema.SessionNotification, Mono<Void>>> sessionUpdateConsumers = new ArrayList<>();
+		private final List<Function<AcpSchema.SessionNotification, Mono<Void>>> sessionUpdateHandlers = new ArrayList<>();
 
-		/** Receives the session updates only while no consumer is added. */
-		private @Nullable Function<AcpSchema.SessionNotification, Mono<Void>> defaultSessionUpdateConsumer;
+		/** Receives the session updates only while no handler is added. */
+		private @Nullable Function<AcpSchema.SessionNotification, Mono<Void>> defaultSessionUpdateHandler;
 
 		private @Nullable Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> createElicitationHandler;
 
@@ -488,50 +488,50 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a consumer for {@code session/update} notifications: the message and thought chunks,
+		 * Adds a handler for {@code session/update} notifications: the message and thought chunks,
 		 * tool calls, plans and other updates the agent streams during a prompt turn, and the
-		 * updates it sends between turns. The consumer's {@code Mono} completes when it has
+		 * updates it sends between turns. The handler's {@code Mono} completes when it has
 		 * finished with a notification.
 		 *
 		 * <p>Notifications are delivered one at a time, in the order the agent sent them, and each
-		 * goes to every consumer added: the next one waits until all consumers have finished with
+		 * goes to every handler added: the next one waits until all handlers have finished with
 		 * this one. A response from the agent, such as a prompt's, completes its caller only after
-		 * the consumers have finished with every notification sent before it, so the updates of a
-		 * turn are all handled when {@code prompt} returns. A slow consumer therefore delays
-		 * responses, and the wait counts against the request timeout. A consumer must not wait for
-		 * a prompt in flight to complete: that prompt waits for the consumer. A consumer that fails
-		 * is logged, and the next notification follows. Consumers add up; the first one added
-		 * replaces the {@link #defaultSessionUpdateConsumer default consumer}, if one is set.
-		 * @param sessionUpdateConsumer the consumer
+		 * the handlers have finished with every notification sent before it, so the updates of a
+		 * turn are all handled when {@code prompt} returns. A slow handler therefore delays
+		 * responses, and the wait counts against the request timeout. A handler must not wait for
+		 * a prompt in flight to complete: that prompt waits for the handler. A handler that fails
+		 * is logged, and the next notification follows. Handlers add up; the first one added
+		 * replaces the {@link #defaultSessionUpdateHandler default handler}, if one is set.
+		 * @param sessionUpdateHandler the handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code sessionUpdateConsumer} is null
+		 * @throws IllegalArgumentException if {@code sessionUpdateHandler} is null
 		 */
-		public AsyncSpec sessionUpdateConsumer(
-				Function<AcpSchema.SessionNotification, Mono<Void>> sessionUpdateConsumer) {
-			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
-			this.sessionUpdateConsumers.add(sessionUpdateConsumer);
+		public AsyncSpec sessionUpdateHandler(
+				Function<AcpSchema.SessionNotification, Mono<Void>> sessionUpdateHandler) {
+			Assert.notNull(sessionUpdateHandler, "Session update handler must not be null");
+			this.sessionUpdateHandlers.add(sessionUpdateHandler);
 			return this;
 		}
 
 		/**
-		 * Sets the consumer that receives {@code session/update} notifications when no
-		 * {@link #sessionUpdateConsumer} is added: a default that the application's own consumers
+		 * Sets the handler that receives {@code session/update} notifications when no
+		 * {@link #sessionUpdateHandler} is added: a default that the application's own handlers
 		 * replace rather than run beside, whichever is registered first. It is meant for
 		 * frameworks, which set a default (such as logging each update at DEBUG) before handing
-		 * the builder to the application's customizers. It is delivered like a consumer added
-		 * with {@code sessionUpdateConsumer}.
-		 * @param consumer the default consumer
+		 * the builder to the application's customizers. It is delivered like a handler added
+		 * with {@code sessionUpdateHandler}.
+		 * @param handler the default handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code consumer} is null
-		 * @throws IllegalStateException if a default consumer is already set
+		 * @throws IllegalArgumentException if {@code handler} is null
+		 * @throws IllegalStateException if a default handler is already set
 		 */
-		public AsyncSpec defaultSessionUpdateConsumer(Function<AcpSchema.SessionNotification, Mono<Void>> consumer) {
-			Assert.notNull(consumer, "Default session update consumer must not be null");
-			if (this.defaultSessionUpdateConsumer != null) {
+		public AsyncSpec defaultSessionUpdateHandler(Function<AcpSchema.SessionNotification, Mono<Void>> handler) {
+			Assert.notNull(handler, "Default session update handler must not be null");
+			if (this.defaultSessionUpdateHandler != null) {
 				throw new IllegalStateException(
-						"A default session update consumer is already set; defaultSessionUpdateConsumer was called twice");
+						"A default session update handler is already set; defaultSessionUpdateHandler was called twice");
 			}
-			this.defaultSessionUpdateConsumer = consumer;
+			this.defaultSessionUpdateHandler = handler;
 			return this;
 		}
 
@@ -756,24 +756,24 @@ public interface AcpClient {
 		public AcpAsyncClient build() {
 			checkCapabilitiesHaveHandlers();
 
-			// Set up session update notification handler: the application's consumers, or else the
+			// Set up session update notification handler: the application's handlers, or else the
 			// default one
-			List<Function<AcpSchema.SessionNotification, Mono<Void>>> consumers = new ArrayList<>(
-					sessionUpdateConsumers);
-			Function<AcpSchema.SessionNotification, Mono<Void>> defaultConsumer = this.defaultSessionUpdateConsumer;
-			if (consumers.isEmpty() && defaultConsumer != null) {
-				consumers.add(defaultConsumer);
+			List<Function<AcpSchema.SessionNotification, Mono<Void>>> updateHandlers = new ArrayList<>(
+					sessionUpdateHandlers);
+			Function<AcpSchema.SessionNotification, Mono<Void>> defaultHandler = this.defaultSessionUpdateHandler;
+			if (updateHandlers.isEmpty() && defaultHandler != null) {
+				updateHandlers.add(defaultHandler);
 			}
 			Map<String, AcpClientSession.NotificationHandler> notifications = new HashMap<>(notificationHandlers);
-			if (!consumers.isEmpty()) {
+			if (!updateHandlers.isEmpty()) {
 				notifications.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
 					AcpSchema.SessionNotification notification = transport.unmarshalParams(params,
 							new TypeRef<AcpSchema.SessionNotification>() {
 							});
 					logger.debug("Received session update for session: {}", notification.sessionId());
 
-					// Call all registered consumers
-					return Mono.when(consumers.stream().map(consumer -> consumer.apply(notification)).toList());
+					// Call all registered handlers
+					return Mono.when(updateHandlers.stream().map(handler -> handler.apply(notification)).toList());
 				});
 			}
 
@@ -823,11 +823,11 @@ public interface AcpClient {
 
 	/**
 	 * Configures and builds an {@link AcpSyncClient}: the client's capabilities and info, the
-	 * request timeout, the session update consumers, and the handlers for the agent's requests and
+	 * request timeout, the session update handlers, and the handlers for the agent's requests and
 	 * notifications, each returning a plain value. Get one from
 	 * {@link AcpClient#sync(AcpClientTransport)}.
 	 *
-	 * <p>Handlers and session update consumers run on the sync builder's handler executor, not
+	 * <p>Handlers and session update handlers run on the sync builder's handler executor, not
 	 * on the transport's thread, so they may block. A request is handed to its handler once the
 	 * session updates before it have been handled, without waiting for other handlers, so several
 	 * handlers can run at the same time and state they share must be thread-safe. A request handler
@@ -840,7 +840,7 @@ public interface AcpClient {
 
 		private final AsyncSpec asyncSpec;
 
-		/** Where the handlers and consumers run; read when one is called. */
+		/** Where the handlers run; read when one is called. */
 		private Scheduler handlerScheduler = SyncHandlerScheduler.DEFAULT;
 
 		private SyncSpec(AcpClientTransport transport) {
@@ -848,7 +848,7 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Sets the executor the handlers and session update consumers run on, for example
+		 * Sets the executor the handlers run on, for example
 		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool. Without
 		 * it each call runs on a virtual thread of its own on JDK 21 and later, and before that on
 		 * a pool of daemon threads shared by every synchronous client in the JVM, which has no size
@@ -1133,23 +1133,23 @@ public interface AcpClient {
 		}
 
 		/**
-		 * Adds a consumer for {@code session/update} notifications: the message and thought chunks,
+		 * Adds a handler for {@code session/update} notifications: the message and thought chunks,
 		 * tool calls, plans and other updates the agent streams during a prompt turn, and the
-		 * updates it sends between turns. The consumer runs on
+		 * updates it sends between turns. The handler runs on
 		 * the sync builder's handler executor and has finished with a notification when it
 		 * returns.
 		 *
 		 * <p>Notifications are delivered one at a time, in the order the agent sent them, and each
-		 * goes to every consumer added: the next one waits until all consumers have finished with
+		 * goes to every handler added: the next one waits until all handlers have finished with
 		 * this one. A response from the agent, such as a prompt's, completes its caller only after
-		 * the consumers have finished with every notification sent before it, so the updates of a
-		 * turn are all handled when {@code prompt} returns. A slow consumer therefore delays
-		 * responses, and the wait counts against the request timeout. A consumer must not wait for
-		 * a prompt in flight to complete: that prompt waits for the consumer. A consumer that fails
+		 * the handlers have finished with every notification sent before it, so the updates of a
+		 * turn are all handled when {@code prompt} returns. A slow handler therefore delays
+		 * responses, and the wait counts against the request timeout. A handler must not wait for
+		 * a prompt in flight to complete: that prompt waits for the handler. A handler that fails
 		 * is logged, and the next notification follows.
 		 *
 		 * <pre>{@code
-		 * .sessionUpdateConsumer(notification -> {
+		 * .sessionUpdateHandler(notification -> {
 		 *     if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 		 *             && chunk.content() instanceof AcpSchema.TextContent text) {
 		 *         System.out.print(text.text());
@@ -1157,35 +1157,35 @@ public interface AcpClient {
 		 * })
 		 * }</pre>
 		 *
-		 * @param sessionUpdateConsumer the consumer
+		 * @param sessionUpdateHandler the handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code sessionUpdateConsumer} is null
+		 * @throws IllegalArgumentException if {@code sessionUpdateHandler} is null
 		 */
-		public SyncSpec sessionUpdateConsumer(Consumer<AcpSchema.SessionNotification> sessionUpdateConsumer) {
-			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
-			// Convert sync consumer to async Function
-			asyncSpec.sessionUpdateConsumer(notification -> Mono
-				.fromRunnable(HandlerFailures.guard(() -> sessionUpdateConsumer.accept(notification)))
+		public SyncSpec sessionUpdateHandler(Consumer<AcpSchema.SessionNotification> sessionUpdateHandler) {
+			Assert.notNull(sessionUpdateHandler, "Session update handler must not be null");
+			// Convert sync handler to async Function
+			asyncSpec.sessionUpdateHandler(notification -> Mono
+				.fromRunnable(HandlerFailures.guard(() -> sessionUpdateHandler.accept(notification)))
 				.subscribeOn(this.handlerScheduler)
 				.then());
 			return this;
 		}
 
 		/**
-		 * Sets the consumer that receives {@code session/update} notifications when no
-		 * {@link #sessionUpdateConsumer} is added; the application's own consumers replace it,
+		 * Sets the handler that receives {@code session/update} notifications when no
+		 * {@link #sessionUpdateHandler} is added; the application's own handlers replace it,
 		 * whichever is registered first. Meant for frameworks; see
-		 * {@link AsyncSpec#defaultSessionUpdateConsumer(Function)}. It runs on the handler
+		 * {@link AsyncSpec#defaultSessionUpdateHandler(Function)}. It runs on the handler
 		 * executor.
-		 * @param consumer the default consumer
+		 * @param handler the default handler
 		 * @return this builder
-		 * @throws IllegalArgumentException if {@code consumer} is null
-		 * @throws IllegalStateException if a default consumer is already set
+		 * @throws IllegalArgumentException if {@code handler} is null
+		 * @throws IllegalStateException if a default handler is already set
 		 */
-		public SyncSpec defaultSessionUpdateConsumer(Consumer<AcpSchema.SessionNotification> consumer) {
-			Assert.notNull(consumer, "Default session update consumer must not be null");
-			asyncSpec.defaultSessionUpdateConsumer(notification -> Mono
-				.fromRunnable(HandlerFailures.guard(() -> consumer.accept(notification)))
+		public SyncSpec defaultSessionUpdateHandler(Consumer<AcpSchema.SessionNotification> handler) {
+			Assert.notNull(handler, "Default session update handler must not be null");
+			asyncSpec.defaultSessionUpdateHandler(notification -> Mono
+				.fromRunnable(HandlerFailures.guard(() -> handler.accept(notification)))
 				.subscribeOn(this.handlerScheduler)
 				.then());
 			return this;

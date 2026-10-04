@@ -39,7 +39,7 @@ import reactor.core.publisher.Mono;
  *
  * <pre>{@code
  * AcpAsyncClient client = AcpClient.async(transport)
- *     .sessionUpdateConsumer(notification -> Mono.fromRunnable(
+ *     .sessionUpdateHandler(notification -> Mono.fromRunnable(
  *         () -> System.out.println(notification.update())))
  *     .build();
  *
@@ -342,7 +342,7 @@ public class AcpAsyncClient {
 
 	/**
 	 * Reopens a session the agent kept ({@code session/load}). The agent replays the conversation
-	 * as session updates, which reach the session update consumers before this call completes, then
+	 * as session updates, which reach the session update handlers before this call completes, then
 	 * answers. Only an agent that advertises {@code loadSession} supports it; for any other the call
 	 * fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent.
 	 * @param request the session ID, the working directory and the MCP servers
@@ -529,16 +529,16 @@ public class AcpAsyncClient {
 	/**
 	 * Sends a prompt to a session ({@code session/prompt}) and returns the agent's answer at the
 	 * end of the turn, with the stop reason. Meanwhile the agent streams the turn as
-	 * {@code session/update} notifications to the session update consumers. A session takes one
+	 * {@code session/update} notifications to the session update handlers. A session takes one
 	 * prompt at a time: a Java agent answers a second prompt sent before the first is answered with
 	 * {@code -32600}.
 	 *
-	 * <p>The answer is delivered only once the session update consumers have finished with every
+	 * <p>The answer is delivered only once the session update handlers have finished with every
 	 * notification the agent sent before it, so what they collected for the turn is complete when
-	 * the stop reason arrives. A slow consumer delays the answer, and the wait counts against the
-	 * prompt timeout, if one is set. The one exception: a consumer that was already running when
+	 * the stop reason arrives. A slow update handler delays the answer, and the wait counts against the
+	 * prompt timeout, if one is set. The one exception: a update handler that was already running when
 	 * the prompt was sent, and is still running when its answer arrives, is not waited for, since
-	 * it may be the one waiting for the prompt. A consumer must therefore not wait for this prompt
+	 * it may be the one waiting for the prompt. A update handler must therefore not wait for this prompt
 	 * to complete.
 	 *
 	 * <p>A prompt is not bound by the builder's {@code requestTimeout}: by default it waits for the
@@ -568,7 +568,7 @@ public class AcpAsyncClient {
 	 * notification: the agent does not answer it.
 	 *
 	 * <p>The cancel does not end the turn. The agent may still send {@code session/update}s, which
-	 * reach the session update consumers as usual, and then answers the pending prompt with stop
+	 * reach the session update handlers as usual, and then answers the pending prompt with stop
 	 * reason {@code cancelled}. Send the next prompt on the session once that answer has arrived:
 	 * until then the agent refuses it (ACP v1, prompt turn, Cancellation).
 	 * @param notification the session ID
@@ -702,7 +702,7 @@ public class AcpAsyncClient {
 	/**
 	 * Closes the client gracefully. Requests still waiting for an answer, a prompt included, fail
 	 * at once, and the agent's requests being handled are cancelled and answered {@code -32800}.
-	 * Session updates already received are still handed to the consumers, waiting at most the
+	 * Session updates already received are still handed to the update handlers, waiting at most the
 	 * request timeout, and then the transport closes gracefully. For a
 	 * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} that closes the
 	 * agent's input first and gives the agent time to exit.

@@ -26,8 +26,8 @@ import reactor.core.publisher.Mono;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The client bean logs session updates at DEBUG only while the application adds no consumer of
- * its own: an application consumer replaces that default instead of running beside it.
+ * The client bean logs session updates at DEBUG only while the application adds no update handler of
+ * its own: an application update handler replaces that default instead of running beside it.
  */
 class DefaultSessionUpdateLoggingTest {
 
@@ -62,7 +62,7 @@ class DefaultSessionUpdateLoggingTest {
 	@Test
 	void anApplicationConsumerReplacesTheDefault() {
 		List<AcpSchema.SessionNotification> received = new CopyOnWriteArrayList<>();
-		prompt(List.of(spec -> spec.sessionUpdateConsumer(notification -> {
+		prompt(List.of(spec -> spec.sessionUpdateHandler(notification -> {
 			received.add(notification);
 			return Mono.empty();
 		})));

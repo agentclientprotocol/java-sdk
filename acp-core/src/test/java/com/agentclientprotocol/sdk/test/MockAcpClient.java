@@ -330,7 +330,7 @@ public class MockAcpClient {
 				// terminal handlers, so it does not advertise terminal.
 				.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), false))
 				.requestTimeout(requestTimeout)
-				.sessionUpdateConsumer(notification -> {
+				.sessionUpdateHandler(notification -> {
 					mockClient.receivedUpdates.add(notification);
 					mockClient.updateLatch.countDown();
 					return Mono.empty();

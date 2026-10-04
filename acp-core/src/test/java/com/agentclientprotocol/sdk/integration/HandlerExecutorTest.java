@@ -65,7 +65,7 @@ class HandlerExecutorTest {
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
 			.handlerExecutor(clientPool)
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(n -> updateThread.set(Thread.currentThread().getName()))
+			.sessionUpdateHandler(n -> updateThread.set(Thread.currentThread().getName()))
 			.extRequestHandler("_x/where", params -> {
 				extThread.set(Thread.currentThread().getName());
 				return Map.of();
@@ -112,7 +112,7 @@ class HandlerExecutorTest {
 			.build();
 		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
-			.sessionUpdateConsumer(n -> updateThread.compareAndSet(null, Thread.currentThread()))
+			.sessionUpdateHandler(n -> updateThread.compareAndSet(null, Thread.currentThread()))
 			.build();
 		try {
 			agent.start();

@@ -73,8 +73,8 @@ class MutinyReturnValueHandlersTest {
 				promptContext(prompt));
 		assertThat(result).isEqualTo(AcpSchema.PromptResponse.endTurn());
 		verify(prompt).sendMessage("text");
-		verify(prompt).sendUpdate(any(AcpSchema.AgentMessageChunk.class));
-		verify(prompt).sendUpdate(thought);
+		verify(prompt).sendSessionUpdate(any(AcpSchema.AgentMessageChunk.class));
+		verify(prompt).sendSessionUpdate(thought);
 	}
 
 	@Test

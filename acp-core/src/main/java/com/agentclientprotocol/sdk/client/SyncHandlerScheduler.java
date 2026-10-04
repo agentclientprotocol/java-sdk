@@ -12,12 +12,12 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * The default executor of synchronous clients' handlers, shared by every synchronous client in the
- * JVM that was not given a {@code handlerExecutor}, and created on first use: on JDK 21 and later
- * a virtual thread per handler call, named {@code acp-sync-handler}; before, a cached pool of
- * daemon threads of that name. Its threads may block, and neither kind keeps the JVM alive. On JDK
- * 21 to 23 a handler that blocks inside a {@code synchronized} block pins its carrier thread (JEP
- * 491 removed that in JDK 24).
+ * The default executor of synchronous clients' handlers and session update handlers, shared by
+ * every synchronous client in the JVM that was not given a {@code handlerExecutor}, and created on
+ * first use: on JDK 21 and later a virtual thread per handler call, named
+ * {@code acp-sync-handler}; before, a cached pool of daemon threads of that name. Its threads may
+ * block, and neither kind keeps the JVM alive. On JDK 21 to 23 a handler that blocks inside a
+ * {@code synchronized} block pins its carrier thread (JEP 491 removed that in JDK 24).
  */
 final class SyncHandlerScheduler {
 

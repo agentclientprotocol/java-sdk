@@ -38,7 +38,7 @@ public class InMemoryAgentTransport {
 
 	/** A client on the other end, collecting the agent's message chunks. */
 	AcpSyncClient client() {
-		return AcpClient.sync(pair.clientTransport()).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
+		return AcpClient.sync(pair.clientTransport()).requestTimeout(TIMEOUT).sessionUpdateHandler(notification -> {
 			if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 					&& chunk.content() instanceof AcpSchema.TextContent text) {
 				messages.add(text.text());

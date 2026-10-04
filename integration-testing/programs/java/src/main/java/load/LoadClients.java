@@ -54,7 +54,7 @@ public class LoadClients {
 						sharedConnection ? shared
 								: HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).executor(httpExecutor).build()))
 				.requestTimeout(Duration.ofSeconds(60))
-				.sessionUpdateConsumer(n -> {
+				.sessionUpdateHandler(n -> {
 					updates.incrementAndGet();
 					return Mono.empty();
 				})
