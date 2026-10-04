@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
@@ -166,7 +167,8 @@ public class AcpAgentSession implements AcpSession {
 		// twice) fails construction rather than handing back a session that can never talk.
 		Throwable failure = this.startFailure;
 		if (failure != null) {
-			throw notStarted(failure);
+			// A refusal to start at all (a reused transport) is a misuse, not a lost connection.
+			throw new IllegalStateException("ACP agent transport is not started: " + failure.getMessage(), failure);
 		}
 	}
 
@@ -177,8 +179,8 @@ public class AcpAgentSession implements AcpSession {
 		dismissPendingResponses(error);
 	}
 
-	private static IllegalStateException notStarted(Throwable cause) {
-		return new IllegalStateException("ACP agent transport is not started: " + cause.getMessage(), cause);
+	private static AcpConnectionException notStarted(Throwable cause) {
+		return new AcpConnectionException("ACP agent transport is not started: " + cause.getMessage(), cause);
 	}
 
 	private void dismissPendingResponses() {

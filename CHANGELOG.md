@@ -379,6 +379,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: a lost connection fails a request with `AcpConnectionException`, on both sides.** A
+  request still waiting when the transport ended failed with a plain `RuntimeException` ("ACP
+  session with agent terminated"), and a request or notification sent after that with an
+  `IllegalStateException` ("ACP client transport is not connected: ..." or "ACP agent transport is
+  not started: ..."), so `catch (AcpConnectionException e)` missed the commonest connection failure,
+  a peer that went away. Both are now `AcpConnectionException`, with the same messages and the
+  transport's failure as the cause; requests waiting when a session is closed fail the same way.
+  Building a client or agent on a transport that refuses at once (one already in use) still throws
+  `IllegalStateException`. Migration: replace `catch (IllegalStateException e)` or
+  `catch (RuntimeException e)` around calls that meant "the connection is gone" with
+  `catch (AcpConnectionException e)`.
+
 - **Breaking: a peer's error that escapes a handler is passed on unchanged.** A handler that called
   the other side and let the resulting `AcpError` escape answered its own request `-32603`, losing
   the peer's code (a `-32601` or `-32002` became an internal error). The `AcpError`'s JSON-RPC

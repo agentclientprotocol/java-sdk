@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -166,7 +167,8 @@ final class PendingResponses {
 	}
 
 	/**
-	 * Fails every request still waiting for a response. Each entry is removed before it is
+	 * Fails every request still waiting for a response with an {@link AcpConnectionException},
+	 * whose cause, when there is one, is why the session ended. Each entry is removed before it is
 	 * failed: a request registered while this runs is either failed here or stays waiting
 	 * for its response, never dropped unsignalled.
 	 */
@@ -176,7 +178,9 @@ final class PendingResponses {
 			MonoSink<AcpSchema.JSONRPCResponse> sink = this.pending.remove(requestId);
 			if (sink != null) {
 				logger.warn("Abruptly terminating exchange for request {}", requestId);
-				sink.error(new RuntimeException("ACP session with " + this.peer + " terminated", cause));
+				String message = "ACP session with " + this.peer + " terminated";
+				sink.error((cause != null) ? new AcpConnectionException(message, cause)
+						: new AcpConnectionException(message));
 			}
 		}
 	}

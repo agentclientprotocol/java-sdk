@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.MockAcpClientTransport;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -97,7 +98,7 @@ class AcpClientSessionLifecycleTest {
 		transport.connection.tryEmitError(cause);
 
 		assertThatThrownBy(() -> pending.block(WAIT)).hasMessage("ACP session with agent terminated").hasCause(cause);
-		assertThatThrownBy(() -> pendingInitialize(session).block(WAIT)).isInstanceOf(IllegalStateException.class)
+		assertThatThrownBy(() -> pendingInitialize(session).block(WAIT)).isInstanceOf(AcpConnectionException.class)
 			.hasMessage("ACP client transport is not connected: socket reset");
 	}
 
@@ -108,7 +109,7 @@ class AcpClientSessionLifecycleTest {
 
 		transport.termination.tryEmitEmpty();
 
-		assertThatThrownBy(() -> pendingInitialize(session).block(WAIT)).isInstanceOf(IllegalStateException.class)
+		assertThatThrownBy(() -> pendingInitialize(session).block(WAIT)).isInstanceOf(AcpConnectionException.class)
 			.hasMessage("ACP client transport is not connected: ACP client transport terminated");
 	}
 
