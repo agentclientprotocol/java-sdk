@@ -8,10 +8,26 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
 /**
- * Captures generic type information at runtime for parameterized JSON (de)serialization.
- * Usage: TypeRef&lt;List&lt;Foo&gt;&gt; ref = new TypeRef&lt;&gt;(){};
+ * A Java type, generics included, for the SDK to read JSON as. Create one as an anonymous subclass,
+ * {@code new TypeRef<List<String>>() {}}, and pass it where the SDK reads a value whose type only
+ * you know: an extension method's result ({@code sendExtRequest(method, params, resultType)}), an
+ * extension handler's params ({@code extRequestHandler(method, paramsType, handler)}), or
+ * {@link AcpJsonMapper#readValue(String, TypeRef)} and
+ * {@link AcpJsonMapper#convertValue(Object, TypeRef)}. A plain {@code Class} cannot carry a type
+ * argument such as {@code String} in {@code List<String>}; the anonymous subclass keeps it.
  *
- * @param <T> the type to capture
+ * <p>For a type known only at runtime, such as a reflected method parameter's generic type, use
+ * {@link #of(Type)}. Instances are immutable and safe to share between threads.
+ *
+ * <p>Example, reading an extension method's result as a record:
+ * <pre>{@code
+ * record Pong(String text) {}
+ *
+ * TypeRef<Pong> pongType = new TypeRef<>() {};
+ * Pong pong = client.sendExtRequest("_example.com/ping", Map.of("text", "hi"), pongType);
+ * }</pre>
+ *
+ * @param <T> the type to read
  * @author Mark Pollack
  */
 public abstract class TypeRef<T> {
@@ -19,13 +35,10 @@ public abstract class TypeRef<T> {
 	private final Type type;
 
 	/**
-	 * Constructs a new TypeRef instance, capturing the generic type information of the
-	 * subclass. This constructor should be called from an anonymous subclass to capture
-	 * the actual type arguments. For example: <pre>
-	 * TypeRef&lt;List&lt;Foo&gt;&gt; ref = new TypeRef&lt;&gt;(){};
-	 * </pre>
-	 * @throws IllegalStateException if TypeRef is not subclassed with actual type
-	 * information
+	 * Captures the type argument of the anonymous subclass being created, such as
+	 * {@code List<String>} in {@code new TypeRef<List<String>>() {}}.
+	 * @throws IllegalStateException if the subclass gives no type argument, as in a raw
+	 * {@code new TypeRef() {}}
 	 */
 	protected TypeRef() {
 		Type superClass = getClass().getGenericSuperclass();
@@ -40,8 +53,8 @@ public abstract class TypeRef<T> {
 	}
 
 	/**
-	 * A type reference for a type known only at runtime, such as the reflected generic
-	 * type of a handler method's parameter.
+	 * Returns a type reference for a type known only at runtime, such as the reflected generic type
+	 * of a handler method's parameter.
 	 * @param type the type
 	 * @return a type reference to it
 	 * @throws IllegalArgumentException if the type is null
@@ -63,9 +76,9 @@ public abstract class TypeRef<T> {
 	}
 
 	/**
-	 * Returns the captured type information.
-	 * @return the Type representing the actual type argument captured by this TypeRef
-	 * instance
+	 * Returns the captured type: a {@code Class} for a plain type, or a {@code ParameterizedType}
+	 * for a generic one.
+	 * @return the type
 	 */
 	public Type getType() {
 		return type;

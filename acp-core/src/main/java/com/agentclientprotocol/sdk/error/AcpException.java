@@ -5,31 +5,38 @@
 package com.agentclientprotocol.sdk.error;
 
 /**
- * Base exception for all ACP-related errors.
+ * The base class of the SDK's own exceptions: catch it to handle, in one place, every failure the
+ * SDK raises about capabilities, the connection or timeouts. It does not cover
+ * {@link com.agentclientprotocol.sdk.spec.AcpError}, the failure of a request the peer answered
+ * with an error, which extends {@link RuntimeException} directly; catch both where every failure of
+ * a request matters.
  *
- * <p>
- * This is the root exception class for the ACP SDK. All ACP-specific exceptions extend
- * this class, enabling catch blocks to handle all ACP errors uniformly when desired.
- * </p>
- *
- * <p>
- * Exception hierarchy:
+ * <p>Subclasses:
  * <ul>
- * <li>{@link AcpException} - Base class for all ACP errors</li>
- * <li>{@link AcpProtocolException} - JSON-RPC protocol errors with error codes</li>
- * <li>{@link AcpCapabilityException} - Capability negotiation errors</li>
- * <li>{@link AcpConnectionException} - Transport/connection errors</li>
+ * <li>{@link AcpProtocolException}: what a handler throws to answer a request with a JSON-RPC
+ * error</li>
+ * <li>{@link AcpCapabilityException}: a call needs a capability the peer did not advertise</li>
+ * <li>{@link AcpConnectionException}: the transport could not send a message, or the connection
+ * ended</li>
+ * <li>{@link AcpTimeoutException}: a blocking call of the sync API got no answer in time</li>
  * </ul>
+ *
+ * <p>The sync API also throws a plain {@code AcpException} when a call fails with a checked
+ * exception, which it carries as the cause.
+ *
+ * <p>Every instance has a message (see {@link #getMessage()}), since a JSON-RPC error built from it
+ * needs one.
  *
  * @author Mark Pollack
  * @see AcpProtocolException
  * @see AcpCapabilityException
  * @see AcpConnectionException
+ * @see AcpTimeoutException
  */
 public class AcpException extends RuntimeException {
 
 	/**
-	 * Constructs a new ACP exception with the specified detail message.
+	 * Creates an exception with this message.
 	 * @param message the detail message
 	 */
 	public AcpException(String message) {
@@ -37,7 +44,7 @@ public class AcpException extends RuntimeException {
 	}
 
 	/**
-	 * Constructs a new ACP exception with the specified detail message and cause.
+	 * Creates an exception with this message and cause.
 	 * @param message the detail message
 	 * @param cause the cause of this exception
 	 */
@@ -46,7 +53,7 @@ public class AcpException extends RuntimeException {
 	}
 
 	/**
-	 * Constructs a new ACP exception with the specified cause.
+	 * Creates an exception for this cause; the message is the cause's description.
 	 * @param cause the cause of this exception
 	 */
 	public AcpException(Throwable cause) {
