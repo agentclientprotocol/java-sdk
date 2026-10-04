@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -195,6 +196,19 @@ class AcpAgentHttpAutoConfigurationTests {
 		this.runner.withUserConfiguration(EchoAgentConfiguration.class)
 			.withPropertyValues("spring.acp.agent.enabled=false", "spring.acp.agent.transport.type=http")
 			.run(context -> assertThat(context).doesNotHaveBean(StreamableHttpAcpAgentTransport.class));
+	}
+
+	@Test
+	void reactiveWebApplicationFailsTheStartup() {
+		new ReactiveWebApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+			.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.listener.port=0")
+			.run(context -> {
+				assertThat(context).hasFailed();
+				assertThat(context.getStartupFailure()).rootCause()
+					.hasMessageContaining("The ACP HTTP transport needs a servlet web application or the "
+							+ "standalone listener (acp-streamable-http-jetty); WebFlux is not supported");
+			});
 	}
 
 	@Test

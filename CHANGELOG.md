@@ -1043,6 +1043,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Spring Boot: `spring.acp.agent.enabled=false` turns the agent off on every transport.** The
+  stdio transport and the HTTP endpoint already backed off, but `AcpAgentAutoConfiguration` did
+  not: it still built the `AcpAgentFactory` from the `@AcpAgent` bean and still served the agent on
+  an `AcpAgentTransport` bean the application defined itself. With `enabled=false` it now creates
+  no agent beans and serves nothing, as Micronaut and Quarkus already did.
+
+- **Spring Boot: two `@AcpAgent` beans no longer fail the startup when
+  `spring.acp.agent.enabled=false`.** The startup failed with the error naming both beans, whose
+  advice was to set `spring.acp.agent.enabled=false`. Same cause and fix as the entry above.
+
+- **Spring Boot: `spring.acp.agent.transport.type=http` in a reactive (WebFlux) web application
+  fails the startup.** It served no endpoint and gave no error. The startup now fails with "The
+  ACP HTTP transport needs a servlet web application or the standalone listener
+  (acp-streamable-http-jetty); WebFlux is not supported".
+
 - **A prompt answers `cancelled` once `session/cancel` was received, whatever its handler
   returns.** ACP requires an agent to answer a cancelled prompt with stop reason `cancelled`. A
   handler that noticed the cancel and returned another stop reason within the grace period had

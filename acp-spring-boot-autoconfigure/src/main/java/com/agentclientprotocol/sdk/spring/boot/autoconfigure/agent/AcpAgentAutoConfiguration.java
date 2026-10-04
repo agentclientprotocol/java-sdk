@@ -28,6 +28,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -56,9 +57,13 @@ import org.springframework.util.ClassUtils;
  * the handler executor come from {@link AcpAgentProperties}. More than one {@code @AcpAgent} bean
  * fails the startup with an error naming them. On the HTTP endpoint every connection's agent calls
  * the same bean, so its handler methods must be thread-safe.
+ *
+ * <p>With {@code spring.acp.agent.enabled=false} it creates nothing: no factory and no agent, on
+ * any transport, however many {@code @AcpAgent} beans there are.
  */
 @AutoConfiguration(after = AcpAgentTransportAutoConfiguration.class)
 @ConditionalOnClass(AcpAgentSupport.class)
+@ConditionalOnProperty(prefix = "spring.acp.agent", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(AcpAgentProperties.class)
 public class AcpAgentAutoConfiguration {
 
