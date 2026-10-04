@@ -87,7 +87,7 @@ class AcpSettingsTest {
 	private static AcpClientProducers producers(AcpRuntimeConfig.Client client) {
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class);
 		when(config.client()).thenReturn(client);
-		return new AcpClientProducers(config);
+		return new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
 	}
 
 	private static AcpRuntimeConfig.Client client(AcpTransportType type, String command, URI ws, URI http) {

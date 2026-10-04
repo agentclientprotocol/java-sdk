@@ -93,7 +93,7 @@ class HostsAndProducersTest {
 		when(config.client().transport().type()).thenReturn(Optional.of(AcpTransportType.HTTP));
 		when(config.client().transport().websocket().connectTimeout()).thenReturn(Duration.ofSeconds(10));
 		when(config.client().transport().http().uri()).thenReturn(Optional.of(java.net.URI.create("http://localhost:9/acp")));
-		AcpClientProducers producers = new AcpClientProducers(config);
+		AcpClientProducers producers = new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
 		assertThat(producers.acpClientTransport()).isNotNull();
 
 		List<String> customized = new java.util.ArrayList<>();
@@ -111,7 +111,7 @@ class HostsAndProducersTest {
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
 		when(config.client().capabilities().readTextFile()).thenReturn(true);
 		when(config.client().capabilities().elicitationForm()).thenReturn(true);
-		AcpClientProducers producers = new AcpClientProducers(config);
+		AcpClientProducers producers = new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
 
 		assertThatThrownBy(
 				() -> producers.acpAsyncClient(InMemoryTransportPair.create().clientTransport(), List.of()))
@@ -181,7 +181,7 @@ class HostsAndProducersTest {
 			.build();
 		agent.start();
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
-		AcpClientProducers producers = new AcpClientProducers(config);
+		AcpClientProducers producers = new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
 		AcpSyncClient client = producers.acpSyncClient(producers.acpAsyncClient(pair.clientTransport(), customizers));
 		try {
 			client.initialize();

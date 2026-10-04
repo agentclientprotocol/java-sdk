@@ -42,14 +42,19 @@ public class AcpClientProducers {
 
 	private final AcpRuntimeConfig config;
 
-	AcpClientProducers(AcpRuntimeConfig config) {
+	private final AcpExecutors executors;
+
+	AcpClientProducers(AcpRuntimeConfig config, AcpExecutors executors) {
 		this.config = config;
+		this.executors = executors;
 	}
 
 	/**
 	 * Produces the transport the configuration selects, by the SDK's rule
 	 * ({@link AcpClientTransports}): a {@code type} that is set wins; otherwise the one transport
-	 * whose command or URI is set. Not connected yet; the client connects it.
+	 * whose command or URI is set. Not connected yet; the client connects it. The WebSocket and HTTP
+	 * transports run on the executor {@code quarkus.acp.handler-executor} selects (virtual threads
+	 * on JDK 21 and later by default) and create no pool of their own.
 	 * @return the client transport
 	 * @throws IllegalStateException when no transport is configured, several are without a type, or
 	 * the type lacks its command or URI; the message names the properties
@@ -59,7 +64,7 @@ public class AcpClientProducers {
 	@DefaultBean
 	public AcpClientTransport acpClientTransport() {
 		String prefix = AcpSettings.CLIENT_PREFIX + ".transport.";
-		return AcpClientTransports.create(settings(), AcpSettings.CLIENT_PREFIX)
+		return AcpClientTransports.create(settings(), AcpSettings.CLIENT_PREFIX, executors.transportThreads())
 			.orElseThrow(() -> new IllegalStateException("No ACP client transport is configured: set " + prefix
 					+ "stdio.command, " + prefix + "websocket.uri or " + prefix + "http.uri"));
 	}

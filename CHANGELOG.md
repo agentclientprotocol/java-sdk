@@ -406,6 +406,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Quarkus: handlers run on virtual threads by default on JDK 21 and later; new
+  `quarkus.acp.handler-executor=virtual|managed`.** The agent's handler methods ran on the
+  `ManagedExecutor` (the `executor-thread-*` worker pool). With the default, `virtual`, they now run
+  on Quarkus' own virtual-thread executor (`@VirtualThreads`, `quarkus-virtual-thread-*`) on JDK 21
+  and later, and on the `ManagedExecutor` before. The client bean's WebSocket and Streamable HTTP
+  transports run on the same executor, and create no pool of their own. What `virtual` does not
+  carry: MicroProfile Context Propagation contexts of the submitting thread. A handler has no CDI
+  request context of the caller's (a `@RequestScoped` bean needs `@ActivateRequestContext` on the
+  handler method), and no propagated security identity, transaction or OpenTelemetry context; the
+  Vert.x context is kept. JDK 21 to 23 pin a virtual thread's carrier when it blocks inside
+  `synchronized` (fixed in JDK 24, JEP 491). Migration: set `quarkus.acp.handler-executor=managed`
+  to keep the `ManagedExecutor` and the contexts it propagates.
+
 - **Micronaut: the listener and the client transports run on `TaskExecutors.VIRTUAL` too.** On JDK
   21 and later the HTTP/WebSocket listener and the auto-configured WebSocket and Streamable HTTP
   client transports run on Micronaut's virtual-thread executor, as the handlers already did, and

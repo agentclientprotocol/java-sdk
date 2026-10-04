@@ -21,7 +21,6 @@ import io.quarkus.arc.All;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.inject.Any;
 import jakarta.inject.Singleton;
-import org.eclipse.microprofile.context.ManagedExecutor;
 
 /**
  * Assembles the {@link AcpAgentSupport} builder for the application's {@code @AcpAgent} bean
@@ -30,9 +29,10 @@ import org.eclipse.microprofile.context.ManagedExecutor;
  * ({@code Uni}, and {@code Multi} from a prompt handler). The stdio host and the HTTP endpoint
  * build their agents from it; it exists only when an agent is served. Part of the extension's
  * wiring; an application does not use it directly.
- * <p>Handler methods block, so they run on the {@link ManagedExecutor}: Quarkus' worker pool, where
- * blocking work belongs (never the Vert.x event loop), with the application's contexts propagated,
- * rather than on a second pool of the SDK's.
+ * <p>Handler methods block, so they run on the executor {@code quarkus.acp.handler-executor}
+ * selects, never the Vert.x event loop and never a second pool of the SDK's: Quarkus'
+ * virtual-thread executor on JDK 21 and later by default, else its {@code ManagedExecutor} worker
+ * pool, which propagates the application's contexts.
  * <p>Handlers are discovered on the user's class (from the build-time index), not on the instance's
  * class, so a container subclass of the bean does not hide them. </p>
  *
@@ -94,7 +94,7 @@ public class AcpAgentAssembly {
 	private <T> AcpAgentSupport.Builder builder(Class<T> type) {
 		T bean = Arc.container().select(type, Any.Literal.INSTANCE).get();
 		return AcpAgents.builder(new AgentCandidate<>(type.getName(), type, () -> bean), settings, interceptors,
-				argumentResolvers, returnValueHandlers, Arc.container().select(ManagedExecutor.class).get());
+				argumentResolvers, returnValueHandlers, Arc.container().select(AcpExecutors.class).get().handlerExecutor());
 	}
 
 }

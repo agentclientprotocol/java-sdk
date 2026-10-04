@@ -14,6 +14,7 @@ import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentAssembly;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentClass;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpClientProducers;
+import com.agentclientprotocol.sdk.quarkus.runtime.AcpExecutors;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpConfigBuilder;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpEndpoint;
@@ -61,10 +62,15 @@ class AcpProcessor {
 		return new FeatureBuildItem(FEATURE);
 	}
 
-	/** The client beans, each created only when the application injects it. */
+	/**
+	 * The client beans, each created only when the application injects it, and the executor
+	 * they and the agent run on.
+	 */
 	@BuildStep
-	AdditionalBeanBuildItem clientBeans() {
-		return new AdditionalBeanBuildItem(AcpClientProducers.class);
+	void clientBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
+		beans.produce(new AdditionalBeanBuildItem(AcpClientProducers.class));
+		// The agent looks it up when it builds a handler chain, which Arc does not see.
+		beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpExecutors.class));
 	}
 
 	/** {@code @AcpAgent} alone makes a class a bean, a singleton unless it declares a scope. */

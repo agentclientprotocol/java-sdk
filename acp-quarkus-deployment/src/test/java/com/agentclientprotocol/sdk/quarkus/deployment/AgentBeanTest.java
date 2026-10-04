@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioAgentHost;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import io.quarkus.arc.Arc;
 import io.quarkus.test.QuarkusUnitTest;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -84,10 +85,17 @@ class AgentBeanTest {
 		assertThat(transport.messages).containsExactly("HELLO!");
 		// The derived initialize and the default session/new run through the interceptor beans too.
 		assertThat(interceptor.methods).containsExactly("initialize", "session/new", "session/prompt");
-		// The handler ran on Quarkus' worker pool, through the ManagedExecutor, not the SDK's own pool.
-		assertThat(Arc.container().instance(EchoAgent.class).get().threads).singleElement()
-			.asString()
-			.startsWith("executor-thread-");
+		// The handler ran on Quarkus' virtual-thread executor on JDK 21 and later, else on its
+		// worker pool through the ManagedExecutor; never on the SDK's own pool.
+		assertThat(Arc.container().instance(EchoAgent.class).get().threads).singleElement().satisfies(thread -> {
+			if (VirtualThreads.isSupported()) {
+				assertThat(VirtualThreads.isVirtual(thread)).as("virtual: %s", thread).isTrue();
+				assertThat(thread.getName()).startsWith("quarkus-virtual-thread-");
+			}
+			else {
+				assertThat(thread.getName()).startsWith("executor-thread-");
+			}
+		});
 	}
 
 	@AcpAgent(name = "echo")
@@ -96,7 +104,7 @@ class AgentBeanTest {
 		private final Shouter shouter;
 
 		/** The threads the prompt handler ran on. */
-		final List<String> threads = new CopyOnWriteArrayList<>();
+		final List<Thread> threads = new CopyOnWriteArrayList<>();
 
 		@Inject
 		EchoAgent(Shouter shouter) {
@@ -105,7 +113,7 @@ class AgentBeanTest {
 
 		@Prompt
 		AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, SyncPromptContext context, Suffix suffix) {
-			threads.add(Thread.currentThread().getName());
+			threads.add(Thread.currentThread());
 			AcpSchema.TextContent text = (AcpSchema.TextContent) request.prompt().get(0);
 			context.sendMessage(shouter.shout(text.text()) + suffix.value());
 			return AcpSchema.PromptResponse.endTurn();
