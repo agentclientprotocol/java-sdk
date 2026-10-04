@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.client;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -318,7 +319,11 @@ public class AcpAsyncClient {
 	/**
 	 * Creates an ACP session ({@code session/new}) for a working directory, with the MCP servers
 	 * the agent should connect to. The answer carries the session ID every later call for the
-	 * session uses, and optionally the session's modes and config options.
+	 * session uses, and optionally the session's modes and config options. A request that names
+	 * additional directories fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent unless
+	 * the agent advertises {@code sessionCapabilities.additionalDirectories}; so do
+	 * {@link #loadSession}, {@link #resumeSession} and {@link #forkSession}.
 	 * @param request the working directory, an absolute path, and the MCP servers
 	 * @return a {@code Mono} emitting the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
@@ -326,7 +331,8 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.NewSessionResponse> newSession(AcpSchema.NewSessionRequest request) {
 		Assert.notNull(request, "New session request must not be null");
 		logger.debug("Creating new session with cwd: {}", request.cwd());
-		return afterInitialize(AcpSchema.METHOD_SESSION_NEW, AcpAsyncClient::initializedOnly,
+		return afterInitialize(AcpSchema.METHOD_SESSION_NEW,
+				withDirectories(AcpAsyncClient::initializedOnly, request.additionalDirectories()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, request, NEW_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -342,7 +348,8 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.LoadSessionResponse> loadSession(AcpSchema.LoadSessionRequest request) {
 		Assert.notNull(request, "Load session request must not be null");
 		logger.debug("Loading session: {}", request.sessionId());
-		return afterInitialize(AcpSchema.METHOD_SESSION_LOAD, NegotiatedCapabilities::requireLoadSession,
+		return afterInitialize(AcpSchema.METHOD_SESSION_LOAD,
+				withDirectories(NegotiatedCapabilities::requireLoadSession, request.additionalDirectories()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, request, LOAD_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -422,7 +429,8 @@ public class AcpAsyncClient {
 			AcpSchema.ResumeSessionRequest request) {
 		Assert.notNull(request, "Resume session request must not be null");
 		logger.debug("Resuming session: {}", request.sessionId());
-		return afterInitialize(AcpSchema.METHOD_SESSION_RESUME, NegotiatedCapabilities::requireResumeSession,
+		return afterInitialize(AcpSchema.METHOD_SESSION_RESUME,
+				withDirectories(NegotiatedCapabilities::requireResumeSession, request.additionalDirectories()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, request,
 				RESUME_SESSION_RESPONSE_TYPE_REF));
 	}
@@ -437,7 +445,8 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.ForkSessionResponse> forkSession(AcpSchema.ForkSessionRequest request) {
 		Assert.notNull(request, "Fork session request must not be null");
 		logger.debug("Forking session: {}", request.sessionId());
-		return afterInitialize(AcpSchema.METHOD_SESSION_FORK, NegotiatedCapabilities::requireForkSession,
+		return afterInitialize(AcpSchema.METHOD_SESSION_FORK,
+				withDirectories(NegotiatedCapabilities::requireForkSession, request.additionalDirectories()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, request,
 				FORK_SESSION_RESPONSE_TYPE_REF));
 	}
@@ -630,6 +639,19 @@ public class AcpAsyncClient {
 	// --------------------------
 	// Order and capabilities
 	// --------------------------
+
+	/**
+	 * A session call's requirement, plus {@code sessionCapabilities.additionalDirectories} when
+	 * the request names additional directories: ACP lets a client send them only to an agent that
+	 * advertises it. No list or an empty one needs nothing more.
+	 */
+	private static Consumer<NegotiatedCapabilities> withDirectories(Consumer<NegotiatedCapabilities> requirement,
+			@Nullable List<String> additionalDirectories) {
+		if (additionalDirectories == null || additionalDirectories.isEmpty()) {
+			return requirement;
+		}
+		return requirement.andThen(NegotiatedCapabilities::requireAdditionalDirectories);
+	}
 
 	/** No capability needed beyond an initialized connection. */
 	private static void initializedOnly(NegotiatedCapabilities capabilities) {

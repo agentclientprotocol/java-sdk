@@ -803,7 +803,9 @@ public final class AcpSchema {
 	 * <p>
 	 * The protocol requires absolute paths for {@code cwd} and {@code additionalDirectories}; the
 	 * SDK does not check them. Pass an empty list, not {@code null}, when there are no MCP
-	 * servers.
+	 * servers. A non-empty {@code additionalDirectories} needs an agent that advertises
+	 * {@code sessionCapabilities.additionalDirectories}: for any other, the client fails the call
+	 * with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it.
 	 *
 	 * @param cwd the session's working directory, an absolute path; relative paths in the
 	 * session resolve against it
@@ -917,8 +919,9 @@ public final class AcpSchema {
 	 * {@link ResumeSessionRequest}. The protocol requires absolute paths for {@code cwd} and
 	 * {@code additionalDirectories}; the SDK does not check them. A non-empty
 	 * {@code additionalDirectories} is the complete list of additional workspace roots for the
-	 * session. Send it only to an agent that advertises
-	 * {@code sessionCapabilities.additionalDirectories}; the client does not check this.
+	 * session. Only an agent that advertises {@code sessionCapabilities.additionalDirectories}
+	 * accepts it: for any other, the client fails a call with a non-empty list with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it.
 	 *
 	 * @param sessionId the ACP session to reopen, as {@link NewSessionResponse#sessionId()} or
 	 * {@link SessionInfo#sessionId()} gave it
@@ -1421,8 +1424,9 @@ public final class AcpSchema {
 	 * {@code null}. The protocol requires absolute paths for {@code cwd} and
 	 * {@code additionalDirectories}; the SDK does not check them. A non-empty
 	 * {@code additionalDirectories} is the complete list of additional workspace roots for the
-	 * session. Send it only to an agent that advertises
-	 * {@code sessionCapabilities.additionalDirectories}; the client does not check this.
+	 * session. Only an agent that advertises {@code sessionCapabilities.additionalDirectories}
+	 * accepts it: for any other, the client fails a call with a non-empty list with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it.
 	 *
 	 * @param sessionId the ACP session to reopen
 	 * @param cwd the session's working directory, an absolute path
@@ -1498,7 +1502,9 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Fork session request - creates a new session branched from an existing one
+	 * Fork session request - creates a new session branched from an existing one. A non-empty
+	 * {@code additionalDirectories} needs an agent that advertises
+	 * {@code sessionCapabilities.additionalDirectories}, as for {@link NewSessionRequest}.
 	 */
 	@UnstableAcpApi
 	@JsonInclude(JsonInclude.Include.NON_NULL)

@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
  * annotations imply, the {@link AcpAgent#authMethods()}, and {@code agentInfo} from
  * {@link AcpAgent#name()} and {@link AcpAgent#version()}, in the protocol version negotiated with
  * the client. Declare one to look at the client's request, or to advertise what the annotations
- * cannot express, such as {@code sessionCapabilities.additionalDirectories}.
+ * cannot express, such as a capability's {@code _meta}.
  *
  * <p><b>Merge rule.</b> The derived response is the base, and the response this method returns
  * is laid over it:

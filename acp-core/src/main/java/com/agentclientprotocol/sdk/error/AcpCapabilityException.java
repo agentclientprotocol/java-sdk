@@ -16,7 +16,9 @@ package com.agentclientprotocol.sdk.error;
  * <li>On a client, the calls the agent must advertise: {@code loadSession}, {@code listSessions},
  * {@code closeSession}, {@code deleteSession}, {@code resumeSession}, {@code logout} and the
  * unstable fork and provider calls. The capabilities are {@code loadSession},
- * {@code sessionCapabilities.list} and its siblings, and {@code auth.logout}.</li>
+ * {@code sessionCapabilities.list} and its siblings, and {@code auth.logout}. Also a
+ * {@code session/new}, {@code session/load}, {@code session/resume} or {@code session/fork} that
+ * names additional directories, which needs {@code sessionCapabilities.additionalDirectories}.</li>
  * <li>On an agent, the requests to the client the client must advertise: reading and writing files
  * ({@code fs.readTextFile}, {@code fs.writeTextFile}), terminals ({@code terminal}) and elicitation
  * ({@code elicitation.form} or {@code elicitation.url} for the mode asked). Before the client's

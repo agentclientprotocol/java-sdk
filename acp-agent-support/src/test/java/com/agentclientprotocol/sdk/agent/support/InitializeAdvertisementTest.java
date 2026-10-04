@@ -45,6 +45,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.AuthMethodTerminal;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.Implementation;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
+import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SessionCapabilities;
@@ -204,6 +206,72 @@ class InitializeAdvertisementTest {
 				new AuthMethodAgent("api-key", "API key", "Reads FULL_API_KEY"),
 				new AuthMethodTerminal("login", "Log in", null, List.of("--login"),
 						Map.of("FULL_MODE", "login", "FULL_EMPTY", ""), null));
+	}
+
+	@AcpAgent(additionalDirectories = true)
+	static class MultiRootAgent {
+
+		final java.util.List<String> received = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+		@NewSession
+		NewSessionResponse newSession(NewSessionRequest request) {
+			received.addAll(request.additionalDirectories());
+			return new NewSessionResponse("multi-root", null, null);
+		}
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
+	}
+
+	@Test
+	void additionalDirectoriesAreAdvertisedWhenDeclared() {
+		InitializeResponse declared = initialize(AcpAgentSupport.create(new MultiRootAgent()), Function.identity());
+		assertThat(declared.agentCapabilities().sessionCapabilities()).isNotNull();
+		assertThat(declared.agentCapabilities().sessionCapabilities().additionalDirectories()).isNotNull();
+	}
+
+	@Test
+	void aClientSendsAdditionalDirectoriesToAnAgentThatDeclaresThem() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		MultiRootAgent bean = new MultiRootAgent();
+		AcpAgentSupport agent = AcpAgentSupport.create(bean)
+			.transport(pair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.build();
+		agent.start();
+		AcpAsyncClient client = AcpClient.async(pair.clientTransport()).requestTimeout(TIMEOUT).build();
+		try {
+			client.initialize().block(TIMEOUT);
+			assertThat(client.getAgentCapabilities().supportsAdditionalDirectories()).isTrue();
+			client.newSession(new NewSessionRequest("/work", List.of(), List.of("/shared"))).block(TIMEOUT);
+			assertThat(bean.received).containsExactly("/shared");
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			agent.close();
+		}
+	}
+
+	@AcpAgent(additionalDirectories = true)
+	static class MultiRootWithoutNewSession {
+
+		@Prompt
+		PromptResponse prompt() {
+			return PromptResponse.endTurn();
+		}
+
+	}
+
+	/** The default session/new would drop the directories, which ACP forbids. */
+	@Test
+	void declaringAdditionalDirectoriesNeedsANewSessionMethod() {
+		assertThatThrownBy(() -> AcpAgentSupport.create(new MultiRootWithoutNewSession()).buildFactory())
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("additionalDirectories")
+			.hasMessageContaining("@NewSession");
 	}
 
 	/** What the client concludes from the response: every annotated method is supported. */
