@@ -87,24 +87,19 @@ public class InterceptorChain {
 	}
 
 	/**
-	 * Calls {@code onError} on each interceptor in reverse order, whether or not its
-	 * {@code preInvoke} ran, until one returns a replacement. An exception from an interceptor is
-	 * logged, and the next one is asked.
+	 * Calls {@code onError}, in reverse order, on each interceptor whose {@code preInvoke}
+	 * returned {@code true}, the same interceptors {@link #triggerAfterCompletion} reaches, until
+	 * one returns a replacement. What an interceptor throws ends the walk and reaches the caller,
+	 * which answers with it (see {@link AcpInterceptor#onError}).
 	 * @param context the call's context
 	 * @param ex what the call threw
 	 * @return the first replacement, or null if no interceptor gave one
 	 */
 	public @Nullable Object applyOnError(AcpInvocationContext context, Throwable ex) {
-		for (int i = interceptors.size() - 1; i >= 0; i--) {
-			try {
-				Object replacement = interceptors.get(i).onError(context, ex);
-				if (replacement != null) {
-					return replacement;
-				}
-			}
-			catch (Exception e) {
-				log.warn("Interceptor onError threw exception", e);
-				// Continue with other interceptors
+		for (int i = this.interceptorIndex; i >= 0; i--) {
+			Object replacement = interceptors.get(i).onError(context, ex);
+			if (replacement != null) {
+				return replacement;
 			}
 		}
 		return null;

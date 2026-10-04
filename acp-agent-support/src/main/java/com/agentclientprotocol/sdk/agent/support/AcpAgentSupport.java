@@ -511,7 +511,7 @@ public class AcpAgentSupport implements AutoCloseable {
 			return (returnType != null) ? returnValueHandlers.handleReturnValue(result, returnType, context) : result;
 		}
 		catch (Exception e) {
-			Object replacement = chain.applyOnError(context, e);
+			Object replacement = onError(chain, context, e);
 			if (replacement != null) {
 				return replacement;
 			}
@@ -523,6 +523,32 @@ public class AcpAgentSupport implements AutoCloseable {
 		finally {
 			chain.triggerAfterCompletion(context, null);
 		}
+	}
+
+	/**
+	 * Asks the interceptors' {@code onError} for a replacement. An {@link AcpProtocolException}
+	 * one of them throws is the call's answer; anything else it throws is a fault in the
+	 * interceptor, answered as an internal error with the call's own failure kept as suppressed.
+	 */
+	private static @Nullable Object onError(InterceptorChain chain, AcpInvocationContext context, Exception failure) {
+		try {
+			return chain.applyOnError(context, failure);
+		}
+		catch (AcpProtocolException answer) {
+			return rethrow(answer, failure);
+		}
+		catch (RuntimeException fault) {
+			return rethrow(new IllegalStateException("An interceptor's onError failed for " + context.getAcpMethod(),
+					fault), failure);
+		}
+	}
+
+	@SuppressWarnings("ReferenceEquality") // the same exception instance, rethrown, cannot suppress itself
+	private static Object rethrow(RuntimeException thrown, Exception failure) {
+		if (thrown != failure) {
+			thrown.addSuppressed(failure);
+		}
+		throw thrown;
 	}
 
 	private @Nullable Object[] resolveArguments(AcpHandlerMethod handler, AcpInvocationContext context) {
