@@ -30,7 +30,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
  * thread-safe.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class PromptRequestResolver implements ArgumentResolver {
 

@@ -43,7 +43,6 @@ import org.jspecify.annotations.Nullable;
  * {@code @ExtRequest} method that returns one of these types has it sent as its result.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class DirectResponseHandler implements ReturnValueHandler {
 

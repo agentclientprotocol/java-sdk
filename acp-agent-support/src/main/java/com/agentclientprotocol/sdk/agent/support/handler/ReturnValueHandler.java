@@ -30,7 +30,6 @@ import org.jspecify.annotations.Nullable;
  * block there, as the built-in handler does to wait for a {@code Mono}.
  *
  * @author Mark Pollack
- * @since 1.0.0
  * @see ReturnValueHandlerComposite
  */
 public interface ReturnValueHandler {

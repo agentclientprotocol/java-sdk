@@ -23,7 +23,6 @@ import org.jspecify.annotations.Nullable;
  * handlers are added; adding handlers is not, so add them all before the first use.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class ReturnValueHandlerComposite implements ReturnValueHandler {
 

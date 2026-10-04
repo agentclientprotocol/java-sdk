@@ -39,7 +39,6 @@ import org.jspecify.annotations.Nullable;
  * one.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public final class AcpInvocationContext {
 

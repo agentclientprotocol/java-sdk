@@ -27,7 +27,6 @@ import org.jspecify.annotations.Nullable;
  * thread-safe; adding resolvers is not, so add them all before the first use.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class ArgumentResolverComposite implements ArgumentResolver {
 

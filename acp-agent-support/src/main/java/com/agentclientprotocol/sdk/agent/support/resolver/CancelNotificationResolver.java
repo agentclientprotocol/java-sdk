@@ -24,7 +24,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.CancelNotification;
  * carries only the session id.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class CancelNotificationResolver implements ArgumentResolver {
 

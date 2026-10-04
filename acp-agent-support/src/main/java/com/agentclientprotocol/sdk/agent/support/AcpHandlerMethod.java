@@ -25,7 +25,6 @@ import org.jspecify.annotations.Nullable;
  * its package to the SDK. Instances do not change after construction.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public final class AcpHandlerMethod {
 

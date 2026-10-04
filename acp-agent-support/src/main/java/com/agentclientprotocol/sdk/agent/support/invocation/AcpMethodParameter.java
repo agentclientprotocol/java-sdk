@@ -24,7 +24,6 @@ import org.jspecify.annotations.Nullable;
  * this key. The values are read once, at construction.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public final class AcpMethodParameter {
 

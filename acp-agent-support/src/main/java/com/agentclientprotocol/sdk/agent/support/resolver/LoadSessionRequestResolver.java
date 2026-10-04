@@ -23,7 +23,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.LoadSessionRequest;
  * a context that holds another request.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class LoadSessionRequestResolver implements ArgumentResolver {
 

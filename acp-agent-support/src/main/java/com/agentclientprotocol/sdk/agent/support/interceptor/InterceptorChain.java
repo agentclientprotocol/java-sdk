@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
  * for each call. It is not thread-safe.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class InterceptorChain {
 

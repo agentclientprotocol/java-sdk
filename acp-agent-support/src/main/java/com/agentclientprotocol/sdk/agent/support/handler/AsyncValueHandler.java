@@ -41,7 +41,6 @@ import reactor.core.publisher.Mono;
  * stateless and thread-safe.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class AsyncValueHandler implements ReturnValueHandler {
 

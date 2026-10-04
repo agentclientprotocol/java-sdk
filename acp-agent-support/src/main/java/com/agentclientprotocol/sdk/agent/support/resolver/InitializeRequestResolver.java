@@ -24,7 +24,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeRequest;
  * without one, the agent answers {@code initialize} from its annotations and calls no method.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class InitializeRequestResolver implements ArgumentResolver {
 

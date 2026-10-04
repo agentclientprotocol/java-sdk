@@ -24,7 +24,6 @@ import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
  * {@link ArgumentResolutionException}, and the client receives an internal error ({@code -32603}).
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class CapabilitiesResolver implements ArgumentResolver {
 

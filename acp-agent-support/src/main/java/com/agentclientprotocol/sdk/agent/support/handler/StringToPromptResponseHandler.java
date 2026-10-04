@@ -32,7 +32,6 @@ import org.jspecify.annotations.Nullable;
  * {@link ReturnValueHandlingException} for a non-empty string.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class StringToPromptResponseHandler implements ReturnValueHandler {
 

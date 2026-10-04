@@ -23,7 +23,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ResumeSessionRequest;
  * a context that holds another request.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class ResumeSessionRequestResolver implements ArgumentResolver {
 

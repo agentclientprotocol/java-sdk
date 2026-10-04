@@ -13,7 +13,6 @@ package com.agentclientprotocol.sdk.agent.support.handler;
  * custom {@link ReturnValueHandler}, which throws it for the same purpose.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class ReturnValueHandlingException extends RuntimeException {
 

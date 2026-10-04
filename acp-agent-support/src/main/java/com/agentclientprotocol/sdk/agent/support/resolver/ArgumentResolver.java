@@ -53,7 +53,6 @@ import org.jspecify.annotations.Nullable;
  * the error the client should see, such as invalid params ({@code -32602}).
  *
  * @author Mark Pollack
- * @since 1.0.0
  * @see ArgumentResolverComposite
  */
 public interface ArgumentResolver {

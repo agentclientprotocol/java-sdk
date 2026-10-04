@@ -32,7 +32,6 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
  * They are stateless and thread-safe.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class PromptContextResolver implements ArgumentResolver {
 

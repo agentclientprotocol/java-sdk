@@ -22,7 +22,6 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.CloseSessionRequest;
  * a context that holds another request.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class CloseSessionRequestResolver implements ArgumentResolver {
 

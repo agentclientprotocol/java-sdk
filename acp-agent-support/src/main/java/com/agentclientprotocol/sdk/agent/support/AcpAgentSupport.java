@@ -178,7 +178,6 @@ import org.slf4j.LoggerFactory;
  * {@code @NewSession} method, pass through the interceptors as a handler method's would.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class AcpAgentSupport implements AutoCloseable {
 

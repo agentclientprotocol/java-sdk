@@ -23,7 +23,6 @@ import com.agentclientprotocol.sdk.annotation.SessionId;
  * {@code @SessionId} parameter of another type no resolver applies, and building the agent fails.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class SessionIdResolver implements ArgumentResolver {
 

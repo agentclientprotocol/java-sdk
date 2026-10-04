@@ -36,7 +36,6 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * @author Mark Pollack
- * @since 1.0.0
  * @see AcpAgent
  * @see Authenticate
  */

@@ -25,7 +25,6 @@ import org.jspecify.annotations.Nullable;
  * {@code cancelled} once the cancel was received.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class VoidHandler implements ReturnValueHandler {
 

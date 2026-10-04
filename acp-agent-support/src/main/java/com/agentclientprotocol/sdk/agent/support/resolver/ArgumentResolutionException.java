@@ -13,7 +13,6 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
  * another error code, a resolver throws an {@code AcpProtocolException} instead.
  *
  * @author Mark Pollack
- * @since 1.0.0
  */
 public class ArgumentResolutionException extends RuntimeException {
 

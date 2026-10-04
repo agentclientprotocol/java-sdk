@@ -68,7 +68,6 @@ import org.jspecify.annotations.Nullable;
  * {@code onError} replaces the failure (see {@link #onError}).
  *
  * @author Mark Pollack
- * @since 1.0.0
  * @see InterceptorChain
  */
 public interface AcpInterceptor {
