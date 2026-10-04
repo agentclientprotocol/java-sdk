@@ -782,10 +782,12 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * Adds an interceptor that runs around every handler method call. Interceptors run in
 		 * {@link AcpInterceptor#getOrder()} order, and those with the same order in the order they
 		 * were added.
-		 * @param interceptor the interceptor, not null
+		 * @param interceptor the interceptor
 		 * @return this builder
+		 * @throws IllegalArgumentException if {@code interceptor} is null
 		 */
 		public Builder interceptor(AcpInterceptor interceptor) {
+			Assert.notNull(interceptor, "The interceptor must not be null");
 			this.interceptors.add(interceptor);
 			return this;
 		}

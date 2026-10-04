@@ -1010,6 +1010,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`AcpAgentSupport.Builder.interceptor(null)` fails at once** with `IllegalArgumentException`,
+  as `argumentResolver(null)` and `returnValueHandler(null)` do. It was accepted, and the next
+  build failed with a bare `NullPointerException`.
+
 - **An `Error` while reading a stdio agent's output is reported as itself.** When handling a line
   of the agent's standard output threw an `Error` (typically a `NoSuchMethodError` from a Jackson
   version clash), `StdioAcpClientTransport` ended as if the agent had "closed its standard output
