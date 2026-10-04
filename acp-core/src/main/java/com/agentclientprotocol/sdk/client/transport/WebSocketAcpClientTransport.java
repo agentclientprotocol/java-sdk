@@ -56,6 +56,14 @@ import reactor.core.scheduler.Schedulers;
  * skipped. When the agent closes the connection, or it fails, {@link #awaitTermination()} ends
  * and the client's pending requests fail.
  *
+ * <p>An endpoint that requires authentication, such as one that expects an API key or a
+ * bearer token in a header, gets it through {@link #webSocketCustomizer}:
+ *
+ * <pre>{@code
+ * var transport = new WebSocketAcpClientTransport(URI.create("wss://agents.example.com/acp"))
+ *     .webSocketCustomizer(builder -> builder.header("Authorization", "Bearer " + token));
+ * }</pre>
+ *
  * <p>The transport is thread-safe: messages may be sent from any thread, and one daemon thread
  * of its own ({@code acp-ws-client-outbound}) sends them one frame at a time. The default
  * HTTP client runs on a pool of daemon threads named {@code acp-ws-client}.
@@ -107,6 +115,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	private Consumer<Throwable> exceptionHandler = t -> logger.error("Transport error", t);
 
 	private Duration connectTimeout = Duration.ofSeconds(30);
+
+	private Consumer<WebSocket.Builder> webSocketCustomizer = builder -> {
+	};
 
 	/**
 	 * Creates a transport for the WebSocket endpoint at {@code serverUri}, with an HTTP client
@@ -187,6 +198,26 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
+	 * Customizes the WebSocket handshake before it is sent, typically to add the headers the
+	 * endpoint requires: an {@code Authorization} header, an API key, a tenant. The JDK's
+	 * {@link java.net.http.HttpClient} has no default headers, so this is the only way to send
+	 * one. Runs on every {@link #connect} attempt, after the transport has set its connect
+	 * timeout, so the customizer may replace that too; a header whose value changes, such as
+	 * a token that expires, is read again by each attempt. The JDK refuses headers that belong
+	 * to the handshake itself ({@code Connection}, {@code Upgrade}, {@code Host},
+	 * {@code Sec-WebSocket-*}): setting one, or any exception the customizer throws, fails
+	 * that connect, which may then be tried again. Call it before connecting.
+	 * @param customizer applied to the builder of each handshake
+	 * @return this transport
+	 * @throws IllegalArgumentException if {@code customizer} is null
+	 */
+	public WebSocketAcpClientTransport webSocketCustomizer(Consumer<WebSocket.Builder> customizer) {
+		Assert.notNull(customizer, "The WebSocket customizer can not be null");
+		this.webSocketCustomizer = customizer;
+		return this;
+	}
+
+	/**
 	 * {@inheritDoc}
 	 * <p>Opens the WebSocket connection when the returned Mono is subscribed, and completes
 	 * once the handshake has finished. A second call fails with an
@@ -204,9 +235,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 
 			// Build WebSocket connection with listener; frames that arrive before the handshake
 			// completes wait in the inbound sink.
-			return httpClient.newWebSocketBuilder()
-				.connectTimeout(connectTimeout)
-				.buildAsync(serverUri, new AcpWebSocketListener());
+			WebSocket.Builder builder = httpClient.newWebSocketBuilder().connectTimeout(connectTimeout);
+			webSocketCustomizer.accept(builder);
+			return builder.buildAsync(serverUri, new AcpWebSocketListener());
 		}).doOnSuccess(ws -> {
 			this.webSocket = ws;
 			// Only an open connection takes the inbound sink's one subscriber, so a connect that

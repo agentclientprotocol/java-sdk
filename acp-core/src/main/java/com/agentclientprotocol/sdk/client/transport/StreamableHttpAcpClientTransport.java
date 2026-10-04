@@ -61,7 +61,16 @@ import reactor.core.publisher.Sinks;
  * the server does not. The default client keeps cookies in a cookie manager of its own and
  * runs on a bounded pool of daemon threads; {@link StreamableHttpAcpClientTransportOptions}
  * sets its sizes and the number of SSE streams. Pass an {@link HttpClient} of your own for TLS,
- * proxy or authentication settings.
+ * proxy or cookie settings.
+ *
+ * <p>An endpoint that requires authentication, such as one that expects an API key or a
+ * bearer token in a header, gets it through {@link #requestCustomizer}, which every request
+ * the transport sends passes through:
+ *
+ * <pre>{@code
+ * var transport = new StreamableHttpAcpClientTransport(URI.create("https://agents.example.com/acp"))
+ *     .requestCustomizer(builder -> builder.header("Authorization", "Bearer " + tokens.current()));
+ * }</pre>
  *
  * <p>{@link #closeGracefully()} closes the streams and sends {@code DELETE} for the connection,
  * waiting at most five seconds for the answer; {@link #close()} does the same and blocks for up
@@ -202,6 +211,31 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	}
 
 	/**
+	 * Customizes every HTTP request the transport sends, typically to add the headers the
+	 * endpoint requires: an {@code Authorization} header, an API key, a tenant. The JDK's
+	 * {@link HttpClient} has no default headers, so this is the only way to send one. It is
+	 * applied to each request as it is built, the cleartext probe, {@code initialize}, every
+	 * POST, every SSE stream (re)opened and the closing {@code DELETE}, so a header whose
+	 * value changes, such as a token that expires, is read again for each one. It runs on the
+	 * thread that sends the request; keep it quick, and refresh a token elsewhere.
+	 *
+	 * <p>The transport owns the method, the body, the URI and its own headers (Content-Type,
+	 * Accept, Acp-Connection-Id, Acp-Session-Id): values the customizer sets for any of them
+	 * are dropped or replaced, so a customizer cannot break the protocol by accident. Other
+	 * settings, such as a per-request timeout, are kept. The JDK refuses restricted headers
+	 * such as {@code Host} or {@code Connection}; setting one, or any exception the customizer
+	 * throws, fails that request's Mono. Call it before the first message is sent.
+	 * @param customizer applied to the builder of each request
+	 * @return this transport
+	 * @throws IllegalArgumentException if {@code customizer} is null
+	 */
+	public StreamableHttpAcpClientTransport requestCustomizer(Consumer<HttpRequest.Builder> customizer) {
+		Assert.notNull(customizer, "The request customizer can not be null");
+		this.requests.requestCustomizer(customizer);
+		return this;
+	}
+
+	/**
 	 * {@inheritDoc}
 	 * <p>It contacts nothing: it registers the handler and completes at once. The connection
 	 * opens when the {@code initialize} request is sent. A second call fails with an
@@ -249,17 +283,21 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 			return Mono.error(new IllegalStateException("Transport is already initialized"));
 		}
 
-		HttpRequest httpRequest;
+		String json;
 		try {
-			httpRequest = requests.jsonPost(RouteScope.bootstrap(), jsonMapper.writeValueAsString(request));
+			json = jsonMapper.writeValueAsString(request);
 		}
 		catch (IOException e) {
 			initialized.set(false);
 			return Mono.error(new AcpConnectionException("Failed to serialize initialize request", e));
 		}
 
+		// Built after the probe, so it carries the HTTP version the probe settled on; built
+		// inside defer, so a request customizer that throws fails this Mono rather than the
+		// caller.
 		return requests.upgradeCleartextToHttp2()
-			.then(Mono.defer(() -> requests.sendAsync(requests.pinned(httpRequest), HttpResponse.BodyHandlers.ofString())))
+			.then(Mono.defer(() -> requests.sendAsync(requests.jsonPost(RouteScope.bootstrap(), json),
+					HttpResponse.BodyHandlers.ofString())))
 			.flatMap(response -> readInitializeResponse(request, response))
 			.flatMap(responseMessage -> streams.openConnectionStream().then(inbound.emit(responseMessage)))
 			.doOnError(error -> {
