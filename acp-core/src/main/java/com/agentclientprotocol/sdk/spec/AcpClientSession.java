@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.spec;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.util.AcpSchedulers;
@@ -195,7 +196,8 @@ public class AcpClientSession implements AcpSession {
 		if (failure != null) {
 			this.notifications.complete();
 			this.notificationSubscription.dispose();
-			throw notConnected(failure);
+			// A refusal to connect at all (a reused transport) is a misuse, not a lost connection.
+			throw new IllegalStateException("ACP client transport is not connected: " + failure.getMessage(), failure);
 		}
 
 		// When the transport later terminates (peer gone, stream failed for good), pending
@@ -226,8 +228,8 @@ public class AcpClientSession implements AcpSession {
 		dismissPendingResponses(error);
 	}
 
-	private static IllegalStateException notConnected(Throwable cause) {
-		return new IllegalStateException("ACP client transport is not connected: " + cause.getMessage(), cause);
+	private static AcpConnectionException notConnected(Throwable cause) {
+		return new AcpConnectionException("ACP client transport is not connected: " + cause.getMessage(), cause);
 	}
 
 	private void dismissPendingResponses() {

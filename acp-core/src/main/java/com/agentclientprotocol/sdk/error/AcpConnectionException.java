@@ -5,22 +5,23 @@
 package com.agentclientprotocol.sdk.error;
 
 /**
- * Raised by a transport when it cannot carry a message or the connection has ended. A request or
- * notification sent after the transport closed fails with it ({@code "The transport is closed"}),
- * on the asynchronous API as the {@code Mono}'s error and on the sync API as a thrown exception.
- * Catch it around a send to notice a connection that is gone; a closed transport does not open
- * again, so connect a new transport and client or agent.
+ * Raised when a message cannot be carried because the connection is gone, on the client and the
+ * agent side alike: a request still waiting for its answer when the connection ends fails with it
+ * ({@code "ACP session with agent terminated"}), and so does a request or notification sent
+ * afterwards ({@code "ACP client transport is not connected: ..."}) or after the transport closed
+ * ({@code "The transport is closed"}). It fails the {@code Mono} on the asynchronous API and is
+ * thrown by the sync API. Its cause, when there is one, is why the connection ended, such as the
+ * transport's own failure. Catch it around a call to notice a connection that is gone; a closed
+ * transport does not open again, so connect a new transport and client or agent.
  *
  * <p>Transports also raise it when a message cannot be queued, when a stdio agent sends a request
  * after the client closed the agent's input, for Streamable HTTP and WebSocket protocol failures,
  * and as the error of {@code awaitTermination()} when the connection ends, for example
  * {@code "ACP agent process exited with code 137 (signal 9)"} from a stdio client.
  *
- * <p>A request still waiting for its answer when the connection ends does not fail with this type:
- * it fails with a {@link RuntimeException} whose message says the session terminated and whose
- * cause is this exception. A request sent after the connection ended fails with an
- * {@link IllegalStateException} whose cause it is. Look at the cause to treat both as connection
- * failures.
+ * <p>Building a client or agent on a transport that refuses to connect or start at once, such as
+ * one already in use, fails with an {@link IllegalStateException} instead: that is a misuse, not a
+ * lost connection.
  *
  * <p>Example:
  * <pre>{@code

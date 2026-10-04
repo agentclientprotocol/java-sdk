@@ -41,7 +41,8 @@ import org.jspecify.annotations.Nullable;
  * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException AcpCapabilityException} for a
  * call the peer did not advertise, refused before sending;
  * {@link com.agentclientprotocol.sdk.error.AcpConnectionException AcpConnectionException} for a
- * request the transport could not send, such as one sent after the transport closed; and a
+ * request the connection could not carry: one waiting when the connection ended, or sent after it
+ * ended or the transport closed; and a
  * {@link java.util.concurrent.TimeoutException} for a request that got no answer in time, which the
  * sync API throws as
  * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException AcpTimeoutException}. This class

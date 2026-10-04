@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import org.junit.jupiter.api.Test;
@@ -138,7 +139,7 @@ class AcpAgentSessionLifecycleTest {
 		this.transport.started.tryEmitError(cause);
 
 		assertThatThrownBy(() -> pending.block(WAIT)).hasMessage("ACP session with client terminated").hasCause(cause);
-		assertThatThrownBy(() -> pendingRead(session).block(WAIT)).isInstanceOf(IllegalStateException.class)
+		assertThatThrownBy(() -> pendingRead(session).block(WAIT)).isInstanceOf(AcpConnectionException.class)
 			.hasMessage("ACP agent transport is not started: port in use");
 	}
 
