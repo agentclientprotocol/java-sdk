@@ -33,9 +33,9 @@ import org.jspecify.annotations.Nullable;
  * </ol>
  *
  * <p>Interceptors see every handler method call, extension methods and the {@code session/cancel}
- * notification included, and the {@code initialize} answer derived from the annotations. They do
- * not see the default {@code session/new} answer given when the agent has no {@code @NewSession}
- * method. The {@link AcpInvocationContext} names the ACP method and carries the request, the
+ * notification included, and the answers the SDK gives itself: the {@code initialize} answer
+ * derived from the annotations, and the default {@code session/new} answer given when the agent
+ * has no {@code @NewSession} method. The {@link AcpInvocationContext} names the ACP method and carries the request, the
  * session id, and attributes that pass state from one step of a call to a later one.
  *
  * <p>Example: log how long each call takes.

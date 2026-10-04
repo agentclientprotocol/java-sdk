@@ -379,6 +379,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The default `session/new` answer passes through the interceptors.** An annotated agent without
+  a `@NewSession` method answers `session/new` with a random session id; that answer skipped the
+  interceptors, while the `initialize` answer derived from the annotations went through them, so a
+  logging or access-check interceptor missed session creation. It now passes through the chain
+  like any handler method: `preInvoke` can veto it or reject it with an `AcpProtocolException`.
+  Migration: an interceptor that should not act on `session/new` checks
+  `context.getAcpMethod()`.
+
 - **Breaking: an `@ExtNotification` method must return `void`.** A notification gets no answer,
   and a value the method returned was dropped without a word, while a `void` `@ExtRequest` was
   already rejected. Building the agent now rejects a non-`void` `@ExtNotification` method with an

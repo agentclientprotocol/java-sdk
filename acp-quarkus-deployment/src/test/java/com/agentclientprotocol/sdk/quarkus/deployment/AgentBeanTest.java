@@ -82,9 +82,8 @@ class AgentBeanTest {
 
 		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 		assertThat(transport.messages).containsExactly("HELLO!");
-		// The derived initialize runs through the interceptor beans too; session/new is the
-		// SDK's default, outside them.
-		assertThat(interceptor.methods).containsExactly("initialize", "session/prompt");
+		// The derived initialize and the default session/new run through the interceptor beans too.
+		assertThat(interceptor.methods).containsExactly("initialize", "session/new", "session/prompt");
 		// The handler ran on Quarkus' worker pool, through the ManagedExecutor, not the SDK's own pool.
 		assertThat(Arc.container().instance(EchoAgent.class).get().threads).singleElement()
 			.asString()

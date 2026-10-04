@@ -175,8 +175,8 @@ import org.slf4j.LoggerFactory;
  * with {@link Builder#interceptor}, {@link Builder#argumentResolver} and
  * {@link Builder#returnValueHandler}. Custom resolvers and return value handlers are asked before
  * the built-in ones, so they can also replace one. The {@code initialize} answer derived from the
- * annotations passes through the interceptors as an {@code @Initialize} method's would; the default
- * {@code session/new} answer, given when there is no {@code @NewSession} method, does not.
+ * annotations, and the default {@code session/new} answer given when there is no
+ * {@code @NewSession} method, pass through the interceptors as a handler method's would.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -317,10 +317,12 @@ public class AcpAgentSupport implements AutoCloseable {
 		bind(AcpSchema.METHOD_INITIALIZE,
 				handler -> agent.initializeHandler(req -> AgentAdvertisement.merge(advertisement.derive(req),
 						respond(handler, InitializeResponse.class, req, null))),
-				() -> agent.initializeHandler(req -> deriveInitialize(req)));
+				() -> agent.initializeHandler(req -> answerByDefault(AcpSchema.METHOD_INITIALIZE, req,
+						InitializeResponse.class, () -> advertisement.derive(req))));
 		bind(AcpSchema.METHOD_SESSION_NEW,
 				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
-				() -> agent.newSessionHandler(req -> new NewSessionResponse(UUID.randomUUID().toString(), null, null)));
+				() -> agent.newSessionHandler(req -> answerByDefault(AcpSchema.METHOD_SESSION_NEW, req,
+						NewSessionResponse.class, () -> new NewSessionResponse(UUID.randomUUID().toString(), null, null))));
 		bind(AcpSchema.METHOD_AUTHENTICATE, handler -> agent
 			.authenticateHandler(req -> respond(handler, AcpSchema.AuthenticateResponse.class, req, null)));
 		bind(AcpSchema.METHOD_LOGOUT,
@@ -451,18 +453,17 @@ public class AcpAgentSupport implements AutoCloseable {
 	}
 
 	/**
-	 * The initialize response derived from the annotations, for an agent without an
-	 * {@code @Initialize} method, produced through the interceptor chain as a declared
-	 * handler's would be.
+	 * The SDK's own answer for an ACP method the agent declares no handler method for (the
+	 * initialize response derived from the annotations, or a session/new with a random id),
+	 * produced through the interceptor chain as a declared handler's would be.
 	 */
-	private InitializeResponse deriveInitialize(AcpSchema.InitializeRequest request) {
-		Object result = intercept(AcpSchema.METHOD_INITIALIZE, request, null, null,
-				context -> new Outcome(advertisement.derive(request), null));
-		if (!(result instanceof InitializeResponse response)) {
+	private <T> T answerByDefault(String acpMethod, Object request, Class<T> responseType, Supplier<T> answer) {
+		Object result = intercept(acpMethod, request, null, null, context -> new Outcome(answer.get(), null));
+		if (!responseType.isInstance(result)) {
 			throw new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
-					"The initialize handler produced no response (an interceptor vetoed the call)");
+					"The " + acpMethod + " handler produced no response (an interceptor vetoed the call)");
 		}
-		return response;
+		return responseType.cast(result);
 	}
 
 	/** The call an interceptor chain wraps. */
