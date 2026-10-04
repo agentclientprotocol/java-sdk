@@ -1298,8 +1298,9 @@ public interface AcpAgent {
 
 		/**
 		 * Sets the handler for {@code logout}, which ends the client's authenticated state.
-		 * Advertise it in the initialize answer ({@code AgentAuthCapabilities.withLogout()});
-		 * clients check for it before sending {@code logout}.
+		 * Clients send {@code logout} only to an agent that advertises {@code auth.logout}; the
+		 * default {@code initialize} answer advertises it, and an initialize handler must
+		 * advertise it itself ({@code AgentAuthCapabilities.withLogout()}).
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -1325,8 +1326,10 @@ public interface AcpAgent {
 
 		/**
 		 * Sets the handler for {@code session/load}, which reopens a session the agent kept: the
-		 * agent replays the conversation to the client as session updates, then answers. Advertise
-		 * it with the {@code loadSession} agent capability.
+		 * agent replays the conversation to the client as session updates, then answers. Clients
+		 * send {@code session/load} only to an agent that advertises the {@code loadSession}
+		 * capability; the default {@code initialize} answer advertises it, and an initialize
+		 * handler must advertise it itself.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -1761,8 +1764,9 @@ public interface AcpAgent {
 
 		/**
 		 * Sets the handler for {@code logout}, which ends the client's authenticated state.
-		 * Advertise it in the initialize answer ({@code AgentAuthCapabilities.withLogout()});
-		 * clients check for it before sending {@code logout}.
+		 * Clients send {@code logout} only to an agent that advertises {@code auth.logout}; the
+		 * default {@code initialize} answer advertises it, and an initialize handler must
+		 * advertise it itself ({@code AgentAuthCapabilities.withLogout()}).
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -1788,8 +1792,10 @@ public interface AcpAgent {
 
 		/**
 		 * Sets the handler for {@code session/load}, which reopens a session the agent kept: the
-		 * agent replays the conversation to the client as session updates, then answers. Advertise
-		 * it with the {@code loadSession} agent capability.
+		 * agent replays the conversation to the client as session updates, then answers. Clients
+		 * send {@code session/load} only to an agent that advertises the {@code loadSession}
+		 * capability; the default {@code initialize} answer advertises it, and an initialize
+		 * handler must advertise it itself.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
