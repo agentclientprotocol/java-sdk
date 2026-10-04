@@ -10,8 +10,19 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Handles void return types for prompt handlers by returning
- * {@link PromptResponse#endTurn()}.
+ * Handles a {@code void} or {@code Void} return type: for a
+ * {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt} method it ends the turn with
+ * {@link PromptResponse#endTurn()}, and for a notification method ({@code @Cancel},
+ * {@code @ExtNotification}) it produces nothing, as a notification gets no answer. It is one of the
+ * built-in {@link ReturnValueHandler}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, so an application never creates or registers it: the method declares the return type.
+ *
+ * <p>It works as {@link AsyncValueHandler} does, for a method that returns nothing. A request
+ * method other than a {@code @Prompt} one cannot be {@code void}: building the agent rejects it,
+ * because a request must get a result. The turn ends with stop reason {@code end_turn} also after a
+ * {@code session/cancel}; to answer {@code cancelled}, return {@code PromptResponse.cancelled()}
+ * instead.
  *
  * @author Mark Pollack
  * @since 1.0.0

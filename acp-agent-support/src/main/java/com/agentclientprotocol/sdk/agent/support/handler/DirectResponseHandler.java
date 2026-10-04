@@ -27,11 +27,20 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionModeResponse;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Handles direct protocol response types that need no conversion.
+ * Handles a return value that is already an ACP response, such as an {@link InitializeResponse},
+ * {@link NewSessionResponse}, {@link LoadSessionResponse}, {@link PromptResponse} or
+ * {@link SetSessionModeResponse}: it passes the value through unchanged, as the response sent to
+ * the client. It applies when the declared return type is the response type of any ACP method that
+ * a handler annotation serves, the other session, auth and provider responses included. It is one
+ * of the built-in {@link ReturnValueHandler}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, so an application never creates or registers it: the method declares the return type.
  *
- * <p>Supports {@link InitializeResponse}, {@link NewSessionResponse},
- * {@link LoadSessionResponse}, {@link PromptResponse}, {@link SetSessionModeResponse}, and the other
- * session and provider responses.
+ * <p>It works as {@link AsyncValueHandler} does, for a value that needs no waiting, and is asked
+ * first. Building the agent rejects a method declared to return the response of another method,
+ * such as a {@code NewSessionResponse} from a {@code @Prompt} method, and a {@code null} value
+ * produces no response, which is answered with an internal error ({@code -32603}). An
+ * {@code @ExtRequest} method that returns one of these types has it sent as its result.
  *
  * @author Mark Pollack
  * @since 1.0.0

@@ -14,12 +14,27 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionRequest;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Resolves the {@link ConfigId} and {@link ConfigValue} parameters of a
- * {@code @SetSessionConfigOption} method from its {@link SetSessionConfigOptionRequest}: the
- * option id as a {@code String}, and the value as a {@code String} (a select option), a
- * {@code boolean} or {@code Boolean} (a boolean option), or an {@code Object} (either). A value of
- * the other kind than the parameter's is answered with {@code -32602} (invalid params), so the
- * method is not called with a value it cannot take.
+ * Supplies the parts of a {@code session/set_config_option} request to the parameters of a
+ * {@link com.agentclientprotocol.sdk.annotation.SetSessionConfigOption @SetSessionConfigOption}
+ * method: a {@link ConfigId @ConfigId} {@code String} receives the option id, and a
+ * {@link ConfigValue @ConfigValue} parameter the new value, typed. The method can take them instead
+ * of reading {@link SetSessionConfigOptionRequest#configId()} and {@code value()} from the request.
+ * It is one of the built-in {@link ArgumentResolver}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, so an application never creates or registers it: it declares the parameter.
+ *
+ * <p>A {@code @ConfigValue} parameter may be a {@code String} for a select option, a
+ * {@code boolean} or {@code Boolean} for a boolean option, or an {@code Object} for either, which
+ * then receives a {@code String} or a {@code Boolean}. When the client sends a value of the other
+ * kind, the call is answered with invalid params ({@code -32602}) naming the option, and the method
+ * is not called. A {@code @ConfigId} parameter must be a {@code String}. For a parameter of another
+ * type than these, this resolver does not apply, and building the agent fails.
+ *
+ * <p>It works as {@link PromptContextResolver} does otherwise: building the agent rejects these
+ * parameters on any method but the {@code @SetSessionConfigOption} one, registering it rejects them
+ * on an extension method, and {@link #resolveArgument} throws an
+ * {@link ArgumentResolutionException} for a context whose request is not a
+ * {@code SetSessionConfigOptionRequest}.
  *
  * @author Mark Pollack
  * @since 0.80.0

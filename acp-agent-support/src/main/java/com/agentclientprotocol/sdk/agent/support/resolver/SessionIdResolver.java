@@ -9,7 +9,18 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.annotation.SessionId;
 
 /**
- * Resolves String parameters annotated with {@link SessionId}.
+ * Supplies the session id to a {@code String} parameter annotated {@link SessionId @SessionId}: the
+ * id of the session that the request or notification being handled names, the same value as its
+ * {@code sessionId()}. A handler method uses it when it needs only the id, or does not take the
+ * request. It is one of the built-in {@link ArgumentResolver}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, so an application never creates or registers it: it declares the parameter.
+ *
+ * <p>It works as {@link PromptContextResolver} does, for the session id: building the agent rejects
+ * a {@code @SessionId} parameter on a method whose ACP method names no session ({@code @SessionId}
+ * lists them), and {@link #resolveArgument} throws an {@link ArgumentResolutionException} for a
+ * context without a session id. It supplies only a {@code String} parameter: for a
+ * {@code @SessionId} parameter of another type no resolver applies, and building the agent fails.
  *
  * @author Mark Pollack
  * @since 1.0.0

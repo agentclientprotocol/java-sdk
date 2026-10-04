@@ -15,10 +15,26 @@ import com.agentclientprotocol.sdk.annotation.ExtNotification;
 import com.agentclientprotocol.sdk.annotation.ExtRequest;
 
 /**
- * Resolves the params parameter of an {@link ExtRequest} or {@link ExtNotification} handler to
- * the extension method's params, already read as that parameter's type. The handler's other
- * parameters, if any, are of a {@linkplain #isConnectionType connection type}, resolved by
- * their own resolvers.
+ * Supplies the params of an extension method to its handler: the parameter of an
+ * {@link ExtRequest @ExtRequest} or {@link ExtNotification @ExtNotification} method that is not of
+ * a {@linkplain #isConnectionType connection type} receives the request's or notification's params,
+ * already read by the JSON mapper as that parameter's declared type, such as a record or a
+ * {@code Map<String, Object>}. It is one of the built-in {@link ArgumentResolver}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, the first of them to be asked, so an application never creates or registers it: the
+ * method declares the parameter.
+ *
+ * <p>It takes every parameter of an extension method that is not of a connection type, whatever its
+ * type or annotations, so a parameter declared as a request type such as {@code PromptRequest}, or
+ * as a prompt context, is read from the params too. Registering the agent rejects an extension
+ * method with more than one such parameter, or with a {@code @SessionId}, {@code @ConfigId} or
+ * {@code @ConfigValue} parameter, with an {@code IllegalArgumentException}. Params that cannot be
+ * read as the declared type are answered with invalid params ({@code -32602}) before the method is
+ * called. The connection-type parameters go to {@link CapabilitiesResolver} and
+ * {@link AgentResolver}.
+ *
+ * <p>It works as {@link PromptContextResolver} does otherwise, except that {@link #resolveArgument}
+ * never throws: it passes the call's request, which for an extension method is its params.
  *
  * @author Mark Pollack
  */
@@ -29,11 +45,13 @@ public class ExtensionParamsResolver implements ArgumentResolver {
 			AcpSyncAgent.class, AcpAsyncAgent.class);
 
 	/**
-	 * Whether a handler parameter of this type receives its connection's capabilities or agent,
-	 * not an extension method's params.
+	 * Returns whether a parameter of this type receives the call's connection rather than an
+	 * extension method's params: true for {@link NegotiatedCapabilities}, {@link AcpSyncAgent} and
+	 * {@link AcpAsyncAgent}, the types {@link CapabilitiesResolver} and {@link AgentResolver}
+	 * supply. The runtime uses it to find an extension method's params parameter; applications do
+	 * not need it.
 	 * @param type the parameter type
-	 * @return true for {@code NegotiatedCapabilities}, {@code AcpSyncAgent} and
-	 * {@code AcpAsyncAgent}
+	 * @return true for exactly those three types, false for any other type, a subtype included
 	 */
 	public static boolean isConnectionType(Class<?> type) {
 		return CONNECTION_TYPES.contains(type);

@@ -9,7 +9,18 @@ import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 
 /**
- * Resolves {@link NewSessionRequest} parameters in new session handlers.
+ * Supplies the {@link NewSessionRequest} that the client sent in {@code session/new} to a
+ * {@link com.agentclientprotocol.sdk.annotation.NewSession @NewSession} method that declares a
+ * parameter of that type: the working directory, the MCP servers and any additional directories. It
+ * is one of the built-in {@link ArgumentResolver}s that
+ * {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers by
+ * default, so an application never creates or registers it: it declares the parameter, or leaves it
+ * out when the method does not need the request.
+ *
+ * <p>It works as {@link PromptRequestResolver} does, for {@code NewSessionRequest}: building the
+ * agent rejects the parameter on a method of another ACP method, a custom resolver for the type
+ * replaces this one, and {@link #resolveArgument} throws an {@link ArgumentResolutionException} for
+ * a context that holds another request.
  *
  * @author Mark Pollack
  * @since 1.0.0

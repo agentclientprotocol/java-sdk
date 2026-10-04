@@ -17,13 +17,26 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * Handles a value a handler returns later: a {@link Mono}, a {@link CompletionStage} (such as
- * a {@code CompletableFuture}) or another Reactive Streams {@link Publisher} of at most one
- * value. The runtime waits for the value on the handler's thread, and it means what returning
- * the value itself means: a prompt method's {@code String} is sent to the client as an agent
- * message chunk and ends the turn, as {@link StringToPromptResponseHandler} does. An empty
- * {@code Mono} or {@code Publisher}, or a {@code null} stage value, produces no response; a
- * {@code Publisher} that emits more than one value fails the call.
+ * Handles a value that a handler method returns later: a {@link Mono}, a {@link CompletionStage}
+ * (such as a {@code CompletableFuture}) or another Reactive Streams {@link Publisher} of at most
+ * one value. The runtime waits for the value on the handler's thread, and the value then means what
+ * returning it directly means: the method's response, a prompt method's {@code String} (sent to the
+ * client as an agent message chunk before the turn ends, as {@link StringToPromptResponseHandler}
+ * does), or an extension request's result. It is one of the built-in {@link ReturnValueHandler}s
+ * that {@link com.agentclientprotocol.sdk.agent.support.AcpAgentSupport AcpAgentSupport} registers
+ * by default, so an application never creates or registers it: the method declares the return type.
+ *
+ * <p>An empty {@code Mono} or {@code Publisher}, or a stage that completes with {@code null},
+ * produces no response, which for a request is answered with an internal error ({@code -32603}). A
+ * {@code Publisher} that emits more than one value fails the call with an internal error too, and a
+ * value that fails fails the call as an exception from the method would. Building the agent checks
+ * the value type where it can read it: a {@code Mono<NewSessionResponse>} or a {@code Mono<Void>}
+ * from a {@code @Prompt} method is rejected. The wait has no time limit of its own.
+ *
+ * <p>There is one built-in return value handler for each kind of return value:
+ * {@link DirectResponseHandler}, {@link StringToPromptResponseHandler}, {@link VoidHandler}, this
+ * one and {@link ExtensionResultHandler}, asked in that order after any custom handler. They are
+ * stateless and thread-safe.
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -60,10 +73,11 @@ public class AsyncValueHandler implements ReturnValueHandler {
 	}
 
 	/**
-	 * The value type of an async return type, such as {@code PromptResponse} for
+	 * Returns the value type of an async return type, such as {@code PromptResponse} for
 	 * {@code Mono<PromptResponse>}.
-	 * @param returnType the return type parameter
-	 * @return the type argument, or {@code Object} when it is not a class
+	 * @param returnType a handler method's return type
+	 * @return the first type argument when it is a class; {@code Object} otherwise, also for a raw
+	 * type, a wildcard, a type variable or a parameterized argument such as {@code List<String>}
 	 */
 	public static Class<?> getValueType(AcpMethodParameter returnType) {
 		Type genericType = returnType.getGenericType();
