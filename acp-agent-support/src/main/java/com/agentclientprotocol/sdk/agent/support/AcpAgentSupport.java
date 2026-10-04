@@ -751,12 +751,14 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * Sets how long a {@code @Prompt} method has to return after {@code session/cancel} before
 		 * the agent answers the prompt with stop reason {@code cancelled} itself and interrupts the
 		 * method's thread. Default 60 seconds; {@link Duration#ZERO} for none. See
-		 * {@link AcpAgent.SyncAgentBuilder#cancelGracePeriod(Duration)}. The value is checked when
-		 * an agent is built, not here.
+		 * {@link AcpAgent.SyncAgentBuilder#cancelGracePeriod(Duration)}.
 		 * @param gracePeriod the grace period; zero for none, not negative
 		 * @return this builder
+		 * @throws IllegalArgumentException if {@code gracePeriod} is null or negative
 		 */
 		public Builder cancelGracePeriod(Duration gracePeriod) {
+			Assert.notNull(gracePeriod, "The cancelGracePeriod must not be null");
+			Assert.isTrue(!gracePeriod.isNegative(), "The cancelGracePeriod must not be negative");
 			this.cancelGracePeriod = gracePeriod;
 			return this;
 		}
@@ -764,12 +766,14 @@ public class AcpAgentSupport implements AutoCloseable {
 		/**
 		 * Sets how long a prompt turn may run before the agent answers it with error {@code -32800}
 		 * (request cancelled). Default none ({@link Duration#ZERO}). See
-		 * {@link AcpAgent.SyncAgentBuilder#maxPromptDuration(Duration)}. The value is checked when
-		 * an agent is built, not here.
+		 * {@link AcpAgent.SyncAgentBuilder#maxPromptDuration(Duration)}.
 		 * @param maxDuration the maximum prompt duration; zero for none, not negative
 		 * @return this builder
+		 * @throws IllegalArgumentException if {@code maxDuration} is null or negative
 		 */
 		public Builder maxPromptDuration(Duration maxDuration) {
+			Assert.notNull(maxDuration, "The maxPromptDuration must not be null");
+			Assert.isTrue(!maxDuration.isNegative(), "The maxPromptDuration must not be negative");
 			this.maxPromptDuration = maxDuration;
 			return this;
 		}
@@ -827,7 +831,6 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * is no {@code @Prompt} method; a {@code @SetSessionMode} or
 		 * {@code @SetSessionConfigOption} method has no {@code @NewSession} method to offer modes
 		 * or config options; or an auth method has no {@code @Authenticate} method to serve it
-		 * @throws IllegalArgumentException if a duration set on this builder is negative
 		 */
 		public AcpAgentSupport build() {
 			AcpAgentTransport transport = this.transport;
@@ -846,7 +849,6 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * AcpAgentSupport.create(new MyAgent()).transport(new StdioAcpAgentTransport()).run();
 		 * }</pre>
 		 * @throws IllegalStateException for the reasons {@link #build()} gives
-		 * @throws IllegalArgumentException if a duration set on this builder is negative
 		 */
 		public void run() {
 			build().run();
@@ -860,8 +862,7 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * concurrently across connections, so its handler methods must be thread-safe (see
 		 * {@link AcpAgentSupport}). The factory captures the builder as it is now. The listener
 		 * supplies a transport per connection, so a builder with a {@link #transport} set is
-		 * refused. A negative duration is not checked here: each connection's agent then fails to
-		 * build.
+		 * refused.
 		 * @return a factory creating one agent per connection
 		 * @throws IllegalStateException if a transport was set, or for the reasons {@link #build()}
 		 * gives (other than the transport)

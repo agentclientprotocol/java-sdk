@@ -379,6 +379,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`AcpAgentSupport.Builder.cancelGracePeriod(..)` and `maxPromptDuration(..)` reject a negative
+  or null value where it is set.** They stored any value: `build()` failed later, and
+  `buildFactory()` built a factory whose every connection then failed to build its agent. Both
+  now throw `IllegalArgumentException` at once. Migration: none for valid values.
+
 - **Breaking: `AcpInterceptor.afterCompletion` receives the exception the call failed with.** It
   took only the context, and the runtime dropped the exception it had, so cleanup that must know
   how a call ended (a span status, a failure metric) had to stash the exception from `onError` in
