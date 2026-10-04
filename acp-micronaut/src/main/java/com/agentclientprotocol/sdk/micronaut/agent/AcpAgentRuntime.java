@@ -68,8 +68,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * {@code AcpInterceptor}, {@code ArgumentResolver} and {@code ReturnValueHandler} beans are
- * added to the agent, in their bean order. Handler methods run on Micronaut's blocking executor
- * ({@code TaskExecutors.BLOCKING}: virtual threads on a JVM that has them, else the I/O pool). Handler methods may also return a
+ * added to the agent, in their bean order. Handler methods run on Micronaut's virtual-thread
+ * executor ({@code TaskExecutors.VIRTUAL}) on JDK 21 and later, else on the SDK's own pool. Handler methods may also return a
  * {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams {@code Publisher},
  * which {@code AcpAgentSupport} waits for.
  *
@@ -146,10 +146,10 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			}
 			AcpAgentSettings settings = config.toSettings();
 			logger.info("Serving @AcpAgent bean {} over {}", agent.userClass().getName(), settings.transport());
-			// Handlers block: they run on Micronaut's blocking executor, virtual threads where
-			// the JVM has them, the I/O pool otherwise.
+			// Handlers block: they run on Micronaut's virtual-thread executor where the JVM has
+			// one, else on the SDK's own pool.
 			AcpHost newHost = createHost(AcpAgents.builder(agent, settings, interceptors, argumentResolvers,
-					returnValueHandlers, blockingExecutor()), settings);
+					returnValueHandlers, virtualExecutor()), settings);
 			// Before the host serves anything, so a SIGTERM after the first answer is handled.
 			registerShutdownHook();
 			try {
@@ -242,8 +242,13 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		return new AgentCandidate<>(definition.getName(), definition.getBeanType(), () -> context.getBean(definition));
 	}
 
-	private @Nullable ExecutorService blockingExecutor() {
-		return context.findBean(ExecutorService.class, Qualifiers.byName(TaskExecutors.BLOCKING)).orElse(null);
+	/**
+	 * Micronaut's virtual-thread executor ({@code TaskExecutors.VIRTUAL}), present on JDK 21 and
+	 * later. Not the blocking executor on older JDKs: that is the I/O pool, whose non-daemon
+	 * threads outlive a context closed at the end of stdio input, so the process would not exit.
+	 */
+	private @Nullable ExecutorService virtualExecutor() {
+		return context.findBean(ExecutorService.class, Qualifiers.byName(TaskExecutors.VIRTUAL)).orElse(null);
 	}
 
 	private AcpHost createHost(AcpAgentSupport.Builder builder, AcpAgentSettings settings) {

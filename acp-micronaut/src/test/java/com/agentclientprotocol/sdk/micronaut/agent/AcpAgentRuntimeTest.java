@@ -102,13 +102,15 @@ class AcpAgentRuntimeTest {
 		assertThat(runtime.isRunning()).isTrue();
 		assertThat(runtime.port()).isEmpty();
 
-		// The handler ran on Micronaut's blocking executor, not on the SDK's own pool:
-		// virtual threads where the JVM has them, else the I/O executor's threads.
+		// The handler ran on Micronaut's virtual-thread executor where the JVM has one (JDK 21+),
+		// else on the SDK's own pool.
 		assertThat(agent.promptThreads).hasSize(1).allSatisfy(thread -> {
-			assertThat(thread.getName()).doesNotStartWith("acp-");
-			assertThat(isVirtual(thread) || thread.getName().startsWith("io-executor-thread"))
-				.as("virtual or io-executor-thread: %s", thread)
-				.isTrue();
+			if (Runtime.version().feature() >= 21) {
+				assertThat(isVirtual(thread)).as("a virtual thread: %s", thread).isTrue();
+			}
+			else {
+				assertThat(thread.getName()).startsWith("acp-agent-sync-handler");
+			}
 		});
 	}
 

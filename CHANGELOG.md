@@ -141,8 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Built on `acp-integration`: `AcpClientCustomizer` and the transport type are its
     `com.agentclientprotocol.sdk.integration` types, and an explicit client type without its property
     fails with "...transport.type=http requires ...transport.http.uri".
-  - The agent's handler methods run on Micronaut's blocking executor (`TaskExecutors.BLOCKING`: virtual
-    threads on a JVM that has them, the I/O pool otherwise) instead of the SDK's own pool.
+  - On JDK 21 and later the agent's handler methods run on Micronaut's virtual-thread executor
+    (`TaskExecutors.VIRTUAL`) instead of the SDK's own pool; on JDK 17 they stay on the SDK's pool.
 
 - **Quarkus extension: `acp-quarkus` (with `acp-quarkus-deployment`).** One `@AcpAgent` class
   becomes a singleton bean (found at build time; a second one fails the build) and is served over
