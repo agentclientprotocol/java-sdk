@@ -14,7 +14,7 @@ import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
-import com.agentclientprotocol.sdk.micronaut.TransportType;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import io.micronaut.context.ApplicationContext;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ class AcpClientBeansTest {
 			AcpClientConfiguration config = context.getBean(AcpClientConfiguration.class);
 			assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofSeconds(45));
 			assertThat(config.getPromptTimeout()).isEqualTo(Duration.ofMinutes(10));
-			assertThat(config.getTransport().getType()).isEqualTo(TransportType.STDIO);
+			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 			assertThat(config.getTransport().getStdio().getCommand()).isEqualTo("my-agent");
 			assertThat(config.getTransport().getStdio().getArgs()).containsExactly("--acp", "--verbose");
 			assertThat(config.getTransport().getStdio().getEnv()).containsEntry("AGENT_MODE", "test");
@@ -108,11 +108,11 @@ class AcpClientBeansTest {
 			.rootCause()
 			.hasMessageContaining("An ACP client needs a transport");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "http"))).rootCause()
-			.hasMessageContaining("acp.client.transport.type=http needs acp.client.transport.http.uri");
+			.hasMessageContaining("acp.client.transport.type=http requires acp.client.transport.http.uri");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "websocket"))).rootCause()
-			.hasMessageContaining("acp.client.transport.type=websocket needs acp.client.transport.websocket.uri");
+			.hasMessageContaining("acp.client.transport.type=websocket requires acp.client.transport.websocket.uri");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "stdio"))).rootCause()
-			.hasMessageContaining("acp.client.transport.type=stdio needs acp.client.transport.stdio.command");
+			.hasMessageContaining("acp.client.transport.type=stdio requires acp.client.transport.stdio.command");
 	}
 
 	@Test

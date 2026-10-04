@@ -6,7 +6,8 @@ package com.agentclientprotocol.sdk.micronaut.agent;
 
 import java.time.Duration;
 
-import com.agentclientprotocol.sdk.micronaut.TransportType;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.micronaut.context.annotation.ConfigurationProperties;
 import io.micronaut.core.convert.format.ReadableBytes;
 import org.jspecify.annotations.Nullable;
@@ -148,11 +149,37 @@ public class AcpAgentConfiguration {
 		this.transport = transport;
 	}
 
+	/**
+	 * These settings as the SDK's framework-neutral settings.
+	 * @return the settings
+	 */
+	public AcpAgentSettings toSettings() {
+		Transport.Http http = transport.getHttp();
+		return AcpAgentSettings.builder()
+			.enabled(enabled)
+			.requestTimeout(requestTimeout)
+			.cancelGracePeriod(cancelGracePeriod)
+			.maxPromptDuration(maxPromptDuration)
+			.shutdownOnTransportEnd(shutdownOnTransportEnd)
+			.transport(transport.getType())
+			.path(http.getPath())
+			.maxPostBodyBytes(http.getMaxPostBodySize())
+			.keepAliveInterval(http.getKeepAliveInterval())
+			.mailboxCapacity(http.getMailboxCapacity())
+			.maxPendingSseEvents(http.getMaxPendingSseEvents())
+			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
+			.maxProvisionalSessions(http.getMaxProvisionalSessions())
+			.shutdownTimeout(http.getShutdownTimeout())
+			.listenerPort(http.getPort())
+			.maxConcurrentStreamsPerConnection(http.getMaxConcurrentStreamsPerConnection())
+			.build();
+	}
+
 	/** The agent transport, bound from {@code acp.agent.transport.*}. */
 	@ConfigurationProperties("transport")
 	public static class Transport {
 
-		private TransportType type = TransportType.STDIO;
+		private AcpTransportType type = AcpTransportType.STDIO;
 
 		private Http http = new Http();
 
@@ -162,7 +189,7 @@ public class AcpAgentConfiguration {
 		 * An application bean of type {@code AcpAgentTransport} is used instead of stdio.
 		 * @return the transport type
 		 */
-		public TransportType getType() {
+		public AcpTransportType getType() {
 			return type;
 		}
 
@@ -170,7 +197,7 @@ public class AcpAgentConfiguration {
 		 * Sets the transport type.
 		 * @param type the transport type
 		 */
-		public void setType(TransportType type) {
+		public void setType(AcpTransportType type) {
 			this.type = type;
 		}
 
@@ -201,7 +228,7 @@ public class AcpAgentConfiguration {
 
 			private int port = 8080;
 
-			private String path = "/acp";
+			private String path = AcpAgentSettings.DEFAULT_PATH;
 
 			private @Nullable Long maxPostBodySize;
 

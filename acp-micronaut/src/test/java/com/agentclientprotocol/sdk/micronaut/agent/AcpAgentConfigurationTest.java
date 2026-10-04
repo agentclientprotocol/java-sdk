@@ -8,7 +8,7 @@ import java.time.Duration;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
-import com.agentclientprotocol.sdk.micronaut.TransportType;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.micronaut.context.ApplicationContext;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getCancelGracePeriod()).isEqualTo(Duration.ofSeconds(60));
 			assertThat(config.getMaxPromptDuration()).isEqualTo(Duration.ZERO);
 			assertThat(config.isShutdownOnTransportEnd()).isTrue();
-			assertThat(config.getTransport().getType()).isEqualTo(TransportType.STDIO);
+			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
 			assertThat(http.getPort()).isEqualTo(8080);
 			assertThat(http.getPath()).isEqualTo("/acp");
@@ -39,7 +39,7 @@ class AcpAgentConfigurationTest {
 			assertThat(http.getMaxConcurrentStreamsPerConnection()).isNull();
 			assertThat(http.getShutdownTimeout()).isNull();
 			// unset limits keep the SDK's defaults
-			assertThat(HttpListenerHost.options(http)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
+			assertThat(config.toSettings().toOptions(true)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
 		}
 	}
 
@@ -66,12 +66,12 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getCancelGracePeriod()).isEqualTo(Duration.ofSeconds(3));
 			assertThat(config.getMaxPromptDuration()).isEqualTo(Duration.ofMinutes(2));
 			assertThat(config.isShutdownOnTransportEnd()).isFalse();
-			assertThat(config.getTransport().getType()).isEqualTo(TransportType.HTTP);
+			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.HTTP);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
 			assertThat(http.getPort()).isEqualTo(9123);
 			assertThat(http.getPath()).isEqualTo("/agents/acp");
 
-			StreamableHttpAcpAgentTransportOptions options = HttpListenerHost.options(http);
+			StreamableHttpAcpAgentTransportOptions options = config.toSettings().toOptions(true);
 			assertThat(options.maxPostBodyBytes()).isEqualTo(2L * 1024 * 1024);
 			assertThat(options.keepAliveInterval()).isEqualTo(Duration.ofSeconds(20));
 			assertThat(options.mailboxCapacity()).isEqualTo(11);
