@@ -278,6 +278,17 @@ PromptResponse handle(PromptRequest req, SyncPromptContext ctx) {
 }
 ```
 
+The raw ACP requests sit one step down, on `ctx.client()`: `readTextFile`, `writeTextFile`,
+`requestPermission`, the five terminal calls and the elicitation calls, each taking the ACP request
+record. Use them for what the convenience calls do not cover, for example a line range or a
+permission request for a tool call you announced yourself:
+
+```java
+String head = ctx.client()
+    .readTextFile(new ReadTextFileRequest(ctx.getSessionId(), "/path/to/file.txt", 1, 20))
+    .content();
+```
+
 ### Cancellation
 
 A prompt method learns that its prompt was cancelled from its context, whether by `session/cancel`

@@ -527,6 +527,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one daemon platform thread per JVM, so that handlers pinning every carrier thread cannot also
   stop the timeouts meant to end them. On JDK 17 nothing changes. Migration: none.
 
+- **Breaking: the prompt context is split into its two layers.** `PromptContext` and
+  `SyncPromptContext` keep the convenience layer — `sendMessage`, `sendThought`,
+  `sendSessionUpdate`, `readFile`, `tryReadFile` (sync), `writeFile`, `askPermission`, `askChoice`,
+  `execute`, cancellation (`isCancelled`, `whenCancelled`/`onCancel`), `getSessionId`,
+  `getClientCapabilities` and `async()` (sync) — and the raw ACP requests move one step down to the
+  new `context.client()`: a `SessionClient` (async, `Mono`s) or `SyncSessionClient` (blocking) with
+  `readTextFile`, `writeTextFile`, `requestPermission`, `createTerminal`, `getTerminalOutput`,
+  `releaseTerminal`, `waitForTerminalExit`, `killTerminal`, `createElicitation` and
+  `completeElicitation`. The calls themselves are unchanged (same request records, capability
+  checks, timeouts and cancellation). `readFile` no longer sits beside `readTextFile`, nor
+  `askPermission` beside `requestPermission`, in the completion menu. Migration: insert
+  `.client()` before each raw call —
+  `context.readTextFile(request)` → `context.client().readTextFile(request)`,
+  `context.writeTextFile(request)` → `context.client().writeTextFile(request)`,
+  `context.requestPermission(request)` → `context.client().requestPermission(request)`,
+  `context.createTerminal(request)` → `context.client().createTerminal(request)` (likewise
+  `getTerminalOutput`, `releaseTerminal`, `waitForTerminalExit`, `killTerminal`),
+  `context.createElicitation(request)` → `context.client().createElicitation(request)`,
+  `context.completeElicitation(notification)` → `context.client().completeElicitation(notification)`.
+  A test double implementing `PromptContext` or `SyncPromptContext` drops those ten methods and
+  implements `client()`.
+
 - **Breaking: one vocabulary for session updates.** The client builders' setters are handlers,
   like every other setter, and the prompt context sends session updates with the same verb as
   the agent and the test kit (`AcpAsyncAgent.sendSessionUpdate`, `AcpSyncAgent.sendSessionUpdate`,

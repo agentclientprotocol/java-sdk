@@ -70,12 +70,12 @@ class TerminalCapabilityTest {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();
 		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport()).promptHandler((request, context) -> {
 			List<Runnable> calls = List.of(
-					() -> context.createTerminal(new AcpSchema.CreateTerminalRequest(SESSION, "ls", List.of(), null,
+					() -> context.client().createTerminal(new AcpSchema.CreateTerminalRequest(SESSION, "ls", List.of(), null,
 							List.of(), null)),
-					() -> context.getTerminalOutput(new AcpSchema.TerminalOutputRequest(SESSION, TERMINAL)),
-					() -> context.waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(SESSION, TERMINAL)),
-					() -> context.killTerminal(new AcpSchema.KillTerminalCommandRequest(SESSION, TERMINAL)),
-					() -> context.releaseTerminal(new AcpSchema.ReleaseTerminalRequest(SESSION, TERMINAL)));
+					() -> context.client().getTerminalOutput(new AcpSchema.TerminalOutputRequest(SESSION, TERMINAL)),
+					() -> context.client().waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(SESSION, TERMINAL)),
+					() -> context.client().killTerminal(new AcpSchema.KillTerminalCommandRequest(SESSION, TERMINAL)),
+					() -> context.client().releaseTerminal(new AcpSchema.ReleaseTerminalRequest(SESSION, TERMINAL)));
 			for (Runnable call : calls) {
 				try {
 					call.run();

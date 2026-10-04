@@ -141,7 +141,7 @@ class CancelRequestEndToEndTest {
 				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
 			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(SESSION, null, null)))
 			.promptHandler((request, context) -> context
-				.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION, toolCall, options))
+				.client().requestPermission(new AcpSchema.RequestPermissionRequest(SESSION, toolCall, options))
 				.timeout(Duration.ofMillis(200))
 				.map(response -> new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN))
 				.onErrorReturn(new AcpSchema.PromptResponse(AcpSchema.StopReason.REFUSAL)))

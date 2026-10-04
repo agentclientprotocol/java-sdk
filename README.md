@@ -316,6 +316,10 @@ AcpSyncAgent agent = AcpAgent.sync(transport)
         // Convenience methods on SyncPromptContext
         String content = context.readFile("pom.xml");
         context.writeFile("output.txt", "Hello!");
+        // The raw ACP requests are on context.client()
+        String firstLines = context.client()
+            .readTextFile(new ReadTextFileRequest(context.getSessionId(), "pom.xml", 1, 10))
+            .content();
         return PromptResponse.endTurn();
     })
     .build();

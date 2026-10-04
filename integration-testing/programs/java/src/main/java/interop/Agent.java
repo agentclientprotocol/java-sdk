@@ -531,7 +531,7 @@ public class Agent {
 				List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE),
 						new AcpSchema.PermissionOption("reject", "Reject", AcpSchema.PermissionOptionKind.REJECT_ONCE)),
 				meta ? Map.of("interop", "m1") : null);
-		return context.requestPermission(req).flatMap(r -> {
+		return context.client().requestPermission(req).flatMap(r -> {
 			String said = r.outcome() instanceof AcpSchema.PermissionSelected sel ? "selected " + sel.optionId()
 					: "cancelled";
 			if (meta) {
@@ -566,7 +566,7 @@ public class Agent {
 			step("fs.write", false, t0, "the client did not advertise fs.writeTextFile");
 			return context.sendMessage("fs write error capability").thenReturn(endTurn());
 		}
-		return context.writeTextFile(new AcpSchema.WriteTextFileRequest(sessionId, path, content))
+		return context.client().writeTextFile(new AcpSchema.WriteTextFileRequest(sessionId, path, content))
 			.then(Mono.fromCallable(() -> {
 				step("fs.write", true, t0, "fs/write_text_file answered without error");
 				return "fs write ok";
@@ -601,7 +601,7 @@ public class Agent {
 			step(id, false, t0, "the client did not advertise fs.readTextFile");
 			return context.sendMessage("fs read error capability").thenReturn(endTurn());
 		}
-		return context.readTextFile(new AcpSchema.ReadTextFileRequest(sessionId, path, line, limit)).map(r -> {
+		return context.client().readTextFile(new AcpSchema.ReadTextFileRequest(sessionId, path, line, limit)).map(r -> {
 			String content = r.content();
 			switch (id) {
 				case "fs.read" -> step(id, FS_READ_CONTENT.equals(content), t0, "content " + quote(content));
@@ -625,7 +625,7 @@ public class Agent {
 	static Mono<AcpSchema.PromptResponse> readSlow(String sessionId, PromptContext context, String[] words) {
 		long t0 = System.nanoTime();
 		String path = words.length > 2 ? words[2] : "";
-		return context.readTextFile(new AcpSchema.ReadTextFileRequest(sessionId, path, null, null))
+		return context.client().readTextFile(new AcpSchema.ReadTextFileRequest(sessionId, path, null, null))
 			.contextWrite(RequestCancellation.cancelWhen(Mono.delay(Duration.ofMillis(300))))
 			.timeout(Duration.ofMillis(5_300))
 			.doOnNext(r -> step("cancel-request.agent", false, t0, "the read answered content, not -32800"))
@@ -791,12 +791,12 @@ public class Agent {
 			return context.sendMessage("terminal error capability").thenReturn(endTurn());
 		}
 		List<String> args = List.of(words).subList(3, words.length);
-		return context.createTerminal(new AcpSchema.CreateTerminalRequest(sid, words[2], args, null, null, null))
+		return context.client().createTerminal(new AcpSchema.CreateTerminalRequest(sid, words[2], args, null, null, null))
 			.flatMap(created -> {
 				String tid = created.terminalId();
-				return context.waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(sid, tid))
-					.flatMap(exit -> context.getTerminalOutput(new AcpSchema.TerminalOutputRequest(sid, tid))
-						.flatMap(out -> context.releaseTerminal(new AcpSchema.ReleaseTerminalRequest(sid, tid))
+				return context.client().waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(sid, tid))
+					.flatMap(exit -> context.client().getTerminalOutput(new AcpSchema.TerminalOutputRequest(sid, tid))
+						.flatMap(out -> context.client().releaseTerminal(new AcpSchema.ReleaseTerminalRequest(sid, tid))
 							.thenReturn(new Object[] { out.output(), exit.exitCode() })));
 			})
 			.map(r -> {
@@ -822,19 +822,19 @@ public class Agent {
 			return context.sendMessage("terminal error capability").thenReturn(endTurn());
 		}
 		List<String> args = List.of(words).subList(3, words.length);
-		return context.createTerminal(new AcpSchema.CreateTerminalRequest(sid, words[2], args, null, null, null))
+		return context.client().createTerminal(new AcpSchema.CreateTerminalRequest(sid, words[2], args, null, null, null))
 			.flatMap(created -> {
 				String tid = created.terminalId();
 				long[] killedAt = new long[1];
 				return Mono.delay(Duration.ofMillis(200))
-					.then(context.killTerminal(new AcpSchema.KillTerminalCommandRequest(sid, tid)))
+					.then(context.client().killTerminal(new AcpSchema.KillTerminalCommandRequest(sid, tid)))
 					.then(Mono.fromRunnable(() -> killedAt[0] = System.nanoTime()))
-					.then(context.waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(sid, tid)))
+					.then(context.client().waitForTerminalExit(new AcpSchema.WaitForTerminalExitRequest(sid, tid)))
 					.flatMap(exit -> {
 						long ms = (System.nanoTime() - killedAt[0]) / 1_000_000;
 						step("term.kill", ms <= 5000, t0, "wait_for_exit returned " + ms + " ms after the kill: exitCode "
 								+ exit.exitCode() + " signal " + exit.signal());
-						return context.releaseTerminal(new AcpSchema.ReleaseTerminalRequest(sid, tid));
+						return context.client().releaseTerminal(new AcpSchema.ReleaseTerminalRequest(sid, tid));
 					})
 					.thenReturn("terminal killed");
 			})
@@ -855,7 +855,7 @@ public class Agent {
 		Map<String, AcpSchema.ElicitationPropertySchema> props = Map.of("name",
 				new AcpSchema.StringPropertySchema("string", null, null, null, null, null, null, null, null, null,
 						null));
-		return context
+		return context.client()
 			.createElicitation(AcpSchema.CreateElicitationRequest.form(sid, "interop form",
 					new AcpSchema.ElicitationSchema(props, List.of("name"))))
 			.map(r -> {
@@ -877,10 +877,10 @@ public class Agent {
 		if (caps == null || caps.elicitation() == null || caps.elicitation().url() == null) {
 			return context.sendMessage("elicit error capability").thenReturn(endTurn());
 		}
-		return context
+		return context.client()
 			.createElicitation(AcpSchema.CreateElicitationRequest.url(sid, "interop url", "elic-1",
 					"https://example.invalid/interop"))
-			.then(context.completeElicitation(new AcpSchema.CompleteElicitationNotification("elic-1")))
+			.then(context.client().completeElicitation(new AcpSchema.CompleteElicitationNotification("elic-1")))
 			.thenReturn("elicit url done")
 			.onErrorResume(e -> Mono.just("elicit error " + code(e)))
 			.flatMap(context::sendMessage)

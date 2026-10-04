@@ -173,7 +173,7 @@ class PromptUpdateOrderTest {
 			.promptHandler((request, context) -> {
 				context.sendSessionUpdate(new AcpSchema.ToolCall(null, "call-1", "Edit file", null,
 						AcpSchema.ToolKind.EDIT, AcpSchema.ToolCallStatus.PENDING, null, null, null, null, null));
-				context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
+				context.client().requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
 						new AcpSchema.ToolCallUpdate("call-1", "Edit file", AcpSchema.ToolKind.EDIT,
 								AcpSchema.ToolCallStatus.PENDING),
 						List.of(new AcpSchema.PermissionOption("allow", "Allow", AcpSchema.PermissionOptionKind.ALLOW_ONCE))));
@@ -226,7 +226,7 @@ class PromptUpdateOrderTest {
 					context.sendMessage("trigger");
 				}
 				else {
-					context.requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
+					context.client().requestPermission(new AcpSchema.RequestPermissionRequest(SESSION,
 							new AcpSchema.ToolCallUpdate("call-2", "Edit", AcpSchema.ToolKind.EDIT,
 									AcpSchema.ToolCallStatus.PENDING),
 							List.of(new AcpSchema.PermissionOption("allow", "Allow",

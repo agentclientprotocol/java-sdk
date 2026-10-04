@@ -128,7 +128,7 @@ public abstract class SmokeAgent {
 	/** {@code #permission allow}: perm.selected. */
 	private static AcpSchema.PromptResponse permission(SyncPromptContext context) {
 		long t0 = System.nanoTime();
-		AcpSchema.RequestPermissionResponse response = context.requestPermission(new AcpSchema.RequestPermissionRequest(
+		AcpSchema.RequestPermissionResponse response = context.client().requestPermission(new AcpSchema.RequestPermissionRequest(
 				context.getSessionId(),
 				new AcpSchema.ToolCallUpdate("perm-1", "interop permission", AcpSchema.ToolKind.EDIT,
 						AcpSchema.ToolCallStatus.PENDING),
@@ -153,7 +153,7 @@ public abstract class SmokeAgent {
 		Map<String, AcpSchema.ElicitationPropertySchema> properties = Map.of("name",
 				new AcpSchema.StringPropertySchema("string", null, null, null, null, null, null, null, null, null,
 						null));
-		AcpSchema.CreateElicitationResponse response = context.createElicitation(AcpSchema.CreateElicitationRequest
+		AcpSchema.CreateElicitationResponse response = context.client().createElicitation(AcpSchema.CreateElicitationRequest
 			.form(context.getSessionId(), "interop form", new AcpSchema.ElicitationSchema(properties, List.of("name"))));
 		String action = String.valueOf(response.action());
 		Object name = response.content() == null ? null : response.content().get("name");

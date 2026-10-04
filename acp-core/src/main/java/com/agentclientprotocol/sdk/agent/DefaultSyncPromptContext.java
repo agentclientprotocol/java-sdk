@@ -45,54 +45,8 @@ class DefaultSyncPromptContext implements SyncPromptContext {
 	}
 
 	@Override
-	public AcpSchema.ReadTextFileResponse readTextFile(AcpSchema.ReadTextFileRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.readTextFile(request));
-	}
-
-	@Override
-	public AcpSchema.WriteTextFileResponse writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.writeTextFile(request));
-	}
-
-	@Override
-	public AcpSchema.RequestPermissionResponse requestPermission(AcpSchema.RequestPermissionRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.requestPermission(request));
-	}
-
-	@Override
-	public AcpSchema.CreateTerminalResponse createTerminal(AcpSchema.CreateTerminalRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.createTerminal(request));
-	}
-
-	@Override
-	public AcpSchema.TerminalOutputResponse getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.getTerminalOutput(request));
-	}
-
-	@Override
-	public AcpSchema.ReleaseTerminalResponse releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.releaseTerminal(request));
-	}
-
-	@Override
-	public AcpSchema.WaitForTerminalExitResponse waitForTerminalExit(AcpSchema.WaitForTerminalExitRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.waitForTerminalExit(request));
-	}
-
-	@Override
-	public AcpSchema.KillTerminalCommandResponse killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.killTerminal(request));
-	}
-
-	@Override
-	public AcpSchema.CreateElicitationResponse createElicitation(
-			AcpSchema.CreateElicitationRequest request) {
-		return SyncBlocking.awaitResponse(asyncContext.createElicitation(request));
-	}
-
-	@Override
-	public void completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
-		SyncCalls.block(asyncContext.completeElicitation(notification));
+	public SyncSessionClient client() {
+		return new DefaultSyncSessionClient(asyncContext.client());
 	}
 
 	@Override

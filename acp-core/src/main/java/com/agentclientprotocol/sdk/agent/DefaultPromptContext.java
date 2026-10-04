@@ -59,6 +59,9 @@ class DefaultPromptContext implements PromptContext {
 
 	private final PromptCancellations.Signal cancellation;
 
+	/** The protocol calls, through the agent. */
+	private final SessionClient client;
+
 	/** Whether this context's prompt has been answered: its updates are then dropped. */
 	private final BooleanSupplier answered;
 
@@ -70,6 +73,7 @@ class DefaultPromptContext implements PromptContext {
 	DefaultPromptContext(AcpAsyncAgent agent, String sessionId) {
 		this.agent = agent;
 		this.sessionId = sessionId;
+		this.client = new DefaultSessionClient(agent);
 		this.cancellation = (agent instanceof DefaultAcpAsyncAgent running) ? running.promptSignal(sessionId)
 				: new PromptCancellations.Signal();
 		this.answered = (agent instanceof DefaultAcpAsyncAgent running) ? running.promptAnswered(sessionId)
@@ -94,55 +98,8 @@ class DefaultPromptContext implements PromptContext {
 	}
 
 	@Override
-	public Mono<AcpSchema.ReadTextFileResponse> readTextFile(AcpSchema.ReadTextFileRequest request) {
-		return agent.readTextFile(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.WriteTextFileResponse> writeTextFile(AcpSchema.WriteTextFileRequest request) {
-		return agent.writeTextFile(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.RequestPermissionResponse> requestPermission(AcpSchema.RequestPermissionRequest request) {
-		return agent.requestPermission(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.CreateTerminalResponse> createTerminal(AcpSchema.CreateTerminalRequest request) {
-		return agent.createTerminal(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
-		return agent.getTerminalOutput(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
-		return agent.releaseTerminal(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.WaitForTerminalExitResponse> waitForTerminalExit(
-			AcpSchema.WaitForTerminalExitRequest request) {
-		return agent.waitForTerminalExit(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request) {
-		return agent.killTerminal(request);
-	}
-
-	@Override
-	public Mono<AcpSchema.CreateElicitationResponse> createElicitation(
-			AcpSchema.CreateElicitationRequest request) {
-		return agent.createElicitation(request);
-	}
-
-	@Override
-	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
-		return agent.completeElicitation(notification);
+	public SessionClient client() {
+		return client;
 	}
 
 	@Override
@@ -190,13 +147,13 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<String> readFile(String path, @Nullable Integer startLine, @Nullable Integer lineCount) {
-		return readTextFile(new ReadTextFileRequest(sessionId, path, startLine, lineCount))
+		return client.readTextFile(new ReadTextFileRequest(sessionId, path, startLine, lineCount))
 				.map(AcpSchema.ReadTextFileResponse::content);
 	}
 
 	@Override
 	public Mono<Void> writeFile(String path, String content) {
-		return writeTextFile(new WriteTextFileRequest(sessionId, path, content)).then();
+		return client.writeTextFile(new WriteTextFileRequest(sessionId, path, content)).then();
 	}
 
 	@Override
@@ -228,7 +185,7 @@ class DefaultPromptContext implements PromptContext {
 					null, null, null);
 			ToolCallUpdate toolCall = new ToolCallUpdate(toolCallId, title, kind, ToolCallStatus.PENDING);
 			return sendSessionUpdate(announce)
-				.then(requestPermission(new RequestPermissionRequest(sessionId, toolCall, options)))
+				.then(client.requestPermission(new RequestPermissionRequest(sessionId, toolCall, options)))
 				.flatMap(response -> {
 					ToolCallStatus status = (response.outcome() instanceof PermissionSelected) ? ToolCallStatus.COMPLETED
 							: ToolCallStatus.FAILED;
@@ -283,7 +240,7 @@ class DefaultPromptContext implements PromptContext {
 					.toList();
 		}
 
-		return createTerminal(new CreateTerminalRequest(
+		return client.createTerminal(new CreateTerminalRequest(
 				sessionId, command.executable(), command.args(),
 				command.cwd(), envList, command.outputByteLimit()))
 			.flatMap(createResp -> {
@@ -294,10 +251,10 @@ class DefaultPromptContext implements PromptContext {
 				// caller cancels (the prompt was cancelled or timed out).
 				AtomicBoolean releaseSent = new AtomicBoolean();
 				Mono<Void> release = Mono.defer(() -> releaseSent.compareAndSet(false, true)
-						? releaseTerminal(releaseReq).then() : Mono.empty());
+						? client.releaseTerminal(releaseReq).then() : Mono.empty());
 
-				return waitForTerminalExit(new WaitForTerminalExitRequest(sessionId, terminalId))
-						.flatMap(exitResp -> getTerminalOutput(new TerminalOutputRequest(sessionId, terminalId))
+				return client.waitForTerminalExit(new WaitForTerminalExitRequest(sessionId, terminalId))
+						.flatMap(exitResp -> client.getTerminalOutput(new TerminalOutputRequest(sessionId, terminalId))
 								.map(outputResp -> new CommandResult(outputResp.output(), exitResp.exitCode(),
 										exitResp.signal(), outputResp.truncated())))
 						// Release terminal after getting result, then return result

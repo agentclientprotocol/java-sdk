@@ -1733,8 +1733,8 @@ public final class AcpSchema {
 	 * The params of {@code session/request_permission}: the agent asks the client to let the user
 	 * approve a tool call, and offers the options to choose from, such as "allow once" and
 	 * "reject". An agent in a prompt turn sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#requestPermission
-	 * requestPermission(...)} on the prompt context, or the method of the same name on
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#requestPermission
+	 * requestPermission(...)} on the prompt context's {@code client()}, or the method of the same name on
 	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askPermission(String, ToolKind)
 	 * askPermission} and
@@ -1875,8 +1875,8 @@ public final class AcpSchema {
 	 * usually sends it with
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#readFile(String, Integer, Integer)
 	 * readFile}, which fills in the session;
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#readTextFile readTextFile(...)} on the
-	 * prompt context, and the methods of the same name on {@code AcpAsyncAgent} and
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#readTextFile readTextFile(...)} on the
+	 * prompt context's {@code client()}, and the methods of the same name on {@code AcpAsyncAgent} and
 	 * {@code AcpSyncAgent}, take the whole request. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#readTextFileHandler
 	 * readTextFileHandler} on the client builder, receives it and answers with a
@@ -1949,8 +1949,8 @@ public final class AcpSchema {
 	 * An agent in a prompt turn usually sends it with
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#writeFile(String, String) writeFile},
 	 * which fills in the session;
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#writeTextFile writeTextFile(...)} on
-	 * the prompt context, and the methods of the same name on {@code AcpAsyncAgent} and
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#writeTextFile writeTextFile(...)} on
+	 * the prompt context's {@code client()}, and the methods of the same name on {@code AcpAsyncAgent} and
 	 * {@code AcpSyncAgent}, take the whole request. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#writeTextFileHandler
 	 * writeTextFileHandler} on the client builder, receives it and answers with a
@@ -2017,8 +2017,8 @@ public final class AcpSchema {
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} on the
 	 * prompt context builds it from a {@link com.agentclientprotocol.sdk.agent.Command} and runs
 	 * the whole sequence. To send it yourself, use
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#createTerminal createTerminal(...)} on
-	 * the prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#createTerminal createTerminal(...)} on
+	 * the prompt context's {@code client()}, or the method of the same name on {@code AcpAsyncAgent} or
 	 * {@code AcpSyncAgent}. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#createTerminalHandler
 	 * createTerminalHandler} on the client builder, receives it.
@@ -2104,8 +2104,8 @@ public final class AcpSchema {
 	 * The params of {@code terminal/output}: the agent asks for a terminal's output so far, without
 	 * waiting for the command to end. The answer, a {@link TerminalOutputResponse}, also says
 	 * whether the output was truncated and, once the command has ended, how it ended. The agent
-	 * sends it with {@link com.agentclientprotocol.sdk.agent.PromptContext#getTerminalOutput
-	 * getTerminalOutput(...)} on the prompt context, or the method of the same name on
+	 * sends it with {@link com.agentclientprotocol.sdk.agent.SessionClient#getTerminalOutput
+	 * getTerminalOutput(...)} on the prompt context's {@code client()}, or the method of the same name on
 	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} sends it
 	 * once the command has ended. The client's handler, set with
@@ -2177,8 +2177,8 @@ public final class AcpSchema {
 	 * the command if it is still running and frees the terminal; the ID is invalid afterwards for
 	 * every other terminal request. A tool call that shows the terminal ({@link ToolCallTerminal})
 	 * should keep showing its output. The agent sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#releaseTerminal releaseTerminal(...)}
-	 * on the prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#releaseTerminal releaseTerminal(...)}
+	 * on the prompt context's {@code client()}, or the method of the same name on {@code AcpAsyncAgent} or
 	 * {@code AcpSyncAgent}. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#releaseTerminalHandler
 	 * releaseTerminalHandler} on the client builder, receives it and answers with a
@@ -2240,8 +2240,8 @@ public final class AcpSchema {
 	 * The params of {@code terminal/wait_for_exit}: the agent asks the client to answer once a
 	 * terminal's command has ended. The answer, a {@link WaitForTerminalExitResponse}, carries the
 	 * exit code or the signal that ended it. The agent sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#waitForTerminalExit
-	 * waitForTerminalExit(...)} on the prompt context, or the method of the same name on
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#waitForTerminalExit
+	 * waitForTerminalExit(...)} on the prompt context's {@code client()}, or the method of the same name on
 	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
 	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#execute(Command) execute} sends it
 	 * right after creating the terminal. The client's handler, set with
@@ -2319,8 +2319,8 @@ public final class AcpSchema {
 	 * but keep the terminal. Afterwards {@code terminal/output} still gives the final output and
 	 * {@code terminal/wait_for_exit} the exit status, and the agent must still release the terminal
 	 * ({@link ReleaseTerminalRequest}). The agent sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#killTerminal killTerminal(...)} on the
-	 * prompt context, or the method of the same name on {@code AcpAsyncAgent} or
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#killTerminal killTerminal(...)} on the
+	 * prompt context's {@code client()}, or the method of the same name on {@code AcpAsyncAgent} or
 	 * {@code AcpSyncAgent}. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#killTerminalHandler
 	 * killTerminalHandler} on the client builder, receives it and answers with a
@@ -2388,8 +2388,8 @@ public final class AcpSchema {
 	 * sign-in that the agent's own server handles. Build it with
 	 * {@link #form(String, String, ElicitationSchema) form} or
 	 * {@link #url(String, String, String, String) url}, which scope it to a session. The agent
-	 * sends it with {@link com.agentclientprotocol.sdk.agent.PromptContext#createElicitation
-	 * createElicitation(...)} on the prompt context, or the method of the same name on
+	 * sends it with {@link com.agentclientprotocol.sdk.agent.SessionClient#createElicitation
+	 * createElicitation(...)} on the prompt context's {@code client()}, or the method of the same name on
 	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent}. The client's handler, set with
 	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#createElicitationHandler
 	 * createElicitationHandler} on the client builder, receives it and answers with a
@@ -2625,8 +2625,8 @@ public final class AcpSchema {
 	 * The params of {@code elicitation/complete}, a notification: the agent tells the client that
 	 * the interaction of a URL-mode elicitation, at its URL, has finished. Sending it is optional.
 	 * The agent sends it with
-	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#completeElicitation
-	 * completeElicitation(...)} on the prompt context, or the method of the same name on
+	 * {@link com.agentclientprotocol.sdk.agent.SessionClient#completeElicitation
+	 * completeElicitation(...)} on the prompt context's {@code client()}, or the method of the same name on
 	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent}, with the
 	 * {@link CreateElicitationRequest#elicitationId()} of the request, and the protocol allows it
 	 * only to the client that received that request. The client's handler, set with
