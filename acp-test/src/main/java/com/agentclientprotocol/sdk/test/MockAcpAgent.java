@@ -20,31 +20,41 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * A mock ACP agent for testing client implementations.
+ * A scripted ACP agent for testing client code: it answers {@code initialize}, {@code session/new}
+ * and {@code session/prompt} with the responses set on its {@link Builder}, and records every
+ * request it receives so a test can check what the client sent. Put it on the agent side of an
+ * {@link InMemoryTransportPair}, or on any {@link AcpAgentTransport}, and call {@link #start()}. To
+ * test an agent instead, use {@link MockAcpClient}.
  *
- * <p>
- * This mock provides a configurable agent that:
- * <ul>
- * <li>Records all received requests for verification</li>
- * <li>Allows customizing responses via response providers</li>
- * <li>Supports synchronous waiting for specific operations</li>
- * </ul>
+ * <p>Without builder settings it answers {@code initialize} with protocol version 1, no agent
+ * capabilities and no authentication methods, {@code session/new} with the session ID
+ * {@code "mock-session"}, and every prompt with stop reason {@code end_turn}. It accepts
+ * {@code session/cancel} and records it. Every other request is answered {@code -32601} (method not
+ * found), even when a custom {@code initialize} answer advertises the capability. Send session
+ * updates with {@link #sendSessionUpdate}; for other calls to the client, use the agent it wraps,
+ * from {@link #async()}.
  *
- * <p>
- * Example usage:
+ * <p>The {@code getReceived...} methods return copies of what has arrived so far, oldest first. To
+ * wait for prompts, call {@link #expectPrompts(int)} before the client sends them, then
+ * {@link #awaitPrompts(Duration)}. The methods may be called from any thread while the client runs.
+ *
  * <pre>{@code
- * InMemoryTransportPair transportPair = InMemoryTransportPair.create();
- * MockAcpAgent mockAgent = MockAcpAgent.builder(transportPair.agentTransport())
- *     .initializeResponse(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of()))
- *     .promptResponse(request -> new AcpSchema.PromptResponse(AcpSchema.StopReason.END_TURN))
+ * InMemoryTransportPair pair = InMemoryTransportPair.create();
+ * MockAcpAgent agent = MockAcpAgent.builder(pair.agentTransport())
+ *     .promptResponse(request -> AcpSchema.PromptResponse.refusal())
  *     .build();
+ * agent.start();
  *
- * mockAgent.start();
+ * AcpSyncClient client = AcpClient.sync(pair.clientTransport()).build();
+ * client.initialize();
+ * String sessionId = client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
+ *     .sessionId();                                       // "mock-session"
+ * AcpSchema.PromptResponse response = client.prompt(new AcpSchema.PromptRequest(sessionId,
+ *     List.of(new AcpSchema.TextContent("Delete everything"))));
  *
- * // ... test client operations ...
- *
- * assertThat(mockAgent.getReceivedPrompts()).hasSize(1);
- * mockAgent.close();
+ * List<AcpSchema.PromptRequest> prompts = agent.getReceivedPrompts(); // the one prompt sent
+ * client.close();
+ * agent.close();
  * }</pre>
  *
  * @author Mark Pollack
@@ -93,25 +103,31 @@ public class MockAcpAgent {
 	}
 
 	/**
-	 * Creates a builder for configuring the mock agent.
-	 * @param transport The agent transport
-	 * @return A new builder instance
+	 * Starts a builder for a mock agent on the given transport, with the default responses.
+	 * @param transport the agent transport, usually {@link InMemoryTransportPair#agentTransport()};
+	 * must not be null
+	 * @return a new builder
 	 */
 	public static Builder builder(AcpAgentTransport transport) {
 		return new Builder(transport);
 	}
 
 	/**
-	 * Creates a simple mock agent with default responses.
-	 * @param transport The agent transport
-	 * @return A new mock agent with default behavior
+	 * Creates a mock agent with the default responses (see the class comment), not yet started. The
+	 * same as {@code builder(transport).build()}.
+	 * @param transport the agent transport
+	 * @return a new mock agent
+	 * @throws IllegalArgumentException if {@code transport} is null
 	 */
 	public static MockAcpAgent createDefault(AcpAgentTransport transport) {
 		return builder(transport).build();
 	}
 
 	/**
-	 * Starts the mock agent.
+	 * Starts the agent, which starts its transport; from then on it answers the client. It returns
+	 * once the agent is started and does not wait for the client. Call it once: a failure to start,
+	 * such as a transport that was started before, is logged at WARN under this class's logger, not
+	 * thrown.
 	 */
 	public void start() {
 		delegate.start()
@@ -120,88 +136,105 @@ public class MockAcpAgent {
 	}
 
 	/**
-	 * Sets a latch to wait for a specific number of prompts.
-	 * @param count The number of prompts to wait for
+	 * Sets how many prompts {@link #awaitPrompts} waits for, counting from this call: prompts that
+	 * arrived before it do not count. Call it before the client sends them. Until it is called,
+	 * {@code awaitPrompts} returns {@code true} at once.
+	 * @param count the number of prompts to wait for
+	 * @throws IllegalArgumentException if {@code count} is negative
 	 */
 	public void expectPrompts(int count) {
 		promptLatch.set(new CountDownLatch(count));
 	}
 
 	/**
-	 * Waits for expected prompts to be received.
-	 * @param timeout The maximum time to wait
-	 * @return true if all expected prompts were received
-	 * @throws InterruptedException if interrupted while waiting
+	 * Waits until the prompts set by the last {@link #expectPrompts} call have arrived, or the
+	 * timeout passes. A prompt counts when it reaches the mock, before its answer is sent.
+	 * @param timeout the longest to wait
+	 * @return {@code true} if they arrived, {@code false} if the timeout passed first
+	 * @throws InterruptedException if the thread is interrupted while waiting
 	 */
 	public boolean awaitPrompts(Duration timeout) throws InterruptedException {
 		return promptLatch.get().await(timeout.toMillis(), TimeUnit.MILLISECONDS);
 	}
 
 	/**
-	 * Gets all received initialize requests.
-	 * @return The list of initialize requests
+	 * Returns the {@code initialize} requests received so far, oldest first.
+	 * @return a copy, which later requests do not change
 	 */
 	public List<AcpSchema.InitializeRequest> getReceivedInitRequests() {
 		return List.copyOf(receivedInitRequests);
 	}
 
 	/**
-	 * Gets all received new session requests.
-	 * @return The list of new session requests
+	 * Returns the {@code session/new} requests received so far, oldest first.
+	 * @return a copy, which later requests do not change
 	 */
 	public List<AcpSchema.NewSessionRequest> getReceivedNewSessionRequests() {
 		return List.copyOf(receivedNewSessionRequests);
 	}
 
 	/**
-	 * Gets all received prompts.
-	 * @return The list of prompts
+	 * Returns the {@code session/prompt} requests received so far, oldest first, from every
+	 * session.
+	 * @return a copy, which later prompts do not change
 	 */
 	public List<AcpSchema.PromptRequest> getReceivedPrompts() {
 		return List.copyOf(receivedPrompts);
 	}
 
 	/**
-	 * Gets all received cancellation notifications.
-	 * @return The list of cancellations
+	 * Returns the {@code session/cancel} notifications received so far, oldest first.
+	 * @return a copy, which later notifications do not change
 	 */
 	public List<AcpSchema.CancelNotification> getReceivedCancellations() {
 		return List.copyOf(receivedCancellations);
 	}
 
 	/**
-	 * Sends a session update notification to the client.
-	 * @param sessionId The session ID
-	 * @param update The update to send
+	 * Sends a {@code session/update} notification to the client, during a prompt or between
+	 * prompts, and blocks until it is handed to the transport, at most 10 seconds. The session ID
+	 * is not checked.
+	 * @param sessionId the ACP session the update belongs to
+	 * @param update the update, such as an {@code AgentMessageChunk}
+	 * @throws IllegalStateException if the agent is not started, or the send takes longer than 10
+	 * seconds
 	 */
 	public void sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
 		delegate.sendSessionUpdate(sessionId, update).block(DEFAULT_TIMEOUT);
 	}
 
 	/**
-	 * Returns the underlying async agent.
-	 * @return The async agent
+	 * Returns the agent the mock wraps, for calls the mock does not offer: permission, file,
+	 * terminal and extension requests to the client, or the client's capabilities.
+	 * @return the underlying agent
 	 */
 	public AcpAsyncAgent async() {
 		return delegate;
 	}
 
 	/**
-	 * Closes the mock agent gracefully.
+	 * Closes the agent gracefully and blocks until its transport has closed, at most 10 seconds:
+	 * requests still being handled are answered as cancelled ({@code -32800}). See
+	 * {@link AcpAsyncAgent#closeGracefully()}.
+	 * @throws IllegalStateException if closing takes longer than 10 seconds
 	 */
 	public void closeGracefully() {
 		delegate.closeGracefully().block(DEFAULT_TIMEOUT);
 	}
 
 	/**
-	 * Closes the mock agent immediately.
+	 * Closes the agent and its transport at once, without waiting. See
+	 * {@link AcpAsyncAgent#close()}.
 	 */
 	public void close() {
 		delegate.close();
 	}
 
 	/**
-	 * Builder for MockAcpAgent.
+	 * Configures a {@link MockAcpAgent}: its answers to {@code initialize}, {@code session/new} and
+	 * {@code session/prompt}, and the timeout of its requests to the client. Every setting has a
+	 * default (see {@link MockAcpAgent}). Get one from {@link MockAcpAgent#builder};
+	 * {@link #build()} creates the mock, not yet started.
 	 */
 	public static class Builder {
 
@@ -224,9 +257,12 @@ public class MockAcpAgent {
 		}
 
 		/**
-		 * Sets the response for initialize requests.
-		 * @param response The initialize response
-		 * @return This builder
+		 * Sets the answer to every {@code initialize} request. Capabilities it advertises are only
+		 * advertised: the mock still serves only {@code initialize}, {@code session/new},
+		 * {@code session/prompt} and {@code session/cancel}.
+		 * @param response the answer; must not be null. Default: protocol version 1, no
+		 * capabilities, no authentication methods
+		 * @return this builder
 		 */
 		public Builder initializeResponse(AcpSchema.InitializeResponse response) {
 			this.initializeResponse = response;
@@ -234,9 +270,10 @@ public class MockAcpAgent {
 		}
 
 		/**
-		 * Sets the response for new session requests.
-		 * @param response The new session response
-		 * @return This builder
+		 * Sets the answer to every {@code session/new} request, so every session gets the same ID.
+		 * @param response the answer; must not be null. Default: session ID {@code "mock-session"},
+		 * no modes and no config options
+		 * @return this builder
 		 */
 		public Builder newSessionResponse(AcpSchema.NewSessionResponse response) {
 			this.newSessionResponse = response;
@@ -244,9 +281,13 @@ public class MockAcpAgent {
 		}
 
 		/**
-		 * Sets a function to generate prompt responses.
-		 * @param provider The prompt response provider
-		 * @return This builder
+		 * Sets the function that answers each prompt, given the request. It runs after the prompt
+		 * is recorded. An exception it throws answers the prompt with an error: an
+		 * {@code AcpProtocolException} with its own code, anything else with {@code -32603}
+		 * (internal error).
+		 * @param provider the function; must not be null or return null. Default: stop reason
+		 * {@code end_turn}
+		 * @return this builder
 		 */
 		public Builder promptResponse(Function<AcpSchema.PromptRequest, AcpSchema.PromptResponse> provider) {
 			this.promptResponseProvider = provider;
@@ -254,9 +295,13 @@ public class MockAcpAgent {
 		}
 
 		/**
-		 * Sets the request timeout.
-		 * @param timeout The timeout
-		 * @return This builder
+		 * Sets how long the agent waits for the client to answer a request it sends, such as one
+		 * made through {@link MockAcpAgent#async()}; see
+		 * {@link AcpAgent.AsyncAgentBuilder#requestTimeout(Duration)}. It does not change how long
+		 * {@link MockAcpAgent#sendSessionUpdate} and {@link MockAcpAgent#closeGracefully()} wait,
+		 * which is 10 seconds.
+		 * @param timeout the timeout; default 10 seconds
+		 * @return this builder
 		 */
 		public Builder requestTimeout(Duration timeout) {
 			this.requestTimeout = timeout;
@@ -264,8 +309,9 @@ public class MockAcpAgent {
 		}
 
 		/**
-		 * Builds the mock agent.
-		 * @return The configured mock agent
+		 * Builds the mock agent; call {@link MockAcpAgent#start()} to start it.
+		 * @return the mock agent
+		 * @throws IllegalArgumentException if the transport or the request timeout is null
 		 */
 		public MockAcpAgent build() {
 			return new MockAcpAgent(this);

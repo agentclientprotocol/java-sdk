@@ -23,11 +23,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Jackson 2 implementation of {@link AcpJsonMapper}, shipped in {@code acp-json-jackson2}.
- * Wraps a Jackson {@link ObjectMapper} but keeps the SDK decoupled from Jackson at the API
- * level. It keeps the package it had when it lived in {@code acp-core}, so code that
- * constructs it compiles unchanged. It needs Jackson 2.18.1 or later (jackson-core and
- * jackson-databind), which it checks when it is created.
+ * The Jackson 2 {@link AcpJsonMapper}, from the {@code acp-json-jackson2} module: it reads and
+ * writes ACP messages with a Jackson {@link ObjectMapper}. {@link AcpJsonMapper#createDefault()}
+ * returns one built on {@link #defaultObjectMapper()} when this is the only JSON module on the
+ * classpath; create one yourself to give a transport an {@code ObjectMapper} you configured. Use
+ * {@code acp-json-jackson3} instead when the application already runs on Jackson 3.
+ *
+ * <p>It needs jackson-core and jackson-databind 2.18.1 or later, and checks both when it is
+ * created: an older Jackson 2 fails then with an {@link IllegalStateException} that names the
+ * versions found, not later while reading a message. It lives in the package of
+ * {@link AcpJsonMapper}, which acp-core and this module share.
+ *
+ * <p>Reads and writes fail with Jackson's {@link IOException} subclasses, and conversions with
+ * {@link IllegalArgumentException}, as {@link AcpJsonMapper} requires. It is safe for concurrent
+ * use as long as the {@code ObjectMapper} is not reconfigured once in use.
  *
  * @author Mark Pollack
  */
@@ -38,27 +47,26 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	private final ObjectMapper objectMapper;
 
 	/**
-	 * The {@link ObjectMapper} the SDK uses by default: <em>lenient</em> about unknown
-	 * properties, because the ACP specification adds fields between releases and an agent
-	 * newer than this SDK must keep working. Each unknown property is logged once per
-	 * occurrence at DEBUG under this class's logger, so spec drift is observable without
-	 * making the wire strict.
+	 * Returns a new {@link ObjectMapper} set up the way the SDK reads and writes ACP; the module's
+	 * supplier builds its mapper on it. It differs from a bare {@code new ObjectMapper()} in two
+	 * ways:
+	 * <ul>
+	 * <li>unknown properties are skipped, not rejected, because the ACP specification adds fields
+	 * between releases and an agent newer than this SDK must keep working. Each skipped property is
+	 * logged at DEBUG under this class's logger, so drift can be seen without making the wire
+	 * strict;</li>
+	 * <li>a scalar of the wrong JSON type is refused rather than coerced (a number or boolean where
+	 * a string is expected, a string where a number or boolean is expected): the SDK answers such
+	 * params {@code -32602} (Invalid params), and a coerced value would hide a peer's bug.</li>
+	 * </ul>
 	 *
-	 * <p>
-	 * Strictness is the mapper's decision, not the schema's: the schema records carry no
+	 * <p>Strictness is the mapper's choice, not the schema's: the schema records carry no
 	 * {@code @JsonIgnoreProperties}, so a mapper with
-	 * {@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} enabled (Jackson's own
-	 * default for a bare {@code new ObjectMapper()}) fails on the first unknown field.
-	 * Consumers who want their own configuration on top of the SDK's defaults should start
-	 * from this method's result.
-	 * </p>
-	 * <p>
-	 * A scalar of the wrong JSON type is refused rather than coerced (a number or boolean for
-	 * a string, a string for a number or boolean): JSON-RPC answers such params -32602 Invalid
-	 * params, and a coerced value would hide a peer's bug.
-	 * </p>
-	 *
-	 * @return a new, independently configurable lenient mapper
+	 * {@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} enabled (a bare
+	 * {@code ObjectMapper}'s default) fails on the first unknown field. To customise the SDK's
+	 * settings, start from this method's result and pass it to
+	 * {@link #JacksonAcpJsonMapper(ObjectMapper)}.
+	 * @return a new mapper, shared with no other caller
 	 */
 	public static ObjectMapper defaultObjectMapper() {
 		return JsonMapper.builder()
@@ -91,11 +99,13 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	}
 
 	/**
-	 * Constructs a new JacksonAcpJsonMapper with the given ObjectMapper.
-	 * @param objectMapper the ObjectMapper to use. Must not be null.
-	 * @throws IllegalArgumentException if the provided ObjectMapper is null.
-	 * @throws IllegalStateException if the Jackson 2 on the classpath is older than the supported
-	 * floor (see the type comment)
+	 * Creates a mapper that reads and writes with the given {@code ObjectMapper}, used as is: none
+	 * of the settings of {@link #defaultObjectMapper()} are added.
+	 * @param objectMapper the Jackson mapper; start from {@link #defaultObjectMapper()} to keep the
+	 * SDK's settings
+	 * @throws IllegalArgumentException if {@code objectMapper} is null
+	 * @throws IllegalStateException if the jackson-core or jackson-databind on the classpath is
+	 * older than 2.18.1
 	 */
 	public JacksonAcpJsonMapper(ObjectMapper objectMapper) {
 		JacksonVersions.requireSupported();
@@ -106,8 +116,9 @@ public final class JacksonAcpJsonMapper implements AcpJsonMapper {
 	}
 
 	/**
-	 * Returns the underlying Jackson {@link ObjectMapper}.
-	 * @return the ObjectMapper instance
+	 * Returns the {@code ObjectMapper} this mapper reads and writes with: the one given to the
+	 * constructor, not a copy.
+	 * @return the Jackson mapper
 	 */
 	public ObjectMapper getObjectMapper() {
 		return objectMapper;

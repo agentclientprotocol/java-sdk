@@ -26,23 +26,24 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.type.LogicalType;
 
 /**
- * Jackson 3 ({@code tools.jackson}) implementation of {@link AcpJsonMapper}, shipped in
- * {@code acp-json-jackson3}. Wraps a Jackson {@link JsonMapper} but keeps the SDK
- * decoupled from Jackson at the API level. It needs Jackson 3.0.0 or later (jackson-core and
- * jackson-databind), which it checks when it is created.
+ * The Jackson 3 {@link AcpJsonMapper}, from the {@code acp-json-jackson3} module: it reads and
+ * writes ACP messages with a Jackson 3 ({@code tools.jackson}) {@link JsonMapper}.
+ * {@link AcpJsonMapper#createDefault()} returns one built on {@link #defaultJsonMapper()} when this
+ * module is on the classpath, even next to {@code acp-json-jackson2}; create one yourself to give a
+ * transport a {@code JsonMapper} you configured. Use it when the application already runs on
+ * Jackson 3, as under Spring Boot 4.
  *
- * <p>
- * The schema records carry Jackson 2 annotations ({@code com.fasterxml.jackson.annotation}),
- * which Jackson 3 reads unchanged, so both JSON modules serialize the same records. With
- * {@link #defaultJsonMapper()} the bytes on the wire are the same as with the Jackson 2
- * module.
- * </p>
+ * <p>How it differs from the Jackson 2 module's {@code JacksonAcpJsonMapper}: it needs jackson-core
+ * and jackson-databind 3.0.0 or later, and checks both when it is created (an
+ * {@link IllegalStateException} names the versions found). Jackson 3 reports errors with the
+ * unchecked {@link JacksonException}; to keep the {@link AcpJsonMapper} contract, this mapper
+ * rethrows it as an {@link IOException} from reads and writes and as an
+ * {@link IllegalArgumentException} from conversions, with the original as the cause. Jackson 3
+ * mappers are immutable, so it is safe for concurrent use.
  *
- * <p>
- * Jackson 3 reports errors with the unchecked {@link JacksonException}. To keep the
- * {@link AcpJsonMapper} contract, reads and writes rethrow it as an {@link IOException}
- * (the original is the cause) and conversions as an {@link IllegalArgumentException}.
- * </p>
+ * <p>The schema records carry Jackson 2 annotations ({@code com.fasterxml.jackson.annotation}),
+ * which Jackson 3 reads unchanged, so both modules serialize the same records. With
+ * {@link #defaultJsonMapper()} the bytes on the wire are the same as with the Jackson 2 module.
  *
  * @author Mark Pollack
  */
@@ -53,46 +54,36 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	private final JsonMapper jsonMapper;
 
 	/**
-	 * The {@link JsonMapper} the SDK uses by default. Like the Jackson 2 module's
-	 * default it is <em>lenient</em> about unknown properties, because the ACP
-	 * specification adds fields between releases and an agent newer than this SDK must
-	 * keep working, and it logs each unknown property at DEBUG under this class's logger,
-	 * so spec drift is observable without making the wire strict.
+	 * Returns a new {@link JsonMapper} set up the way the SDK reads and writes ACP; the module's
+	 * supplier builds its mapper on it. Like the Jackson 2 module's default, it skips unknown
+	 * properties instead of rejecting them, because the ACP specification adds fields between
+	 * releases and an agent newer than this SDK must keep working, and logs each one at DEBUG under
+	 * this class's logger, so drift can be seen without making the wire strict. It also refuses a
+	 * scalar of the wrong JSON type rather than coercing it (a number or boolean where a string is
+	 * expected, a string where a number or boolean is expected): the SDK answers such params
+	 * {@code -32602} (Invalid params), and a coerced value would hide a peer's bug.
 	 *
-	 * <p>
-	 * Jackson 3 changed several defaults from Jackson 2. Where the change would alter
-	 * what the SDK writes or accepts, this mapper restores the Jackson 2 behaviour:
-	 * </p>
+	 * <p>Jackson 3 changed several defaults from Jackson 2. Where the change would alter what the
+	 * SDK writes or accepts, this mapper restores the Jackson 2 behaviour:
 	 * <ul>
-	 * <li>{@link MapperFeature#SORT_PROPERTIES_ALPHABETICALLY} is disabled, so properties
-	 * are written in record-component order, as with Jackson 2;</li>
-	 * <li>{@link DeserializationFeature#FAIL_ON_NULL_FOR_PRIMITIVES} is disabled, so a
-	 * JSON {@code null} for a primitive component reads as its default value;</li>
-	 * <li>{@link DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is disabled, so content
-	 * after the first JSON value is ignored rather than rejected;</li>
+	 * <li>{@link MapperFeature#SORT_PROPERTIES_ALPHABETICALLY} is disabled, so properties are
+	 * written in record-component order;</li>
+	 * <li>{@link DeserializationFeature#FAIL_ON_NULL_FOR_PRIMITIVES} is disabled, so a JSON
+	 * {@code null} for a primitive component reads as its default value;</li>
+	 * <li>{@link DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is disabled, so content after the
+	 * first JSON value is ignored rather than rejected;</li>
 	 * <li>{@link EnumFeature#READ_ENUMS_USING_TO_STRING} and
 	 * {@link EnumFeature#WRITE_ENUMS_USING_TO_STRING} are disabled, so enums use their
 	 * {@code @JsonProperty} name or constant name, never {@code toString()}.</li>
 	 * </ul>
-	 * <p>
-	 * {@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} is disabled explicitly
-	 * (it is already off by default in Jackson 3, unlike Jackson 2).
-	 * </p>
 	 *
-	 * <p>
-	 * Strictness is the mapper's decision, not the schema's: the schema records carry no
-	 * {@code @JsonIgnoreProperties}, so a mapper with
-	 * {@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} enabled fails on the
-	 * first unknown field. Jackson 3 mappers are immutable; to customise this one, start
-	 * from {@code defaultJsonMapper().rebuild()}.
-	 * </p>
-	 * <p>
-	 * A scalar of the wrong JSON type is refused rather than coerced (a number or boolean for
-	 * a string, a string for a number or boolean): JSON-RPC answers such params -32602 Invalid
-	 * params, and a coerced value would hide a peer's bug.
-	 * </p>
-	 *
-	 * @return a new, independently configurable lenient mapper
+	 * <p>{@link DeserializationFeature#FAIL_ON_UNKNOWN_PROPERTIES} is disabled explicitly; Jackson
+	 * 3 already has it off by default. Strictness is the mapper's choice, not the schema's: the
+	 * schema records carry no {@code @JsonIgnoreProperties}, so a mapper with that feature enabled
+	 * fails on the first unknown field. Jackson 3 mappers are immutable; to customise this one,
+	 * start from {@code defaultJsonMapper().rebuild()}, which keeps the logging of unknown
+	 * properties, and pass the result to {@link #Jackson3AcpJsonMapper(JsonMapper)}.
+	 * @return a new mapper, shared with no other caller
 	 */
 	public static JsonMapper defaultJsonMapper() {
 		return JsonMapper.builder()
@@ -129,11 +120,13 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	/**
-	 * Constructs a new Jackson3AcpJsonMapper with the given JsonMapper, used as is.
-	 * @param jsonMapper the JsonMapper to use. Must not be null.
-	 * @throws IllegalArgumentException if the provided JsonMapper is null.
-	 * @throws IllegalStateException if the Jackson 3 on the classpath is older than the supported
-	 * floor (see the type comment)
+	 * Creates a mapper that reads and writes with the given {@code JsonMapper}, used as is: none of
+	 * the settings of {@link #defaultJsonMapper()} are added.
+	 * @param jsonMapper the Jackson mapper; start from {@link #defaultJsonMapper()} to keep the
+	 * SDK's settings
+	 * @throws IllegalArgumentException if {@code jsonMapper} is null
+	 * @throws IllegalStateException if the jackson-core or jackson-databind on the classpath is
+	 * older than 3.0.0
 	 */
 	public Jackson3AcpJsonMapper(JsonMapper jsonMapper) {
 		Jackson3Versions.requireSupported();
@@ -144,8 +137,9 @@ public final class Jackson3AcpJsonMapper implements AcpJsonMapper {
 	}
 
 	/**
-	 * Returns the underlying Jackson {@link JsonMapper}.
-	 * @return the JsonMapper instance
+	 * Returns the {@code JsonMapper} this mapper reads and writes with: the one given to the
+	 * constructor.
+	 * @return the Jackson mapper
 	 */
 	public JsonMapper getJsonMapper() {
 		return jsonMapper;

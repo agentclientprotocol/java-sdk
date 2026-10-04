@@ -17,32 +17,52 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 /**
- * Creates a bidirectional in-memory transport pair for testing client ↔ agent communication
- * without real processes or network connections.
+ * Two connected transports, {@link #clientTransport()} and {@link #agentTransport()}, that link an
+ * ACP client and an agent inside one JVM for tests: build a client on one and an agent on the
+ * other, and they talk without a process or a network. Use it with {@link MockAcpAgent} or
+ * {@link MockAcpClient}, or with a real client and agent from
+ * {@link com.agentclientprotocol.sdk.client.AcpClient} and
+ * {@link com.agentclientprotocol.sdk.agent.AcpAgent}. Messages pass between the two as Java objects
+ * and are never written as JSON, so a test of what goes over the wire needs a real transport
+ * instead.
  *
- * <p>
- * This class provides connected client and agent transports that communicate through
- * in-memory sinks, enabling:
- * </p>
- * <ul>
- * <li>Unit testing of protocol logic without I/O</li>
- * <li>Fast, deterministic tests</li>
- * <li>Testing both client and agent sides in isolation or together</li>
- * </ul>
+ * <p>Each side receives what the other sends, in order. A message sent before the other side has
+ * started waits until it starts, so the client and the agent can be built and started in either
+ * order. Both transports accept sends from several threads at once. Each carries one connection: a
+ * second connect or start fails with {@link IllegalStateException}, so use a new pair for every
+ * client and agent. Params and results are converted to the records the SDK expects with a mapper
+ * from {@link AcpJsonMapper#createDefault()}, created for each conversion, so a JSON module must be
+ * on the classpath; {@code acp-test} brings in {@code acp-json-jackson2}.
  *
- * <p>
- * Example usage:
- * </p>
+ * <p>Closing one side ends the other side's input, but neither transport reports that as its end:
+ * the agent transport's {@code awaitTermination()} completes only once the agent side is closed (so
+ * {@code AcpSyncAgent.run()} keeps running after the client closes), and the client transport never
+ * reports termination, so a request the agent leaves unanswered when its transport closes fails
+ * only at the client's timeout. Close both sides, or call {@link #closeGracefully()}, at the end of
+ * a test.
+ *
  * <pre>{@code
  * InMemoryTransportPair pair = InMemoryTransportPair.create();
  *
- * // Use client transport in client code
- * AcpClientTransport clientTransport = pair.clientTransport();
+ * AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+ *     .initializeHandler(request -> AcpSchema.InitializeResponse.ok())
+ *     .newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-1", null, null))
+ *     .promptHandler((request, context) -> {
+ *         context.sendMessage("Hello");
+ *         return AcpSchema.PromptResponse.endTurn();
+ *     })
+ *     .build();
+ * agent.start();
  *
- * // Use agent transport in agent code
- * AcpAgentTransport agentTransport = pair.agentTransport();
+ * AcpSyncClient client = AcpClient.sync(pair.clientTransport()).build();
+ * client.initialize();
+ * String sessionId = client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()))
+ *     .sessionId();
+ * AcpSchema.PromptResponse response = client.prompt(new AcpSchema.PromptRequest(sessionId,
+ *     List.of(new AcpSchema.TextContent("Hi"))));
  *
- * // Messages sent by client arrive at agent, and vice versa
+ * client.close();
+ * agent.close();
  * }</pre>
  *
  * @author Mark Pollack
@@ -63,32 +83,37 @@ public class InMemoryTransportPair {
 	}
 
 	/**
-	 * Creates a new transport pair with connected client and agent transports.
-	 * @return a new InMemoryTransportPair
+	 * Creates a pair of connected transports, neither of them connected or started yet.
+	 * @return a new pair
 	 */
 	public static InMemoryTransportPair create() {
 		return new InMemoryTransportPair();
 	}
 
 	/**
-	 * Gets the client-side transport.
-	 * @return the client transport
+	 * Returns the client side of the pair. Pass it to {@code AcpClient.sync(...)},
+	 * {@code AcpClient.async(...)} or {@link MockAcpClient#builder}; it can be connected once.
+	 * @return the client transport, the same instance on every call
 	 */
 	public AcpClientTransport clientTransport() {
 		return clientTransport;
 	}
 
 	/**
-	 * Gets the agent-side transport.
-	 * @return the agent transport
+	 * Returns the agent side of the pair. Pass it to {@code AcpAgent.sync(...)},
+	 * {@code AcpAgent.async(...)} or {@link MockAcpAgent#builder}; it can be started once.
+	 * @return the agent transport, the same instance on every call
 	 */
 	public AcpAgentTransport agentTransport() {
 		return agentTransport;
 	}
 
 	/**
-	 * Closes both transports gracefully.
-	 * @return a Mono that completes when both transports are closed
+	 * Closes both transports: each stops sending to the other, and the agent transport's
+	 * {@code awaitTermination()} completes. Closing the client and the agent built on the pair
+	 * closes their transports as well; this method is a final clean-up for a test, and can be
+	 * called more than once.
+	 * @return a {@code Mono} that completes when both transports are closed
 	 */
 	public Mono<Void> closeGracefully() {
 		return Mono.when(clientTransport.closeGracefully(), agentTransport.closeGracefully());
