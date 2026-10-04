@@ -1616,7 +1616,46 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Set session config option request - changes a configuration value
+	 * The params of {@code session/set_config_option}: the client asks the agent to change one
+	 * config option of an ACP session, such as switching the model. Build it with
+	 * {@link #select(String, String, String) select} for a {@link SessionConfigSelect} or
+	 * {@link #bool(String, String, boolean) bool} for a {@link SessionConfigBoolean}. A client
+	 * sends it with {@link com.agentclientprotocol.sdk.client.AcpSyncClient#setSessionConfigOption
+	 * AcpSyncClient.setSessionConfigOption} or the {@code AcpAsyncClient} method of the same name,
+	 * once {@code initialize} is answered. The agent's handler, an
+	 * {@link com.agentclientprotocol.sdk.agent.AcpAgent.SetSessionConfigOptionHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.SetSessionConfigOption @SetSessionConfigOption}
+	 * method, receives it and answers with a {@link SetSessionConfigOptionResponse} that lists
+	 * every option of the session. An agent without a handler answers {@code -32601}
+	 * (method not found).
+	 *
+	 * <p>
+	 * {@link #configId()} is the {@code id} of an option the agent offered, and {@link #value()} is
+	 * the new value: for a select, the {@link SessionConfigSelectOption#value()} of one of its
+	 * options, a {@code String}, without a {@code type}; for a boolean option, a {@code Boolean},
+	 * with the type {@code "boolean"}. No capability guards the request: the client may change an
+	 * option at any time in the session, during a prompt turn too.
+	 *
+	 * <p>
+	 * The SDK checks neither the id nor the value against the options the agent offered, nor that
+	 * the value fits the type: read from the wire, the value is whatever JSON value arrived, such
+	 * as a {@code String}, a {@code Boolean} or a number. The agent answers an option or a value it
+	 * did not offer with an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} of code
+	 * {@code -32602} ({@link com.agentclientprotocol.sdk.error.AcpErrorCodes#INVALID_PARAMS}). A
+	 * {@link com.agentclientprotocol.sdk.annotation.ConfigId @ConfigId} parameter of a
+	 * {@code @SetSessionConfigOption} method receives the id, and a
+	 * {@link com.agentclientprotocol.sdk.annotation.ConfigValue @ConfigValue} parameter the value,
+	 * typed by the parameter: {@code String} for a select, {@code boolean} for a boolean option,
+	 * {@code Object} for either; a value of the other kind is answered {@code -32602} without
+	 * calling the method. A request without {@code sessionId}, {@code configId} or {@code value} is
+	 * answered {@code -32602} before any handler is called.
+	 *
+	 * @param sessionId the ACP session whose option changes
+	 * @param configId the {@code id} of the option to change
+	 * @param value the new value: a {@code String} for a select, a {@code Boolean} for a boolean
+	 * option
+	 * @param type {@code "boolean"} for a boolean option, or {@code null} for a select
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionRequest(@JsonProperty("sessionId") String sessionId,
@@ -1625,14 +1664,25 @@ public final class AcpSchema {
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
 		/**
-		 * Creates a request to set a select-type config option.
+		 * Returns a request that sets a select option to one of its values, without a type or
+		 * {@code _meta}.
+		 * @param sessionId the ACP session
+		 * @param configId the select's {@code id}
+		 * @param value the {@link SessionConfigSelectOption#value()} of the option to choose
+		 * @return the request
 		 */
 		public static SetSessionConfigOptionRequest select(String sessionId, String configId, String value) {
 			return new SetSessionConfigOptionRequest(sessionId, configId, value, null, null);
 		}
 
 		/**
-		 * Creates a request to set a boolean-type config option.
+		 * Returns a request that turns a boolean option on or off, with the type {@code "boolean"}
+		 * and without {@code _meta}. Send it only for an option the agent offered as a
+		 * {@link SessionConfigBoolean}.
+		 * @param sessionId the ACP session
+		 * @param configId the boolean option's {@code id}
+		 * @param value {@code true} to turn the option on, {@code false} to turn it off
+		 * @return the request
 		 */
 		public static SetSessionConfigOptionRequest bool(String sessionId, String configId, boolean value) {
 			return new SetSessionConfigOptionRequest(sessionId, configId, value, "boolean", null);
@@ -1640,12 +1690,30 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Set session config option response - returns full config state
+	 * The result of {@code session/set_config_option}: every config option of the session with its
+	 * current value, not only the one that changed, since one change can change other options too,
+	 * such as the reasoning levels a model offers. The protocol requires the full list. The agent's
+	 * handler returns it; the client's {@code setSessionConfigOption(...)} completes with it, and
+	 * its list replaces the client's copy.
+	 *
+	 * <p>
+	 * {@code configOptions} is required: an answer without it fails the client's call with an
+	 * {@link AcpError} of code {@code -32603}. An option of a type this SDK does not know reads as
+	 * an {@link UnknownSessionConfigOption}; an option this SDK cannot read, such as a select whose
+	 * list mixes options and groups, fails the call the same way. The SDK does not check that the
+	 * list is complete.
+	 *
+	 * @param configOptions every config option of the session, with its current value
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionConfigOptionResponse(
 			@JsonProperty("configOptions") List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param configOptions every config option of the session
+		 */
 		public SetSessionConfigOptionResponse(List<SessionConfigOption> configOptions) {
 			this(configOptions, null);
 		}
@@ -2634,8 +2702,28 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Elicitation property schema - defines a single form field. A property of a type this
-	 * SDK does not know reads as an {@link UnknownElicitationPropertySchema}.
+	 * One field of an elicitation form: a value of {@link ElicitationSchema#properties()}, keyed by
+	 * the field's name. An agent builds a form from the variant records and sends it with
+	 * {@link CreateElicitationRequest#form(String, String, ElicitationSchema)
+	 * CreateElicitationRequest.form}; the client's elicitation handler checks the variant with
+	 * {@code instanceof} and shows the user an input for it.
+	 *
+	 * <p>
+	 * The variants: {@link StringPropertySchema} for text, or for one choice when it lists
+	 * {@code enum} values or {@code oneOf} options; {@link NumberPropertySchema} and
+	 * {@link IntegerPropertySchema} for numbers; {@link BooleanPropertySchema} for yes or no; and
+	 * {@link MultiSelectPropertySchema} for several choices. The user's answer, the
+	 * {@link CreateElicitationResponse#content()} of an accepted form, holds a string, a number, a
+	 * boolean or a list of strings for the field, by its name.
+	 *
+	 * <p>
+	 * On the wire the {@code type} member names the variant, and each variant record has it as its
+	 * first component. A property of a type this SDK does not know, or one without {@code type},
+	 * reads as an {@link UnknownElicitationPropertySchema}, so the request that carries it still
+	 * reaches the handler. The interface is not sealed: end an {@code instanceof} chain with a
+	 * branch for anything else (see {@link AcpSchema} on forward compatibility). A property's
+	 * bounds, lengths, pattern and format are for the client to apply: the SDK checks none of them,
+	 * nor the values in the answer.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownElicitationPropertySchema.class)
@@ -2649,23 +2737,70 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A form property of a type this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code type} discriminator (null when the peer sent none) and
-	 * every other field, and writes them back unchanged.
+	 * A form property of a type this SDK does not know, kept as received: the agent is on a newer
+	 * protocol version or sent an extension, whose types begin with {@code _}. The protocol forbids
+	 * a client to show it as an input it knows; a client should keep it as it is when it stores or
+	 * forwards the request, and a proxy can forward it unchanged.
 	 *
-	 * @param type the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code type} discriminator ({@code null} when the property had none) and every
+	 * other member in {@link #fields()}, an unmodifiable map in wire order, and writes them back
+	 * unchanged. Names are case sensitive: {@code "STRING"} is an unknown type, not a
+	 * {@link StringPropertySchema}. A nested {@code "object"} property, which the protocol's flat
+	 * forms do not allow, also reads as this record.
+	 *
+	 * @param type the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownElicitationPropertySchema(@JsonProperty("type") @Nullable String type,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements ElicitationPropertySchema {
+		/**
+		 * Creates an unknown property. The fields are copied in their order, and {@code null}
+		 * fields become an empty map.
+		 * @param type the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownElicitationPropertySchema {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * String property schema - text input or single-select enum.
+	 * A text field of an elicitation form, or a field where the user picks one value from a list.
+	 * Build a text field with {@link #text(String)} and a choice with
+	 * {@link #singleSelect(String, List)}, and put it in an {@link ElicitationSchema}; the
+	 * canonical constructor sets the rest. The user's answer for it is a string.
+	 *
+	 * <p>
+	 * It is a choice when it lists the values: {@link #enumValues()} (the {@code enum} member)
+	 * gives plain strings, which the client shows as they are, and {@link #oneOf()} gives
+	 * {@link EnumOption}s, each a value with a label. The answer is one of the values. The schema
+	 * expects one of the two lists; the SDK checks neither that nor that the default or the answer
+	 * is one of the values.
+	 *
+	 * <p>
+	 * For a text field, {@link #minLength()}, {@link #maxLength()}, {@link #pattern()} and
+	 * {@link #format()} constrain what the user may enter. The format is an open string; the
+	 * protocol defines {@code "email"}, {@code "uri"}, {@code "date"} ({@code YYYY-MM-DD}) and
+	 * {@code "date-time"} (ISO 8601). The SDK checks none of these: the client should check the
+	 * answer, and the agent should check it again. A {@code default} that is not a string fails to
+	 * read, and with it the request that carries the form. Members the schema does not define are
+	 * dropped when it is read.
+	 *
+	 * @param type the discriminator, {@code "string"}
+	 * @param title the label the client shows, or {@code null}
+	 * @param description a longer explanation of the field, or {@code null}
+	 * @param defaultValue the value to fill in before the user edits it
+	 * (the {@code default} member), or {@code null}
+	 * @param minLength the shortest answer allowed, or {@code null} for no minimum
+	 * @param maxLength the longest answer allowed, or {@code null} for no maximum
+	 * @param pattern a regular expression the answer must match, or {@code null}
+	 * @param format the kind of text expected, such as {@code "email"}, or {@code null}
+	 * @param enumValues the values to choose from, shown as they are (the {@code enum} member), or
+	 * {@code null}
+	 * @param oneOf the values to choose from, each with a label, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record StringPropertySchema(@JsonProperty("type") String type,
@@ -2676,21 +2811,68 @@ public final class AcpSchema {
 			@JsonProperty("oneOf") @Nullable List<EnumOption> oneOf,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
 
+		/**
+		 * Creates a property with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use {@link #text(String)} or {@link #singleSelect(String, List)}, and it
+		 * becomes {@code "string"}.
+		 * @param type {@code null} or {@code "string"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param minLength the shortest answer, or {@code null}
+		 * @param maxLength the longest answer, or {@code null}
+		 * @param pattern the pattern, or {@code null}
+		 * @param format the format, or {@code null}
+		 * @param enumValues the plain values to choose from, or {@code null}
+		 * @param oneOf the labelled values to choose from, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public StringPropertySchema {
 			type = discriminator(type, "string");
 		}
 
+		/**
+		 * Returns a text field with this label and no default or constraints.
+		 * @param title the label the client shows, or {@code null}
+		 * @return the property
+		 */
 		public static StringPropertySchema text(String title) {
 			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, null, null);
 		}
 
+		/**
+		 * Returns a field where the user picks one of these options, each a value with a label
+		 * ({@code oneOf}). The answer is the chosen option's {@link EnumOption#constValue()}.
+		 * @param title the label the client shows, or {@code null}
+		 * @param options the options to choose from
+		 * @return the property
+		 */
 		public static StringPropertySchema singleSelect(String title, List<EnumOption> options) {
 			return new StringPropertySchema("string", title, null, null, null, null, null, null, null, options, null);
 		}
 	}
 
 	/**
-	 * Number property schema - floating-point input.
+	 * A number field of an elicitation form, for a value that may have a fraction. Construct it and
+	 * put it in an {@link ElicitationSchema}. The user's answer for it is a number. Use
+	 * {@link IntegerPropertySchema} for whole numbers.
+	 *
+	 * <p>
+	 * It differs from {@link StringPropertySchema} in what it constrains: {@link #minimum()} and
+	 * {@link #maximum()} are inclusive bounds, which the SDK does not check. The values are
+	 * {@code Double}s, so a whole number is written with a fraction ({@code 3.0}). A
+	 * {@code default} that is not a number fails to read, and with it the request that carries the
+	 * form.
+	 *
+	 * @param type the discriminator, {@code "number"}
+	 * @param title the label the client shows, or {@code null}
+	 * @param description a longer explanation of the field, or {@code null}
+	 * @param defaultValue the value to fill in before the user edits it
+	 * (the {@code default} member), or {@code null}
+	 * @param minimum the smallest value allowed, or {@code null} for no lower bound
+	 * @param maximum the largest value allowed, or {@code null} for no upper bound
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record NumberPropertySchema(@JsonProperty("type") String type,
@@ -2699,10 +2881,32 @@ public final class AcpSchema {
 			@JsonProperty("maximum") @Nullable Double maximum,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
 
+		/**
+		 * Creates a property with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use a shorter constructor, and it becomes {@code "number"}.
+		 * @param type {@code null} or {@code "number"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param minimum the lower bound, or {@code null}
+		 * @param maximum the upper bound, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public NumberPropertySchema {
 			type = discriminator(type, "number");
 		}
 
+		/**
+		 * Creates a property without {@code _meta}.
+		 * @param type {@code null} or {@code "number"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param minimum the lower bound, or {@code null}
+		 * @param maximum the upper bound, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public NumberPropertySchema(String type, @Nullable String title, @Nullable String description,
 				@Nullable Double defaultValue, @Nullable Double minimum, @Nullable Double maximum) {
 			this(type, title, description, defaultValue, minimum, maximum, null);
@@ -2710,7 +2914,25 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Integer property schema - whole number input.
+	 * A whole-number field of an elicitation form. Construct it and put it in an
+	 * {@link ElicitationSchema}. The user's answer for it is a number. Use
+	 * {@link NumberPropertySchema} for values that may have a fraction.
+	 *
+	 * <p>
+	 * It differs from {@link StringPropertySchema} in what it constrains: {@link #minimum()} and
+	 * {@link #maximum()} are inclusive bounds, which the SDK does not check. The values are
+	 * {@code Long}s; a number with a fraction in the JSON reads as its whole part. A
+	 * {@code default} that is not a number fails to read, and with it the request that carries the
+	 * form.
+	 *
+	 * @param type the discriminator, {@code "integer"}
+	 * @param title the label the client shows, or {@code null}
+	 * @param description a longer explanation of the field, or {@code null}
+	 * @param defaultValue the value to fill in before the user edits it
+	 * (the {@code default} member), or {@code null}
+	 * @param minimum the smallest value allowed, or {@code null} for no lower bound
+	 * @param maximum the largest value allowed, or {@code null} for no upper bound
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record IntegerPropertySchema(@JsonProperty("type") String type,
@@ -2719,10 +2941,32 @@ public final class AcpSchema {
 			@JsonProperty("maximum") @Nullable Long maximum,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
 
+		/**
+		 * Creates a property with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use a shorter constructor, and it becomes {@code "integer"}.
+		 * @param type {@code null} or {@code "integer"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param minimum the lower bound, or {@code null}
+		 * @param maximum the upper bound, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public IntegerPropertySchema {
 			type = discriminator(type, "integer");
 		}
 
+		/**
+		 * Creates a property without {@code _meta}.
+		 * @param type {@code null} or {@code "integer"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param minimum the lower bound, or {@code null}
+		 * @param maximum the upper bound, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public IntegerPropertySchema(String type, @Nullable String title, @Nullable String description,
 				@Nullable Long defaultValue, @Nullable Long minimum, @Nullable Long maximum) {
 			this(type, title, description, defaultValue, minimum, maximum, null);
@@ -2730,7 +2974,21 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Boolean property schema - checkbox/toggle input.
+	 * A yes-or-no field of an elicitation form, which a client usually shows as a checkbox or a
+	 * switch. Construct it and put it in an {@link ElicitationSchema}. The user's answer for it is
+	 * a boolean.
+	 *
+	 * <p>
+	 * It differs from {@link StringPropertySchema} in having no constraints, only a label, a
+	 * description and a default. A {@code default} that is not a boolean fails to read, and with it
+	 * the request that carries the form.
+	 *
+	 * @param type the discriminator, {@code "boolean"}
+	 * @param title the label the client shows, or {@code null}
+	 * @param description a longer explanation of the field, or {@code null}
+	 * @param defaultValue the value to fill in before the user edits it
+	 * (the {@code default} member), or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BooleanPropertySchema(@JsonProperty("type") String type,
@@ -2738,10 +2996,28 @@ public final class AcpSchema {
 			@JsonProperty("default") @Nullable Boolean defaultValue,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
 
+		/**
+		 * Creates a property with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use a shorter constructor, and it becomes {@code "boolean"}.
+		 * @param type {@code null} or {@code "boolean"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public BooleanPropertySchema {
 			type = discriminator(type, "boolean");
 		}
 
+		/**
+		 * Creates a property without {@code _meta}.
+		 * @param type {@code null} or {@code "boolean"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValue the default, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public BooleanPropertySchema(String type, @Nullable String title, @Nullable String description,
 				@Nullable Boolean defaultValue) {
 			this(type, title, description, defaultValue, null);
@@ -2749,7 +3025,29 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Multi-select property schema - array of selected values.
+	 * A field of an elicitation form where the user picks any number of values from a list.
+	 * {@link #items()} holds the values: an {@link UntitledMultiSelectItems} of plain strings, or a
+	 * {@link TitledMultiSelectItems} of {@link EnumOption}s with labels. Construct it with the
+	 * canonical constructor and put it in an {@link ElicitationSchema}. The user's answer for it is
+	 * a list of strings, the chosen values.
+	 *
+	 * <p>
+	 * It differs from {@link StringPropertySchema} in what it constrains: {@link #minItems()} and
+	 * {@link #maxItems()} bound how many values the user picks, and {@link #defaultValues()} lists
+	 * the values picked before the user edits it. Its wire type is {@code "array"}. {@code items}
+	 * is required; the SDK checks it on neither side, nor the bounds, nor that the defaults are
+	 * among the values. A default list with an item that is not a string fails to read, and with it
+	 * the request that carries the form.
+	 *
+	 * @param type the discriminator, {@code "array"}
+	 * @param title the label the client shows, or {@code null}
+	 * @param description a longer explanation of the field, or {@code null}
+	 * @param defaultValues the values picked before the user edits it (the {@code default} member),
+	 * or {@code null}
+	 * @param items the values to choose from
+	 * @param minItems the fewest values the user may pick, or {@code null} for no minimum
+	 * @param maxItems the most values the user may pick, or {@code null} for no maximum
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record MultiSelectPropertySchema(@JsonProperty("type") String type,
@@ -2758,13 +3056,39 @@ public final class AcpSchema {
 			@JsonProperty("minItems") @Nullable Long minItems, @JsonProperty("maxItems") @Nullable Long maxItems,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ElicitationPropertySchema {
 
+		/**
+		 * Creates a property with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, and it becomes {@code "array"}.
+		 * @param type {@code null} or {@code "array"}
+		 * @param title the label, or {@code null}
+		 * @param description the explanation, or {@code null}
+		 * @param defaultValues the values picked by default, or {@code null}
+		 * @param items the values to choose from
+		 * @param minItems the fewest values to pick, or {@code null}
+		 * @param maxItems the most values to pick, or {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public MultiSelectPropertySchema {
 			type = discriminator(type, "array");
 		}
 	}
 
 	/**
-	 * Multi-select items - defines allowed values for multi-select.
+	 * The values a {@link MultiSelectPropertySchema} offers, its
+	 * {@link MultiSelectPropertySchema#items()}: {@link UntitledMultiSelectItems} lists plain
+	 * strings, which the client shows as they are; {@link TitledMultiSelectItems} lists
+	 * {@link EnumOption}s, each a value with a label. A client handler checks the variant with
+	 * {@code instanceof}.
+	 *
+	 * <p>
+	 * On the wire the shapes have no shared discriminator, so the SDK tells them apart by their
+	 * members, not by the value of {@code type}. Items with a {@code type} or an {@code enum}
+	 * member read as {@code UntitledMultiSelectItems}, whatever the type, and items with an
+	 * {@code anyOf} member as {@code TitledMultiSelectItems}; members the chosen record does not
+	 * have are dropped. Only items with none of these members read as an
+	 * {@link UnknownMultiSelectItems}. The interface is not sealed: end an {@code instanceof} chain
+	 * with a branch for anything else (see {@link AcpSchema} on forward compatibility).
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION, defaultImpl = UnknownMultiSelectItems.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = UntitledMultiSelectItems.class),
@@ -2774,48 +3098,105 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Multi-select items of a shape this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps every field and writes them back unchanged.
+	 * Multi-select items of a shape this SDK does not know, kept as received: the agent is on a
+	 * newer protocol version or sent an extension. A proxy can forward them unchanged.
 	 *
-	 * @param fields every field, in wire order
+	 * <p>
+	 * It keeps every member in {@link #fields()}, an unmodifiable map in wire order, and writes
+	 * them back unchanged. Only items without a {@code type}, {@code enum} or {@code anyOf} member
+	 * read as this record (see {@link MultiSelectItems}): items of a newer type, which has a
+	 * {@code type} member, read as an {@link UntitledMultiSelectItems} instead.
+	 *
+	 * @param fields every member, in wire order
 	 */
 	public record UnknownMultiSelectItems(@JsonAnySetter @JsonAnyGetter Map<String, Object> fields)
 			implements MultiSelectItems {
+		/**
+		 * Creates unknown items. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param fields every member
+		 */
 		public UnknownMultiSelectItems {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * Untitled multi-select items - plain string enum values.
+	 * The values of a {@link MultiSelectPropertySchema} as plain strings, which the client shows as
+	 * they are: {@code {"type":"string","enum":["a","b"]}}. The user's answer lists the chosen
+	 * strings. Use {@link TitledMultiSelectItems} to give each value a label.
+	 *
+	 * <p>
+	 * Pass {@code "string"} for {@link #type()}: unlike the property records, the constructor
+	 * neither fills it in nor checks it, and a {@code null} type is left out of the JSON, which the
+	 * schema requires. Both components are required; the SDK checks neither.
+	 *
+	 * @param type the item type, {@code "string"}
+	 * @param enumValues the values to choose from (the {@code enum} member)
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UntitledMultiSelectItems(@JsonProperty("type") String type,
 			@JsonProperty("enum") List<String> enumValues,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements MultiSelectItems {
+		/**
+		 * Creates items without {@code _meta}.
+		 * @param type the item type, {@code "string"}
+		 * @param enumValues the values to choose from
+		 */
 		public UntitledMultiSelectItems(String type, List<String> enumValues) {
 			this(type, enumValues, null);
 		}
 	}
 
 	/**
-	 * Titled multi-select items - options with const/title pairs.
+	 * The values of a {@link MultiSelectPropertySchema} as {@link EnumOption}s, each a value with
+	 * the label the client shows: {@code {"anyOf":[{"const":"a","title":"Option A"}]}}. The user's
+	 * answer lists the chosen options' {@link EnumOption#constValue()}s. Use
+	 * {@link UntitledMultiSelectItems} when the values can be shown as they are.
+	 *
+	 * <p>
+	 * {@link #anyOf()} is required; the SDK does not check it.
+	 *
+	 * @param anyOf the options to choose from
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record TitledMultiSelectItems(@JsonProperty("anyOf") List<EnumOption> anyOf,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements MultiSelectItems {
+		/**
+		 * Creates items without {@code _meta}.
+		 * @param anyOf the options to choose from
+		 */
 		public TitledMultiSelectItems(List<EnumOption> anyOf) {
 			this(anyOf, null);
 		}
 	}
 
 	/**
-	 * Enum option - a named value for single-select or multi-select.
+	 * One choice of a form field, a value with a label: the client shows {@link #title()}, and the
+	 * answer carries {@link #constValue()} (the {@code const} member). A
+	 * {@link StringPropertySchema} offers them in {@link StringPropertySchema#oneOf()} for one
+	 * choice ({@link StringPropertySchema#singleSelect(String, List)} builds one), and a
+	 * {@link TitledMultiSelectItems} in {@link TitledMultiSelectItems#anyOf()} for several.
+	 *
+	 * <p>
+	 * The value and the label are required; the SDK checks neither.
+	 *
+	 * @param constValue the value the answer carries when the user picks this choice
+	 * @param title the label the client shows
+	 * @param description a longer explanation of the choice, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record EnumOption(@JsonProperty("const") String constValue, @JsonProperty("title") String title,
 			@JsonProperty("description") @Nullable String description,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a choice without a description or {@code _meta}.
+		 * @param constValue the value the answer carries
+		 * @param title the label the client shows
+		 */
 		public EnumOption(String constValue, String title) {
 			this(constValue, title, null, null);
 		}
@@ -3825,10 +4206,38 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Session config option - a configurable setting exposed by the agent. Discriminated by
-	 * type: {@code "select"} or {@code "boolean"}, both stable. An agent sends boolean
-	 * options only to a client that advertises
-	 * {@code clientCapabilities.session.configOptions.boolean}.
+	 * One setting an agent offers for an ACP session, such as the model, the mode or the reasoning
+	 * level, with its current value. The agent lists the session's options as {@code configOptions}
+	 * in its answers to {@code session/new} ({@link NewSessionResponse}), {@code session/load}
+	 * ({@link LoadSessionResponse}) and {@code session/resume} ({@link ResumeSessionResponse}); the
+	 * client shows them and changes one with a {@link SetSessionConfigOptionRequest}. The answer to
+	 * that request, and a {@link ConfigOptionUpdate} when the agent changes options on its own,
+	 * carry the full list again.
+	 *
+	 * <p>
+	 * The variants: {@link SessionConfigSelect}, where the user picks one value from a list, and
+	 * {@link SessionConfigBoolean}, which the user turns on or off. Each has an {@code id}, which
+	 * {@link SetSessionConfigOptionRequest#configId()} names, a {@code name} to show, an optional
+	 * {@code category} (see {@link SessionConfigOptionCategory}) and a current value. The protocol
+	 * requires a current value for every option, so the agent works even if the client shows none
+	 * of them, and asks the agent to put the most important options first. It forbids sending a
+	 * boolean option to a client that did not advertise {@code session.configOptions.boolean}; the
+	 * SDK does not check this, so check {@code supportsBooleanConfigOptions()} on the
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} first.
+	 *
+	 * <p>
+	 * Config options supersede session modes ({@code session/set_mode}, {@link SessionModeState}).
+	 * During the transition, the protocol asks an agent with modes to send both: a select with the
+	 * category {@link SessionConfigOptionCategory#MODE} and the modes, kept in step. A client that
+	 * supports config options uses them and ignores the modes.
+	 *
+	 * <p>
+	 * On the wire the {@code type} member names the variant, and each variant record has it as its
+	 * first component. An option of a type this SDK does not know, or one without {@code type},
+	 * reads as an {@link UnknownSessionConfigOption}. The interface is not sealed: end an
+	 * {@code instanceof} chain with a branch for anything else
+	 * (see {@link AcpSchema} on forward compatibility).
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownSessionConfigOption.class)
@@ -3839,58 +4248,115 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A config option of a kind this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
-	 * and every other field, and writes them back unchanged.
+	 * A config option of a type this SDK does not know, kept as received: the agent is on a newer
+	 * protocol version or sent an extension. The protocol asks a client to ignore an option of a
+	 * type it does not know; the agent keeps using that option's current value. A proxy can forward
+	 * it unchanged.
 	 *
-	 * @param type the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code type} discriminator ({@code null} when the option had none) and every
+	 * other member, {@code id} and {@code name} included, in {@link #fields()}, an unmodifiable map
+	 * in wire order, and writes them back unchanged. Names are case sensitive: {@code "SELECT"} is
+	 * an unknown type, not a {@link SessionConfigSelect}.
+	 *
+	 * @param type the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownSessionConfigOption(@JsonProperty("type") @Nullable String type,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements SessionConfigOption {
+		/**
+		 * Creates an unknown option. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param type the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownSessionConfigOption {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * The {@code category} values ACP v1 reserves for a config option (the schema's
-	 * {@code SessionConfigOptionCategory}). A category helps a client place and style an
-	 * option; it is never required for correctness. Any other string is allowed: names
-	 * starting with {@code _} are free for custom use, and a client treats an unknown
-	 * category as uncategorized. A holder of constants, not meant to be implemented.
+	 * The category names ACP v1 reserves for a config option's {@code category}, as {@code String}
+	 * constants. A category tells a client what an option is for, so it can place it, give it an
+	 * icon or a keyboard shortcut, for example put the model picker next to the prompt. Set it with
+	 * the builders' {@code category(...)};
+	 * {@link SessionConfigSelect#model(String, String, String, List)} sets {@link #MODEL}.
+	 *
+	 * <p>
+	 * A category is for the user interface only: the protocol forbids making it required for
+	 * correctness, and requires a client to handle a missing or unknown category. It is an open
+	 * string that the SDK does not check. Names starting with {@code _}, such as
+	 * {@code "_my_category"}, are free for custom use; other names are reserved for the protocol.
+	 * When several options share a category, the protocol asks a client to prefer the one earlier
+	 * in the list. This is a holder of constants, not meant to be implemented.
 	 */
 	public interface SessionConfigOptionCategory {
 
-		/** Session mode selector. */
+		/**
+		 * The session's mode, such as ask or code: the select an agent offers next to its
+		 * {@link SessionModeState} (see {@link SessionConfigOption}).
+		 */
 		String MODE = "mode";
 
-		/** Model selector: the config option that replaces {@code session/set_model}. */
+		/**
+		 * The model the agent uses. {@link SessionConfigSelect#model(String, String, String, List)}
+		 * builds a select with this category.
+		 */
 		String MODEL = "model";
 
-		/** Model-related configuration parameter. */
+		/**
+		 * A model setting, such as the context size or a trade-off between speed and quality. The
+		 * protocol asks a client to show it near the model picker.
+		 */
 		String MODEL_CONFIG = "model_config";
 
-		/** Thought or reasoning level selector. */
+		/** How much the model thinks or reasons before it answers. */
 		String THOUGHT_LEVEL = "thought_level";
 
 	}
 
 	/**
-	 * Select-type config option - a dropdown with named values. The short constructors set
-	 * no description, category or {@code _meta}; {@link #model} builds the model picker
-	 * (category {@code "model"}) and {@link #builder()} reaches every field.
+	 * A config option where the user picks one value from a list, such as the model or the
+	 * reasoning level, which most clients show as a drop-down. {@link #currentValue()} is the
+	 * {@link SessionConfigSelectOption#value()} of the chosen option, and {@link #options()} lists
+	 * the options, flat or in groups. Build a model picker with
+	 * {@link #model(String, String, String, List) model}, and any other select with
+	 * {@link #builder()}; the agent returns it in the {@code configOptions} of its session answers,
+	 * and the client changes it with
+	 * {@link SetSessionConfigOptionRequest#select(String, String, String)}.
+	 *
+	 * <p>
+	 * {@link Builder#build()} checks that the select has at least one option and that
+	 * {@code currentValue} is the value of one of them. The constructors and {@code model(...)}
+	 * check neither, since the JSON mapper uses them to read whatever the agent sent: a select read
+	 * from the wire may name a value it does not list, or list none. The SDK checks neither that
+	 * ids are unique nor that values are. A {@code currentValue} that is not a string, or an option
+	 * list the SDK cannot read (see {@link SessionConfigSelectOptions}), fails to read, and with it
+	 * the message that carries it.
 	 *
 	 * <pre>{@code
 	 * SessionConfigSelect model = SessionConfigSelect.model("model", "Model", "fast",
-	 *         List.of(new SessionConfigSelectOption("fast", "Fast"), new SessionConfigSelectOption("smart", "Smart")));
+	 *         List.of(new SessionConfigSelectOption("fast", "Fast"),
+	 *                 new SessionConfigSelectOption("smart", "Smart")));
 	 *
+	 * SessionConfigSelectOption low = new SessionConfigSelectOption("low", "Low");
+	 * SessionConfigSelectOption high = new SessionConfigSelectOption("high", "High");
 	 * SessionConfigSelect effort = SessionConfigSelect.builder()
 	 *     .id("effort").name("Effort").category(SessionConfigOptionCategory.THOUGHT_LEVEL)
 	 *     .currentValue("low").options(List.of(low, high))
 	 *     .build();
 	 * }</pre>
+	 *
+	 * @param type the discriminator, {@code "select"}
+	 * @param id the option's id, unique within the session, which the client names to change it
+	 * @param name the label the client shows
+	 * @param description a longer explanation the client may show, or {@code null}
+	 * @param category what the option is for, one of the {@link SessionConfigOptionCategory}
+	 * constants or a custom name starting with {@code _}, or {@code null}
+	 * @param currentValue the value of the chosen option
+	 * @param options the options to choose from, flat or in groups
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelect(
@@ -3900,27 +4366,59 @@ public final class AcpSchema {
 			@JsonProperty("currentValue") String currentValue,
 			@JsonProperty("options") SessionConfigSelectOptions options,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigOption {
+		/**
+		 * Creates a select with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use a shorter constructor, and it becomes {@code "select"}. It checks
+		 * neither the options nor {@code currentValue}.
+		 * @param type {@code null} or {@code "select"}
+		 * @param id the option's id
+		 * @param name the label
+		 * @param description the explanation, or {@code null}
+		 * @param category the category, or {@code null}
+		 * @param currentValue the value of the chosen option
+		 * @param options the options
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public SessionConfigSelect {
 			type = discriminator(type, "select");
 		}
 
+		/**
+		 * Creates a select from a flat list of options, without a description, category or
+		 * {@code _meta}. It does not check {@code currentValue} against the options.
+		 * @param id the option's id
+		 * @param name the label
+		 * @param currentValue the value of the chosen option
+		 * @param options the options, ungrouped
+		 */
 		public SessionConfigSelect(String id, String name, String currentValue,
 				List<SessionConfigSelectOption> options) {
 			this("select", id, name, null, null, currentValue, SessionConfigSelectOptions.ungrouped(options), null);
 		}
 
+		/**
+		 * Creates a select from options that may be in groups, without a description, category or
+		 * {@code _meta}. It does not check {@code currentValue} against the options.
+		 * @param id the option's id
+		 * @param name the label
+		 * @param currentValue the value of the chosen option
+		 * @param options the options, grouped or ungrouped
+		 */
 		public SessionConfigSelect(String id, String name, String currentValue, SessionConfigSelectOptions options) {
 			this("select", id, name, null, null, currentValue, options, null);
 		}
 
 		/**
-		 * A model picker: a select option with category
-		 * {@link SessionConfigOptionCategory#MODEL}, the way ACP v1 offers model choice.
+		 * Returns a model picker: a select with the category
+		 * {@link SessionConfigOptionCategory#MODEL} and these options, without a description or
+		 * {@code _meta}. It is how an agent lets the user choose its model. It does not check
+		 * {@code currentValue} against the options.
 		 * @param id the option's id, for example {@code "model"}
-		 * @param name the human-readable name
-		 * @param currentValue the value of the selected model
+		 * @param name the label the client shows
+		 * @param currentValue the value of the model in use
 		 * @param options the models, ungrouped
-		 * @return the model option
+		 * @return the model picker
 		 */
 		public static SessionConfigSelect model(String id, String name, String currentValue,
 				List<SessionConfigSelectOption> options) {
@@ -3928,13 +4426,13 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * A model picker whose models may be grouped.
+		 * Returns a model picker whose models may be in groups, for example by provider; otherwise
+		 * the same as {@link #model(String, String, String, List)}.
 		 * @param id the option's id, for example {@code "model"}
-		 * @param name the human-readable name
-		 * @param currentValue the value of the selected model
+		 * @param name the label the client shows
+		 * @param currentValue the value of the model in use
 		 * @param options the models, grouped or ungrouped
-		 * @return the model option
-		 * @see #model(String, String, String, List)
+		 * @return the model picker
 		 */
 		public static SessionConfigSelect model(String id, String name, String currentValue,
 				SessionConfigSelectOptions options) {
@@ -3943,8 +4441,8 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * A builder that reaches every field. {@code id}, {@code name},
-		 * {@code currentValue} and the options are required.
+		 * Returns an empty builder. {@code id}, {@code name}, {@code currentValue} and the options
+		 * are required, and {@link Builder#build()} checks the select.
 		 * @return a new builder
 		 */
 		public static Builder builder() {
@@ -3952,7 +4450,12 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Builds a {@link SessionConfigSelect}.
+		 * Builds a {@link SessionConfigSelect} one component at a time and checks it (see
+		 * {@link #build()}). Get one from {@link SessionConfigSelect#builder()}. Each setter
+		 * replaces one component; {@link #options(List)}, {@link #groups(List)} and
+		 * {@link #options(SessionConfigSelectOptions)} set the same component, so the last call
+		 * wins. {@link #build()} can be called more than once. A builder is not safe for use by
+		 * several threads at once.
 		 */
 		public static final class Builder {
 
@@ -3974,8 +4477,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code id}.
-			 * @param id the option's id, sent back in {@code session/set_config_option}
+			 * Sets the option's id, which the client names in
+			 * {@link SetSessionConfigOptionRequest#configId()} to change it. Required.
+			 * @param id the option's id, unique within the session
 			 * @return this builder
 			 */
 			public Builder id(String id) {
@@ -3984,8 +4488,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code name}.
-			 * @param name the human-readable name
+			 * Sets the label the client shows. Required.
+			 * @param name the label
 			 * @return this builder
 			 */
 			public Builder name(String name) {
@@ -3994,8 +4498,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code description}.
-			 * @param description an optional description
+			 * Sets a longer explanation the client may show with the label.
+			 * @param description the explanation, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder description(@Nullable String description) {
@@ -4004,9 +4508,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code category}.
-			 * @param category an optional category, one of
-			 * {@link SessionConfigOptionCategory} or a custom one starting with {@code _}
+			 * Sets what the option is for, which helps the client place it.
+			 * @param category one of the {@link SessionConfigOptionCategory} constants, a custom
+			 * name starting with {@code _}, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder category(@Nullable String category) {
@@ -4015,8 +4519,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code currentValue}.
-			 * @param currentValue the value of the selected option
+			 * Sets the value of the chosen option. Required: {@link #build()} checks that it is the
+			 * {@link SessionConfigSelectOption#value()} of one of the options.
+			 * @param currentValue the value of the chosen option
 			 * @return this builder
 			 */
 			public Builder currentValue(String currentValue) {
@@ -4025,8 +4530,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code options}.
-			 * @param options the options, ungrouped
+			 * Sets the options as a flat list, replacing options set before.
+			 * @param options the options, in the order the client shows them; not {@code null}
 			 * @return this builder
 			 */
 			public Builder options(List<SessionConfigSelectOption> options) {
@@ -4034,8 +4539,10 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code groups}.
-			 * @param groups the options, in groups
+			 * Sets the options in groups, each shown under its own heading, replacing options set
+			 * before.
+			 * @param groups the groups, in the order the client shows them; not {@code null}, and
+			 * no group's options {@code null}
 			 * @return this builder
 			 */
 			public Builder groups(List<SessionConfigSelectGroup> groups) {
@@ -4043,8 +4550,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code options}.
-			 * @param options the options, grouped or ungrouped
+			 * Sets the options, flat or in groups, replacing options set before.
+			 * @param options the options; not {@code null}
 			 * @return this builder
 			 */
 			public Builder options(SessionConfigSelectOptions options) {
@@ -4053,8 +4560,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code meta}.
-			 * @param meta optional {@code _meta}
+			 * Sets the {@code _meta} map.
+			 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 			 * @return this builder
 			 */
 			public Builder meta(@Nullable Map<String, Object> meta) {
@@ -4063,13 +4570,14 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Builds the option. Unlike the record's constructors, which also read other agents'
-			 * options and so accept any value, the builder checks that the option can be
-			 * offered: it has at least one choice, and {@code currentValue} is one of them.
-			 * @return the option
-			 * @throws IllegalStateException when {@code id}, {@code name},
-			 * {@code currentValue} or the options were not set, when the options (across all
-			 * groups) are empty, or when {@code currentValue} is not the value of one of them
+			 * Builds the select, after checking that it can be offered: it has at least one option,
+			 * across all groups, and {@code currentValue} is the value of one of them. The record's
+			 * constructors check neither, since they also read other agents' options. Neither
+			 * checks that values are unique.
+			 * @return the select
+			 * @throws IllegalStateException if {@code id}, {@code name}, {@code currentValue} or
+			 * the options were not set, if there are no options, or if {@code currentValue} is not
+			 * the value of one of them
 			 */
 			public SessionConfigSelect build() {
 				String id = required(this.id, "id");
@@ -4092,9 +4600,31 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Boolean-type config option - a toggle (stable in ACP v1 since 2026-07-06). Set it with
-	 * {@link SetSessionConfigOptionRequest#bool}. The short constructor sets no
-	 * description, category or {@code _meta}; {@link #builder()} reaches every field.
+	 * A config option the user turns on or off, such as a switch that lets the agent act without
+	 * asking for confirmation. {@link #currentValue()} is whether it is on. Build it with
+	 * {@link #builder()} or the shorter constructor; the agent returns it in the
+	 * {@code configOptions} of its session answers, and the client changes it with
+	 * {@link SetSessionConfigOptionRequest#bool(String, String, boolean)}.
+	 *
+	 * <p>
+	 * It differs from {@link SessionConfigSelect} in having no options and a boolean value. The
+	 * protocol forbids an agent to offer it to a client that did not advertise
+	 * {@code session.configOptions.boolean}
+	 * ({@link ClientSessionCapabilities#withBooleanConfigOptions()}). The SDK does not check this
+	 * when sending, so check {@code supportsBooleanConfigOptions()} on the
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}, and offer a select in its place, or nothing, to other clients.
+	 * {@code currentValue} is required; a value that is not a JSON boolean fails to read, and with
+	 * it the message that carries it.
+	 *
+	 * @param type the discriminator, {@code "boolean"}
+	 * @param id the option's id, unique within the session, which the client names to change it
+	 * @param name the label the client shows
+	 * @param description a longer explanation the client may show, or {@code null}
+	 * @param category what the option is for, one of the {@link SessionConfigOptionCategory}
+	 * constants or a custom name starting with {@code _}, or {@code null}
+	 * @param currentValue whether the option is on
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigBoolean(
@@ -4103,17 +4633,34 @@ public final class AcpSchema {
 			@JsonProperty("description") @Nullable String description, @JsonProperty("category") @Nullable String category,
 			@JsonProperty("currentValue") Boolean currentValue,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigOption {
+		/**
+		 * Creates an option with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type}, or use a shorter constructor, and it becomes {@code "boolean"}.
+		 * @param type {@code null} or {@code "boolean"}
+		 * @param id the option's id
+		 * @param name the label
+		 * @param description the explanation, or {@code null}
+		 * @param category the category, or {@code null}
+		 * @param currentValue whether the option is on
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public SessionConfigBoolean {
 			type = discriminator(type, "boolean");
 		}
 
+		/**
+		 * Creates an option without a description, category or {@code _meta}.
+		 * @param id the option's id
+		 * @param name the label
+		 * @param currentValue whether the option is on
+		 */
 		public SessionConfigBoolean(String id, String name, Boolean currentValue) {
 			this("boolean", id, name, null, null, currentValue, null);
 		}
 
 		/**
-		 * A builder that reaches every field. {@code id}, {@code name} and
-		 * {@code currentValue} are required.
+		 * Returns an empty builder. {@code id}, {@code name} and {@code currentValue} are required.
 		 * @return a new builder
 		 */
 		public static Builder builder() {
@@ -4121,7 +4668,10 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Builds a {@link SessionConfigBoolean}.
+		 * Builds a {@link SessionConfigBoolean} one component at a time. Get one from
+		 * {@link SessionConfigBoolean#builder()}. Each setter replaces one component, and
+		 * {@link #build()} can be called more than once. A builder is not safe for use by several
+		 * threads at once.
 		 */
 		public static final class Builder {
 
@@ -4141,8 +4691,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code id}.
-			 * @param id the option's id, sent back in {@code session/set_config_option}
+			 * Sets the option's id, which the client names in
+			 * {@link SetSessionConfigOptionRequest#configId()} to change it. Required.
+			 * @param id the option's id, unique within the session
 			 * @return this builder
 			 */
 			public Builder id(String id) {
@@ -4151,8 +4702,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code name}.
-			 * @param name the human-readable name
+			 * Sets the label the client shows. Required.
+			 * @param name the label
 			 * @return this builder
 			 */
 			public Builder name(String name) {
@@ -4161,8 +4712,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code description}.
-			 * @param description an optional description
+			 * Sets a longer explanation the client may show with the label.
+			 * @param description the explanation, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder description(@Nullable String description) {
@@ -4171,9 +4722,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code category}.
-			 * @param category an optional category, one of
-			 * {@link SessionConfigOptionCategory} or a custom one starting with {@code _}
+			 * Sets what the option is for, which helps the client place it.
+			 * @param category one of the {@link SessionConfigOptionCategory} constants, a custom
+			 * name starting with {@code _}, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder category(@Nullable String category) {
@@ -4182,8 +4733,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code currentValue}.
-			 * @param currentValue whether the option is on
+			 * Sets whether the option is on. Required.
+			 * @param currentValue {@code true} if the option is on
 			 * @return this builder
 			 */
 			public Builder currentValue(boolean currentValue) {
@@ -4192,8 +4743,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code meta}.
-			 * @param meta optional {@code _meta}
+			 * Sets the {@code _meta} map.
+			 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 			 * @return this builder
 			 */
 			public Builder meta(@Nullable Map<String, Object> meta) {
@@ -4204,8 +4755,8 @@ public final class AcpSchema {
 			/**
 			 * Builds the option.
 			 * @return the option
-			 * @throws IllegalStateException when {@code id}, {@code name} or
-			 * {@code currentValue} was not set
+			 * @throws IllegalStateException if {@code id}, {@code name} or {@code currentValue} was
+			 * not set
 			 */
 			public SessionConfigBoolean build() {
 				return new SessionConfigBoolean("boolean", required(this.id, "id"), required(this.name, "name"),
@@ -4216,19 +4767,28 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The options of a select config option: a flat list ({@link UngroupedSelectOptions})
-	 * or a list of groups ({@link GroupedSelectOptions}), as the schema's
-	 * {@code SessionConfigSelectOptions}. Both are written as a JSON array; a list whose
-	 * items have a {@code group} reads as grouped, any other list as ungrouped.
+	 * The options of a {@link SessionConfigSelect}: a flat list ({@link UngroupedSelectOptions}) or
+	 * a list of groups, each shown under its own heading ({@link GroupedSelectOptions}). Create
+	 * them with {@link #ungrouped(List)} or {@link #grouped(List)}, or let the select's builder do
+	 * it. {@link #allOptions()} returns every option either way, for example to check a value the
+	 * client sent.
+	 *
+	 * <p>
+	 * Both are written as a JSON array, and the protocol does not let one list mix options and
+	 * groups. When a list is read, it reads as grouped when all its items are groups, and as
+	 * ungrouped otherwise, the empty list included (see {@link SessionConfigSelectItem}). A list
+	 * that mixes options and groups, or has an item that is neither, fails to read, and with it the
+	 * message that carries it.
 	 */
 	public interface SessionConfigSelectOptions {
 
 		/**
-		 * Reads the wire list: groups when its items are groups, options otherwise.
-		 * @param items the list's items
+		 * Returns the options for the items of a list read from JSON: grouped when every item is a
+		 * group, ungrouped otherwise. The JSON mapper calls it.
+		 * @param items the list's items, options or groups
 		 * @return grouped or ungrouped options
-		 * @throws IllegalArgumentException when the list mixes options and groups, which
-		 * the schema does not allow
+		 * @throws IllegalArgumentException if the list mixes options and groups, which the protocol
+		 * does not allow
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		static SessionConfigSelectOptions of(List<SessionConfigSelectItem> items) {
@@ -4242,8 +4802,8 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * A flat list of options.
-		 * @param options the options
+		 * Returns a flat list of options.
+		 * @param options the options, in the order the client shows them; kept, not copied
 		 * @return ungrouped options
 		 */
 		static SessionConfigSelectOptions ungrouped(List<SessionConfigSelectOption> options) {
@@ -4251,8 +4811,8 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Options in groups.
-		 * @param groups the groups
+		 * Returns options in groups.
+		 * @param groups the groups, in the order the client shows them; kept, not copied
 		 * @return grouped options
 		 */
 		static SessionConfigSelectOptions grouped(List<SessionConfigSelectGroup> groups) {
@@ -4260,7 +4820,7 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Every option, in order, across groups when grouped.
+		 * Returns every option, in order: for grouped options, the options of each group in turn.
 		 * @return the options
 		 */
 		List<SessionConfigSelectOption> allOptions();
@@ -4268,12 +4828,19 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A flat list of select options.
+	 * A flat list of select options: the {@link SessionConfigSelectOptions} of a select whose
+	 * options need no headings. It is written as the JSON array of its options, and keeps the list
+	 * it is given without copying it.
 	 *
-	 * @param options the options
+	 * @param options the options, in the order the client shows them
 	 */
 	public record UngroupedSelectOptions(@JsonValue List<SessionConfigSelectOption> options)
 			implements SessionConfigSelectOptions {
+		/**
+		 * {@inheritDoc}
+		 * <p>
+		 * It is {@link #options()} itself.
+		 */
 		@Override
 		public List<SessionConfigSelectOption> allOptions() {
 			return options;
@@ -4281,12 +4848,21 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Select options organised in groups.
+	 * Select options in groups, each with its own heading: the {@link SessionConfigSelectOptions}
+	 * for a long list, such as models by provider. It is written as the JSON array of its
+	 * {@link SessionConfigSelectGroup}s, and keeps the list it is given without copying it. A
+	 * select's {@code currentValue} and the client's choice name an option's value, never a group.
 	 *
-	 * @param groups the groups
+	 * @param groups the groups, in the order the client shows them
 	 */
 	public record GroupedSelectOptions(@JsonValue List<SessionConfigSelectGroup> groups)
 			implements SessionConfigSelectOptions {
+		/**
+		 * {@inheritDoc}
+		 * <p>
+		 * Each call returns a new, unmodifiable list. Every group's options must not be
+		 * {@code null}.
+		 */
 		@Override
 		public List<SessionConfigSelectOption> allOptions() {
 			return groups.stream().flatMap(group -> group.options().stream()).toList();
@@ -4294,8 +4870,17 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * An item of a select option list on the wire: an option or a group, told apart by
-	 * their fields ({@code value} or {@code group}).
+	 * An item of a select's option list as it is read from JSON: a
+	 * {@link SessionConfigSelectOption} or a {@link SessionConfigSelectGroup}. The JSON mapper
+	 * reads the items as these and {@link SessionConfigSelectOptions#of(List)} sorts them;
+	 * application code works with {@link SessionConfigSelectOptions} and {@code allOptions()}
+	 * instead.
+	 *
+	 * <p>
+	 * The items have no discriminator, so the SDK tells them apart by their members: an item with
+	 * {@code value} or {@code description} reads as an option, and one with {@code group} or
+	 * {@code options} as a group. An item with neither, such as one with only a {@code name}, fails
+	 * to read, and with it the message that carries it.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
 	@JsonSubTypes({ @JsonSubTypes.Type(SessionConfigSelectOption.class),
@@ -4305,51 +4890,103 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A named group of select options.
+	 * A group of a select's options, shown under its own heading: the group's id, the heading and
+	 * the options. Groups go in a {@link GroupedSelectOptions}, which
+	 * {@link SessionConfigSelectOptions#grouped(List)} or the select builder's
+	 * {@link SessionConfigSelect.Builder#groups(List) groups} creates.
 	 *
-	 * @param group the group's id
-	 * @param name human-readable name of the group
+	 * <p>
+	 * All three components are required; the SDK does not check them when sending, and the options
+	 * must not be {@code null} for {@link SessionConfigSelectOptions#allOptions()} and the
+	 * builder's check.
+	 *
+	 * @param group the group's id, unique within the select
+	 * @param name the heading the client shows
 	 * @param options the options in the group
-	 * @param meta reserved metadata
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelectGroup(@JsonProperty("group") String group, @JsonProperty("name") String name,
 			@JsonProperty("options") List<SessionConfigSelectOption> options,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigSelectItem {
+		/**
+		 * Creates a group without {@code _meta}.
+		 * @param group the group's id
+		 * @param name the heading
+		 * @param options the options in the group
+		 */
 		public SessionConfigSelectGroup(String group, String name, List<SessionConfigSelectOption> options) {
 			this(group, name, options, null);
 		}
 	}
 
 	/**
-	 * A selectable option within a select-type config option.
+	 * One value a {@link SessionConfigSelect} offers: its id, which the select's
+	 * {@code currentValue} and a client's {@link SetSessionConfigOptionRequest} name, and the label
+	 * the client shows, for example {@code new SessionConfigSelectOption("fast", "Fast")}.
+	 *
+	 * <p>
+	 * {@code value} and {@code name} are required. The SDK checks neither when sending, nor that
+	 * values are unique within the select.
+	 *
+	 * @param value the value's id, unique within the select
+	 * @param name the label the client shows
+	 * @param description a longer explanation of what the value does, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigSelectOption(@JsonProperty("value") String value,
 			@JsonProperty("name") String name, @JsonProperty("description") @Nullable String description,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionConfigSelectItem {
+		/**
+		 * Creates an option without a description or {@code _meta}.
+		 * @param value the value's id
+		 * @param name the label
+		 */
 		public SessionConfigSelectOption(String value, String name) {
 			this(value, name, null, null);
 		}
 	}
 
 	/**
-	 * Config option update - pushed by agent via session/update notification. It carries the
-	 * full list of config options, like {@link SetSessionConfigOptionResponse}.
+	 * Tells the client that the agent changed config options of an ACP session on its own, streamed
+	 * as a session update: for example it switched the mode after a planning phase, or fell back to
+	 * another model after hitting rate limits. Like {@link SetSessionConfigOptionResponse}, it
+	 * carries every config option of the session with its current value, not only the changed ones,
+	 * and the list replaces the client's copy.
+	 *
+	 * <p>
+	 * A change the client asked for with {@link SetSessionConfigOptionRequest} is confirmed by that
+	 * request's answer. The SDK never sends this update by itself; the agent sends it, with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#sendUpdate PromptContext.sendUpdate}
+	 * in a prompt turn or {@link com.agentclientprotocol.sdk.agent.AcpAsyncAgent#sendSessionUpdate
+	 * AcpAsyncAgent.sendSessionUpdate} outside one.
+	 *
+	 * @param sessionUpdate the discriminator, {@code "config_option_update"}
+	 * @param configOptions every config option of the session, with its current value
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ConfigOptionUpdate(
 			@JsonProperty("sessionUpdate") String sessionUpdate,
 			@JsonProperty("configOptions") List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements SessionUpdate {
+		/**
+		 * Creates an update with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code sessionUpdate}, or use the shorter constructor, and it becomes
+		 * {@code "config_option_update"}.
+		 * @param sessionUpdate {@code null} or {@code "config_option_update"}
+		 * @param configOptions every config option of the session
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code sessionUpdate} is any other name
+		 */
 		public ConfigOptionUpdate {
 			sessionUpdate = discriminator(sessionUpdate, "config_option_update");
 		}
 
 		/**
-		 * The update an agent sends when its config options changed.
-		 * @param configOptions every config option with its current value, not only the
-		 * changed ones
+		 * Creates an update without {@code _meta}.
+		 * @param configOptions every config option of the session, not only the changed ones
 		 */
 		public ConfigOptionUpdate(List<SessionConfigOption> configOptions) {
 			this("config_option_update", configOptions, null);
