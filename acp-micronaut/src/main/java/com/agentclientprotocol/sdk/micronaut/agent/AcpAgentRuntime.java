@@ -242,7 +242,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			AcpAgentTransport transport = transportBean.isPresent() ? transportBean.get() : AcpAgentTransports.stdio();
 			Runnable onTransportEnd = settings.shutdownOnTransportEnd() ? this::onTransportEnd : () -> {
 			};
-			return new AcpAgentHost(builder.transport(transport).build(), transport, onTransportEnd);
+			return new AcpAgentHost(builder.transport(transport).build(), onTransportEnd);
 		}
 		if (!AcpListeners.isListenerAvailable()) {
 			throw new IllegalStateException(AcpAgentConfiguration.PREFIX + ".transport.type="

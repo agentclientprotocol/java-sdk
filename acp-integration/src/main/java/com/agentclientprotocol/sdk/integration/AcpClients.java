@@ -28,8 +28,8 @@ public final class AcpClients {
 	}
 
 	/**
-	 * The async client: the settings' capabilities and request timeout (unset keeps the SDK
-	 * default), a session-update consumer that logs at DEBUG, then the customizers in order. The
+	 * The async client: the settings' capabilities, request timeout (unset keeps the SDK
+	 * default) and prompt timeout (unset: none), a session-update consumer that logs at DEBUG, then the customizers in order. The
 	 * client connects when the application calls {@code initialize()}.
 	 * @param transport the client transport
 	 * @param settings the client settings
@@ -44,7 +44,10 @@ public final class AcpClients {
 		if (requestTimeout != null) {
 			spec.requestTimeout(requestTimeout);
 		}
-		// TODO(fix4): pass settings.promptTimeout() to AsyncSpec.promptTimeout once it exists.
+		Duration promptTimeout = settings.promptTimeout();
+		if (promptTimeout != null) {
+			spec.promptTimeout(promptTimeout);
+		}
 		// TODO(api1): register this as the replaceable default, so that a customizer's own consumer
 		// replaces it rather than runs beside it. Today AsyncSpec.sessionUpdateConsumer only adds.
 		// Session updates always have a consumer, so the SDK does not warn about an unhandled one.

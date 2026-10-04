@@ -53,7 +53,7 @@ public class AcpStdioAgentHost {
 		AcpAgentSupport support = assembly.builder().transport(transport).build();
 		Runnable onTransportEnd = assembly.settings().shutdownOnTransportEnd() ? AcpStdioAgentHost::exit : () -> {
 		};
-		AcpAgentHost started = new AcpAgentHost(support, transport, onTransportEnd);
+		AcpAgentHost started = new AcpAgentHost(support, onTransportEnd);
 		this.agent = support;
 		this.host = started;
 		started.start();

@@ -12,7 +12,6 @@ import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
-import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import org.jspecify.annotations.Nullable;
 
@@ -62,10 +61,9 @@ public final class AcpClientTransports {
 		return Optional.of(switch (type) {
 			case STDIO -> stdio(settings.stdio(), prefix);
 			case WEBSOCKET -> new WebSocketAcpClientTransport(
-					required(settings.websocket().uri(), type, prefix, "websocket.uri"), AcpJsonMapper.createDefault())
+					required(settings.websocket().uri(), type, prefix, "websocket.uri"))
 				.connectTimeout(settings.websocket().connectTimeout());
-			case HTTP -> new StreamableHttpAcpClientTransport(
-					required(settings.http().uri(), type, prefix, "http.uri"), AcpJsonMapper.createDefault());
+			case HTTP -> new StreamableHttpAcpClientTransport(required(settings.http().uri(), type, prefix, "http.uri"));
 		});
 	}
 

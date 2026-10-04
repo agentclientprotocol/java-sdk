@@ -11,15 +11,16 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
-import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * One agent on one transport: stdio, or an application's own transport. Starting and stopping use
- * the SDK's own lifecycle ({@link AcpAgentSupport#start()} and {@link AcpAgentSupport#close()}).
+ * One agent on one transport: stdio, or an application's own transport. Starting, stopping and
+ * the end of the transport are the SDK's own lifecycle: {@link AcpAgentSupport#start()}, its
+ * {@link AcpAgentSupport#close() AutoCloseable close} (graceful, bounded, then at once) and its
+ * agent's {@code awaitTermination()}.
  *
  * <p>
  * When the transport ends by itself (for stdio: the client closed the agent's input and every
@@ -54,16 +55,15 @@ public final class AcpAgentHost implements AcpHost {
 	private @Nullable CompletableFuture<Void> stopped;
 
 	/**
-	 * A host for an agent built on {@code transport}.
-	 * @param agent the agent, built on {@code transport}
-	 * @param transport the agent's transport
+	 * A host for an agent built on its transport.
+	 * @param agent the agent
 	 * @param onTransportEnd what to do when the transport ends by itself, such as closing the
 	 * container; fixed here, so no end is missed
 	 */
-	public AcpAgentHost(AcpAgentSupport agent, AcpAgentTransport transport, Runnable onTransportEnd) {
+	public AcpAgentHost(AcpAgentSupport agent, Runnable onTransportEnd) {
 		this.agent = agent;
 		this.onTransportEnd = onTransportEnd;
-		this.termination = transport.awaitTermination().onErrorResume(error -> {
+		this.termination = agent.getAgent().async().awaitTermination().onErrorResume(error -> {
 			logger.debug("ACP agent transport ended with an error: {}", error.toString());
 			return Mono.empty();
 		}).doOnSuccess(ignored -> transportEnded()).toFuture();
@@ -86,7 +86,8 @@ public final class AcpAgentHost implements AcpHost {
 			CompletableFuture<Void> current = stopped;
 			if (current == null) {
 				stopping.set(true);
-				// Off the caller's thread: the SDK's close blocks, bounded by its own timeout.
+				// Off the caller's thread: the SDK's close blocks, gracefully for a bounded time,
+				// then closes at once.
 				current = CompletableFuture.runAsync(agent::close, runnable -> {
 					Thread closer = new Thread(runnable, "acp-agent-stop");
 					closer.setDaemon(true);
@@ -100,7 +101,7 @@ public final class AcpAgentHost implements AcpHost {
 
 	@Override
 	public void stop(Duration timeout) {
-		Hosts.await(stopGracefully(), timeout, "ACP agent", () -> agent.getAgent().close());
+		Hosts.await(stopGracefully(), timeout, "ACP agent", () -> agent.getAgent().async().close());
 	}
 
 	@Override

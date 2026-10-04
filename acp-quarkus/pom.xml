@@ -15,9 +15,9 @@
     <description>Quarkus extension for ACP agents and clients: an @AcpAgent bean served over stdio, Streamable HTTP or WebSocket on the Quarkus HTTP server, and ACP clients configured from quarkus.acp.*</description>
 
     <properties>
-        <!-- Coverage floors: measured line 78.75%, branch 90.12%, less 2 points (parent pom, JaCoCo). The beans that need a running container (the agent assembly, the recorder) are exercised by acp-quarkus-deployment's QuarkusUnitTests, which count there, not here. -->
-        <jacoco.minimum.line>0.76</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.88</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 82.22%, branch 91.67%, less 2 points (parent pom, JaCoCo). The beans that need a running container (the agent assembly, the recorder) are exercised by acp-quarkus-deployment's QuarkusUnitTests, which count there, not here. -->
+        <jacoco.minimum.line>0.80</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.89</jacoco.minimum.branch>
     </properties>
 
     <dependencyManagement>
