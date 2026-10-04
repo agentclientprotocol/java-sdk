@@ -384,6 +384,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Timeout work runs on virtual threads on JDK 21 and later.** What a request timeout, the
+  stdio drain timer or a `$/cancel_request` triggers used to run on a cached pool of daemon
+  platform threads (`acp-timeout-delivery`); where the JDK has virtual threads it now runs on a
+  virtual thread per task, so no such pool exists. The shared timer itself (`acp-timeout`) stays
+  one daemon platform thread per JVM, so that handlers pinning every carrier thread cannot also
+  stop the timeouts meant to end them. On JDK 17 nothing changes. Migration: none.
+
 - **`SessionCapabilities`' six- and four-argument constructors are `@UnstableAcpApi`.** Both take
   the unstable `fork` component (the four-argument one exists only to set it) but were not marked,
   so stable code could reach an unstable capability without a marker. `UnstableApiMarkerTest`
