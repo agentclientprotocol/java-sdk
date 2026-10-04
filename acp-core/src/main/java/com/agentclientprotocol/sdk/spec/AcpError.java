@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
+import com.agentclientprotocol.sdk.error.AcpException;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -45,8 +46,9 @@ import org.jspecify.annotations.Nullable;
  * ended or the transport closed; and a
  * {@link java.util.concurrent.TimeoutException} for a request that got no answer in time, which the
  * sync API throws as
- * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException AcpTimeoutException}. This class
- * does not extend {@link com.agentclientprotocol.sdk.error.AcpException AcpException}.
+ * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException AcpTimeoutException}. All of these,
+ * and this class, extend {@link AcpException}, so {@code catch (AcpException e)} covers every way
+ * a request can fail in the SDK; catch this class to handle the peer's answer alone.
  *
  * <p>A handler that lets an {@code AcpError} escape answers its own request with the error this
  * exception carries, unchanged: the peer's code, message and data, or for a rejected response the
@@ -73,7 +75,7 @@ import org.jspecify.annotations.Nullable;
  * }
  * }</pre>
  */
-public class AcpError extends RuntimeException {
+public class AcpError extends AcpException {
 
 	/** The error the peer sent, or the SDK built for a rejected response. */
 	private final AcpSchema.JSONRPCError error;

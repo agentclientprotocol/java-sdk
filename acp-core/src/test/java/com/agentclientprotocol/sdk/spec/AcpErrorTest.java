@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import java.util.List;
 import java.util.Map;
 
+import com.agentclientprotocol.sdk.error.AcpException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +63,28 @@ class AcpErrorTest {
 	void toStringNamesTheCode() {
 		assertThat(error("plain"))
 			.hasToString("com.agentclientprotocol.sdk.spec.AcpError: Invalid params [code=-32602]: plain");
+	}
+
+	@Test
+	void aPeerErrorIsAnAcpException() {
+		AcpError error = error(null);
+		assertThat(error).isInstanceOf(AcpException.class);
+		AcpException caught = null;
+		try {
+			fail(error);
+		}
+		catch (AcpException e) {
+			caught = e;
+		}
+		catch (RuntimeException e) {
+			// not an AcpException
+		}
+		assertThat(caught).isSameAs(error);
+		assertThat(caught.getMessage()).isEqualTo("Invalid params");
+	}
+
+	private static void fail(RuntimeException failure) {
+		throw failure;
 	}
 
 }

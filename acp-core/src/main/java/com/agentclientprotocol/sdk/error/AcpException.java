@@ -5,14 +5,14 @@
 package com.agentclientprotocol.sdk.error;
 
 /**
- * The base class of the SDK's own exceptions: catch it to handle, in one place, every failure the
- * SDK raises about capabilities, the connection or timeouts. It does not cover
- * {@link com.agentclientprotocol.sdk.spec.AcpError}, the failure of a request the peer answered
- * with an error, which extends {@link RuntimeException} directly; catch both where every failure of
- * a request matters.
+ * The base class of the SDK's own exceptions: catch it to handle, in one place, every failure of
+ * a call the SDK raises, whether the peer answered with an error, a capability was missing, the
+ * connection is gone or no answer came in time.
  *
  * <p>Subclasses:
  * <ul>
+ * <li>{@link com.agentclientprotocol.sdk.spec.AcpError}: the peer answered the request with an
+ * error, or with a response the SDK rejected</li>
  * <li>{@link AcpProtocolException}: what a handler throws to answer a request with a JSON-RPC
  * error</li>
  * <li>{@link AcpCapabilityException}: a call needs a capability the peer did not advertise</li>
@@ -28,6 +28,7 @@ package com.agentclientprotocol.sdk.error;
  * needs one.
  *
  * @author Mark Pollack
+ * @see com.agentclientprotocol.sdk.spec.AcpError
  * @see AcpProtocolException
  * @see AcpCapabilityException
  * @see AcpConnectionException
