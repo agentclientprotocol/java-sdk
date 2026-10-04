@@ -13,8 +13,8 @@ import java.lang.annotation.Target;
 /**
  * Marks the {@link AcpAgent} method that receives a custom extension notification: the client sends
  * a notification whose method is the name given here, which starts with {@code _}, and the method
- * acts on it. A notification gets no answer, so the method returns {@code void}; a value it returns
- * is ignored. Declare one for each one-way message outside ACP that the agent and its clients agree
+ * acts on it. A notification gets no answer, so the method returns {@code void}: building the agent
+ * rejects one that returns a value, with an {@code IllegalStateException}. Declare one for each one-way message outside ACP that the agent and its clients agree
  * on, such as the client saying a file was opened. Without an {@code @ExtNotification} method for a
  * name, the agent ignores that notification, as ACP asks. Clients send it with
  * {@code sendExtNotification} on {@code AcpAsyncClient} or {@code AcpSyncClient}.

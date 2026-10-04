@@ -226,9 +226,16 @@ final class HandlerSignatures {
 			ReturnValueHandlerComposite returnHandlers) {
 		String acpMethod = handler.getAcpMethod();
 		if (ExtensionMethods.isExtension(acpMethod)) {
-			if (isVoid(returnType.getParameterType()) && !handler.getMethod().isAnnotationPresent(ExtNotification.class)) {
+			boolean notification = handler.getMethod().isAnnotationPresent(ExtNotification.class);
+			boolean isVoid = isVoid(returnType.getParameterType());
+			if (isVoid && !notification) {
 				throw misuse(handler, "return type void, but an @ExtRequest is answered with what its method"
 						+ " returns. Return a result (an empty Map when there is nothing to return)");
+			}
+			if (!isVoid && notification) {
+				throw misuse(handler, "return type " + returnType.getGenericType().getTypeName()
+						+ ", but a notification gets no answer, so the value would be dropped. Return void, or"
+						+ " use @ExtRequest if the client expects an answer");
 			}
 			return;
 		}
