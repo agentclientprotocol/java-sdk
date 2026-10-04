@@ -37,6 +37,7 @@ class VertxWebSocketConnectionTest {
 
 	private static final AcpAgentFactory AGENT = AcpAgentFactory.sync(transport -> AcpAgent.sync(transport)
 		.initializeHandler(request -> AcpSchema.InitializeResponse.ok())
+		.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
 		.build());
 
 	private final ServerWebSocket socket = mock(ServerWebSocket.class);

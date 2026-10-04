@@ -15,7 +15,6 @@ import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.converters.uni.UniReactorConverters;
 import org.jspecify.annotations.Nullable;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Sinks;
 
 /**
  * Lets a handler return a Mutiny {@link Uni}: its item is the handler's result, read as
@@ -53,9 +52,7 @@ final class UniReturnValueHandler implements ReturnValueHandler {
 		SyncPromptContext prompt = context.getSyncPromptContext().orElse(null);
 		if (prompt != null) {
 			// A cancelled prompt cancels the Uni's subscription and ends the turn cancelled.
-			Sinks.Empty<Void> cancelled = Sinks.empty();
-			prompt.onCancel(cancelled::tryEmitEmpty);
-			mono = mono.takeUntilOther(cancelled.asMono());
+			mono = mono.takeUntilOther(prompt.async().whenCancelled());
 		}
 		Object item = mono.block();
 		if (prompt != null && prompt.isCancelled()) {

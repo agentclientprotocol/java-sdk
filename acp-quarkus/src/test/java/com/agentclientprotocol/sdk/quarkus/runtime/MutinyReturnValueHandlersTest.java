@@ -47,7 +47,7 @@ class MutinyReturnValueHandlersTest {
 
 	@Test
 	void uniStringAndVoidFromPromptAreReadAsTheSdkReadsThem() throws Exception {
-		SyncPromptContext prompt = mock(SyncPromptContext.class);
+		SyncPromptContext prompt = livePrompt();
 		assertThat(uni.handleReturnValue(Uni.createFrom().item("hi"), returnType("uni"), promptContext(prompt)))
 			.isEqualTo(AcpSchema.PromptResponse.endTurn());
 		verify(prompt).sendMessage("hi");
@@ -115,9 +115,21 @@ class MutinyReturnValueHandlersTest {
 			.hasRootCauseMessage("io");
 	}
 
+	/** A prompt that is not cancelled. */
+	private static SyncPromptContext livePrompt() {
+		SyncPromptContext prompt = mock(SyncPromptContext.class);
+		com.agentclientprotocol.sdk.agent.PromptContext async = mock(com.agentclientprotocol.sdk.agent.PromptContext.class);
+		when(async.whenCancelled()).thenReturn(reactor.core.publisher.Mono.never());
+		when(prompt.async()).thenReturn(async);
+		return prompt;
+	}
+
 	/** A prompt already cancelled: onCancel runs its action at once, as the SDK's does. */
 	private static SyncPromptContext cancelledPrompt() {
 		SyncPromptContext prompt = mock(SyncPromptContext.class);
+		com.agentclientprotocol.sdk.agent.PromptContext async = mock(com.agentclientprotocol.sdk.agent.PromptContext.class);
+		when(async.whenCancelled()).thenReturn(reactor.core.publisher.Mono.empty());
+		when(prompt.async()).thenReturn(async);
 		when(prompt.isCancelled()).thenReturn(true);
 		org.mockito.Mockito.doAnswer(invocation -> {
 			invocation.<Runnable>getArgument(0).run();

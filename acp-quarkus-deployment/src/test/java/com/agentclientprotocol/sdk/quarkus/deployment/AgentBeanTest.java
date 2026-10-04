@@ -82,8 +82,9 @@ class AgentBeanTest {
 
 		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
 		assertThat(transport.messages).containsExactly("HELLO!");
-		// initialize and session/new have no handler here (the SDK defaults answer them).
-		assertThat(interceptor.methods).containsExactly("session/prompt");
+		// The derived initialize runs through the interceptor beans too; session/new is the
+		// SDK's default, outside them.
+		assertThat(interceptor.methods).containsExactly("initialize", "session/prompt");
 	}
 
 	@AcpAgent(name = "echo")
