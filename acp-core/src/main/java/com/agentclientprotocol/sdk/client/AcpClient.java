@@ -182,8 +182,9 @@ public interface AcpClient {
 	 * {@link AcpClient#async(AcpClientTransport)}. For blocking handlers, use {@link SyncSpec}.
 	 *
 	 * <p>Handlers are called on the transport's thread and must not block: return a {@code Mono}
-	 * that completes later instead. Registering a method again replaces its handler, and a typed
-	 * setter and {@link #requestHandler} for the same method replace each other. A request
+	 * that completes later instead. A method takes one handler: registering a second one, with the
+	 * same setter or another, throws {@link IllegalStateException}, and a null handler throws
+	 * {@link IllegalArgumentException}. A request
 	 * handler's {@code Mono} must emit the answer: an empty one is answered {@code -32603}.
 	 * {@link #build()} connects the transport. A builder is not thread-safe; configure it on one
 	 * thread.
@@ -286,7 +287,7 @@ public interface AcpClient {
 		public AsyncSpec readTextFileHandler(
 				Function<AcpSchema.ReadTextFileRequest, Mono<AcpSchema.ReadTextFileResponse>> handler) {
 			Assert.notNull(handler, "Read text file handler must not be null");
-			return request(AcpSchema.METHOD_FS_READ_TEXT_FILE, new TypeRef<AcpSchema.ReadTextFileRequest>() {
+			return request("readTextFileHandler", AcpSchema.METHOD_FS_READ_TEXT_FILE, new TypeRef<AcpSchema.ReadTextFileRequest>() {
 			}, handler);
 		}
 
@@ -309,7 +310,7 @@ public interface AcpClient {
 		public AsyncSpec writeTextFileHandler(
 				Function<AcpSchema.WriteTextFileRequest, Mono<AcpSchema.WriteTextFileResponse>> handler) {
 			Assert.notNull(handler, "Write text file handler must not be null");
-			return request(AcpSchema.METHOD_FS_WRITE_TEXT_FILE, new TypeRef<AcpSchema.WriteTextFileRequest>() {
+			return request("writeTextFileHandler", AcpSchema.METHOD_FS_WRITE_TEXT_FILE, new TypeRef<AcpSchema.WriteTextFileRequest>() {
 			}, handler);
 		}
 
@@ -333,7 +334,7 @@ public interface AcpClient {
 		public AsyncSpec requestPermissionHandler(
 				Function<AcpSchema.RequestPermissionRequest, Mono<AcpSchema.RequestPermissionResponse>> handler) {
 			Assert.notNull(handler, "Request permission handler must not be null");
-			return request(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, new TypeRef<AcpSchema.RequestPermissionRequest>() {
+			return request("requestPermissionHandler", AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, new TypeRef<AcpSchema.RequestPermissionRequest>() {
 			}, handler);
 		}
 
@@ -349,7 +350,7 @@ public interface AcpClient {
 		public AsyncSpec createTerminalHandler(
 				Function<AcpSchema.CreateTerminalRequest, Mono<AcpSchema.CreateTerminalResponse>> handler) {
 			Assert.notNull(handler, "Create terminal handler must not be null");
-			return request(AcpSchema.METHOD_TERMINAL_CREATE, new TypeRef<AcpSchema.CreateTerminalRequest>() {
+			return request("createTerminalHandler", AcpSchema.METHOD_TERMINAL_CREATE, new TypeRef<AcpSchema.CreateTerminalRequest>() {
 			}, handler);
 		}
 
@@ -364,7 +365,7 @@ public interface AcpClient {
 		public AsyncSpec terminalOutputHandler(
 				Function<AcpSchema.TerminalOutputRequest, Mono<AcpSchema.TerminalOutputResponse>> handler) {
 			Assert.notNull(handler, "Terminal output handler must not be null");
-			return request(AcpSchema.METHOD_TERMINAL_OUTPUT, new TypeRef<AcpSchema.TerminalOutputRequest>() {
+			return request("terminalOutputHandler", AcpSchema.METHOD_TERMINAL_OUTPUT, new TypeRef<AcpSchema.TerminalOutputRequest>() {
 			}, handler);
 		}
 
@@ -379,7 +380,7 @@ public interface AcpClient {
 		public AsyncSpec releaseTerminalHandler(
 				Function<AcpSchema.ReleaseTerminalRequest, Mono<AcpSchema.ReleaseTerminalResponse>> handler) {
 			Assert.notNull(handler, "Release terminal handler must not be null");
-			return request(AcpSchema.METHOD_TERMINAL_RELEASE, new TypeRef<AcpSchema.ReleaseTerminalRequest>() {
+			return request("releaseTerminalHandler", AcpSchema.METHOD_TERMINAL_RELEASE, new TypeRef<AcpSchema.ReleaseTerminalRequest>() {
 			}, handler);
 		}
 
@@ -395,7 +396,7 @@ public interface AcpClient {
 		public AsyncSpec waitForTerminalExitHandler(
 				Function<AcpSchema.WaitForTerminalExitRequest, Mono<AcpSchema.WaitForTerminalExitResponse>> handler) {
 			Assert.notNull(handler, "Wait for terminal exit handler must not be null");
-			return request(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, new TypeRef<AcpSchema.WaitForTerminalExitRequest>() {
+			return request("waitForTerminalExitHandler", AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, new TypeRef<AcpSchema.WaitForTerminalExitRequest>() {
 			}, handler);
 		}
 
@@ -410,7 +411,7 @@ public interface AcpClient {
 		public AsyncSpec killTerminalHandler(
 				Function<AcpSchema.KillTerminalCommandRequest, Mono<AcpSchema.KillTerminalCommandResponse>> handler) {
 			Assert.notNull(handler, "Kill terminal handler must not be null");
-			return request(AcpSchema.METHOD_TERMINAL_KILL, new TypeRef<AcpSchema.KillTerminalCommandRequest>() {
+			return request("killTerminalHandler", AcpSchema.METHOD_TERMINAL_KILL, new TypeRef<AcpSchema.KillTerminalCommandRequest>() {
 			}, handler);
 		}
 
@@ -430,7 +431,10 @@ public interface AcpClient {
 		public AsyncSpec createElicitationHandler(
 				Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> handler) {
 			Assert.notNull(handler, "Create elicitation handler must not be null");
-			this.requestHandlers.remove(AcpSchema.METHOD_ELICITATION_CREATE);
+			if (this.createElicitationHandler != null
+					|| this.requestHandlers.containsKey(AcpSchema.METHOD_ELICITATION_CREATE)) {
+				throw alreadyRegistered(AcpSchema.METHOD_ELICITATION_CREATE, "createElicitationHandler");
+			}
 			this.createElicitationHandler = handler;
 			return this;
 		}
@@ -447,10 +451,9 @@ public interface AcpClient {
 		public AsyncSpec completeElicitationHandler(
 				Function<AcpSchema.CompleteElicitationNotification, Mono<Void>> handler) {
 			Assert.notNull(handler, "Complete elicitation handler must not be null");
-			this.notificationHandlers.put(AcpSchema.METHOD_ELICITATION_COMPLETE, params -> handler
+			return notification("completeElicitationHandler", AcpSchema.METHOD_ELICITATION_COMPLETE, params -> handler
 				.apply(transport.unmarshalFrom(params, new TypeRef<AcpSchema.CompleteElicitationNotification>() {
 				})));
-			return this;
 		}
 
 		/**
@@ -480,22 +483,23 @@ public interface AcpClient {
 
 		/**
 		 * Registers a handler for any agent-to-client request method, with the params as the
-		 * transport read them. It replaces a typed handler for the same method, and a typed setter
-		 * called later replaces it. The method name is not checked: prefer the typed setters for
-		 * ACP methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension
-		 * methods.
+		 * transport read them. The method name is not checked: prefer the typed setters for ACP
+		 * methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension methods.
 		 * @param method the method name
 		 * @param handler the handler
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code method} or {@code handler} is null
+		 * @throws IllegalStateException if the method already has a handler
 		 */
 		public AsyncSpec requestHandler(String method, AcpClientSession.RequestHandler<?> handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			if (AcpSchema.METHOD_ELICITATION_CREATE.equals(method)) {
-				this.createElicitationHandler = null;
+			if (AcpSchema.METHOD_ELICITATION_CREATE.equals(method) && this.createElicitationHandler != null) {
+				throw alreadyRegistered(method, "requestHandler");
 			}
-			this.requestHandlers.put(method, handler);
+			if (this.requestHandlers.putIfAbsent(method, handler) != null) {
+				throw alreadyRegistered(method, "requestHandler");
+			}
 			return this;
 		}
 
@@ -513,8 +517,7 @@ public interface AcpClient {
 		public AsyncSpec notificationHandler(String method, AcpClientSession.NotificationHandler handler) {
 			Assert.notNull(method, "Method must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			this.notificationHandlers.put(method, handler);
-			return this;
+			return notification("notificationHandler", method, handler);
 		}
 
 		/**
@@ -542,7 +545,7 @@ public interface AcpClient {
 			ExtensionMethods.requireExtension(method);
 			Assert.notNull(paramsType, "Params type must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			return request(method, paramsType, params -> handler.apply(params).cast(Object.class));
+			return request("extRequestHandler", method, paramsType, params -> handler.apply(params).cast(Object.class));
 		}
 
 		/**
@@ -577,8 +580,8 @@ public interface AcpClient {
 			ExtensionMethods.requireExtension(method);
 			Assert.notNull(paramsType, "Params type must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			this.notificationHandlers.put(method, params -> handler.apply(transport.unmarshalParams(params, paramsType)));
-			return this;
+			return notification("extNotificationHandler", method,
+					params -> handler.apply(transport.unmarshalParams(params, paramsType)));
 		}
 
 		/**
@@ -595,11 +598,28 @@ public interface AcpClient {
 		}
 
 		/** Reads the params as the request type, then calls the handler. */
-		private <Q, R> AsyncSpec request(String method, TypeRef<Q> requestType, Function<Q, Mono<R>> handler) {
+		private <Q, R> AsyncSpec request(String setter, String method, TypeRef<Q> requestType,
+				Function<Q, Mono<R>> handler) {
 			AcpClientSession.RequestHandler<R> rawHandler = params -> handler
 				.apply(transport.unmarshalParams(params, requestType));
-			this.requestHandlers.put(method, rawHandler);
+			if (this.requestHandlers.putIfAbsent(method, rawHandler) != null) {
+				throw alreadyRegistered(method, setter);
+			}
 			return this;
+		}
+
+		/** Registers a notification handler, unless the method has one. */
+		private AsyncSpec notification(String setter, String method, AcpClientSession.NotificationHandler handler) {
+			if (this.notificationHandlers.putIfAbsent(method, handler) != null) {
+				throw alreadyRegistered(method, setter);
+			}
+			return this;
+		}
+
+		/** A second handler for a method: a mistake, which would silently replace the first. */
+		private static IllegalStateException alreadyRegistered(String method, String setter) {
+			return new IllegalStateException("A handler for " + method + " is already registered on this builder; "
+					+ setter + " cannot register a second one");
 		}
 
 		/**
@@ -980,10 +1000,9 @@ public interface AcpClient {
 
 		/**
 		 * Registers a blocking handler for any agent-to-client request method, with the params as
-		 * the transport read them. It replaces a typed handler for the same method, and a typed
-		 * setter called later replaces it. The method name is not checked: prefer the typed setters
-		 * for ACP methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension
-		 * methods.
+		 * the transport read them. The method name is not checked: prefer the typed setters for ACP
+		 * methods and {@link #extRequestHandler(String, TypeRef, Function)} for extension methods.
+		 * A method already registered throws {@link IllegalStateException}.
 		 * @param <T> the result type
 		 * @param method the method name
 		 * @param handler the handler, run on {@link AcpClient#SYNC_HANDLER_SCHEDULER}

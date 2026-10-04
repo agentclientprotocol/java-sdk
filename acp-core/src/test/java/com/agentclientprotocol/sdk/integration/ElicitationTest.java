@@ -272,7 +272,6 @@ class ElicitationTest {
 			}
 		});
 		AcpAsyncClient client = AcpClient.async(transport)
-			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw handler replaced"))
 			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline()))
 			.build();
 		client.initialize().subscribe(r -> {
@@ -290,24 +289,23 @@ class ElicitationTest {
 	}
 
 	@Test
-	void aRawRequestHandlerRegisteredLaterReplacesTheTypedOne() throws Exception {
-		CompletableFuture<AcpSchema.JSONRPCResponse> answer = new CompletableFuture<>();
-		MockAcpClientTransport transport = new MockAcpClientTransport((t, message) -> {
-			if (message instanceof AcpSchema.JSONRPCResponse response) {
-				answer.complete(response);
-			}
-		});
-		AcpAsyncClient client = AcpClient.async(transport)
-			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline()))
-			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw"))
-			.build();
+	void aRawRequestHandlerCannotReplaceTheTypedOne() {
+		AcpClient.AsyncSpec spec = AcpClient.async(new MockAcpClientTransport())
+			.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline()));
 
-		transport.simulateIncomingMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "e-5",
-				AcpSchema.METHOD_ELICITATION_CREATE, Map.of("sessionId", SESSION, "mode", "form", "message", "Name?",
-						"requestedSchema", Map.of())));
+		assertThatThrownBy(() -> spec.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining(AcpSchema.METHOD_ELICITATION_CREATE);
+	}
 
-		assertThat(answer.get(5, TimeUnit.SECONDS).result()).isEqualTo("raw");
-		client.closeGracefully().block(TIMEOUT);
+	@Test
+	void theTypedHandlerCannotReplaceARawOne() {
+		AcpClient.AsyncSpec spec = AcpClient.async(new MockAcpClientTransport())
+			.requestHandler(AcpSchema.METHOD_ELICITATION_CREATE, params -> Mono.just("raw"));
+
+		assertThatThrownBy(() -> spec.createElicitationHandler(request -> Mono.just(CreateElicitationResponse.decline())))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("createElicitationHandler");
 	}
 
 }
