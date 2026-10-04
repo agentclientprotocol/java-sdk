@@ -1,5 +1,7 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
+import java.util.concurrent.Executor;
+
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
@@ -7,6 +9,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -201,6 +204,30 @@ class AcpClientTransportAutoConfigurationTests {
 			return null;
 		}
 
+	}
+
+
+	/**
+	 * With Spring Boot's virtual-thread opt-in (passed in, so tested on every JDK) the network
+	 * transports run on the application task executor; without it, or without the bean, on
+	 * platform threads.
+	 */
+	@Test
+	void transportThreadsFollowTheVirtualThreadOptIn() {
+		Executor executor = Runnable::run;
+		DefaultListableBeanFactory withExecutor = new DefaultListableBeanFactory();
+		withExecutor.registerSingleton("applicationTaskExecutor", executor);
+		DefaultListableBeanFactory without = new DefaultListableBeanFactory();
+
+		assertThat(AcpClientTransportAutoConfiguration
+			.threads(true, withExecutor.getBeanProvider(Executor.class))
+			.executor()).isSameAs(executor);
+		assertThat(AcpClientTransportAutoConfiguration
+			.threads(false, withExecutor.getBeanProvider(Executor.class))
+			.executor()).isNull();
+		assertThat(AcpClientTransportAutoConfiguration
+			.threads(true, without.getBeanProvider(Executor.class))
+			.virtualThreads()).isFalse();
 	}
 
 }

@@ -30,8 +30,14 @@ public class AcpExecutors {
 	AcpExecutors(AcpRuntimeConfig config,
 			@io.quarkus.virtual.threads.VirtualThreads Instance<ExecutorService> virtualThreads,
 			Instance<ManagedExecutor> managed) {
-		this.executor = (config.handlerExecutor() == AcpRuntimeConfig.HandlerExecutor.VIRTUAL
-				&& VirtualThreads.isSupported() && virtualThreads.isResolvable()) ? virtualThreads.get() : managed.get();
+		this(config, virtualThreads, managed, VirtualThreads.isSupported());
+	}
+
+	/** The choice with whether the JDK has virtual threads given, so tests make it on any JDK. */
+	AcpExecutors(AcpRuntimeConfig config, Instance<ExecutorService> virtualThreads, Instance<ManagedExecutor> managed,
+			boolean jdkHasVirtualThreads) {
+		this.executor = (config.handlerExecutor() == AcpRuntimeConfig.HandlerExecutor.VIRTUAL && jdkHasVirtualThreads
+				&& virtualThreads.isResolvable()) ? virtualThreads.get() : managed.get();
 	}
 
 	/** For tests: everything on {@code executor}. */

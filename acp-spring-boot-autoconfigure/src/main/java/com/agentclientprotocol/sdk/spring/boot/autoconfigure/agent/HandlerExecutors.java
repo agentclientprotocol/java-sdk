@@ -41,9 +41,18 @@ final class HandlerExecutors {
 	}
 
 	static ExecutorService resolve(ApplicationContext context, AcpAgentProperties properties) {
+		return resolve(context, properties, virtualThreadsActive(context));
+	}
+
+	/**
+	 * The handler executor, with Spring Boot's virtual-thread opt-in given: tests decide it on any
+	 * JDK, where {@link Threading#VIRTUAL} is never active before 21.
+	 */
+	static ExecutorService resolve(ApplicationContext context, AcpAgentProperties properties,
+			boolean virtualThreads) {
 		String name = properties.getHandlerExecutor();
 		if (name == null) {
-			Executor applicationTaskExecutor = virtualApplicationTaskExecutor(context);
+			Executor applicationTaskExecutor = virtualThreads ? applicationTaskExecutor(context) : null;
 			if (applicationTaskExecutor == null) {
 				return PlatformPool.POOL;
 			}
@@ -62,17 +71,25 @@ final class HandlerExecutors {
 
 	/** The listener's threads: the virtual-thread task executor, else platform threads. */
 	static AcpTransportThreads listenerThreads(ApplicationContext context) {
-		Executor applicationTaskExecutor = virtualApplicationTaskExecutor(context);
+		return listenerThreads(context, virtualThreadsActive(context));
+	}
+
+	/** The listener's threads, with Spring Boot's virtual-thread opt-in given. */
+	static AcpTransportThreads listenerThreads(ApplicationContext context, boolean virtualThreads) {
+		Executor applicationTaskExecutor = virtualThreads ? applicationTaskExecutor(context) : null;
 		return (applicationTaskExecutor != null) ? AcpTransportThreads.executor(applicationTaskExecutor)
 				: AcpTransportThreads.platform();
 	}
 
-	/** The context's {@code applicationTaskExecutor} when virtual threads are on, else null. */
-	private static @org.jspecify.annotations.Nullable Executor virtualApplicationTaskExecutor(
-			ApplicationContext context) {
+	/** Spring Boot's opt-in: {@code spring.threads.virtual.enabled=true} on JDK 21 and later. */
+	private static boolean virtualThreadsActive(ApplicationContext context) {
+		return Threading.VIRTUAL.isActive(context.getEnvironment());
+	}
+
+	/** The context's {@code applicationTaskExecutor}, or null when it has none. */
+	private static @org.jspecify.annotations.Nullable Executor applicationTaskExecutor(ApplicationContext context) {
 		String name = TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME;
-		if (!Threading.VIRTUAL.isActive(context.getEnvironment()) || !context.containsBean(name)
-				|| !(context.getBean(name) instanceof Executor executor)) {
+		if (!context.containsBean(name) || !(context.getBean(name) instanceof Executor executor)) {
 			return null;
 		}
 		return executor;

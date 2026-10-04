@@ -55,7 +55,7 @@ public class AcpClientTransportAutoConfiguration {
 	AcpClientTransport acpClientTransport(AcpClientProperties properties, Environment environment,
 			@Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
 			ObjectProvider<Executor> applicationTaskExecutor) {
-		return AcpClientTransports.create(properties.toSettings(), PREFIX, threads(environment, applicationTaskExecutor))
+		return AcpClientTransports.create(properties.toSettings(), PREFIX, threads(Threading.VIRTUAL.isActive(environment), applicationTaskExecutor))
 			.orElseThrow(() -> new IllegalStateException("No ACP client transport is configured"));
 	}
 
@@ -63,9 +63,12 @@ public class AcpClientTransportAutoConfiguration {
 	 * Spring Boot's opt-in decides: with {@code spring.threads.virtual.enabled=true} (JDK 21 and
 	 * later) the WebSocket and HTTP transports run on the virtual-thread
 	 * {@code applicationTaskExecutor}; otherwise on platform threads, on every JDK.
+	 * @param virtualThreads whether Spring Boot's virtual-thread opt-in is active
+	 * @param applicationTaskExecutor the context's task executor
+	 * @return the transports' threads
 	 */
-	static AcpTransportThreads threads(Environment environment, ObjectProvider<Executor> applicationTaskExecutor) {
-		Executor executor = Threading.VIRTUAL.isActive(environment) ? applicationTaskExecutor.getIfAvailable() : null;
+	static AcpTransportThreads threads(boolean virtualThreads, ObjectProvider<Executor> applicationTaskExecutor) {
+		Executor executor = virtualThreads ? applicationTaskExecutor.getIfAvailable() : null;
 		return (executor != null) ? AcpTransportThreads.executor(executor) : AcpTransportThreads.platform();
 	}
 

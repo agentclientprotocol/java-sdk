@@ -28,32 +28,52 @@ class AcpExecutorsTest {
 
 	@Test
 	void virtualIsQuarkusVirtualThreadExecutorOnJdk21() {
-		ExecutorService chosen = executors(AcpRuntimeConfig.HandlerExecutor.VIRTUAL, true).handlerExecutor();
+		AcpExecutors executors = executors(AcpRuntimeConfig.HandlerExecutor.VIRTUAL, true, true);
+		assertThat(executors.handlerExecutor()).isSameAs(virtual);
+		assertThat(executors.transportThreads().executor()).isSameAs(virtual);
+	}
+
+	@Test
+	void virtualBeforeJdk21IsTheManagedExecutor() {
+		assertThat(executors(AcpRuntimeConfig.HandlerExecutor.VIRTUAL, true, false).handlerExecutor())
+			.isSameAs(managed);
+	}
+
+	@Test
+	void theInjectedChoiceAsksTheJdk() {
+		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class);
+		when(config.handlerExecutor()).thenReturn(AcpRuntimeConfig.HandlerExecutor.VIRTUAL);
+		ExecutorService chosen = new AcpExecutors(config, instance(virtual, true), instance(managed, true))
+			.handlerExecutor();
 		assertThat(chosen).isSameAs(VirtualThreads.isSupported() ? virtual : managed);
 	}
 
 	@Test
 	void virtualWithoutTheBeanIsTheManagedExecutor() {
-		assertThat(executors(AcpRuntimeConfig.HandlerExecutor.VIRTUAL, false).handlerExecutor()).isSameAs(managed);
+		assertThat(executors(AcpRuntimeConfig.HandlerExecutor.VIRTUAL, false, true).handlerExecutor())
+			.isSameAs(managed);
 	}
 
 	@Test
 	void managedIsTheManagedExecutorAndCarriesToTheTransports() {
-		AcpExecutors executors = executors(AcpRuntimeConfig.HandlerExecutor.MANAGED, true);
+		AcpExecutors executors = executors(AcpRuntimeConfig.HandlerExecutor.MANAGED, true, true);
 		assertThat(executors.handlerExecutor()).isSameAs(managed);
 		assertThat(executors.transportThreads().executor()).isSameAs(managed);
 	}
 
-	@SuppressWarnings("unchecked")
-	private AcpExecutors executors(AcpRuntimeConfig.HandlerExecutor choice, boolean virtualBean) {
+	private AcpExecutors executors(AcpRuntimeConfig.HandlerExecutor choice, boolean virtualBean,
+			boolean jdkHasVirtualThreads) {
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class);
 		when(config.handlerExecutor()).thenReturn(choice);
-		Instance<ExecutorService> virtualInstance = mock(Instance.class);
-		when(virtualInstance.isResolvable()).thenReturn(virtualBean);
-		when(virtualInstance.get()).thenReturn(virtual);
-		Instance<ManagedExecutor> managedInstance = mock(Instance.class);
-		when(managedInstance.get()).thenReturn(managed);
-		return new AcpExecutors(config, virtualInstance, managedInstance);
+		return new AcpExecutors(config, instance(virtual, virtualBean), instance(managed, true), jdkHasVirtualThreads);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T> Instance<T> instance(T bean, boolean resolvable) {
+		Instance<T> instance = mock(Instance.class);
+		when(instance.isResolvable()).thenReturn(resolvable);
+		when(instance.get()).thenReturn(bean);
+		return instance;
 	}
 
 }
