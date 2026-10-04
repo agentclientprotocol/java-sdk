@@ -201,7 +201,7 @@ PromptResponse answer(PromptRequest req, SyncPromptContext ctx) { ... }
 PromptResponse answer(SyncPromptContext ctx, @SessionId String sessionId) { ... }
 
 @Prompt
-String simpleAnswer(PromptRequest req) { ... }  // Converted to PromptResponse
+String simpleAnswer(PromptRequest req) { ... }  // Sent as an agent message chunk; the turn ends end_turn
 
 @Prompt
 void streamingAnswer(PromptRequest req, SyncPromptContext ctx) { ... }  // Returns endTurn()
@@ -217,7 +217,7 @@ The runtime automatically converts return values to protocol response types:
 | Return Type | Conversion |
 |-------------|------------|
 | The method's response type (`InitializeResponse`, `NewSessionResponse`, `PromptResponse`, ...) | Passed through directly. |
-| `Mono`, `CompletionStage` (`CompletableFuture`) or single-value `Publisher` of the response type (or of `String` for `@Prompt`) | Awaited on the handler thread; the value is then handled as if returned directly. |
+| `Mono`, `CompletionStage` (`CompletableFuture`) or single-value `Publisher` of the response type (or of `String` for `@Prompt`) | Awaited on the handler thread; the value is then handled as if returned directly. No value (an empty `Mono` or `Publisher`, or a stage that completes with `null`) gives no response, so the request is answered `-32603`, even for `@Prompt`, where a `String` method returning `null` ends the turn. |
 | `String` (`@Prompt` only) | Sent to the client as an `agent_message_chunk` session update, then the turn ends (`PromptResponse.endTurn()`). |
 | `void` (`@Prompt` only) | Converted to `PromptResponse.endTurn()`. |
 | `void` (`@Cancel`, `@ExtNotification`) | Notifications have no response. |
@@ -234,7 +234,10 @@ method and the fix, never at the first request: two methods for one annotation, 
 annotations on one method, a parameter no resolver supplies or that does not suit the method (the
 request type of another method, `@SessionId` where there is no session, a prompt context outside
 `@Prompt`, `@ConfigValue` outside `@SetSessionConfigOption`), and a return type that cannot give the
-method's response. Parameters and return types that a custom `ArgumentResolver` or
+method's response. The one exception is the extension methods: on an `@ExtRequest` or `@ExtNotification`
+method every parameter that is not a connection parameter is read from the params, so a prompt
+context there is not rejected when the agent is built; instead every `@ExtRequest` call is answered
+`-32602` (invalid params). Parameters and return types that a custom `ArgumentResolver` or
 `ReturnValueHandler` supports are left to it.
 
 ## Using SyncPromptContext

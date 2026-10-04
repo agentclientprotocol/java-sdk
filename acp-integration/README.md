@@ -37,7 +37,7 @@ plain key/value configuration with `from(SettingsSource, prefix)`:
 | `enabled` | `true` |
 | `request-timeout`, `cancel-grace-period`, `max-prompt-duration` | SDK defaults |
 | `shutdown-on-transport-end` | `true`: stop the application when stdio input ends |
-| `transport.type` | `stdio`; `http` (or `websocket`, the same) for Streamable HTTP and WebSocket |
+| `transport.type` | `stdio`; `http` (or `websocket`, the same) for Streamable HTTP and WebSocket. The SDK's listener takes WebSocket upgrades on the endpoint's path; the servlet in a framework's Servlet container does not, so there `websocket` serves HTTP/SSE only, unless the framework routes the upgrades itself (Quarkus does) |
 | `transport.http.path` | `/acp` |
 | `transport.http.max-post-body-size`, `keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout` | SDK defaults |
 | `transport.http.listener.port` | `8080`, the SDK listener only; `0` for an ephemeral port |
@@ -63,11 +63,16 @@ Advertise a capability only together with the handler for it, registered through
 `stdio.command`, `websocket.uri` and `http.uri` selects the transport, and more than one fails,
 naming them; with none there is no client. Error messages name the framework's own keys.
 
-`AcpAgentTransports.stdio()` is the stdio agent transport. `AcpListeners` holds what needs
-`acp-streamable-http-jetty`, so that no class a framework always loads names it:
-`isListenerAvailable()`, `listener(settings, factory)` for the SDK's own listener (HTTP, cleartext
-HTTP/2 and WebSocket on one path) and `servlet(settings, factory)` for a framework's Servlet
-container.
+`AcpAgentTransports.stdio()` is the stdio agent transport. `AcpListeners` creates the endpoints
+of the optional `acp-streamable-http-jetty` module: `listener(settings, factory)` for the SDK's own
+listener (HTTP, cleartext HTTP/2 and WebSocket on one path) and `servlet(settings, factory)` for a
+framework's Servlet container; `isListenerAvailable()` says whether the listener and its Jetty
+server are on the classpath. The module's types appear in `AcpListeners`, `AcpListenerHost`,
+`AcpServletHost` and `AcpAgentSettings.toOptions`. A framework without the module still loads
+these classes, `AcpAgentSettings` included, because the JVM resolves those types only when code
+that uses them runs: call them only when the agent is served over HTTP, and call
+`isListenerAvailable()` before `listener` to report a missing module in the framework's own
+words.
 
 ## The agent
 
@@ -77,7 +82,8 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
     AcpAgentSupport.Builder builder = AcpAgents.builder(agent, settings, interceptors, resolvers, handlers);
     AcpHost host = settings.servesHttp()
             ? new AcpListenerHost(AcpListeners.listener(settings, builder.buildFactory()))
-            : new AcpAgentHost(builder.transport(AcpAgentTransports.stdio()).build(), container::close);
+            : new AcpAgentHost(builder.transport(AcpAgentTransports.stdio()).build(),
+                    settings.shutdownOnTransportEnd() ? container::close : () -> { });
     host.start();                            // from the container's start hook
     // host.stop(Duration.ofSeconds(30))     // from its stop hook, or a JVM shutdown hook
 });
@@ -105,7 +111,10 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
 
 `AcpClients.async(transport, settings, customizers)` builds the one async client: capabilities,
 request and prompt timeouts, a session-update consumer that logs at DEBUG, then the
-`AcpClientCustomizer`s in order. `AcpClients.sync(async)` is the sync facade over that same client
+`AcpClientCustomizer`s in order. Building the client connects the transport (for stdio, it starts
+the agent process); a stdio command that cannot be started, or a transport already connected,
+fails the build. The ACP handshake waits for the application's `initialize()`.
+`AcpClients.sync(async)` is the sync facade over that same client
 (one session on one connection). `AcpClientHost` closes it once, gracefully, then at once after
 its timeout (`settings.closeTimeout()`); the framework must not close the client or its transport
 again through an inferred destroy method.

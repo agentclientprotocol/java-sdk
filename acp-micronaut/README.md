@@ -104,8 +104,9 @@ one, not inside it. It serves HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades 
 
 A client is configured when `acp.client.transport.*` is set. It has three beans: the transport,
 an `AcpAsyncClient`, and an `AcpSyncClient` facade over that same client, which is one session on
-one connection. The client connects when you call `initialize()`. It closes gracefully, once,
-with the context. Customize it before it is built with `AcpClientCustomizer` beans
+one connection. Creating the client bean connects its transport (for stdio, it starts the agent
+process); `initialize()` then performs the ACP handshake. It closes gracefully, once, with the
+context. Customize it before it is built with `AcpClientCustomizer` beans
 (`com.agentclientprotocol.sdk.integration.AcpClientCustomizer`, the same type in every framework
 integration), applied in `@Order`:
 
@@ -121,6 +122,7 @@ class Updates implements AcpClientCustomizer {
 | Property | Default | |
 |---|---|---|
 | `acp.client.request-timeout` | `60s` | |
+| `acp.client.prompt-timeout` | none | a longer prompt turn fails and is cancelled |
 | `acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`. When it is unset, the transport is the only one whose command or URI is set; with several set, it is required |
 | `acp.client.transport.stdio.command`, `.args`, `.env.*` | | the agent process; `env` keys keep their case |
 | `acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | `ws://host:port/acp` |
