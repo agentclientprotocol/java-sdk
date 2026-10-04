@@ -699,8 +699,9 @@ public class AcpAgentSupport implements AutoCloseable {
 		 * Sets the executor the agent's handler methods run on, for example
 		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool, as
 		 * {@link AcpAgent.SyncAgentBuilder#handlerExecutor(ExecutorService)} does. Without it they
-		 * run on the SDK's shared pool of daemon threads. The executor must allow blocking; the SDK
-		 * never shuts it down.
+		 * run on the SDK's default: a virtual thread per call on JDK 21 and later, before that a
+		 * shared pool of daemon threads. The executor must allow blocking; the SDK never shuts it
+		 * down.
 		 * @param executor the executor the handler methods run on
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code executor} is null

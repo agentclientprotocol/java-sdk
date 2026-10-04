@@ -75,8 +75,8 @@ import reactor.core.scheduler.Schedulers;
  * updates the agent sent before it have been handled (see below); handlers do not wait for each
  * other. Asynchronous handlers are called on the thread that delivered the request or finished the
  * last of those updates, and must not block; synchronous handlers run on the executor given to
- * {@link SyncSpec#handlerExecutor}, by default a pool of daemon threads the SDK shares between all
- * synchronous clients in the JVM. A handler that fails is answered with an error: an
+ * {@link SyncSpec#handlerExecutor}, by default a virtual thread per call on JDK 21 and later, and
+ * before that a pool of daemon threads the SDK shares between all synchronous clients in the JVM. A handler that fails is answered with an error: an
  * {@link AcpProtocolException} with its own code, an {@code AcpError} from a call to the agent
  * with the error it carries, anything else with {@code -32603} (internal error, message
  * "Internal error").
@@ -850,9 +850,12 @@ public interface AcpClient {
 		/**
 		 * Sets the executor the handlers and session update consumers run on, for example
 		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool. Without
-		 * it they run on a pool of daemon threads named {@code acp-sync-handler}, shared by every
-		 * synchronous client in the JVM, which has no size limit: each handler running at the same
-		 * time takes a thread of its own. The executor must allow blocking. A handler the agent
+		 * it each call runs on a virtual thread of its own on JDK 21 and later, and before that on
+		 * a pool of daemon threads shared by every synchronous client in the JVM, which has no size
+		 * limit: each handler running at the same time takes a thread of its own. Either way the
+		 * threads are named {@code acp-sync-handler}. On JDK 21 to 23 a virtual thread that blocks
+		 * inside a {@code synchronized} block pins its carrier thread (JDK 24 removed that, JEP
+		 * 491). The executor must allow blocking. A handler the agent
 		 * cancels is interrupted (its task is cancelled), and the SDK never shuts the executor
 		 * down; that is the application's job.
 		 * @param executor the executor the handlers run on
