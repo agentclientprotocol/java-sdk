@@ -752,42 +752,107 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Authenticate request - authenticates using specified method
+	 * The params of {@code authenticate}: the client logs in with one of the
+	 * {@link AuthMethodAgent} methods the agent listed in {@link InitializeResponse#authMethods()},
+	 * named by its id. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#authenticate
+	 * AcpSyncClient.authenticate} or the {@code AcpAsyncClient} method of the same name, when the
+	 * agent requires a login: such an agent answers other requests with {@code -32000}
+	 * (authentication required) until then. The agent's authenticate handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.AuthenticateHandler} or an
+	 * {@link com.agentclientprotocol.sdk.annotation.Authenticate @Authenticate} method) receives it
+	 * and answers with an {@link AuthenticateResponse}.
+	 *
+	 * <p>
+	 * Pass only the id of an {@link AuthMethodAgent}. The protocol forbids passing an
+	 * {@link AuthMethodTerminal}: the client runs that one itself, outside the connection. The SDK
+	 * checks the id on neither side: the client sends any id, and the agent's handler receives any
+	 * id, so a handler should reject an id it did not advertise. To refuse a login, the handler
+	 * fails with an {@link AcpProtocolException} carrying
+	 * {@link AcpErrorCodes#AUTHENTICATION_REQUIRED}. An agent without an authenticate handler
+	 * answers {@code -32601} (method not found).
+	 *
+	 * @param methodId the id of the chosen {@link AuthMethodAgent}, one the agent advertised
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthenticateRequest(@JsonProperty("methodId") String methodId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param methodId the id of the chosen agent auth method
+		 */
 		public AuthenticateRequest(String methodId) {
 			this(methodId, null);
 		}
 	}
 
 	/**
-	 * Authenticate response
+	 * The result of {@code authenticate}: an empty answer that confirms the login succeeded. The
+	 * agent's authenticate handler returns it once it has checked the login; the client's
+	 * {@code authenticate(...)} completes with it. A failed login is an error answer, not this
+	 * record.
+	 *
+	 * <p>
+	 * The SDK does not record that a client has logged in. An agent's handlers that need a login
+	 * check for one themselves, and fail with {@link AcpErrorCodes#AUTHENTICATION_REQUIRED} when
+	 * there is none.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthenticateResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public AuthenticateResponse() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Logout request - clears stored credentials, terminating the current
-	 * authenticated session.
+	 * The params of {@code logout}: asks the agent to end the client's authenticated state, so that
+	 * new sessions need a login again. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#logout AcpSyncClient.logout} or the
+	 * {@code AcpAsyncClient} method of the same name. The agent's logout handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.LogoutHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.Logout @Logout} method) receives it and answers
+	 * with a {@link LogoutResponse}.
+	 *
+	 * <p>
+	 * Only an agent that advertises {@code auth.logout}
+	 * ({@link AgentAuthCapabilities#withLogout()}) supports it: for any other agent the client
+	 * fails the call with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
+	 * without sending it. A builder agent without an initialize handler and an annotated agent
+	 * advertise {@code auth.logout} when they have a logout handler. The protocol does not say what
+	 * happens to sessions already running: the agent may end them, keep them, or fail their later
+	 * requests with {@code -32000} (authentication required).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LogoutRequest(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/** Creates a request without {@code _meta}. */
 		public LogoutRequest() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Logout response
+	 * The result of {@code logout}: an empty answer that confirms the client is logged out. The
+	 * agent's logout handler returns it; the client's {@code logout(...)} completes with it.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LogoutResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public LogoutResponse() {
 			this(null);
 		}
@@ -4696,22 +4761,27 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * MCP server configuration.
+	 * An MCP server the client asks the agent to connect to for an ACP session, passed in the
+	 * {@code mcpServers} of {@link NewSessionRequest}, {@link LoadSessionRequest},
+	 * {@link ResumeSessionRequest} and {@link ForkSessionRequest}. The agent can then use the
+	 * server's tools and context while it works on prompts. There are three transports:
+	 * {@link McpServerStdio}, which every agent accepts, and {@link McpServerHttp} and
+	 * {@link McpServerSse}, which an agent accepts only when it advertises them in
+	 * {@link McpCapabilities}.
+	 *
 	 * <p>
-	 * Per the ACP spec:
-	 * <ul>
-	 * <li>Stdio transport: NO type field (default)</li>
-	 * <li>HTTP transport: type="http"</li>
-	 * <li>SSE transport: type="sse"</li>
-	 * </ul>
-	 * </p>
+	 * The SDK only carries these records: the agent's session handlers connect to the servers, and
+	 * the protocol says they should connect to all of them. The SDK checks the transports against
+	 * {@link McpCapabilities} on neither side; a client checks {@code supportsMcpHttp()} and
+	 * {@code supportsMcpSse()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} before it sends HTTP or SSE servers.
+	 *
 	 * <p>
-	 * Uses {@code EXISTING_PROPERTY} so that:
-	 * <ul>
-	 * <li>McpServerStdio (no type method) serializes WITHOUT type field</li>
-	 * <li>McpServerHttp/Sse (with type method) serialize WITH type field</li>
-	 * </ul>
-	 * </p>
+	 * On the wire the {@code type} member tells the transports apart: {@code "http"},
+	 * {@code "sse"}, and none for stdio. A server without {@code type} reads as an
+	 * {@link McpServerStdio}, and so does a server of a transport this SDK does not know: that
+	 * record then has no command, and the members only that transport has are dropped.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			defaultImpl = McpServerStdio.class)
@@ -4722,30 +4792,72 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * STDIO MCP server (default transport, no type field in JSON).
+	 * An MCP server the agent starts as a child process and talks to over standard input and
+	 * output: it runs {@link #command()} with {@link #args()}, and sets {@link #env()} in the
+	 * process's environment. Every agent must accept this transport, so a client can always send
+	 * it. It is written without a {@code type} member.
+	 *
+	 * <p>
+	 * The protocol requires an absolute path in {@code command}, and requires {@code args} and
+	 * {@code env} on the wire; the SDK checks none of these. Pass empty lists, not {@code null}: a
+	 * {@code null} list is left out of the JSON. A record read from a peer that left them out has
+	 * {@code null} there.
+	 *
+	 * @param name a name for the server, shown to people
+	 * @param command the absolute path of the server's executable
+	 * @param args the command-line arguments, possibly empty
+	 * @param env the environment variables to set for the server, possibly empty
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerStdio(@JsonProperty("name") String name, @JsonProperty("command") String command,
 			@JsonProperty("args") List<String> args, @JsonProperty("env") List<EnvVariable> env,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		/**
+		 * Creates a server without {@code _meta}.
+		 * @param name a name for the server
+		 * @param command the absolute path of the executable
+		 * @param args the command-line arguments, possibly empty
+		 * @param env the environment variables, possibly empty
+		 */
 		public McpServerStdio(String name, String command, List<String> args, List<EnvVariable> env) {
 			this(name, command, args, env, null);
 		}
 	}
 
 	/**
-	 * HTTP MCP server.
+	 * An MCP server the agent reaches over HTTP at {@link #url()}, sending {@link #headers()} with
+	 * its requests. A client sends it only to an agent that advertises {@code mcpCapabilities.http}
+	 * ({@link McpCapabilities}); the protocol recommends that new agents support it. It is written
+	 * with {@code "type": "http"}.
+	 *
+	 * <p>
+	 * The protocol requires {@code headers} on the wire: pass an empty list, not {@code null},
+	 * which is left out of the JSON. A record read from a peer that left it out has {@code null}
+	 * there. The SDK does not check the URL.
+	 *
+	 * @param name a name for the server, shown to people
+	 * @param url the server's URL
+	 * @param headers the HTTP headers to send to the server, possibly empty
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerHttp(@JsonProperty("name") String name, @JsonProperty("url") String url,
 			@JsonProperty("headers") List<HttpHeader> headers,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		/**
+		 * Creates a server without {@code _meta}.
+		 * @param name a name for the server
+		 * @param url the server's URL
+		 * @param headers the HTTP headers, possibly empty
+		 */
 		public McpServerHttp(String name, String url, List<HttpHeader> headers) {
 			this(name, url, headers, null);
 		}
 
 		/**
-		 * Returns the transport type identifier.
+		 * Returns the discriminator, {@code "http"}, which the JSON carries as {@code type}.
+		 * @return {@code "http"}
 		 */
 		@JsonProperty("type")
 		public String type() {
@@ -4754,18 +4866,38 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * SSE MCP server.
+	 * An MCP server the agent reaches over HTTP with server-sent events (SSE) at {@link #url()},
+	 * sending {@link #headers()} with its requests. A client sends it only to an agent that
+	 * advertises {@code mcpCapabilities.sse} ({@link McpCapabilities}). It is written with
+	 * {@code "type": "sse"}.
+	 *
+	 * <p>
+	 * It differs from {@link McpServerHttp} only in the transport, which the MCP specification has
+	 * deprecated: prefer {@link McpServerHttp} for an agent that accepts both. As there, pass an
+	 * empty list of headers, not {@code null}, which is left out of the JSON.
+	 *
+	 * @param name a name for the server, shown to people
+	 * @param url the server's URL
+	 * @param headers the HTTP headers to send to the server, possibly empty
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpServerSse(@JsonProperty("name") String name, @JsonProperty("url") String url,
 			@JsonProperty("headers") List<HttpHeader> headers,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements McpServer {
+		/**
+		 * Creates a server without {@code _meta}.
+		 * @param name a name for the server
+		 * @param url the server's URL
+		 * @param headers the HTTP headers, possibly empty
+		 */
 		public McpServerSse(String name, String url, List<HttpHeader> headers) {
 			this(name, url, headers, null);
 		}
 
 		/**
-		 * Returns the transport type identifier.
+		 * Returns the discriminator, {@code "sse"}, which the JSON carries as {@code type}.
+		 * @return {@code "sse"}
 		 */
 		@JsonProperty("type")
 		public String type() {
@@ -4774,22 +4906,46 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Environment variable
+	 * One environment variable, a name and a value. It is an item of {@link McpServerStdio#env()},
+	 * for an MCP server the agent starts, and of {@link CreateTerminalRequest#env()}, for a command
+	 * the agent asks the client to run. Neither may be {@code null}: a {@code null} one is left out
+	 * of the JSON, which the protocol does not allow.
+	 *
+	 * @param name the variable's name
+	 * @param value the variable's value
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record EnvVariable(@JsonProperty("name") String name, @JsonProperty("value") String value,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a variable without {@code _meta}.
+		 * @param name the variable's name
+		 * @param value the variable's value
+		 */
 		public EnvVariable(String name, String value) {
 			this(name, value, null);
 		}
 	}
 
 	/**
-	 * HTTP header
+	 * One HTTP header, a name and a value, that the agent sends with its requests to an MCP server,
+	 * for example an {@code Authorization} header. It is an item of {@link McpServerHttp#headers()}
+	 * and {@link McpServerSse#headers()}. Neither may be {@code null}: a {@code null} one is left
+	 * out of the JSON, which the protocol does not allow.
+	 *
+	 * @param name the header's name
+	 * @param value the header's value
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record HttpHeader(@JsonProperty("name") String name, @JsonProperty("value") String value,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a header without {@code _meta}.
+		 * @param name the header's name
+		 * @param value the header's value
+		 */
 		public HttpHeader(String name, String value) {
 			this(name, value, null);
 		}
@@ -4808,78 +4964,147 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * An authentication method the agent offers, discriminated by {@code type}.
+	 * One way a client can log in to an agent, as listed in
+	 * {@link InitializeResponse#authMethods()}. It is an {@link AuthMethodAgent}, which the client
+	 * passes to {@code authenticate} by its {@link #id()}, or an {@link AuthMethodTerminal}, which
+	 * the client runs itself by starting the agent program again in an interactive terminal. Check
+	 * the type with {@code instanceof} before acting on a method.
 	 *
 	 * <p>
-	 * A method without a {@code type} is an {@link AuthMethodAgent}: the client calls
-	 * {@code authenticate} with its id and the agent does the rest. {@code "terminal"} is an
-	 * {@link AuthMethodTerminal}: the client runs the agent program itself, interactively,
-	 * with the method's extra arguments and environment. A method of any other type,
-	 * including {@code "agent"} (which the Kotlin SDK writes), also reads as an
-	 * {@link AuthMethodAgent}, as in the Rust SDK, where the agent variant is the untagged
-	 * fallback (see {@link AcpSchema} on forward compatibility); its {@code type} is not
-	 * kept.
-	 * </p>
+	 * An annotated agent declares its methods with
+	 * {@link com.agentclientprotocol.sdk.annotation.AuthMethod @AuthMethod} in the
+	 * {@link com.agentclientprotocol.sdk.annotation.AcpAgent#authMethods() authMethods} of
+	 * {@link com.agentclientprotocol.sdk.annotation.AcpAgent @AcpAgent}, and the SDK lists them in
+	 * the {@code initialize} answer: the agent methods to every client, and the terminal methods
+	 * only to a client that advertises {@code auth.terminal}. Methods that an
+	 * {@link com.agentclientprotocol.sdk.annotation.Initialize @Initialize} method returns are
+	 * added after the declared ones, replacing any with the same id, and are not filtered. A
+	 * builder agent lists the methods its initialize handler returns, and none without one.
+	 *
+	 * <p>
+	 * On the wire the {@code type} member tells the two apart. A method without {@code type} reads
+	 * as an {@link AuthMethodAgent}, and so does a method of a type this SDK does not know,
+	 * including {@code "agent"}, which some SDKs write; its {@code type} and the members only that
+	 * type has are not kept (see {@link AcpSchema} on forward compatibility). Only
+	 * {@code "terminal"} reads as an {@link AuthMethodTerminal}.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			defaultImpl = AuthMethodAgent.class)
 	@JsonSubTypes({ @JsonSubTypes.Type(value = AuthMethodTerminal.class, name = "terminal") })
 	public interface AuthMethod {
 
-		/** The id the client passes to {@code authenticate}. */
+		/**
+		 * Returns the method's id, unique among the agent's methods. For an {@link AuthMethodAgent}
+		 * the client passes it to {@code authenticate}.
+		 * @return the method id
+		 */
 		String id();
 
-		/** Human-readable name of the method. */
+		/**
+		 * Returns the name a client shows the user for this method.
+		 * @return the human-readable name
+		 */
 		String name();
 
-		/** Optional description of the method. */
+		/**
+		 * Returns a longer description a client may show, or {@code null}.
+		 * @return the description, or {@code null} for none
+		 */
 		@Nullable String description();
 
 	}
 
 	/**
-	 * Agent authentication: the agent handles it in {@code authenticate}. Written without a
-	 * {@code type}, which is how the schema marks the agent method.
+	 * An authentication method the agent runs itself: the client passes its {@link #id()} to
+	 * {@code authenticate} in an {@link AuthenticateRequest}, and the agent's authenticate handler
+	 * checks the login. It is the default {@link AuthMethod} type, written without a {@code type}
+	 * member.
 	 *
-	 * @param id the method id
-	 * @param name human-readable name
-	 * @param description optional description
-	 * @param meta reserved metadata
+	 * <p>
+	 * An annotated agent gets one for each
+	 * {@link com.agentclientprotocol.sdk.annotation.AuthMethod @AuthMethod} of type {@code AGENT},
+	 * the default, in {@code @AcpAgent(authMethods = ...)}, and lists it to every client. Such an
+	 * agent needs an {@link com.agentclientprotocol.sdk.annotation.Authenticate @Authenticate}
+	 * method, or building it throws an {@link IllegalStateException}. A builder agent returns these
+	 * from its initialize handler and serves them with an {@code authenticateHandler}.
+	 *
+	 * <p>
+	 * A method read with a {@code type} other than {@code "terminal"} also reads as this record
+	 * (see {@link AuthMethod}).
+	 *
+	 * @param id the method id, which the client passes to {@code authenticate}
+	 * @param name the name a client shows the user
+	 * @param description a longer description, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthMethodAgent(@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements AuthMethod {
+		/**
+		 * Creates a method without {@code _meta}.
+		 * @param id the method id
+		 * @param name the name a client shows
+		 * @param description a longer description, or {@code null}
+		 */
 		public AuthMethodAgent(String id, String name, @Nullable String description) {
 			this(id, name, description, null);
 		}
 	}
 
 	/**
-	 * Terminal authentication: the client runs the agent program as a separate interactive
-	 * process (a TUI login), adding {@code args} to its arguments and {@code env} to its
-	 * environment, and does not pass this method to {@code authenticate}. Offered only to a
-	 * client that advertises {@code clientCapabilities.auth.terminal}.
+	 * An authentication method the client runs itself: it starts the agent program again as a
+	 * separate, interactive process, with {@link #args()} added to its arguments and {@link #env()}
+	 * to its environment, and the user logs in there. An exit status of zero means the login
+	 * succeeded; any other end means it failed. The client then reconnects and sends
+	 * {@code initialize} again. The client must not pass this method to {@code authenticate}: the
+	 * terminal process is not the ACP connection.
 	 *
-	 * @param id the method id
-	 * @param name human-readable name
-	 * @param description optional description
-	 * @param args extra arguments for the agent program
-	 * @param env extra environment variables for the agent program
-	 * @param meta reserved metadata
+	 * <p>
+	 * The protocol lets an agent list it only to a client that advertises {@code auth.terminal}
+	 * ({@link AuthCapabilities}). An annotated agent gets one for each
+	 * {@link com.agentclientprotocol.sdk.annotation.AuthMethod @AuthMethod} of type
+	 * {@code TERMINAL} in {@code @AcpAgent(authMethods = ...)}, with its {@code args} and its
+	 * {@code env} entries ({@code NAME=value}), leaves it out of the {@code initialize} answer for
+	 * a client without {@code auth.terminal}, and needs no {@code @Authenticate} method for it. A
+	 * builder agent's initialize handler, or an {@code @Initialize} method that returns one, checks
+	 * {@code supportsTerminalAuth()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} itself.
+	 *
+	 * <p>
+	 * The client SDK neither runs the login process nor stops an {@code authenticate} call with
+	 * this method's id; the application does both. The method carries no command: the client reuses
+	 * the command it starts the agent with, and how the login hands its credentials to the agent is
+	 * up to the agent.
+	 *
+	 * @param id the method id; the client does not pass it to {@code authenticate}
+	 * @param name the name a client shows the user
+	 * @param description a longer description, or {@code null}
+	 * @param args arguments to add to the agent program's arguments, or {@code null} for none
+	 * @param env environment variables to set for the agent program, overriding those of the same
+	 * name in its launch configuration, or {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthMethodTerminal(@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description,
 			@JsonProperty("args") @Nullable List<String> args, @JsonProperty("env") @Nullable Map<String, String> env,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements AuthMethod {
+		/**
+		 * Creates a method without a description or {@code _meta}.
+		 * @param id the method id
+		 * @param name the name a client shows
+		 * @param args extra arguments for the agent program, or {@code null}
+		 * @param env extra environment variables for the agent program, or {@code null}
+		 */
 		public AuthMethodTerminal(String id, String name, @Nullable List<String> args,
 				@Nullable Map<String, String> env) {
 			this(id, name, null, args, env, null);
 		}
 
 		/**
-		 * The discriminator, {@code "terminal"}.
+		 * Returns the discriminator, {@code "terminal"}, which the JSON carries as {@code type}.
 		 * @return {@code "terminal"}
 		 */
 		@JsonProperty("type")
