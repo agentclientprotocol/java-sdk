@@ -31,6 +31,8 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
 			assertThat(http.getPort()).isEqualTo(8080);
+			assertThat(http.getHost()).isNull();
+			assertThat(http.getAllowedOrigins()).isEmpty();
 			assertThat(http.getPath()).isEqualTo("/acp");
 			assertThat(http.getMaxPostBodySize()).isNull();
 			assertThat(http.getKeepAliveInterval()).isNull();
@@ -60,7 +62,9 @@ class AcpAgentConfigurationTest {
 				Map.entry("acp.agent.transport.http.max-web-socket-pending-frames", "13"),
 				Map.entry("acp.agent.transport.http.max-provisional-sessions", "14"),
 				Map.entry("acp.agent.transport.http.max-concurrent-streams-per-connection", "15"),
-				Map.entry("acp.agent.transport.http.shutdown-timeout", "4s"));
+				Map.entry("acp.agent.transport.http.shutdown-timeout", "4s"),
+				Map.entry("acp.agent.transport.http.host", "0.0.0.0"),
+				Map.entry("acp.agent.transport.http.allowed-origins", "https://a.example,https://b.example"));
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
 			AcpAgentConfiguration config = context.getBean(AcpAgentConfiguration.class);
 			assertThat(config.isEnabled()).isFalse();
@@ -83,6 +87,8 @@ class AcpAgentConfigurationTest {
 			assertThat(options.maxProvisionalSessions()).isEqualTo(14);
 			assertThat(options.maxConcurrentStreamsPerConnection()).isEqualTo(15);
 			assertThat(options.shutdownTimeout()).isEqualTo(Duration.ofSeconds(4));
+			assertThat(options.host()).isEqualTo("0.0.0.0");
+			assertThat(options.allowedOrigins()).containsExactlyInAnyOrder("https://a.example", "https://b.example");
 		}
 	}
 

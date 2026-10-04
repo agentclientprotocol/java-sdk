@@ -20,7 +20,7 @@ class AcpHttpEndpointTest {
 	@Test
 	void unsetLimitsKeepTheSdkDefaults() {
 		AgentHttp none = new AgentHttp(Optional.empty(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty(),
-				OptionalInt.empty(), OptionalInt.empty(), Optional.empty());
+				OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty());
 		assertThat(AcpHttpEndpoint.options(none)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
 	}
 
@@ -28,7 +28,7 @@ class AcpHttpEndpointTest {
 	void setLimitsReachTheOptions() {
 		AgentHttp all = new AgentHttp(Optional.of(new MemorySize(java.math.BigInteger.valueOf(1024))),
 				Optional.of(Duration.ofSeconds(2)), OptionalInt.of(3), OptionalInt.of(4), OptionalInt.of(5),
-				OptionalInt.of(6), Optional.of(Duration.ofSeconds(7)));
+				OptionalInt.of(6), Optional.of(Duration.ofSeconds(7)), Optional.of(java.util.List.of("https://app.example.com")));
 		StreamableHttpAcpAgentTransportOptions options = AcpHttpEndpoint.options(all);
 		assertThat(options.maxPostBodyBytes()).isEqualTo(1024);
 		assertThat(options.keepAliveInterval()).isEqualTo(Duration.ofSeconds(2));
@@ -37,6 +37,8 @@ class AcpHttpEndpointTest {
 		assertThat(options.maxWebSocketPendingFrames()).isEqualTo(5);
 		assertThat(options.maxProvisionalSessions()).isEqualTo(6);
 		assertThat(options.shutdownTimeout()).isEqualTo(Duration.ofSeconds(7));
+		assertThat(options.allowedOrigins()).containsExactly("https://app.example.com");
+		assertThat(options.host()).as("the Quarkus server keeps its own bind address").isNull();
 	}
 
 	@Test
@@ -51,7 +53,8 @@ class AcpHttpEndpointTest {
 
 	record AgentHttp(Optional<MemorySize> maxPostBodySize, Optional<Duration> keepAliveInterval,
 			OptionalInt mailboxCapacity, OptionalInt maxPendingSseEvents, OptionalInt maxWebSocketPendingFrames,
-			OptionalInt maxProvisionalSessions, Optional<Duration> shutdownTimeout) implements AcpRuntimeConfig.AgentHttp {
+			OptionalInt maxProvisionalSessions, Optional<Duration> shutdownTimeout,
+			Optional<java.util.List<String>> allowedOrigins) implements AcpRuntimeConfig.AgentHttp {
 	}
 
 }

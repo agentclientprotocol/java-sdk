@@ -5,6 +5,8 @@
 package com.agentclientprotocol.sdk.agent.transport;
 
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 import com.agentclientprotocol.sdk.util.Assert;
@@ -64,12 +66,25 @@ import org.jspecify.annotations.Nullable;
  * (21 and later); false keeps Jetty's pool of platform threads on every JDK, for an
  * application that has not opted into virtual threads, and then no executor may be set;
  * default true. Applied by the listener only
+ * @param host the address the listener binds, or null (the default) for the loopback interface
+ * only: {@code 127.0.0.1}, and {@code ::1} too where the machine has IPv6. A host name or
+ * address binds that one address; {@code 0.0.0.0} (or {@code ::}) binds every interface and
+ * so exposes the agent to the network. The endpoint has no authentication of its own, so
+ * opt in to remote exposure only behind a proxy or firewall that controls who may connect.
+ * Applied by the listener only; a servlet container binds where it is configured to
+ * @param allowedOrigins the browser origins, besides the loopback ones, whose requests the
+ * endpoint accepts, such as {@code https://app.example.com}; {@code *} accepts any origin.
+ * A request without an {@code Origin} header (any non-browser client) and one from
+ * {@code http(s)://localhost}, {@code 127.0.0.1} or {@code [::1]} on any port is always
+ * accepted; any other origin is answered 403, over HTTP and on the WebSocket handshake, so a
+ * web page the user visits cannot drive a local agent (DNS rebinding, cross-site requests).
+ * Default empty
  * @author Mark Pollack
  */
 public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int mailboxCapacity,
 		int maxPendingSseEvents, int maxWebSocketPendingFrames, int maxProvisionalSessions,
 		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection, Duration shutdownTimeout,
-		@Nullable Executor executor, boolean virtualThreads) {
+		@Nullable Executor executor, boolean virtualThreads, @Nullable String host, Set<String> allowedOrigins) {
 
 	private static final long DEFAULT_MAX_POST_BODY_BYTES = 16L * 1024 * 1024;
 
@@ -101,9 +116,11 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 	 * @param executor the executor the listener's Jetty server runs on, or null for Jetty's
 	 * own pool
 	 * @param virtualThreads whether the listener serves on virtual threads where the JDK has them
+	 * @param host the address the listener binds, or null for loopback only
+	 * @param allowedOrigins the browser origins accepted besides the loopback ones
 	 * @throws IllegalArgumentException if a count or {@code shutdownTimeout} is not positive,
-	 * {@code keepAliveInterval} is negative or null, or an executor is set with
-	 * {@code virtualThreads} false
+	 * {@code keepAliveInterval} is negative or null, an executor is set with
+	 * {@code virtualThreads} false, {@code host} is blank, or {@code allowedOrigins} is null
 	 */
 	public StreamableHttpAcpAgentTransportOptions {
 		Assert.isTrue(maxPostBodyBytes > 0, "maxPostBodyBytes must be positive");
@@ -117,6 +134,21 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		Assert.notNull(shutdownTimeout, "shutdownTimeout must not be null");
 		Assert.isTrue(!shutdownTimeout.isNegative() && !shutdownTimeout.isZero(), "shutdownTimeout must be positive");
 		Assert.isTrue(executor == null || virtualThreads, "An executor needs virtualThreads");
+		Assert.isTrue(host == null || !host.isBlank(), "host must not be blank; null binds loopback");
+		Assert.notNull(allowedOrigins, "allowedOrigins must not be null");
+		allowedOrigins = OriginPolicy.normalize(allowedOrigins);
+	}
+
+	/**
+	 * Returns whether a request with this {@code Origin} header may use the endpoint: no header,
+	 * a loopback origin ({@code http} or {@code https} on {@code localhost}, {@code 127.0.0.1} or
+	 * {@code [::1]}, any port), or one of {@link #allowedOrigins()}. Every host of the endpoint
+	 * applies it to every request and to the WebSocket handshake, and answers a refused one 403.
+	 * @param origin the request's {@code Origin} header, or null when it has none
+	 * @return whether the request is accepted
+	 */
+	public boolean isOriginAllowed(@Nullable String origin) {
+		return OriginPolicy.isAllowed(origin, allowedOrigins);
 	}
 
 	/**
@@ -161,6 +193,10 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		private int maxConcurrentStreamsPerConnection = DEFAULT_MAX_CONCURRENT_STREAMS_PER_CONNECTION;
 
 		private Duration shutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT;
+
+		private @Nullable String host;
+
+		private Set<String> allowedOrigins = Set.of();
 
 		private Builder() {
 		}
@@ -276,6 +312,32 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		}
 
 		/**
+		 * Sets the address the listener binds; by default (null) the loopback interface only,
+		 * {@code 127.0.0.1} and {@code ::1}. {@code 0.0.0.0} binds every interface, which exposes
+		 * the agent to anyone who can reach the machine: the endpoint has no authentication of
+		 * its own. The servlet ignores it.
+		 * @param host a host name or address, or null for loopback only
+		 * @return this builder
+		 */
+		public Builder host(@Nullable String host) {
+			this.host = host;
+			return this;
+		}
+
+		/**
+		 * Sets the browser origins accepted besides the loopback ones, such as
+		 * {@code https://app.example.com} (scheme, host and port, as browsers send them);
+		 * {@code *} accepts any origin. Default none.
+		 * @param allowedOrigins the origins
+		 * @return this builder
+		 */
+		public Builder allowedOrigins(Collection<String> allowedOrigins) {
+			Assert.notNull(allowedOrigins, "allowedOrigins must not be null");
+			this.allowedOrigins = Set.copyOf(allowedOrigins);
+			return this;
+		}
+
+		/**
 		 * Returns the options.
 		 * @return the options
 		 * @throws IllegalArgumentException if a value is out of range
@@ -283,7 +345,7 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		public StreamableHttpAcpAgentTransportOptions build() {
 			return new StreamableHttpAcpAgentTransportOptions(maxPostBodyBytes, mailboxCapacity, maxPendingSseEvents,
 					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval,
-					maxConcurrentStreamsPerConnection, shutdownTimeout, executor, virtualThreads);
+					maxConcurrentStreamsPerConnection, shutdownTimeout, executor, virtualThreads, host, allowedOrigins);
 		}
 
 	}

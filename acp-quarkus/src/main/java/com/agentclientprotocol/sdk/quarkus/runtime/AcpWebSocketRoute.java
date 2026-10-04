@@ -75,6 +75,12 @@ public class AcpWebSocketRoute {
 			context.next();
 			return;
 		}
+		if (!endpoint.options().isOriginAllowed(request.getHeader(HttpHeaders.ORIGIN))) {
+			// The same rule as the servlet's, on the handshake: a web page of another origin
+			// must not open a connection to the agent.
+			request.response().setStatusCode(403).end("Origin not allowed");
+			return;
+		}
 		String id = UUID.randomUUID().toString();
 		request.response().putHeader(HEADER_CONNECTION_ID, id);
 		request.toWebSocket().onSuccess(socket -> accept(id, socket)).onFailure(error -> {

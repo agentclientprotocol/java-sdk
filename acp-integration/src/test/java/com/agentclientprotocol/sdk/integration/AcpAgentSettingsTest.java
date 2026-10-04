@@ -43,7 +43,9 @@ class AcpAgentSettingsTest {
 				"acp.agent.transport.http.max-web-socket-pending-frames", "13",
 				"acp.agent.transport.http.max-provisional-sessions", "14", "acp.agent.transport.http.shutdown-timeout",
 				"1h", "acp.agent.transport.http.listener.port", "0",
-				"acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "15"), "acp.agent.");
+				"acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "15",
+				"acp.agent.transport.http.listener.host", "0.0.0.0", "acp.agent.transport.http.allowed-origins",
+				"https://a.example, https://b.example"), "acp.agent.");
 		assertThat(settings.enabled()).isFalse();
 		assertThat(settings.requestTimeout()).isEqualTo(Duration.ofSeconds(7));
 		assertThat(settings.cancelGracePeriod()).isEqualTo(Duration.ofSeconds(3));
@@ -63,6 +65,11 @@ class AcpAgentSettingsTest {
 		assertThat(listener.maxProvisionalSessions()).isEqualTo(14);
 		assertThat(listener.shutdownTimeout()).isEqualTo(Duration.ofHours(1));
 		assertThat(listener.maxConcurrentStreamsPerConnection()).isEqualTo(15);
+		assertThat(listener.host()).isEqualTo("0.0.0.0");
+		assertThat(listener.allowedOrigins()).containsExactlyInAnyOrder("https://a.example", "https://b.example");
+		// A framework's own server keeps its own bind address, and applies the same origins.
+		assertThat(settings.toOptions(false).host()).isNull();
+		assertThat(settings.toOptions(false).allowedOrigins()).hasSize(2);
 		// Inside a framework's server the listener's own stream limit means nothing.
 		assertThat(settings.toOptions(false).maxConcurrentStreamsPerConnection())
 			.isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults().maxConcurrentStreamsPerConnection());

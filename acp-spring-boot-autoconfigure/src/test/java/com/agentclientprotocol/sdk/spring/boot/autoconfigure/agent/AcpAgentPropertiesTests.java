@@ -58,7 +58,9 @@ class AcpAgentPropertiesTests {
 			.withPropertyValues("spring.acp.agent.cancel-grace-period=3s", "spring.acp.agent.max-prompt-duration=2m",
 					"spring.acp.agent.transport.type=websocket", "spring.acp.agent.transport.http.path=/agents/acp",
 					"spring.acp.agent.transport.http.listener.port=9123",
-					"spring.acp.agent.transport.http.listener.max-concurrent-streams-per-connection=15")
+					"spring.acp.agent.transport.http.listener.max-concurrent-streams-per-connection=15",
+					"spring.acp.agent.transport.http.listener.host=0.0.0.0",
+					"spring.acp.agent.transport.http.allowed-origins=https://a.example,https://b.example")
 			.run(context -> {
 				AcpAgentSettings settings = context.getBean(AcpAgentProperties.class).toSettings();
 				assertThat(settings.requestTimeout()).isNull();
@@ -68,6 +70,8 @@ class AcpAgentPropertiesTests {
 				assertThat(settings.http().path()).isEqualTo("/agents/acp");
 				assertThat(settings.http().listener().port()).isEqualTo(9123);
 				assertThat(settings.http().listener().maxConcurrentStreamsPerConnection()).isEqualTo(15);
+				assertThat(settings.http().listener().host()).isEqualTo("0.0.0.0");
+				assertThat(settings.http().allowedOrigins()).containsExactly("https://a.example", "https://b.example");
 			});
 	}
 

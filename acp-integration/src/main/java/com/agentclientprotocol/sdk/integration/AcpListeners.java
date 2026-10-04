@@ -61,7 +61,8 @@ public final class AcpListeners {
 	}
 
 	/**
-	 * Returns the SDK's listener on the settings' listener port and path: HTTP/1.1, cleartext
+	 * Returns the SDK's listener on the settings' listener host (loopback only unless set), port
+	 * and path: HTTP/1.1, cleartext
 	 * HTTP/2 and WebSocket upgrades on that one path, with the settings' limits and the
 	 * listener's stream limit, and the default JSON mapper, on the SDK's own threads (virtual
 	 * threads on JDK 21 and later). It is not started; give it to an {@link AcpListenerHost}.

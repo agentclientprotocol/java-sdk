@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent.transport;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,9 +26,11 @@ import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
+import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
@@ -67,10 +70,15 @@ import reactor.core.publisher.Sinks;
  * thread-safe. Clients connect with {@code StreamableHttpAcpClientTransport} or
  * {@code WebSocketAcpClientTransport} from {@code acp-core}, or with another SDK's client.
  *
- * <p>It listens on every network interface, over plain HTTP/1.1 and cleartext HTTP/2 (h2c),
- * and has no authentication of its own: anyone who can reach the port can start an agent.
- * For TLS, put a proxy that terminates it in front, or mount the servlet in a container that
- * has TLS. Close it with {@link #closeGracefully()}; it registers no JVM shutdown hook.
+ * <p>It listens on the loopback interface only by default ({@code 127.0.0.1}, and {@code ::1}
+ * where the machine has IPv6), over plain HTTP/1.1 and cleartext HTTP/2 (h2c), so only
+ * programs on the same machine can connect. It has no authentication of its own: anyone who
+ * can reach the port can start an agent. Exposing it to the network is an explicit opt-in,
+ * {@link StreamableHttpAcpAgentTransportOptions.Builder#host host("0.0.0.0")} (or a single
+ * address); do so only behind a proxy or firewall that controls who connects, and for TLS put
+ * a proxy that terminates it in front, or mount the servlet in a container that has TLS.
+ * Browser requests from an origin other than a loopback one are refused (403) unless listed
+ * in {@link StreamableHttpAcpAgentTransportOptions.Builder#allowedOrigins allowedOrigins}. Close it with {@link #closeGracefully()}; it registers no JVM shutdown hook.
  *
  * <p>On JDK 21 and later it serves on Jetty's {@code VirtualThreadPool}: every task on a
  * virtual thread ({@code acp-listener-*}), or on the application's executor when the options
@@ -211,20 +219,29 @@ public class StreamableHttpAcpAgentTransport {
 				throw new IllegalStateException("Already started");
 			}
 			Server jettyServer = createServer();
-			ServerConnector jettyConnector = createConnector(jettyServer);
-			jettyServer.addConnector(jettyConnector);
+			List<ServerConnector> connectors;
+			try {
+				connectors = openConnectors(jettyServer);
+			}
+			catch (Exception e) {
+				stopOwnTimer();
+				throw e;
+			}
+			connectors.forEach(jettyServer::addConnector);
 			jettyServer.setHandler(createContext(jettyServer));
 
 			try {
 				jettyServer.start();
 			}
 			catch (Exception e) {
+				connectors.forEach(ServerConnector::close);
 				stopOwnTimer();
 				throw e;
 			}
 			this.server = jettyServer;
-			this.boundPort = jettyConnector.getLocalPort();
-			logger.info("Streamable HTTP agent listener started on port {} at path {}", getPort(), path);
+			this.boundPort = connectors.get(0).getLocalPort();
+			logger.info("Streamable HTTP agent listener started on {} port {} at path {}",
+					options.host() != null ? options.host() : "loopback", getPort(), path);
 			return null;
 		}).then();
 	}
@@ -262,8 +279,33 @@ public class StreamableHttpAcpAgentTransport {
 		}
 	}
 
-	/** HTTP/1.1 and cleartext HTTP/2 on the configured port. */
-	private ServerConnector createConnector(Server jettyServer) {
+	/**
+	 * The connectors, bound before the server starts: one on the configured host, or by default
+	 * one on {@code 127.0.0.1} and, where the machine has IPv6, one on {@code ::1} on the same
+	 * port. Binding first gives the IPv6 connector the port an ephemeral IPv4 one was given, and
+	 * lets a machine without IPv6 run on IPv4 alone.
+	 */
+	private List<ServerConnector> openConnectors(Server jettyServer) throws IOException {
+		String host = options.host();
+		ServerConnector primary = createConnector(jettyServer, host != null ? host : "127.0.0.1", configuredPort);
+		primary.open();
+		if (host != null) {
+			return List.of(primary);
+		}
+		ServerConnector ipv6 = createConnector(jettyServer, "::1", primary.getLocalPort());
+		try {
+			ipv6.open();
+			return List.of(primary, ipv6);
+		}
+		catch (IOException e) {
+			logger.debug("Not listening on ::1 (port {}): {}", primary.getLocalPort(), e.getMessage());
+			ipv6.close();
+			return List.of(primary);
+		}
+	}
+
+	/** HTTP/1.1 and cleartext HTTP/2 on one address and port. */
+	private ServerConnector createConnector(Server jettyServer, String host, int port) {
 		HttpConfiguration httpConfig = new HttpConfiguration();
 		HTTP2CServerConnectionFactory h2c = new HTTP2CServerConnectionFactory(httpConfig);
 		// Every SSE stream is a long-lived HTTP/2 stream: one ACP client holds one per
@@ -272,7 +314,8 @@ public class StreamableHttpAcpAgentTransport {
 		// GOAWAY, which takes down every exchange on the connection.
 		h2c.setMaxConcurrentStreams(options.maxConcurrentStreamsPerConnection());
 		ServerConnector jettyConnector = new ServerConnector(jettyServer, new HttpConnectionFactory(httpConfig), h2c);
-		jettyConnector.setPort(configuredPort);
+		jettyConnector.setHost(host);
+		jettyConnector.setPort(port);
 		return jettyConnector;
 	}
 
@@ -289,7 +332,13 @@ public class StreamableHttpAcpAgentTransport {
 			// Jetty's default is 64 KB; a prompt or file content is often larger. One inbound
 			// limit for both profiles: the POST body cap also bounds a WebSocket text message.
 			container.setMaxTextMessageSize(options.maxPostBodyBytes());
-			container.addMapping(path, (request, response, callback) -> acceptWebSocket(response, callback));
+			container.addMapping(path, (request, response, callback) -> {
+				if (!options.isOriginAllowed(request.getHeaders().get(StreamableHttpRouting.HEADER_ORIGIN))) {
+					Response.writeError(request, response, callback, HttpStatus.FORBIDDEN_403, "Origin not allowed");
+					return null;
+				}
+				return acceptWebSocket(response, callback);
+			});
 		});
 		context.insertHandler(webSocketHandler);
 		return context;

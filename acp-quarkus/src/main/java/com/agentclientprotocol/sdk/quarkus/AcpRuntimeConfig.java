@@ -208,6 +208,17 @@ public interface AcpRuntimeConfig {
 		 */
 		Optional<Duration> shutdownTimeout();
 
+		/**
+		 * Browser origins accepted besides the loopback ones, such as
+		 * {@code https://app.example.com}, or {@code *} for any. A request without an
+		 * {@code Origin} header, or from {@code http(s)://localhost}, {@code 127.0.0.1} or
+		 * {@code [::1]} on any port, is always accepted; any other origin is answered 403, over
+		 * HTTP and on the WebSocket handshake. Unset accepts none besides the loopback ones. The
+		 * Quarkus HTTP server keeps its own bind address ({@code quarkus.http.host}).
+		 * @return the allowed origins
+		 */
+		Optional<List<String>> allowedOrigins();
+
 	}
 
 	/**
