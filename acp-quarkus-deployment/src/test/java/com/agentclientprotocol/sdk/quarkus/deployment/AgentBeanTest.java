@@ -85,12 +85,19 @@ class AgentBeanTest {
 		// The derived initialize runs through the interceptor beans too; session/new is the
 		// SDK's default, outside them.
 		assertThat(interceptor.methods).containsExactly("initialize", "session/prompt");
+		// The handler ran on Quarkus' worker pool, through the ManagedExecutor, not the SDK's own pool.
+		assertThat(Arc.container().instance(EchoAgent.class).get().threads).singleElement()
+			.asString()
+			.startsWith("executor-thread-");
 	}
 
 	@AcpAgent(name = "echo")
 	public static class EchoAgent {
 
 		private final Shouter shouter;
+
+		/** The threads the prompt handler ran on. */
+		final List<String> threads = new CopyOnWriteArrayList<>();
 
 		@Inject
 		EchoAgent(Shouter shouter) {
@@ -99,6 +106,7 @@ class AgentBeanTest {
 
 		@Prompt
 		AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, SyncPromptContext context, Suffix suffix) {
+			threads.add(Thread.currentThread().getName());
 			AcpSchema.TextContent text = (AcpSchema.TextContent) request.prompt().get(0);
 			context.sendMessage(shouter.shout(text.text()) + suffix.value());
 			return AcpSchema.PromptResponse.endTurn();

@@ -29,13 +29,13 @@ public final class AcpListenerHost implements AcpHost {
 
 	private final StreamableHttpAcpAgentTransport listener;
 
-	private final CompletableFuture<Void> termination;
+	private final CompletableFuture<@Nullable Void> termination;
 
 	private final Object lock = new Object();
 
 	private boolean started;
 
-	private @Nullable CompletableFuture<Void> stopped;
+	private @Nullable CompletableFuture<@Nullable Void> stopped;
 
 	/**
 	 * A host for the listener.
@@ -59,9 +59,9 @@ public final class AcpListenerHost implements AcpHost {
 	}
 
 	@Override
-	public CompletionStage<Void> stopGracefully() {
+	public CompletionStage<@Nullable Void> stopGracefully() {
 		synchronized (lock) {
-			CompletableFuture<Void> current = stopped;
+			CompletableFuture<@Nullable Void> current = stopped;
 			if (current == null) {
 				// The listener's close is bounded by its shutdown timeout.
 				current = listener.closeGracefully().toFuture();
@@ -79,7 +79,7 @@ public final class AcpListenerHost implements AcpHost {
 	}
 
 	@Override
-	public CompletionStage<Void> termination() {
+	public CompletionStage<@Nullable Void> termination() {
 		return termination.minimalCompletionStage();
 	}
 

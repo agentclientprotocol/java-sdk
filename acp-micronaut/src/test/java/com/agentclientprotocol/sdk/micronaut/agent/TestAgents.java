@@ -70,6 +70,9 @@ final class TestAgents {
 		/** The client capabilities each prompt's connection negotiated. */
 		final List<NegotiatedCapabilities> clientCapabilities = new CopyOnWriteArrayList<>();
 
+		/** The threads the prompt handler ran on. */
+		final List<Thread> promptThreads = new CopyOnWriteArrayList<>();
+
 		private final Prefix prefix;
 
 		EchoAgent(Prefix prefix) {
@@ -85,6 +88,7 @@ final class TestAgents {
 		AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, SyncPromptContext context, Locale locale,
 				NegotiatedCapabilities client) {
 			clientCapabilities.add(client);
+			promptThreads.add(Thread.currentThread());
 			context.sendMessage(prefix.value());
 			context.sendMessage(request.text() + " [" + locale.toLanguageTag() + "]");
 			return AcpSchema.PromptResponse.endTurn();

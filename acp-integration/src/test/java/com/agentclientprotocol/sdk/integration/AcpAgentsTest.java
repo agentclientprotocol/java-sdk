@@ -6,6 +6,8 @@ package com.agentclientprotocol.sdk.integration;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
@@ -58,6 +60,28 @@ class AcpAgentsTest {
 		}
 		finally {
 			agent.close();
+		}
+	}
+
+	@Test
+	void handlersRunOnTheGivenExecutor() {
+		ExecutorService executor = Executors.newCachedThreadPool(runnable -> new Thread(runnable, "framework-worker"));
+		TestAgents.EchoAgent echo = new TestAgents.EchoAgent();
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpAgentSupport agent = AcpAgents
+			.builder(new AgentCandidate<>("echo", TestAgents.EchoAgent.class, () -> echo),
+					AcpAgentSettings.builder().build(), List.of(), List.of(new TestAgents.SuffixResolver()),
+					List.of(new TestAgents.ReplyHandler()), executor)
+			.transport(pair.agentTransport())
+			.build();
+		agent.start();
+		try {
+			assertThat(TestAgents.roundTrip(pair.clientTransport())).containsExactly("echo: hello!");
+			assertThat(echo.threads).containsExactly("framework-worker");
+		}
+		finally {
+			agent.close();
+			executor.shutdownNow();
 		}
 	}
 

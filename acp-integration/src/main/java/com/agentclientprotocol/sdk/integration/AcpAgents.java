@@ -6,12 +6,14 @@ package com.agentclientprotocol.sdk.integration;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
 import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Assembles the application's {@code @AcpAgent} into an {@link AcpAgentSupport.Builder}, the same
@@ -39,6 +41,27 @@ public final class AcpAgents {
 	public static <T> AcpAgentSupport.Builder builder(AgentCandidate<T> agent, AcpAgentSettings settings,
 			List<? extends AcpInterceptor> interceptors, List<? extends ArgumentResolver> resolvers,
 			List<? extends ReturnValueHandler> returnValueHandlers) {
+		return builder(agent, settings, interceptors, resolvers, returnValueHandlers, null);
+	}
+
+	/**
+	 * A builder for the agent, as {@link #builder(AgentCandidate, AcpAgentSettings, List, List, List)}
+	 * builds it, whose handler methods run on the framework's executor: its worker pool or virtual
+	 * threads, so handlers do not need a second pool beside the framework's. The executor must
+	 * allow blocking; the SDK never shuts it down.
+	 * @param agent the {@code @AcpAgent} bean
+	 * @param settings the agent settings; an unset timeout keeps the SDK default
+	 * @param interceptors the interceptors, in order
+	 * @param resolvers the argument resolvers, in order
+	 * @param returnValueHandlers the return value handlers, in order
+	 * @param handlerExecutor the executor the handler methods run on, or null for the SDK's own
+	 * pool
+	 * @param <T> the agent type
+	 * @return a builder holding everything but the transport
+	 */
+	public static <T> AcpAgentSupport.Builder builder(AgentCandidate<T> agent, AcpAgentSettings settings,
+			List<? extends AcpInterceptor> interceptors, List<? extends ArgumentResolver> resolvers,
+			List<? extends ReturnValueHandler> returnValueHandlers, @Nullable ExecutorService handlerExecutor) {
 		AcpAgentSupport.Builder builder = AcpAgentSupport.builder().agent(agent.userClass(), agent.instance()::get);
 		Duration requestTimeout = settings.requestTimeout();
 		if (requestTimeout != null) {
@@ -55,6 +78,9 @@ public final class AcpAgents {
 		interceptors.forEach(builder::interceptor);
 		resolvers.forEach(builder::argumentResolver);
 		returnValueHandlers.forEach(builder::returnValueHandler);
+		if (handlerExecutor != null) {
+			builder.handlerExecutor(handlerExecutor);
+		}
 		return builder;
 	}
 

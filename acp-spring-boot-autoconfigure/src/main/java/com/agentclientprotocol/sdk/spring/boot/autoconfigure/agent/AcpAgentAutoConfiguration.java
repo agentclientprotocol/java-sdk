@@ -93,7 +93,8 @@ public class AcpAgentAutoConfiguration {
 		AgentCandidate<?> agent = findAgent(context);
 		logger.info("Discovered @AcpAgent bean: {}", agent.userClass().getName());
 		return AcpAgents.builder(agent, properties.toSettings(), interceptors.orderedStream().toList(),
-				resolvers.orderedStream().toList(), returnValueHandlers.orderedStream().toList());
+				resolvers.orderedStream().toList(), returnValueHandlers.orderedStream().toList(),
+				HandlerExecutors.resolve(context, properties));
 	}
 
 	private static AgentCandidate<?> findAgent(ApplicationContext context) {
