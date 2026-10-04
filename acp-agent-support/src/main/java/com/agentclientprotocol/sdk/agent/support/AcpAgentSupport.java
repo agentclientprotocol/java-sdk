@@ -17,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -322,7 +321,7 @@ public class AcpAgentSupport implements AutoCloseable {
 		bind(AcpSchema.METHOD_SESSION_NEW,
 				handler -> agent.newSessionHandler(req -> respond(handler, NewSessionResponse.class, req, null)),
 				() -> agent.newSessionHandler(req -> answerByDefault(AcpSchema.METHOD_SESSION_NEW, req,
-						NewSessionResponse.class, () -> new NewSessionResponse(UUID.randomUUID().toString(), null, null))));
+						NewSessionResponse.class, NewSessionResponse::withGeneratedId)));
 		bind(AcpSchema.METHOD_AUTHENTICATE, handler -> agent
 			.authenticateHandler(req -> respond(handler, AcpSchema.AuthenticateResponse.class, req, null)));
 		bind(AcpSchema.METHOD_LOGOUT,
