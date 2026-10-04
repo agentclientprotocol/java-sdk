@@ -255,6 +255,13 @@ class InterceptorContractTest {
 			.isNotNull();
 	}
 
+	@Test
+	void aNullInterceptorIsRejectedByTheSetter() {
+		AcpAgentSupport.Builder builder = AcpAgentSupport.create(new FailingAgent());
+		assertThatThrownBy(() -> builder.interceptor(null)).isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("interceptor");
+	}
+
 	/** Records each step it sees as "step name method". */
 	static class Recording implements AcpInterceptor {
 
