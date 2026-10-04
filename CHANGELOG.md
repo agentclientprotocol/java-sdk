@@ -75,9 +75,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - the `spring.acp.agent.transport.websocket.*` properties are removed; they never configured anything;
     - `spring.acp.client.capabilities.read-text-file` and `write-text-file` now default to `false`;
     - a client-only application no longer gets an agent transport bean;
-    - session updates with no consumer of your own are logged at DEBUG instead of a WARN.
+    - session updates with no consumer of your own are logged at DEBUG instead of a WARN;
+    - `spring.acp.agent.request-timeout` and `spring.acp.client.request-timeout` have no default of their own
+      (they were 60 s and 30 s): unset, they keep the SDK default, 30 s today. **An agent's requests to its client
+      now time out after 30 s instead of 60 s**; set `spring.acp.agent.request-timeout=60s` to keep the old bound;
+    - several client transports set with no `spring.acp.client.transport.type` fail at startup, naming them; the
+      websocket, then http, then stdio one used to win silently. Set the type, or leave only one set;
+    - the listener-only agent properties move: `spring.acp.agent.transport.http.port` becomes
+      `spring.acp.agent.transport.http.listener.port`, and `...http.max-concurrent-streams-per-connection` becomes
+      `...http.listener.max-concurrent-streams-per-connection`. In a servlet web application they meant nothing;
+    - `spring.acp.agent.transport.type=websocket` is accepted and means the same as `http`: the endpoint takes
+      WebSocket upgrades on its path;
+    - new properties: `spring.acp.client.prompt-timeout`, `spring.acp.client.capabilities.elicitation-form`,
+      `elicitation-url` and `boolean-config-options`, `spring.acp.agent.cancel-grace-period` and
+      `spring.acp.agent.max-prompt-duration`;
+    - `ArgumentResolver` and `ReturnValueHandler` beans are added to the agent, as `AcpInterceptor` beans were;
+    - `AcpClientCustomizer` moves to `com.agentclientprotocol.sdk.integration`, and `TransportType` is replaced by
+      `com.agentclientprotocol.sdk.integration.AcpTransportType`;
+    - closing the client waits at most its request timeout plus 10 s, then closes it at once;
+    - a second `@AcpAgent` bean fails with "Found 2 @AcpAgent beans [...]", naming
+      `spring.acp.agent.enabled=false` as the way to serve none.
   - Everything else in this release's breaking changes applies too: Spring applications compile against the
     SDK's API.
+
+- **`acp-integration`: the framework-neutral half of the framework integrations**, package
+  `com.agentclientprotocol.sdk.integration`. The Spring Boot, Micronaut and Quarkus integrations are thin layers
+  over it, so each rule below holds the same in all three. Depends on `acp-core` and `acp-agent-support`, with
+  `acp-streamable-http-jetty` optional, and on no framework (ArchUnit). See `acp-integration/README.md`.
+  - Settings: `AcpAgentSettings` and `AcpClientSettings`, records with builders, and `from(SettingsSource, prefix)`
+    for kebab-case key/value configuration. An unset value keeps the SDK default. `AcpTransportType`.
+  - Transports: `AcpClientTransports` (an explicit type wins; otherwise the one transport configured; several with
+    no type fail, naming them), `AcpAgentTransports.stdio()`, and `AcpListeners` for the SDK's listener and
+    servlet, with `isListenerAvailable()`.
+  - Agents: `AcpAgentDiscovery.requireSingle` over `AgentCandidate`s (user class plus instance supplier, so a
+    proxied bean keeps its advice) or over class names for build-time discovery; `AcpAgents.builder`.
+  - Clients: `AcpClients` (one async client and its sync facade, a DEBUG session-update consumer, the
+    customizers in order) and `AcpClientCustomizer`, now one type for every framework.
+  - Lifecycles: the `AcpHost` contract (`start`, `stopGracefully`, `stop(Duration)`, `termination`, `port`,
+    `holdJvmUntilTermination`) with `AcpAgentHost` (one transport; a latched `onTransportEnd` action on a host
+    thread, never run when the host stopped the agent) and `AcpListenerHost`; `AcpServletHost` and
+    `AcpClientHost`.
 
 - **`acp-micronaut`: Micronaut 4 integration** (Java 17+), with `acp-micronaut-sample` (not published).
   - **Agent.** Annotate an `@AcpAgent` class `@Singleton` and it is served with the application
@@ -94,6 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The Micronaut platform BOM (4.10) is imported only by these modules, after the SDK's Reactor,
     Jackson, Jetty and JUnit BOMs, so they run on the SDK's versions. The wire format stays the SDK's
     Jackson mapper.
+  - Built on `acp-integration`: `AcpClientCustomizer` and the transport type are its
+    `com.agentclientprotocol.sdk.integration` types, and an explicit client type without its property
+    fails with "...transport.type=http requires ...transport.http.uri".
 
 - **Quarkus extension: `acp-quarkus` (with `acp-quarkus-deployment`).** One `@AcpAgent` class
   becomes a singleton bean (found at build time; a second one fails the build) and is served over
@@ -106,7 +146,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Spring Boot starter's (`quarkus.acp.*`; the HTTP port is `quarkus.http.port`). JVM mode only.
   Built on Quarkus 3.40.1, whose BOM is imported only by these modules. See `acp-quarkus/README.md`.
   Cross-SDK: `quarkus-typescript-http` and `quarkus-typescript-ws` run the TypeScript client
-  against a Quarkus-hosted agent.
+  against a Quarkus-hosted agent. Built on `acp-integration`: `AcpClientCustomizer` and the transport
+  type are its `com.agentclientprotocol.sdk.integration` types, `quarkus.acp.agent.transport.type`
+  also accepts `websocket` (the same as `http`), and several client transports set with no
+  `quarkus.acp.client.transport.type` fail at startup, naming them, as in the other frameworks.
 - **Prompt handlers see their prompt's cancellation.** `SyncPromptContext.isCancelled()` and
   `onCancel(Runnable)`, and `PromptContext.isCancelled()` and `whenCancelled()` (a `Mono<Void>`
   that completes on cancel), signal a cancel by `session/cancel` for the prompt's session or by

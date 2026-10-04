@@ -103,8 +103,9 @@ one, not inside it. It serves HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades 
 A client is configured when `acp.client.transport.*` is set. It has three beans: the transport,
 an `AcpAsyncClient`, and an `AcpSyncClient` facade over that same client, which is one session on
 one connection. The client connects when you call `initialize()`. It closes gracefully, once,
-with the context. Customize it before it is built with `AcpClientCustomizer` beans, applied in
-`@Order`:
+with the context. Customize it before it is built with `AcpClientCustomizer` beans
+(`com.agentclientprotocol.sdk.integration.AcpClientCustomizer`, the same type in every framework
+integration), applied in `@Order`:
 
 ```java
 @Singleton
