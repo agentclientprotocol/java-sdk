@@ -464,6 +464,7 @@ server.start().block();  // ws://localhost:8080/acp and http://localhost:8080/ac
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
+| `acp-spring-boot-starter` | Spring Boot 4.1 starter: serves an `@AcpAgent` bean over stdio, Streamable HTTP or WebSocket, and builds a client from `spring.acp.client.*`; the autoconfiguration is `acp-spring-boot-autoconfigure` ([README](acp-spring-boot-autoconfigure/README.md)) |
 | `acp-micronaut` | Micronaut 4 integration: serves an `@AcpAgent` bean over stdio, Streamable HTTP or WebSocket, and builds a client from `acp.client.*` ([README](acp-micronaut/README.md)) |
 | `acp-quarkus` | Quarkus extension: an `@AcpAgent` bean over stdio, or Streamable HTTP and WebSocket on the Quarkus HTTP server; client beans from `quarkus.acp.*` ([README](acp-quarkus/README.md)) |
 
