@@ -5,15 +5,20 @@
 package com.agentclientprotocol.sdk.micronaut.client;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
 import com.agentclientprotocol.sdk.integration.AcpClientTransports;
 import com.agentclientprotocol.sdk.integration.AcpClients;
+import com.agentclientprotocol.sdk.integration.AcpTransportThreads;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
+import io.micronaut.context.BeanContext;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
+import io.micronaut.inject.qualifiers.Qualifiers;
+import io.micronaut.scheduling.TaskExecutors;
 import jakarta.inject.Singleton;
 
 /**
@@ -43,15 +48,22 @@ public class AcpClientBeans {
 	/**
 	 * Creates the transport {@code acp.client.transport.*} describes, by the SDK's rule
 	 * ({@link AcpClientTransports}): a {@code type} that is set wins; otherwise the one transport
-	 * whose command or URI is set. Not connected yet; the client connects it.
+	 * whose command or URI is set. Not connected yet; the client connects it. The WebSocket and
+	 * HTTP transports run on Micronaut's virtual-thread executor ({@code TaskExecutors.VIRTUAL})
+	 * on JDK 21 and later, creating no pool of their own; before, on the SDK's own threads.
 	 * @param config the client settings
+	 * @param context the application context, which holds the virtual-thread executor
 	 * @return the transport
 	 * @throws IllegalStateException if the settings name no transport, several without a type, or a
 	 * type without its command or URI
 	 */
 	@Singleton
-	public AcpClientTransport acpClientTransport(AcpClientConfiguration config) {
-		return AcpClientTransports.create(config.toSettings(), AcpClientConfiguration.PREFIX)
+	public AcpClientTransport acpClientTransport(AcpClientConfiguration config, BeanContext context) {
+		AcpTransportThreads threads = context
+			.findBean(ExecutorService.class, Qualifiers.byName(TaskExecutors.VIRTUAL))
+			.map(AcpTransportThreads::executor)
+			.orElse(AcpTransportThreads.sdkDefault());
+		return AcpClientTransports.create(config.toSettings(), AcpClientConfiguration.PREFIX, threads)
 			.orElseThrow(() -> new IllegalStateException("An ACP client needs a transport: set "
 					+ AcpClientConfiguration.PREFIX + ".transport.stdio.command, .websocket.uri or .http.uri"));
 	}

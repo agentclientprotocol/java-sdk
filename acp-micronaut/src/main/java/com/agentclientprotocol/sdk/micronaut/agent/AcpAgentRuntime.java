@@ -25,6 +25,7 @@ import com.agentclientprotocol.sdk.integration.AcpAgents;
 import com.agentclientprotocol.sdk.integration.AcpHost;
 import com.agentclientprotocol.sdk.integration.AcpListenerHost;
 import com.agentclientprotocol.sdk.integration.AcpListeners;
+import com.agentclientprotocol.sdk.integration.AcpTransportThreads;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.context.BeanProvider;
@@ -70,7 +71,8 @@ import org.slf4j.LoggerFactory;
  * <p>The agent's timeouts come from {@link AcpAgentConfiguration}. {@code AcpInterceptor},
  * {@code ArgumentResolver} and {@code ReturnValueHandler} beans are added to the agent, in their
  * bean order. Handler methods run on Micronaut's virtual-thread executor
- * ({@code TaskExecutors.VIRTUAL}) on JDK 21 and later, else on the SDK's own pool. Handler methods
+ * ({@code TaskExecutors.VIRTUAL}) on JDK 21 and later, and so does the HTTP listener, which then
+ * creates no pool of its own; before, they run on the SDK's own pool and Jetty's. Handler methods
  * may also return a {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams
  * {@code Publisher}, which {@code AcpAgentSupport} waits for.
  *
@@ -157,7 +159,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			AcpAgentSettings settings = config.toSettings();
 			logger.info("Serving @AcpAgent bean {} over {}", agent.userClass().getName(), settings.transport());
 			// Handlers block: they run on Micronaut's virtual-thread executor where the JVM has
-			// one, else on the SDK's own pool.
+			// one, else on the SDK's own pool. The listener serves on the same executor.
 			AcpHost newHost = createHost(AcpAgents.builder(agent, settings, interceptors, argumentResolvers,
 					returnValueHandlers, virtualExecutor()), settings);
 			// Before the host serves anything, so a SIGTERM after the first answer is handled.
@@ -288,7 +290,9 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			throw new IllegalStateException(AcpAgentConfiguration.PREFIX + ".transport.type="
 					+ settings.transport().value() + " needs com.agentclientprotocol:acp-streamable-http-jetty on the classpath");
 		}
-		return new AcpListenerHost(AcpListeners.listener(settings, builder.buildFactory()));
+		ExecutorService virtual = virtualExecutor();
+		return new AcpListenerHost(AcpListeners.listener(settings, builder.buildFactory(),
+				(virtual != null) ? AcpTransportThreads.executor(virtual) : AcpTransportThreads.sdkDefault()));
 	}
 
 	/** Closes the context on SIGTERM when no embedded server's hook of Micronaut's does. */

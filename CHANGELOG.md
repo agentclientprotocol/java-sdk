@@ -406,6 +406,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Micronaut: the listener and the client transports run on `TaskExecutors.VIRTUAL` too.** On JDK
+  21 and later the HTTP/WebSocket listener and the auto-configured WebSocket and Streamable HTTP
+  client transports run on Micronaut's virtual-thread executor, as the handlers already did, and
+  create no pool of their own; before JDK 21 they keep the SDK's pools. Migration: none.
+
 - **Spring Boot follows its own virtual-thread opt-in for every ACP thread.** With
   `spring.threads.virtual.enabled=true` (JDK 21 and later), the agent's handlers (as before), the
   SDK's listener and the auto-configured WebSocket and Streamable HTTP client transports all run on
