@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * <p>How the SDK treats extension methods, the same on both sides:
  * <ul>
  * <li>A request no handler serves is answered "Method not found" ({@code -32601}); a notification
- * no handler serves is ignored, as ACP asks, with a warning in the log.</li>
+ * no handler serves is ignored, as ACP asks, and logged at DEBUG only.</li>
  * <li>Params the peer omitted arrive as an empty object. Params that cannot be read as the
  * handler's params type are answered "Invalid params" ({@code -32602}) for a request; for a
  * notification the failure is logged and the notification dropped.</li>

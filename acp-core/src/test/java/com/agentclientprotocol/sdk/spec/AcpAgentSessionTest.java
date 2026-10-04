@@ -178,7 +178,10 @@ class AcpAgentSessionTest {
 		}
 	}
 
-	/** An unhandled notification is logged at WARN by its method only: its params can carry personal data. */
+	/**
+	 * An unhandled protocol notification is logged at WARN by its method only: its params can
+	 * carry personal data. (An unhandled extension notification is logged at DEBUG.)
+	 */
 	@Test
 	void unhandledNotificationIsLoggedWithoutItsParams() throws Exception {
 		Logger sessionLogger = (Logger) LoggerFactory.getLogger(AcpAgentSession.class);
@@ -192,7 +195,7 @@ class AcpAgentSessionTest {
 			transportPair.clientTransport().connect(mono -> mono.then(Mono.empty())).subscribe();
 			allowClientTransportSubscription();
 			transportPair.clientTransport()
-				.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "_auth/status_update",
+				.sendMessage(new AcpSchema.JSONRPCNotification(AcpSchema.JSONRPC_VERSION, "session/status_update",
 						Map.of("email", "someone@example.com")))
 				.block(TIMEOUT);
 
@@ -203,7 +206,7 @@ class AcpAgentSessionTest {
 			}
 			assertThat(logs.list).filteredOn(event -> event.getLevel() == Level.WARN)
 				.extracting(ILoggingEvent::getFormattedMessage)
-				.anySatisfy(message -> assertThat(message).contains("_auth/status_update"));
+				.anySatisfy(message -> assertThat(message).contains("session/status_update"));
 			assertThat(logs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
 				.extracting(ILoggingEvent::getFormattedMessage)
 				.allSatisfy(message -> assertThat(message).doesNotContain("someone@example.com"));

@@ -379,6 +379,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An extension notification without a handler is logged at DEBUG, not WARN.** ACP asks
+  implementations to ignore notifications they do not recognize, and a peer can send many
+  (`_auth/status_update` from some agents), each of which logged a warning on both sides. A
+  `_`-prefixed notification without a handler is now logged at DEBUG; a protocol notification
+  without a handler still logs a warning. Migration: none; raise the session logger to DEBUG to
+  see them.
+
 - **Breaking: `AcpError` extends `AcpException`.** It extended `RuntimeException` directly, so
   `catch (AcpException e)`, which the SDK documented as the one place to handle its failures,
   missed every error the peer answered with. `AcpException` is now the base of every failure of a

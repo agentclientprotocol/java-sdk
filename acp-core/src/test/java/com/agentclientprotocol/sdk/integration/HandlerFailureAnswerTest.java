@@ -176,4 +176,18 @@ class HandlerFailureAnswerTest {
 		assertThat(error.getError()).isEqualTo(peerError);
 	}
 
+	@Test
+	void anUnknownExtensionNotificationIsIgnoredWithoutAWarning() {
+		connect(agent(), clientSpec());
+
+		client.sendExtNotification("_x/unknown", Map.of()).block(TIMEOUT);
+		// A request after it: the notification has been read by the time its answer arrives.
+		assertThatThrownBy(() -> client.sendExtRequest("_x/after", Map.of()).block(TIMEOUT))
+			.isInstanceOf(AcpError.class);
+
+		assertThat(this.appender.list).filteredOn(event -> event.getFormattedMessage().contains("_x/unknown"))
+			.isNotEmpty()
+			.allSatisfy(event -> assertThat(event.getLevel()).isEqualTo(Level.DEBUG));
+	}
+
 }
