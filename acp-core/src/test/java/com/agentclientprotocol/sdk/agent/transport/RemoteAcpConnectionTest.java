@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.PinnedVirtualThreads;
 import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
@@ -82,6 +83,33 @@ class RemoteAcpConnectionTest {
 		JSONRPCResponse response = awaitResponse(1);
 		assertThat(response.error()).isNull();
 		assertThat(response.result()).isNotNull();
+		connection.closeGracefully().block(TIMEOUT);
+	}
+
+	/**
+	 * A listener on virtual threads (Jetty's VirtualThreadPool on JDK 21+) hands each POST to
+	 * {@link RemoteAcpConnection#acceptInbound}, which runs the agent's handler chain on the
+	 * caller's thread. A park there (a Jackson cache lock, a blocking handler) must not pin
+	 * the carrier: with every carrier pinned on a lock whose owner waits for a carrier, the
+	 * listener deadlocks (load-50 hung on JDK 21 this way).
+	 */
+	@Test
+	void acceptInboundDoesNotPinTheVirtualThreadItRunsOn() throws Exception {
+		AcpAgentFactory blocking = AcpAgentFactory.async(transport -> AcpAgent.async(transport)
+			.initializeHandler(request -> Mono.fromCallable(() -> {
+				Thread.sleep(50);
+				return AcpSchema.InitializeResponse.ok();
+			}))
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
+			.build());
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add);
+		connection.start(blocking).block(TIMEOUT);
+
+		List<String> pinned = PinnedVirtualThreads.pinnedParks(() -> connection
+			.acceptInbound(new JSONRPCRequest(AcpSchema.METHOD_INITIALIZE, 1, Map.of("protocolVersion", 1))));
+
+		assertThat(awaitResponse(1).error()).isNull();
+		assertThat(pinned).isEmpty();
 		connection.closeGracefully().block(TIMEOUT);
 	}
 

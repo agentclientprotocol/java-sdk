@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.agent.transport;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -206,10 +207,14 @@ public final class RemoteAcpConnection {
 		/*
 		 * Streamable HTTP can deliver multiple POST requests for one ACP connection on
 		 * different server threads. Reactor unicast sinks require serialized producers,
-		 * so all transport-adapter ingress is funneled through this monitor before
-		 * emission.
+		 * so all transport-adapter ingress is funneled through this lock before emission.
+		 * A lock, not a monitor: emitting runs the agent's handler chain on the caller's
+		 * thread, a virtual thread on a listener that serves on them, and a virtual thread
+		 * that parks inside a synchronized block pins its carrier on JDK 21 to 23. Enough
+		 * pinned carriers waiting on a lock held by an unmounted virtual thread deadlock
+		 * the listener.
 		 */
-		private final Object inboundEmitMonitor = new Object();
+		private final ReentrantLock inboundEmitLock = new ReentrantLock();
 
 		private final Sinks.One<Void> terminationSink = Sinks.one();
 
@@ -256,11 +261,15 @@ public final class RemoteAcpConnection {
 			if (transportClosing.get()) {
 				throw new AcpConnectionException("Remote ACP connection is closing");
 			}
-			synchronized (inboundEmitMonitor) {
+			inboundEmitLock.lock();
+			try {
 				Sinks.EmitResult result = inboundSink.tryEmitNext(message);
 				if (result.isFailure()) {
 					throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
 				}
+			}
+			finally {
+				inboundEmitLock.unlock();
 			}
 		}
 

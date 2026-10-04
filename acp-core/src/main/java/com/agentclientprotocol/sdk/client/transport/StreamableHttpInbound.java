@@ -4,6 +4,8 @@
 
 package com.agentclientprotocol.sdk.client.transport;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
@@ -33,9 +35,12 @@ final class StreamableHttpInbound {
 	/*
 	 * A streamable HTTP client may have one connection SSE reader and multiple session
 	 * SSE readers active at the same time. Reactor unicast sinks require serialized
-	 * producers, so every SSE reader emits through this monitor.
+	 * producers, so every SSE reader emits through this lock. A lock, not a monitor:
+	 * emitting runs the client's handler chain on the reader's thread, a virtual thread on
+	 * JDK 21 and later, and a virtual thread that parks inside a synchronized block pins
+	 * its carrier on JDK 21 to 23.
 	 */
-	private final Object inboundEmitMonitor = new Object();
+	private final ReentrantLock inboundEmitLock = new ReentrantLock();
 
 	StreamableHttpInbound(StreamableHttpRoutes routes, StreamableHttpStreams streams, AcpJsonMapper jsonMapper) {
 		this.routes = routes;
@@ -98,11 +103,15 @@ final class StreamableHttpInbound {
 	/** Emits a message into the ordered inbound stream. */
 	Mono<Void> emit(JSONRPCMessage message) {
 		return Mono.fromRunnable(() -> {
-			synchronized (inboundEmitMonitor) {
+			inboundEmitLock.lock();
+			try {
 				Sinks.EmitResult result = inboundSink.tryEmitNext(message);
 				if (result.isFailure()) {
 					throw new AcpConnectionException("Failed to enqueue inbound message: " + result);
 				}
+			}
+			finally {
+				inboundEmitLock.unlock();
 			}
 		});
 	}
