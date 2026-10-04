@@ -24,9 +24,11 @@
              test support needs JUnit 6. -->
         <logback.version>1.5.34</logback.version>
         <junit.version>6.0.3</junit.version>
-        <!-- Coverage floors: measured line 98.59%, branch 86.84%, less 2 points (parent pom, JaCoCo) -->
-        <jacoco.minimum.line>0.96</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.84</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 97.65%, branch 80.00%, less 2 points (parent pom, JaCoCo).
+             The branch floor fell from 0.84 when the generic logic, and most of its branches, moved
+             to acp-integration: 20 branches remain, so one is 5 points. -->
+        <jacoco.minimum.line>0.95</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.78</jacoco.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>
@@ -105,6 +107,12 @@
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-annotations</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <!-- The framework-neutral half: settings, transports, discovery and hosts. It brings
+             acp-agent-support, which the agent autoconfiguration is conditional on. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-integration</artifactId>
         </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>

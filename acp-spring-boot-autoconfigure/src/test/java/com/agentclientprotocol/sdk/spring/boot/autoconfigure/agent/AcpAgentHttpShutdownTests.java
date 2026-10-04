@@ -43,7 +43,7 @@ class AcpAgentHttpShutdownTests {
 	private void assertShutsDownPromptly(String webApplicationType) {
 		ConfigurableApplicationContext context = SpringApplication.run(TestApplication.class, "--server.port=0",
 				"--spring.main.web-application-type=" + webApplicationType, "--spring.acp.agent.transport.type=http",
-				"--spring.acp.agent.transport.http.port=0");
+				"--spring.acp.agent.transport.http.listener.port=0");
 		int port = (context instanceof WebServerApplicationContext web) ? web.getWebServer().getPort()
 				: context.getBean(StreamableHttpAcpAgentTransport.class).getPort();
 		AcpSyncClient client = AcpClient

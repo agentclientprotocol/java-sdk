@@ -1,20 +1,47 @@
+/*
+ * Copyright 2025-2026 the original author or authors.
+ */
+
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.time.Duration;
 
-import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
-
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import org.jspecify.annotations.Nullable;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
+/**
+ * The agent's settings, bound from {@code spring.acp.agent.*} onto {@link AcpAgentSettings}. A
+ * value left unset keeps the SDK's default.
+ */
 @ConfigurationProperties(prefix = "spring.acp.agent")
 public class AcpAgentProperties {
 
+	/**
+	 * Whether to serve the application's @AcpAgent bean.
+	 */
 	private boolean enabled = true;
 
-	private Duration requestTimeout = Duration.ofSeconds(60);
+	/**
+	 * How long a request the agent sends to the client waits for its answer. Unset keeps the
+	 * SDK default.
+	 */
+	private @Nullable Duration requestTimeout;
+
+	/**
+	 * How long a @Prompt method has to return after session/cancel before the agent answers
+	 * the prompt "cancelled" itself. Unset keeps the SDK default; zero for none.
+	 */
+	private @Nullable Duration cancelGracePeriod;
+
+	/**
+	 * How long a prompt may run before the agent answers it with error -32800. Unset keeps the
+	 * SDK default (no limit).
+	 */
+	private @Nullable Duration maxPromptDuration;
 
 	/**
 	 * Close the application context when the agent's transport ends on its own, for stdio
@@ -32,12 +59,28 @@ public class AcpAgentProperties {
 		this.enabled = enabled;
 	}
 
-	public Duration getRequestTimeout() {
+	public @Nullable Duration getRequestTimeout() {
 		return requestTimeout;
 	}
 
-	public void setRequestTimeout(Duration requestTimeout) {
+	public void setRequestTimeout(@Nullable Duration requestTimeout) {
 		this.requestTimeout = requestTimeout;
+	}
+
+	public @Nullable Duration getCancelGracePeriod() {
+		return cancelGracePeriod;
+	}
+
+	public void setCancelGracePeriod(@Nullable Duration cancelGracePeriod) {
+		this.cancelGracePeriod = cancelGracePeriod;
+	}
+
+	public @Nullable Duration getMaxPromptDuration() {
+		return maxPromptDuration;
+	}
+
+	public void setMaxPromptDuration(@Nullable Duration maxPromptDuration) {
+		this.maxPromptDuration = maxPromptDuration;
 	}
 
 	public boolean isShutdownOnTransportEnd() {
@@ -56,17 +99,49 @@ public class AcpAgentProperties {
 		this.transport = transport;
 	}
 
+	/**
+	 * These properties as the SDK's framework-neutral settings.
+	 * @return the settings
+	 */
+	public AcpAgentSettings toSettings() {
+		AgentHttpProperties http = transport.getHttp();
+		DataSize maxPostBodySize = http.getMaxPostBodySize();
+		AcpTransportType type = transport.getType();
+		return AcpAgentSettings.builder()
+			.enabled(enabled)
+			.requestTimeout(requestTimeout)
+			.cancelGracePeriod(cancelGracePeriod)
+			.maxPromptDuration(maxPromptDuration)
+			.shutdownOnTransportEnd(shutdownOnTransportEnd)
+			.transport((type != null) ? type : AcpTransportType.STDIO)
+			.path(http.getPath())
+			.maxPostBodyBytes((maxPostBodySize != null) ? maxPostBodySize.toBytes() : null)
+			.keepAliveInterval(http.getKeepAliveInterval())
+			.mailboxCapacity(http.getMailboxCapacity())
+			.maxPendingSseEvents(http.getMaxPendingSseEvents())
+			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
+			.maxProvisionalSessions(http.getMaxProvisionalSessions())
+			.shutdownTimeout(http.getShutdownTimeout())
+			.listenerPort(http.getListener().getPort())
+			.maxConcurrentStreamsPerConnection(http.getListener().getMaxConcurrentStreamsPerConnection())
+			.build();
+	}
+
 	public static class AgentTransportProperties {
 
-		private @Nullable TransportType type;
+		/**
+		 * The transport: stdio (the default), or http for Streamable HTTP, which also takes
+		 * WebSocket upgrades on its path (websocket means the same as http).
+		 */
+		private @Nullable AcpTransportType type;
 
 		private AgentHttpProperties http = new AgentHttpProperties();
 
-		public @Nullable TransportType getType() {
+		public @Nullable AcpTransportType getType() {
 			return type;
 		}
 
-		public void setType(@Nullable TransportType type) {
+		public void setType(@Nullable AcpTransportType type) {
 			this.type = type;
 		}
 
@@ -84,20 +159,14 @@ public class AcpAgentProperties {
 	 * Streamable HTTP agent transport ({@code type=http}). In a servlet web application
 	 * the endpoint is mounted on the application's own server at {@code path}; otherwise
 	 * the SDK listener serves it, with WebSocket upgrades on the same path, on
-	 * {@code port}. The limits left unset keep the SDK defaults.
+	 * {@code listener.port}. The limits left unset keep the SDK defaults.
 	 */
 	public static class AgentHttpProperties {
 
 		/**
-		 * Port of the standalone listener. Ignored in a servlet web application, which
-		 * uses its own server port.
-		 */
-		private int port = 8080;
-
-		/**
 		 * Endpoint path.
 		 */
-		private String path = "/acp";
+		private String path = AcpAgentSettings.DEFAULT_PATH;
 
 		/**
 		 * Largest accepted inbound message (POST body or WebSocket text message).
@@ -130,23 +199,12 @@ public class AcpAgentProperties {
 		private @Nullable Integer maxProvisionalSessions;
 
 		/**
-		 * HTTP/2 streams one client connection may hold open. Standalone listener only.
-		 */
-		private @Nullable Integer maxConcurrentStreamsPerConnection;
-
-		/**
 		 * How long closing the endpoint waits for its connections to close gracefully
 		 * before closing the rest at once.
 		 */
 		private @Nullable Duration shutdownTimeout;
 
-		public int getPort() {
-			return port;
-		}
-
-		public void setPort(int port) {
-			this.port = port;
-		}
+		private ListenerProperties listener = new ListenerProperties();
 
 		public String getPath() {
 			return path;
@@ -204,20 +262,54 @@ public class AcpAgentProperties {
 			this.maxProvisionalSessions = maxProvisionalSessions;
 		}
 
-		public @Nullable Integer getMaxConcurrentStreamsPerConnection() {
-			return maxConcurrentStreamsPerConnection;
-		}
-
-		public void setMaxConcurrentStreamsPerConnection(@Nullable Integer maxConcurrentStreamsPerConnection) {
-			this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
-		}
-
 		public @Nullable Duration getShutdownTimeout() {
 			return shutdownTimeout;
 		}
 
 		public void setShutdownTimeout(@Nullable Duration shutdownTimeout) {
 			this.shutdownTimeout = shutdownTimeout;
+		}
+
+		public ListenerProperties getListener() {
+			return listener;
+		}
+
+		public void setListener(ListenerProperties listener) {
+			this.listener = listener;
+		}
+
+	}
+
+	/**
+	 * The SDK's own listener, used outside a servlet web application. Ignored in a servlet
+	 * web application, which serves the endpoint on its own server and port.
+	 */
+	public static class ListenerProperties {
+
+		/**
+		 * Port of the standalone listener; 0 for an ephemeral port.
+		 */
+		private int port = AcpAgentSettings.DEFAULT_LISTENER_PORT;
+
+		/**
+		 * HTTP/2 streams one client connection may hold open.
+		 */
+		private @Nullable Integer maxConcurrentStreamsPerConnection;
+
+		public int getPort() {
+			return port;
+		}
+
+		public void setPort(int port) {
+			this.port = port;
+		}
+
+		public @Nullable Integer getMaxConcurrentStreamsPerConnection() {
+			return maxConcurrentStreamsPerConnection;
+		}
+
+		public void setMaxConcurrentStreamsPerConnection(@Nullable Integer maxConcurrentStreamsPerConnection) {
+			this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
 		}
 
 	}

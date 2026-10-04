@@ -3,8 +3,8 @@ package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 import java.net.URI;
 import java.time.Duration;
 
-import com.agentclientprotocol.sdk.spring.boot.autoconfigure.TransportType;
-
+import com.agentclientprotocol.sdk.integration.AcpClientSettings;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,7 +22,8 @@ class AcpClientPropertiesTests {
 	void defaultValues() {
 		this.runner.run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
-			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(60));
+			// Unset: the SDK default
+			assertThat(props.getRequestTimeout()).isNull();
 			assertThat(props.getPromptTimeout()).isNull();
 			assertThat(props.getTransport().getType()).isNull();
 			assertThat(props.getTransport().getWebsocket().getUri()).isNull();
@@ -56,7 +57,7 @@ class AcpClientPropertiesTests {
 	void transportTypeWebsocket() {
 		this.runner.withPropertyValues("spring.acp.client.transport.type=websocket").run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
-			assertThat(props.getTransport().getType()).isEqualTo(TransportType.WEBSOCKET);
+			assertThat(props.getTransport().getType()).isEqualTo(AcpTransportType.WEBSOCKET);
 		});
 	}
 
@@ -64,7 +65,7 @@ class AcpClientPropertiesTests {
 	void transportTypeStdio() {
 		this.runner.withPropertyValues("spring.acp.client.transport.type=stdio").run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
-			assertThat(props.getTransport().getType()).isEqualTo(TransportType.STDIO);
+			assertThat(props.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 		});
 	}
 
@@ -104,6 +105,21 @@ class AcpClientPropertiesTests {
 				assertThat(props.getCapabilities().isReadTextFile()).isTrue();
 				assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
 				assertThat(props.getCapabilities().isTerminal()).isTrue();
+			});
+	}
+
+	@Test
+	void promptTimeoutAndTheNewCapabilitiesBindOntoTheSettings() {
+		this.runner.withPropertyValues("spring.acp.client.prompt-timeout=10m",
+				"spring.acp.client.capabilities.elicitation-form=true",
+				"spring.acp.client.capabilities.elicitation-url=true",
+				"spring.acp.client.capabilities.boolean-config-options=true")
+			.run(context -> {
+				AcpClientSettings settings = context.getBean(AcpClientProperties.class).toSettings();
+				assertThat(settings.promptTimeout()).isEqualTo(Duration.ofMinutes(10));
+				assertThat(settings.requestTimeout()).isNull();
+				assertThat(settings.capabilities())
+					.isEqualTo(new AcpClientSettings.Capabilities(false, false, false, true, true, true));
 			});
 	}
 
