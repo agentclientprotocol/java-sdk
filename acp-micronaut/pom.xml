@@ -17,11 +17,13 @@
     <description>Micronaut integration for ACP: serves an @AcpAgent bean over stdio, Streamable HTTP or WebSocket, and builds an ACP client from configuration</description>
 
     <properties>
-        <!-- Coverage floors: measured line 95.92%, branch 90.36%, less 2 points (parent pom,
+        <!-- Coverage floors: measured line 96.32%, branch 78.95%, less 2 points (parent pom,
              JaCoCo). The bean definitions Micronaut generates are marked @Generated, which
-             JaCoCo leaves out. -->
-        <jacoco.minimum.line>0.93</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.88</jacoco.minimum.branch>
+             JaCoCo leaves out. The branch floor fell from 0.88 when the generic logic and its
+             well-covered branches moved to acp-integration: 38 branches remain, the untested
+             ones the runtime's signal and missing-listener paths. -->
+        <jacoco.minimum.line>0.94</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.76</jacoco.minimum.branch>
     </properties>
 
     <!-- The Micronaut platform BOM is imported here, in the Micronaut modules only, never in
@@ -94,6 +96,11 @@
         <dependency>
             <groupId>org.jspecify</groupId>
             <artifactId>jspecify</artifactId>
+        </dependency>
+        <!-- The framework-neutral half: settings, transports, discovery and hosts. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-integration</artifactId>
         </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
