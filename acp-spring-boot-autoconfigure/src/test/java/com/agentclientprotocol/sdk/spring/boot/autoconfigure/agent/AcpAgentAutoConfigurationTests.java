@@ -81,7 +81,7 @@ class AcpAgentAutoConfigurationTests {
 			assertThat(context).hasFailed();
 			assertThat(context.getStartupFailure()).rootCause()
 				.isInstanceOf(BeanCreationException.class)
-				.hasMessageContaining("Found 2 @AcpAgent-annotated beans");
+				.hasMessageContaining("Found 2 @AcpAgent beans");
 		});
 	}
 

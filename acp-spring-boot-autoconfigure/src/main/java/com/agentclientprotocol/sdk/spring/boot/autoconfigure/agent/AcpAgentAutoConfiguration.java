@@ -1,19 +1,29 @@
+/*
+ * Copyright 2025-2026 the original author or authors.
+ */
+
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
+import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
+import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery;
+import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
+import com.agentclientprotocol.sdk.integration.AcpAgentHost;
+import com.agentclientprotocol.sdk.integration.AcpAgents;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
-
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -24,7 +34,13 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.ClassUtils;
 
+/**
+ * Serves the application's single {@code @AcpAgent} bean. The bean's handlers are found on its
+ * user class (a CGLIB proxy keeps its advice), and {@code AcpInterceptor},
+ * {@code ArgumentResolver} and {@code ReturnValueHandler} beans are added in their order.
+ */
 @AutoConfiguration(after = AcpAgentTransportAutoConfiguration.class)
 @ConditionalOnClass(AcpAgentSupport.class)
 @EnableConfigurationProperties(AcpAgentProperties.class)
@@ -42,13 +58,19 @@ public class AcpAgentAutoConfiguration {
 		@Bean
 		@ConditionalOnBean(annotation = AcpAgent.class)
 		AcpAgentLifecycle acpAgentLifecycle(ApplicationContext applicationContext, AcpAgentTransport transport,
-				AcpAgentProperties properties, List<AcpInterceptor> interceptors) {
-			Object agentBean = findAgentBean(applicationContext);
-			AcpAgentSupport agentSupport = agentSupportBuilder(agentBean, properties, interceptors).transport(transport)
+				AcpAgentProperties properties, ObjectProvider<AcpInterceptor> interceptors,
+				ObjectProvider<ArgumentResolver> resolvers, ObjectProvider<ReturnValueHandler> returnValueHandlers) {
+			AcpAgentSupport agent = builder(applicationContext, properties, interceptors, resolvers,
+					returnValueHandlers)
+				.transport(transport)
 				.build();
-			@Nullable ConfigurableApplicationContext contextToClose = (properties.isShutdownOnTransportEnd()
-					&& applicationContext instanceof ConfigurableApplicationContext configurable) ? configurable : null;
-			return new AcpAgentLifecycle(agentSupport, transport, contextToClose);
+			Runnable onTransportEnd = () -> {
+			};
+			if (properties.isShutdownOnTransportEnd()
+					&& applicationContext instanceof ConfigurableApplicationContext configurable) {
+				onTransportEnd = () -> closeContext(configurable);
+			}
+			return new AcpAgentLifecycle(new AcpAgentHost(agent, transport, onTransportEnd));
 		}
 
 	}
@@ -60,83 +82,75 @@ public class AcpAgentAutoConfiguration {
 	@ConditionalOnBean(annotation = AcpAgent.class)
 	@ConditionalOnMissingBean
 	AcpAgentFactory acpAgentFactory(ApplicationContext applicationContext, AcpAgentProperties properties,
-			List<AcpInterceptor> interceptors) {
-		return agentSupportBuilder(findAgentBean(applicationContext), properties, interceptors).buildFactory();
+			ObjectProvider<AcpInterceptor> interceptors, ObjectProvider<ArgumentResolver> resolvers,
+			ObjectProvider<ReturnValueHandler> returnValueHandlers) {
+		return builder(applicationContext, properties, interceptors, resolvers, returnValueHandlers).buildFactory();
 	}
 
-	private static Object findAgentBean(ApplicationContext applicationContext) {
-		Map<String, Object> agentBeans = applicationContext.getBeansWithAnnotation(AcpAgent.class);
-
-		if (agentBeans.size() > 1) {
-			throw new BeanCreationException("Found " + agentBeans.size() + " @AcpAgent-annotated beans "
-					+ agentBeans.keySet() + ", but only one is supported per application.");
-		}
-
-		Object agentBean = agentBeans.values().iterator().next();
-		logger.info("Discovered @AcpAgent bean: {}", agentBean.getClass().getName());
-		return agentBean;
+	private static AcpAgentSupport.Builder builder(ApplicationContext context, AcpAgentProperties properties,
+			ObjectProvider<AcpInterceptor> interceptors, ObjectProvider<ArgumentResolver> resolvers,
+			ObjectProvider<ReturnValueHandler> returnValueHandlers) {
+		AgentCandidate<?> agent = findAgent(context);
+		logger.info("Discovered @AcpAgent bean: {}", agent.userClass().getName());
+		return AcpAgents.builder(agent, properties.toSettings(), interceptors.orderedStream().toList(),
+				resolvers.orderedStream().toList(), returnValueHandlers.orderedStream().toList());
 	}
 
-	private static AcpAgentSupport.Builder agentSupportBuilder(Object agentBean, AcpAgentProperties properties,
-			List<AcpInterceptor> interceptors) {
-		var builder = AcpAgentSupport.create(agentBean).requestTimeout(properties.getRequestTimeout());
-
-		for (AcpInterceptor interceptor : interceptors) {
-			builder.interceptor(interceptor);
+	private static AgentCandidate<?> findAgent(ApplicationContext context) {
+		List<AgentCandidate<?>> candidates = Arrays.stream(context.getBeanNamesForAnnotation(AcpAgent.class))
+			.<AgentCandidate<?>>map(name -> candidate(context, name))
+			.toList();
+		try {
+			return AcpAgentDiscovery.requireSingle(candidates, "spring.acp.agent.enabled")
+				.orElseThrow(() -> new IllegalStateException("No @AcpAgent bean"));
 		}
+		catch (IllegalStateException ex) {
+			throw new BeanCreationException(String.valueOf(ex.getMessage()));
+		}
+	}
 
-		return builder;
+	private static AgentCandidate<Object> candidate(ApplicationContext context, String name) {
+		Object bean = context.getBean(name);
+		// The user class, not a CGLIB proxy's: the proxy's methods carry no annotations.
+		@SuppressWarnings("unchecked")
+		Class<Object> userClass = (Class<Object>) ClassUtils.getUserClass(bean);
+		return new AgentCandidate<>(name, userClass, () -> bean);
+	}
+
+	private static void closeContext(ConfigurableApplicationContext context) {
+		if (context.isActive()) {
+			logger.info("ACP agent transport ended; closing the application context");
+			context.close();
+		}
 	}
 
 	/**
 	 * Starts and stops the agent with the context. When the transport ends on its own
 	 * (for stdio: the client closed the agent's input and every reply has been written),
-	 * the agent has no one left to serve, so the lifecycle closes the application
-	 * context, which lets a {@code spring.main.keep-alive} application exit.
+	 * the agent has no one left to serve, so the host closes the application context,
+	 * which lets a {@code spring.main.keep-alive} application exit.
 	 */
 	static class AcpAgentLifecycle implements SmartLifecycle {
 
-		private final AcpAgentSupport agentSupport;
+		private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
 
-		private final AcpAgentTransport transport;
-
-		private final @Nullable ConfigurableApplicationContext contextToClose;
+		private final AcpAgentHost host;
 
 		private volatile boolean running = false;
 
-		private volatile boolean stopping = false;
-
-		AcpAgentLifecycle(AcpAgentSupport agentSupport, AcpAgentTransport transport,
-				@Nullable ConfigurableApplicationContext contextToClose) {
-			this.agentSupport = agentSupport;
-			this.transport = transport;
-			this.contextToClose = contextToClose;
+		AcpAgentLifecycle(AcpAgentHost host) {
+			this.host = host;
 		}
 
 		@Override
 		public void start() {
-			agentSupport.start();
+			host.start();
 			running = true;
-			if (contextToClose != null) {
-				transport.awaitTermination().subscribe(null, error -> closeContext(), this::closeContext);
-			}
-		}
-
-		private void closeContext() {
-			if (stopping || contextToClose == null || !contextToClose.isActive()) {
-				return;
-			}
-			logger.info("ACP agent transport ended; closing the application context");
-			// Not on the transport's thread: closing the context stops this lifecycle,
-			// which closes the transport.
-			Thread closer = new Thread(contextToClose::close, "acp-agent-shutdown");
-			closer.start();
 		}
 
 		@Override
 		public void stop() {
-			stopping = true;
-			agentSupport.close();
+			host.stop(STOP_TIMEOUT);
 			running = false;
 		}
 

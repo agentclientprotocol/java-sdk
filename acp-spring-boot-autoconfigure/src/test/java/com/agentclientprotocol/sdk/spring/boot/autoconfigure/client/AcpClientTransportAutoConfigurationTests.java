@@ -145,6 +145,19 @@ class AcpClientTransportAutoConfigurationTests {
 	}
 
 	@Test
+	void severalTransportsWithoutATypeFailAtStartupNamingThem() {
+		this.runner
+			.withPropertyValues("spring.acp.client.transport.stdio.command=echo",
+					"spring.acp.client.transport.websocket.uri=ws://localhost:8080/acp")
+			.run(context -> {
+				assertThat(context).hasFailed();
+				assertThat(context.getStartupFailure()).rootCause()
+					.hasMessageContaining("Several ACP client transports are configured [STDIO, WEBSOCKET]")
+					.hasMessageContaining("spring.acp.client.transport.type");
+			});
+	}
+
+	@Test
 	void userProvidedTransportBeanTakesPrecedence() {
 		this.runner.withUserConfiguration(CustomTransportConfiguration.class)
 			.withPropertyValues("spring.acp.client.transport.stdio.command=echo")
