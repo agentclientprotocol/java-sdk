@@ -72,6 +72,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport's platform-thread pools on every JDK, for an application that has not opted into
   virtual threads.
 
+- **Builder handlers receive their agent.** Every typed request setter of `AcpAgent.async(..)`
+  and `AcpAgent.sync(..)` except `promptHandler` has an overload taking an
+  `AgentAwareHandler<Request, Response>` (async, `(request, AcpAsyncAgent agent)`) or
+  `SyncAgentAwareHandler<Request, Response>` (sync, `(request, AcpSyncAgent agent)`); a
+  two-argument lambda picks it. The agent is the one `build()` returned, so a `session/load`
+  replay or a `ConfigOptionUpdate` after `session/set_config_option` no longer needs an
+  `AtomicReference` holding the built agent:
+  `.setSessionConfigOptionHandler((request, agent) -> { agent.sendSessionUpdate(request.sessionId(), update); return response; })`.
+  One-argument handlers are unchanged. The two interfaces are top-level types in
+  `com.agentclientprotocol.sdk.agent`. `AcpAgent.AsyncAgentBuilder` and `SyncAgentBuilder` are now
+  `final`; their constructors were already package-private, so nothing could extend them.
+
 - **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
   `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;
   `AgentCapabilities.builder()` gains `loadSession()`, `promptImage()`, `promptAudio()`,

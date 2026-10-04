@@ -246,7 +246,8 @@ public interface AcpAgent {
 	 * use {@code session/resume} instead ({@link ResumeSessionHandler}).
 	 *
 	 * <p>Unlike {@link PromptHandler}, it receives no context for sending updates. Send the replay
-	 * as session updates through the built agent ({@link AcpAsyncAgent#sendSessionUpdate}), and
+	 * as session updates through the agent ({@link AcpAsyncAgent#sendSessionUpdate}), which an
+	 * {@link AgentAwareHandler} registered with the same setter receives, and
 	 * complete the {@code Mono} only after they have been sent: ACP requires every update to
 	 * precede the answer. Clients send {@code session/load} only to an agent that advertises
 	 * {@code loadSession}; the default {@code initialize} answer does when this handler is
@@ -765,8 +766,9 @@ public interface AcpAgent {
 	 * use {@code session/resume} instead ({@link SyncResumeSessionHandler}).
 	 *
 	 * <p>Unlike {@link SyncPromptHandler}, it receives no context for sending updates. Send the
-	 * replay as session updates through the built agent
-	 * ({@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}), and return only
+	 * replay as session updates through the agent
+	 * ({@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}), which a
+	 * {@link SyncAgentAwareHandler} registered with the same setter receives, and return only
 	 * after they have been sent: ACP requires every update to precede the answer. Clients send
 	 * {@code session/load} only to an agent that advertises {@code loadSession}; the default
 	 * {@code initialize} answer does when this handler is registered.
@@ -1185,7 +1187,7 @@ public interface AcpAgent {
 	 * else as {@code -32603}), and an empty one is answered {@code -32603}. A builder is not
 	 * thread-safe; configure it on one thread.
 	 */
-	class AsyncAgentBuilder {
+	final class AsyncAgentBuilder extends AsyncAgentAwareSetters<AsyncAgentBuilder> {
 
 		private final AcpAgentTransport transport;
 
@@ -1572,7 +1574,8 @@ public interface AcpAgent {
 			return extNotificationHandler(method, AgentHandlers.RAW_PARAMS, handler);
 		}
 
-		private <T> AsyncAgentBuilder request(String method, TypeRef<T> requestType,
+		@Override
+		<T> AsyncAgentBuilder request(String method, TypeRef<T> requestType,
 				AgentHandlers.RequestHandler<T> handler) {
 			handlers.request(method, requestType, handler);
 			return this;
@@ -1641,7 +1644,7 @@ public interface AcpAgent {
 	 *     .build();
 	 * }</pre>
 	 */
-	class SyncAgentBuilder {
+	final class SyncAgentBuilder extends SyncAgentAwareSetters<SyncAgentBuilder> {
 
 		private final AsyncAgentBuilder asyncBuilder;
 
@@ -2058,7 +2061,12 @@ public interface AcpAgent {
 		 * @throws IllegalStateException if no prompt handler is registered
 		 */
 		public AcpSyncAgent build() {
-			return new AcpSyncAgent(asyncBuilder.build());
+			return remember(new AcpSyncAgent(asyncBuilder.build()));
+		}
+
+		@Override
+		AsyncAgentBuilder asyncBuilder() {
+			return asyncBuilder;
 		}
 
 		/**
@@ -2066,7 +2074,8 @@ public interface AcpAgent {
 		 * {@link SyncPromptContext} calls back to the client, for one) without stalling the
 		 * transport.
 		 */
-		private <T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
+		@Override
+		<T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
 			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(this.handlerScheduler);
 		}
 

@@ -86,7 +86,10 @@ class HandlerAnnotationCoverageTest {
 		DirectResponseHandler direct = new DirectResponseHandler();
 		Set<String> unsupported = new TreeSet<>();
 		for (Method setter : AcpAgent.SyncAgentBuilder.class.getMethods()) {
-			if (setter.getDeclaringClass() != AcpAgent.SyncAgentBuilder.class || !setter.getName().endsWith("Handler")
+			// Bridges re-declare the agent-aware overloads inherited from the builder's setter base,
+			// whose handlers' response type is a type variable.
+			if (setter.isBridge() || setter.getDeclaringClass() != AcpAgent.SyncAgentBuilder.class
+					|| !setter.getName().endsWith("Handler")
 					|| EXTENSION_HANDLER_SETTERS.contains(setter.getName())) {
 				continue;
 			}

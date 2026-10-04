@@ -106,11 +106,14 @@ class UnstableApiMarkerTest {
 					violations.add(where + (unstable ? " is not marked" : " is marked"));
 				}
 				Class<?> handlerType = setter.getParameterTypes()[0];
-				if (isMarked(CLASSES.get(handlerType)) != unstable) {
+				// The agent-aware handlers are one generic interface shared by every method; their
+				// request and response types are the setter's type arguments.
+				boolean shared = handlerType.getTypeParameters().length > 0;
+				if (!shared && isMarked(CLASSES.get(handlerType)) != unstable) {
 					violations.add(where + ": " + handlerType.getSimpleName() + (unstable ? " is not marked" : " is marked"));
 				}
 				if (unstable) {
-					for (Class<?> type : requestAndResponseTypes(handlerType)) {
+					for (Class<?> type : shared ? typeArguments(setter) : requestAndResponseTypes(handlerType)) {
 						if (!isMarked(CLASSES.get(type))) {
 							violations.add(where + ": " + type.getSimpleName() + " is not marked");
 						}
@@ -271,8 +274,11 @@ class UnstableApiMarkerTest {
 	}
 
 	/** The builder's {@code xxxHandler(handler)} setters, without the per-name extension ones. */
+	/** The builder's handler setters, with those it inherits from its agent-aware setters class. */
 	private static List<Method> handlerSetters(Class<?> builderType) {
-		return Arrays.stream(builderType.getDeclaredMethods())
+		return Stream.concat(Arrays.stream(builderType.getDeclaredMethods()),
+				Arrays.stream(builderType.getSuperclass().getDeclaredMethods()))
+			.filter(method -> !method.isSynthetic() && !method.isBridge())
 			.filter(method -> Modifier.isPublic(method.getModifiers()) && method.getName().endsWith("Handler")
 					&& method.getParameterCount() == 1 && method.getParameterTypes()[0].isInterface())
 			.toList();
@@ -308,6 +314,11 @@ class UnstableApiMarkerTest {
 	}
 
 	/** The request type a handler interface takes and the response type it returns. */
+	private static List<Class<?>> typeArguments(Method setter) {
+		ParameterizedType parameter = (ParameterizedType) setter.getGenericParameterTypes()[0];
+		return Arrays.stream(parameter.getActualTypeArguments()).<Class<?>>map(type -> (Class<?>) type).toList();
+	}
+
 	private static List<Class<?>> requestAndResponseTypes(Class<?> handlerType) {
 		Method handle = Arrays.stream(handlerType.getMethods())
 			.filter(method -> Modifier.isAbstract(method.getModifiers()))

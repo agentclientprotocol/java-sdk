@@ -19,19 +19,18 @@ import org.slf4j.LoggerFactory;
  * it for an agent written as plain blocking Java: {@link #run()} starts it and blocks until the
  * client is gone, which is the usual {@code main} of a stdio agent.
  *
- * <p>Inside a prompt handler, use the {@link SyncPromptContext} it receives. Other handlers get
- * only their request; one that needs the agent, for example to send a {@code ConfigOptionUpdate},
- * captures the built agent:
+ * <p>Inside a prompt handler, use the {@link SyncPromptContext} it receives. Another handler that
+ * needs the agent, for example to send a {@code ConfigOptionUpdate}, takes it as a second
+ * parameter ({@link SyncAgentAwareHandler}):
  *
  * <pre>{@code
- * AtomicReference<AcpSyncAgent> self = new AtomicReference<>();
- * self.set(AcpAgent.sync(transport)
- *     .setSessionConfigOptionHandler(request -> {
- *         self.get().sendSessionUpdate(request.sessionId(),
+ * AcpAgent.sync(transport)
+ *     .setSessionConfigOptionHandler((request, agent) -> {
+ *         agent.sendSessionUpdate(request.sessionId(),
  *             new AcpSchema.ConfigOptionUpdate(options));
  *         return new AcpSchema.SetSessionConfigOptionResponse(options);
  *     })
- *     .build());
+ *     .build();
  * }</pre>
  *
  * <p>Each call blocks on the asynchronous agent's {@code Mono} ({@link #async()} returns that

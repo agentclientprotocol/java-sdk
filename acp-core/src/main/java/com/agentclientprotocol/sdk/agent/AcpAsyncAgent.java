@@ -19,8 +19,8 @@ import reactor.core.publisher.Mono;
  *
  * <p>Inside a prompt handler, use the {@link PromptContext} it receives: it makes the same calls
  * for the prompt's session. Use the agent itself outside a prompt turn, for example to send a
- * {@code ConfigOptionUpdate} after a {@code session/set_config_option}; a builder handler reaches
- * it by capturing the built agent.
+ * {@code ConfigOptionUpdate} after a {@code session/set_config_option}; a builder handler receives
+ * it as a second parameter ({@link AgentAwareHandler}).
  *
  * <p>{@link #start()} starts the transport, and the agent answers from then on;
  * {@link #awaitTermination()} completes when the transport has ended; {@link #closeGracefully()}
