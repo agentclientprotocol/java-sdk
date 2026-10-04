@@ -1663,6 +1663,13 @@ Found by measuring coverage with JaCoCo; each has a test.
 
 ### Build
 
+- **The Quarkus tests no longer bind the fixed port 8081.** Quarkus serves `@QuarkusTest` and
+  `QuarkusUnitTest` applications on `quarkus.http.test-port`, 8081 by default, so two builds on one
+  machine (or anything else on 8081) failed with "Port already bound: 8081". The deployment
+  module's tests now run with `quarkus.http.test-port=0`, a random port, and the integration tests
+  on a free port a test resource picks (the client bean's URI is read at startup, before a random
+  port is known). The tests read the bound port through `@TestHTTPResource`.
+
 - **Spring Boot's configuration metadata is written on JDK 21 and later too.** The `errorprone`
   profile (JDK 21+) sets the compiler's processor path to Error Prone and NullAway, which turns off
   discovering processors on the classpath, so `acp-spring-boot-autoconfigure` built on JDK 21 had

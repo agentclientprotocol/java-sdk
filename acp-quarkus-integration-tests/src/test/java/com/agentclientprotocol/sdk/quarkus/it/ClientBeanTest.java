@@ -8,6 +8,8 @@ import java.util.List;
 
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import io.quarkus.test.common.TestResourceScope;
+import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and customized by a bean, against the application's own agent over Streamable HTTP.
  */
 @QuarkusTest
+@WithTestResource(value = FreeTestPort.class, scope = TestResourceScope.GLOBAL)
 class ClientBeanTest {
 
 	@Inject
