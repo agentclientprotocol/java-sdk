@@ -177,4 +177,37 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot's processors write META-INF/spring-configuration-metadata.json and
+                 spring-autoconfigure-metadata.properties. Named on the processor path, not found
+                 on the classpath: in the errorprone profile (JDK 21+) the parent's processor path
+                 (Error Prone, NullAway) turns classpath discovery off, so neither file was written.
+                 Appended, so they run beside Error Prone there and alone on JDK 17. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <annotationProcessorPaths combine.children="append">
+                                <path>
+                                    <groupId>org.springframework.boot</groupId>
+                                    <artifactId>spring-boot-configuration-processor</artifactId>
+                                    <version>${spring-boot.version}</version>
+                                </path>
+                                <path>
+                                    <groupId>org.springframework.boot</groupId>
+                                    <artifactId>spring-boot-autoconfigure-processor</artifactId>
+                                    <version>${spring-boot.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

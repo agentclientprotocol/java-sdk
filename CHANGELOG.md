@@ -1663,6 +1663,14 @@ Found by measuring coverage with JaCoCo; each has a test.
 
 ### Build
 
+- **Spring Boot's configuration metadata is written on JDK 21 and later too.** The `errorprone`
+  profile (JDK 21+) sets the compiler's processor path to Error Prone and NullAway, which turns off
+  discovering processors on the classpath, so `acp-spring-boot-autoconfigure` built on JDK 21 had
+  no `META-INF/spring-configuration-metadata.json` (no IDE completion or descriptions for the 32
+  `spring.acp.*` properties) and no `spring-autoconfigure-metadata.properties`. The module now
+  names `spring-boot-configuration-processor` and `spring-boot-autoconfigure-processor` on its
+  processor path, so every JDK writes both. Released jars, built on JDK 17, were not affected.
+
 - **The Javadoc build knows the `@apiNote`, `@implSpec` and `@implNote` tags.** They were not
   registered with the javadoc plugin, so their text was silently left out of the generated pages
   (and doclint reports them as unknown tags). The parent POM now registers them, with the JDK's
