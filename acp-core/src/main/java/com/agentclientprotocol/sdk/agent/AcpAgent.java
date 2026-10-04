@@ -74,7 +74,7 @@ import reactor.core.scheduler.Schedulers;
  * <h2>Timeouts and threads</h2>
  *
  * <p>Requests the agent sends the client wait at most 60 seconds unless the builder's
- * {@code requestTimeout} says otherwise; the client builders' default is 30 seconds. Asynchronous
+ * {@code requestTimeout} says otherwise, the same default as the client builders'. Asynchronous
  * handlers are called on the transport's thread and must not block. Synchronous handlers run on the
  * executor given to {@link SyncAgentBuilder#handlerExecutor}, by default a pool of daemon threads
  * the SDK shares between all synchronous agents in the JVM.

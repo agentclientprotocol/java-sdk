@@ -42,7 +42,7 @@ import reactor.core.publisher.Mono;
  * }</pre>
  *
  * <p>A call blocks until the answer arrives; it has no time limit of its own beyond the builder's
- * request timeout (30 seconds by default), or, for {@link #prompt}, the builder's prompt timeout
+ * request timeout (60 seconds by default), or, for {@link #prompt}, the builder's prompt timeout
  * (none by default). Failures are thrown: {@link com.agentclientprotocol.sdk.spec.AcpError} for an
  * error answer, whose {@code getCode()} is the JSON-RPC error code;
  * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, whose cause is the

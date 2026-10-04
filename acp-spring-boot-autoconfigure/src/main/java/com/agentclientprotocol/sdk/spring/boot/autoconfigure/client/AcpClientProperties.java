@@ -16,7 +16,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "spring.acp.client")
 public class AcpClientProperties {
 
-	private Duration requestTimeout = Duration.ofSeconds(30);
+	private Duration requestTimeout = Duration.ofSeconds(60);
 
 	/**
 	 * How long a prompt turn may take before the client cancels it; unset (the default) for no

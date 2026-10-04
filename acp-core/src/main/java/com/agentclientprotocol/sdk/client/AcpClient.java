@@ -90,7 +90,7 @@ import reactor.core.scheduler.Schedulers;
  *
  * <h2>Timeouts and cancellation</h2>
  *
- * <p>Requests wait at most 30 seconds unless the builder's {@code requestTimeout} says otherwise.
+ * <p>Requests wait at most 60 seconds unless the builder's {@code requestTimeout} says otherwise.
  * A prompt is the exception: its answer comes only at the end of its turn, so it waits as long as
  * the turn takes unless the builder's {@code promptTimeout} sets a limit. When a timeout passes, or
  * the caller disposes a request's {@code Mono}, the client sends the agent a
@@ -181,7 +181,10 @@ public interface AcpClient {
 
 		private final AcpClientTransport transport;
 
-		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
+		/** The SDK's one default request timeout, the same as the agent builders'. */
+		private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+
+		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
 		/** How long a prompt turn may take; null for no limit (the default). */
 		private @Nullable Duration promptTimeout;
@@ -207,7 +210,7 @@ public interface AcpClient {
 		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
 		 * session calls and extension requests. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 30 seconds.
+		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 60 seconds, as for the agent builders.
 		 * {@code session/prompt} is not bound by it, since its answer comes only at the end of the
 		 * turn; see {@code promptTimeout}.
 		 * @param requestTimeout the timeout
@@ -740,7 +743,7 @@ public interface AcpClient {
 		 * Sets how long the client waits for the agent to answer a request: {@code initialize},
 		 * session calls and extension requests. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
-		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 30 seconds.
+		 * {@code $/cancel_request}; a Java agent then cancels the handler. Default: 60 seconds, as for the agent builders.
 		 * {@code session/prompt} is not bound by it, since its answer comes only at the end of the
 		 * turn; see {@code promptTimeout}.
 		 * @param requestTimeout the timeout

@@ -39,6 +39,9 @@ public class AcpClientProducers {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpClientProducers.class);
 
+	/** The SDK's default request timeout, which applies when none is configured. */
+	private static final Duration SDK_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+
 	private final AcpRuntimeConfig config;
 
 	AcpClientProducers(AcpRuntimeConfig config) {
@@ -109,7 +112,7 @@ public class AcpClientProducers {
 	}
 
 	void close(@Disposes AcpAsyncClient client) {
-		Duration timeout = config.client().requestTimeout().orElse(Duration.ofSeconds(30)).plusSeconds(5);
+		Duration timeout = config.client().requestTimeout().orElse(SDK_REQUEST_TIMEOUT).plusSeconds(5);
 		try {
 			client.closeGracefully().block(timeout);
 		}

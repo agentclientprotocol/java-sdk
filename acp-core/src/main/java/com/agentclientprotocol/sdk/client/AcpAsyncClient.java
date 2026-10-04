@@ -51,7 +51,7 @@ import reactor.core.publisher.Mono;
  *
  * <p>Calls send nothing until their {@code Mono} is subscribed. An error answer fails the
  * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, whose {@code getCode()} is
- * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (30
+ * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (60
  * seconds by default), the {@code Mono} fails with a {@link java.util.concurrent.TimeoutException};
  * then, or when the caller disposes the {@code Mono} first, the client sends the agent a
  * {@code $/cancel_request}. {@link #prompt} is the exception: a turn has no time limit unless the
