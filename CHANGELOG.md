@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Micronaut: `acp.client.capabilities.elicitation-form`, `elicitation-url` and
+  `boolean-config-options`** (default `false`), as Spring Boot and Quarkus already offer. The
+  Micronaut client configuration hard-coded the three as not advertised, so a Micronaut client
+  could not advertise elicitation or boolean config options from its settings.
+
 - **Transport constructors without a JSON mapper:** `StreamableHttpAcpClientTransport(URI)`,
   `WebSocketAcpClientTransport(URI)`, `StreamableHttpAcpAgentTransport(int port, AcpAgentFactory)`
   and `StreamableHttpAcpServlet(AcpAgentFactory)` use `AcpJsonMapper.createDefault()`, as the stdio
