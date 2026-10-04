@@ -180,9 +180,10 @@ class AcpClientSessionLogTest {
 	private static final String EMAIL = "someone@example.com";
 
 	/**
-	 * An unhandled notification is logged at WARN with its method only: its params can carry
-	 * personal data. Claude's and Codex's agents send {@code _auth/status_update}, whose
-	 * params name the account's email address in login mode.
+	 * An unhandled notification is logged with its method only: its params can carry personal
+	 * data. Claude's and Codex's agents send {@code _auth/status_update}, whose params name the
+	 * account's email address in login mode. Being an extension notification, which ACP asks to
+	 * ignore, it is logged at DEBUG.
 	 */
 	@Test
 	void unhandledNotificationIsLoggedWithoutItsParams() throws InterruptedException {
@@ -193,10 +194,11 @@ class AcpClientSessionLogTest {
 				"_auth/status_update", Map.of("status", "logged_in", "email", EMAIL)));
 		session.closeGracefully().block(TIMEOUT);
 
-		assertThat(listAppender.list).filteredOn(event -> event.getLevel() == Level.WARN)
+		assertThat(listAppender.list).filteredOn(event -> event.getLevel() == Level.DEBUG)
 			.extracting(ILoggingEvent::getFormattedMessage)
 			.anySatisfy(message -> assertThat(message).contains("No handler registered")
-				.contains("_auth/status_update"));
+				.contains("_auth/status_update")
+				.doesNotContain(EMAIL));
 		assertNoPersonalDataAboveDebug(listAppender.list);
 	}
 

@@ -42,16 +42,24 @@ final class InboundMessages {
 
 	/**
 	 * Passes a notification to the handler registered for its method; a handler that fails
-	 * (params it cannot read, say) is logged and skipped. One without a handler is ignored
-	 * with a warning that names its method only: its params can carry personal
-	 * data (agents send {@code _auth/status_update}, whose params carry the account's email
-	 * address).
+	 * (params it cannot read, say) is logged and skipped. One without a handler is ignored,
+	 * logged by its method only: its params can carry personal data (agents send
+	 * {@code _auth/status_update}, whose params carry the account's email address). An
+	 * extension notification ({@code _}-prefixed) is logged at DEBUG, since ACP asks
+	 * implementations to ignore notifications they do not recognize and a peer may send many;
+	 * a protocol notification without a handler is logged at WARN, as it usually means a
+	 * handler was not registered.
 	 */
 	static <H> Mono<Void> deliver(Logger logger, AcpSchema.JSONRPCNotification notification,
 			Map<String, H> handlers, BiFunction<H, Object, Mono<Void>> handle) {
 		H handler = handlers.get(notification.method());
 		if (handler == null) {
-			logger.warn("No handler registered for notification method: {}", notification.method());
+			if (ExtensionMethods.isExtension(notification.method())) {
+				logger.debug("No handler registered for extension notification method: {}", notification.method());
+			}
+			else {
+				logger.warn("No handler registered for notification method: {}", notification.method());
+			}
 			return Mono.empty();
 		}
 		// A notification has no answer to carry a failure: it is logged (method and error
