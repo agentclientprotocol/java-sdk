@@ -57,6 +57,18 @@
         "http"
       ],
       "readyTimeoutSec": 90
+    },
+    "quarkus": {
+      "dir": "programs/quarkus",
+      "agentTransports": [
+        "stdio",
+        "http",
+        "ws"
+      ],
+      "clientTransports": [
+        "http"
+      ],
+      "readyTimeoutSec": 90
     }
   },
   "load": {

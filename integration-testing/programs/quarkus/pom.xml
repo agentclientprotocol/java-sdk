@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The Quarkus-hosted agent for the cross-SDK scenarios quarkus-typescript-*: an @AcpAgent bean
-  served by acp-quarkus on the Quarkus HTTP server. Deliberately NOT a module of the SDK reactor:
+  The Quarkus programs of the framework smoke cells (integration-testing/smoke.json) and the
+  quarkus-typescript-* scenarios: the shared smoke agent (programs/framework) as an @AcpAgent bean
+  served by acp-quarkus over stdio or on the Quarkus HTTP server, and a client bean acp-quarkus
+  builds from quarkus.acp.client.* (launch/build.sh packages each). Deliberately NOT a module of the SDK reactor:
   launch/build.sh builds it against the SDK installed from this checkout (-Dacp.version) and the
   Quarkus version of the root pom (-Dquarkus.version).
 -->
@@ -48,6 +50,26 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
+            </plugin>
+            <!-- The shared smoke agent handlers and client steps -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>framework-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/../framework/src/main/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>io.quarkus</groupId>
