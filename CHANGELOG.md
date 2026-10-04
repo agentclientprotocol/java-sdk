@@ -1031,6 +1031,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `acp-agent-support` README's custom return value handler example no longer breaks
+  `CompletableFuture`.** The example registered a `CompletableFutureHandler`; custom handlers are
+  asked before the built-in ones, so it replaced the built-in `CompletionStage` support and a
+  `CompletableFuture<String>` from `@Prompt` failed every prompt with `-32603`. The example now
+  adds a type the SDK does not handle (a plain `Future`), and a test keeps it in step with the
+  README. The README's interceptor example no longer says `afterCompletion` is always called: it
+  is called for the interceptors whose `preInvoke` returned `true`.
+
 - **`AcpAgentSupport.Builder.interceptor(null)` fails at once** with `IllegalArgumentException`,
   as `argumentResolver(null)` and `returnValueHandler(null)` do. It was accepted, and the next
   build failed with a bare `NullPointerException`.

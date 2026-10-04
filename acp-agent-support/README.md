@@ -382,28 +382,42 @@ AcpAgentSupport.create(new MyAgent())
 
 ## Custom Return Value Handlers
 
-Handle custom return types:
+The built-in handlers already accept a handler method's response itself, a `Mono`, a
+`CompletionStage` (such as a `CompletableFuture`) and a single-value `Publisher`, and a `String`
+from a `@Prompt` method. Register a handler for another return type. Custom handlers are asked
+before the built-in ones, so a handler that also claims a built-in type replaces it: keep
+`supportsReturnType` to the type you add. For example, a plain `Future`, as an `ExecutorService`
+returns:
 
 ```java
-public class CompletableFutureHandler implements ReturnValueHandler {
+public class FutureHandler implements ReturnValueHandler {
 
     @Override
     public boolean supportsReturnType(AcpMethodParameter returnType) {
-        return CompletableFuture.class.isAssignableFrom(returnType.getParameterType());
+        // Future itself only: a CompletableFuture stays with the built-in handler
+        return returnType.getParameterType() == Future.class;
     }
 
     @Override
     public Object handleReturnValue(Object returnValue, AcpMethodParameter returnType,
             AcpInvocationContext context) {
-        CompletableFuture<?> future = (CompletableFuture<?>) returnValue;
-        return future.join();  // Block and return result
+        try {
+            return ((Future<?>) returnValue).get();  // the method's response, such as a PromptResponse
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CancellationException("Interrupted while waiting for the handler's result");
+        }
+        catch (ExecutionException e) {
+            throw new ReturnValueHandlingException("The handler's Future failed", e.getCause());
+        }
     }
 }
 
 // Register handler
 AcpAgentSupport.create(new MyAgent())
     .transport(transport)
-    .returnValueHandler(new CompletableFutureHandler())
+    .returnValueHandler(new FutureHandler())
     .build();
 ```
 
