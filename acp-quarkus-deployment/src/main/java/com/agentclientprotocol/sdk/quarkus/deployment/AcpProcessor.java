@@ -8,8 +8,9 @@ import java.util.List;
 import java.util.Optional;
 
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
-import com.agentclientprotocol.sdk.quarkus.AgentTransportType;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentAssembly;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpAgentClass;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpClientProducers;
@@ -77,22 +78,15 @@ class AcpProcessor {
 		if (!config.agent().enabled()) {
 			return;
 		}
-		List<DotName> agents = index.getIndex()
+		List<String> agents = index.getIndex()
 			.getAnnotations(ACP_AGENT)
 			.stream()
 			.map(AnnotationInstance::target)
 			.filter(target -> target.kind() == AnnotationTarget.Kind.CLASS)
-			.map(target -> target.asClass().name())
-			.sorted()
+			.map(target -> target.asClass().name().toString())
 			.toList();
-		if (agents.size() > 1) {
-			throw new IllegalStateException("Found " + agents.size() + " @AcpAgent classes " + agents
-					+ ", but an application serves one. Remove @AcpAgent from all but one, or set "
-					+ "quarkus.acp.agent.enabled=false to serve none.");
-		}
-		if (agents.size() == 1) {
-			agent.produce(new AcpAgentBuildItem(agents.get(0)));
-		}
+		AcpAgentDiscovery.requireSingle(agents, "quarkus.acp.agent.enabled")
+			.ifPresent(name -> agent.produce(new AcpAgentBuildItem(DotName.createSimple(name))));
 	}
 
 	/** The {@code @AcpAgent} class as a bean the runtime reads, and the agent bean kept. */
@@ -121,7 +115,7 @@ class AcpProcessor {
 			return;
 		}
 		beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpAgentAssembly.class));
-		if (config.agent().transport().type() == AgentTransportType.STDIO) {
+		if (config.agent().transport().type() == AcpTransportType.STDIO) {
 			beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpStdioAgentHost.class));
 			beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpStdioTransportProducer.class));
 			// Standard output carries the protocol: nothing else may write there, and a
@@ -149,7 +143,7 @@ class AcpProcessor {
 	@BuildStep
 	void httpServlet(Optional<AcpAgentBuildItem> agent, AcpBuildTimeConfig config,
 			BuildProducer<ServletBuildItem> servlets) {
-		if (agent.isEmpty() || config.agent().transport().type() != AgentTransportType.HTTP) {
+		if (agent.isEmpty() || config.agent().transport().type() == AcpTransportType.STDIO) {
 			return;
 		}
 		servlets.produce(ServletBuildItem.builder("acp", AcpHttpServlet.class.getName())

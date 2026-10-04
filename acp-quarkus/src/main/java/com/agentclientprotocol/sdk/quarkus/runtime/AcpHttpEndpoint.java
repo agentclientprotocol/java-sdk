@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.quarkus.runtime;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import jakarta.inject.Singleton;
@@ -37,15 +38,7 @@ public class AcpHttpEndpoint {
 	 * @return the transport options
 	 */
 	static StreamableHttpAcpAgentTransportOptions options(AcpRuntimeConfig.AgentHttp http) {
-		StreamableHttpAcpAgentTransportOptions.Builder options = StreamableHttpAcpAgentTransportOptions.builder();
-		http.maxPostBodySize().ifPresent(size -> options.maxPostBodyBytes(size.asLongValue()));
-		http.keepAliveInterval().ifPresent(options::keepAliveInterval);
-		http.mailboxCapacity().ifPresent(options::mailboxCapacity);
-		http.maxPendingSseEvents().ifPresent(options::maxPendingSseEvents);
-		http.maxWebSocketPendingFrames().ifPresent(options::maxWebSocketPendingFrames);
-		http.maxProvisionalSessions().ifPresent(options::maxProvisionalSessions);
-		http.shutdownTimeout().ifPresent(options::shutdownTimeout);
-		return options.build();
+		return AcpSettings.limits(AcpAgentSettings.builder(), http).build().toOptions(false);
 	}
 
 	/**

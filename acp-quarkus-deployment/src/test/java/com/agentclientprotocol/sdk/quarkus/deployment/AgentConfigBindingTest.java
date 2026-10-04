@@ -9,9 +9,9 @@ import java.time.Duration;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Prompt;
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
-import com.agentclientprotocol.sdk.quarkus.AgentTransportType;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpEndpoint;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import io.quarkus.test.QuarkusUnitTest;
@@ -60,7 +60,7 @@ class AgentConfigBindingTest {
 	@Test
 	void everyAgentSettingBinds() {
 		assertThat(buildTime.agent().enabled()).isTrue();
-		assertThat(buildTime.agent().transport().type()).isEqualTo(AgentTransportType.HTTP);
+		assertThat(buildTime.agent().transport().type()).isEqualTo(AcpTransportType.HTTP);
 		assertThat(buildTime.agent().transport().http().path()).isEqualTo("/configured");
 
 		AcpRuntimeConfig.Agent agent = runtime.agent();

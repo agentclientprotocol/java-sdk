@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.quarkus;
 
+import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.smallrye.config.ConfigMapping;
@@ -49,13 +50,15 @@ public interface AcpBuildTimeConfig {
 	interface Transport {
 
 		/**
-		 * The transport the agent is served over. With {@code stdio}, the console log goes
-		 * to standard error, the banner is off and the HTTP listener is disabled unless set
-		 * otherwise, because standard output carries the protocol.
+		 * The transport the agent is served over: {@code stdio}, or {@code http} for
+		 * Streamable HTTP and WebSocket on the Quarkus HTTP server ({@code websocket} means
+		 * the same). With {@code stdio}, the console log goes to standard error, the banner
+		 * is off and the HTTP listener is disabled unless set otherwise, because standard
+		 * output carries the protocol.
 		 * @return the transport type
 		 */
 		@WithDefault("stdio")
-		AgentTransportType type();
+		AcpTransportType type();
 
 		/**
 		 * The Streamable HTTP endpoint.

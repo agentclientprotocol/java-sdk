@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * acp-quarkus: the extension's runtime half.
  *
  * <pre>
- *   quarkus (configuration, AcpClientCustomizer)  &lt;--  quarkus.runtime (beans, hosts)
+ *   quarkus (configuration)  &lt;--  quarkus.runtime (beans, hosts)  --&gt;  acp-integration
  * </pre>
  *
  * <p>
