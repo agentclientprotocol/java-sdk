@@ -115,137 +115,357 @@ public interface AcpAgent {
 	}
 
 	/**
-	 * Functional interface for handling initialize requests.
+	 * Answers {@code initialize}, the client's first request on a connection: it carries the
+	 * protocol version the client wants and the client's capabilities, and the answer carries the
+	 * protocol version for the connection, the agent's capabilities, its authentication methods and
+	 * its name. Register it with {@link AsyncAgentBuilder#initializeHandler} when the agent needs
+	 * to choose that answer itself, for example to list authentication methods or advertise prompt
+	 * capabilities.
+	 *
+	 * <p>The handler is optional. Without one, the built agent answers {@code initialize} itself,
+	 * with the negotiated protocol version, the builder's {@code agentInfo} and the capabilities
+	 * its other handlers imply ({@code session/load} advertises {@code loadSession},
+	 * {@code session/list} advertises {@code sessionCapabilities.list}, {@code logout} advertises
+	 * {@code auth.logout}, and so on). A handler's answer is sent as it is: nothing is derived from
+	 * the other handlers, so it must advertise them itself, or clients will not call them. ACP asks
+	 * the agent to answer with the client's protocol version if it supports it, and otherwise with
+	 * the latest version it supports; the handler chooses the version, and the SDK does not check
+	 * it. The client's capabilities are recorded before the handler runs
+	 * ({@link AcpAsyncAgent#getClientCapabilities()}).
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface InitializeHandler {
 
+		/**
+		 * Answers the client's {@code initialize} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the agent's answer: protocol version, capabilities,
+		 * authentication methods and agent info
+		 */
 		Mono<AcpSchema.InitializeResponse> handle(AcpSchema.InitializeRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling authenticate requests.
+	 * Answers {@code authenticate}: the client logs in with one of the authentication methods the
+	 * agent listed in its {@code initialize} answer, named by its ID. Register it with
+	 * {@link AsyncAgentBuilder#authenticateHandler} when the agent lists authentication methods.
+	 * Answer with an empty {@link AcpSchema.AuthenticateResponse} once the login has succeeded.
+	 *
+	 * <p>The SDK checks neither the method ID nor whether a client has logged in. The handler
+	 * should reject an ID the agent did not list, and refuse a failed login by failing with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} carrying
+	 * {@link com.agentclientprotocol.sdk.error.AcpErrorCodes#AUTHENTICATION_REQUIRED}. Handlers
+	 * that need a login check for one themselves and fail the same way.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface AuthenticateHandler {
 
+		/**
+		 * Answers the client's {@code authenticate} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the empty answer once the login has succeeded
+		 */
 		Mono<AcpSchema.AuthenticateResponse> handle(AcpSchema.AuthenticateRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling logout requests.
+	 * Answers {@code logout}: the client ends its authenticated state with the agent. Register it
+	 * with {@link AsyncAgentBuilder#logoutHandler}, and answer with an empty
+	 * {@link AcpSchema.LogoutResponse} once the agent has dropped the login.
+	 *
+	 * <p>Clients send {@code logout} only to an agent that advertises {@code auth.logout}. The
+	 * agent's default {@code initialize} answer advertises it whenever this handler is registered;
+	 * an initialize handler must advertise it itself
+	 * ({@link AcpSchema.AgentAuthCapabilities#withLogout()}).
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface LogoutHandler {
 
+		/**
+		 * Answers the client's {@code logout} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the empty answer once the login has been dropped
+		 */
 		Mono<AcpSchema.LogoutResponse> handle(AcpSchema.LogoutRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling new session requests.
+	 * Answers {@code session/new}: the client opens an ACP session for a working directory (an
+	 * absolute path) and names the MCP servers the agent should connect to. The answer carries the
+	 * new session's ID, which every later request for the session names, and optionally the
+	 * session's modes and config options. Register it with
+	 * {@link AsyncAgentBuilder#newSessionHandler}.
+	 *
+	 * <p>ACP requires every agent to support {@code session/new}, but {@code build()} does not
+	 * check for this handler: an agent built without one answers {@code session/new} with
+	 * {@code -32601} (method not found), and no client can open a session. ACP requires the session
+	 * ID to be unique.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface NewSessionHandler {
 
+		/**
+		 * Answers the client's {@code session/new} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the new session's ID, and optionally its modes and
+		 * config options
+		 */
 		Mono<AcpSchema.NewSessionResponse> handle(AcpSchema.NewSessionRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling load session requests.
+	 * Answers {@code session/load}: the client reopens a session the agent kept, and the agent
+	 * replays the whole conversation to the client before it answers. Register it with
+	 * {@link AsyncAgentBuilder#loadSessionHandler}. To reopen a session without the replay, clients
+	 * use {@code session/resume} instead ({@link ResumeSessionHandler}).
+	 *
+	 * <p>Unlike {@link PromptHandler}, it receives no context for sending updates. Send the replay
+	 * as session updates through the built agent ({@link AcpAsyncAgent#sendSessionUpdate}), and
+	 * complete the {@code Mono} only after they have been sent: ACP requires every update to
+	 * precede the answer. Clients send {@code session/load} only to an agent that advertises
+	 * {@code loadSession}; the default {@code initialize} answer does when this handler is
+	 * registered.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface LoadSessionHandler {
 
+		/**
+		 * Answers the client's {@code session/load} request, after replaying the conversation.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the answer, optionally with the session's modes and
+		 * config options, once the replay has been sent
+		 */
 		Mono<AcpSchema.LoadSessionResponse> handle(AcpSchema.LoadSessionRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling prompt requests with full agent context.
+	 * Answers {@code session/prompt}: one prompt turn of an ACP session. The handler receives the
+	 * request (the session ID and the user's content blocks) and a {@link PromptContext} for
+	 * sending session updates and calling the client during the turn, and returns a {@code Mono}
+	 * that emits the {@link AcpSchema.PromptResponse} whose stop reason ends the turn. Register it
+	 * with {@link AsyncAgentBuilder#promptHandler}; every agent needs one, and {@code build()}
+	 * fails without it. For handler code that blocks, use {@link SyncPromptHandler} on the
+	 * synchronous builder.
 	 *
-	 * <p>
-	 * The handler receives a {@link PromptContext} that provides access to all agent
-	 * capabilities including file operations, permission requests, terminal operations,
-	 * and session updates.
+	 * <p>The SDK runs one turn per session at a time: a second prompt for a session whose turn has
+	 * not ended is answered {@code -32600} (invalid request) without calling the handler. Send the
+	 * turn's updates before the answer; once the prompt has been answered, its context drops
+	 * further updates.
 	 *
-	 * <p>Example usage:
+	 * <p>After {@code session/cancel} for the session, the context reports the cancel
+	 * ({@link PromptContext#isCancelled()}, {@link PromptContext#whenCancelled()}): stop the work,
+	 * send any last updates and answer {@link AcpSchema.PromptResponse#cancelled()}. If the handler
+	 * has not answered within the builder's cancel grace period (60 seconds by default), the SDK
+	 * disposes its {@code Mono} and answers {@code cancelled} itself; the builder's maximum prompt
+	 * duration (off by default) bounds the whole turn the same way. While the prompt is cancelled,
+	 * a failure that is a cancellation ({@link java.util.concurrent.CancellationException}, an
+	 * interrupt, or an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with code
+	 * {@code -32800}) is answered {@code cancelled}. Any other failure, such as the exception a
+	 * model client throws when its call is aborted, is answered {@code -32603}; ACP requires
+	 * {@code cancelled}, so catch it and answer {@code cancelled}.
+	 *
 	 * <pre>{@code
 	 * AcpAgent.async(transport)
-	 *     .promptHandler((request, context) -> {
-	 *         // Read a file
-	 *         var file = context.readTextFile(new ReadTextFileRequest(...)).block();
-	 *
-	 *         // Send progress update
-	 *         context.sendUpdate(new AgentThoughtChunk(...));
-	 *
-	 *         return Mono.just(new PromptResponse(StopReason.END_TURN));
-	 *     })
+	 *     .promptHandler((request, context) -> model.stream(request.prompt())  // Flux<String>
+	 *         .concatMap(context::sendMessage)
+	 *         .takeUntilOther(context.whenCancelled())
+	 *         .then(Mono.fromSupplier(() -> context.isCancelled()
+	 *             ? AcpSchema.PromptResponse.cancelled()
+	 *             : AcpSchema.PromptResponse.endTurn())))
 	 *     .build();
 	 * }</pre>
+	 *
+	 * <p>Implementations are called on the transport's thread that delivered the request and must
+	 * not block it (no {@code block()} inside); return a {@code Mono} that completes later. One
+	 * handler serves every session of the connection, and turns of different sessions can run at
+	 * the same time, so state they share must be thread-safe. These rules hold for every handler
+	 * interface of {@link AcpAgent}: the value the {@code Mono} emits is the result. A failure with
+	 * an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} is answered with its code,
+	 * message and data, and one with the {@link com.agentclientprotocol.sdk.spec.AcpError} of a
+	 * call to the client passes the client's error back unchanged. A
+	 * {@link java.util.concurrent.CancellationException} is answered {@code -32800} (request
+	 * cancelled). Any other failure, a throw or a {@code null} return included, is answered
+	 * {@code -32603} with the message "Internal error" and logged at the agent. An empty
+	 * {@code Mono} is answered {@code -32603} too.
 	 */
 	@FunctionalInterface
 	interface PromptHandler {
 
 		/**
-		 * Handles a prompt request with full access to agent capabilities.
-		 * @param request The prompt request
-		 * @param context Context providing all agent capabilities (file ops, permissions, updates, etc.)
-		 * @return A Mono containing the prompt response
+		 * Runs one prompt turn and answers it.
+		 * @param request the prompt: the session ID and the user's content blocks; never null
+		 * @param context the turn's way back to the client: session updates, client requests and
+		 * cancellation, for this turn
+		 * @return a {@code Mono} that emits the response whose stop reason ends the turn, for
+		 * example {@link AcpSchema.PromptResponse#endTurn()} or
+		 * {@link AcpSchema.PromptResponse#cancelled()}
 		 */
 		Mono<AcpSchema.PromptResponse> handle(AcpSchema.PromptRequest request, PromptContext context);
 
 	}
 
 	/**
-	 * Functional interface for handling set session mode requests.
+	 * Answers {@code session/set_mode}: the client switches a session to one of the modes the agent
+	 * offered in the session's {@code modes} (for example "ask" or "code"). Register it with
+	 * {@link AsyncAgentBuilder#setSessionModeHandler}, and answer with an empty
+	 * {@link AcpSchema.SetSessionModeResponse} once the mode is in effect.
+	 *
+	 * <p>The SDK does not check the mode ID against the modes offered; answer an unknown one with
+	 * an {@link com.agentclientprotocol.sdk.error.AcpProtocolException} carrying
+	 * {@link com.agentclientprotocol.sdk.error.AcpErrorCodes#INVALID_PARAMS}. When the agent
+	 * changes a session's mode on its own, it tells the client with a
+	 * {@link AcpSchema.CurrentModeUpdate} session update instead.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface SetSessionModeHandler {
 
+		/**
+		 * Answers the client's {@code session/set_mode} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the empty answer once the mode is in effect
+		 */
 		Mono<AcpSchema.SetSessionModeResponse> handle(AcpSchema.SetSessionModeRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling list sessions requests.
+	 * Answers {@code session/list}: the client asks for the sessions the agent knows, optionally
+	 * only those of one working directory, a page at a time. Register it with
+	 * {@link AsyncAgentBuilder#listSessionsHandler}. Answer with a
+	 * {@link AcpSchema.ListSessionsResponse} holding one page and, when more remain, an opaque
+	 * cursor the client sends back for the next one.
+	 *
+	 * <p>Clients send {@code session/list} only to an agent that advertises
+	 * {@code sessionCapabilities.list}; the default {@code initialize} answer does when this
+	 * handler is registered. An agent with no sessions answers an empty list, and ACP asks for an
+	 * error answer to a cursor the agent does not recognize.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface ListSessionsHandler {
 
+		/**
+		 * Answers the client's {@code session/list} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits one page of sessions and, when more remain, the next
+		 * cursor
+		 */
 		Mono<AcpSchema.ListSessionsResponse> handle(AcpSchema.ListSessionsRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling close session requests.
+	 * Answers {@code session/close}: the client ends an active session, and the agent frees what
+	 * the session holds. Register it with {@link AsyncAgentBuilder#closeSessionHandler}, and answer
+	 * with an empty {@link AcpSchema.CloseSessionResponse}.
+	 *
+	 * <p>The SDK first cancels the session's work, as ACP requires: it calls the
+	 * {@link CancelHandler} if one is registered, cancels a running prompt (whose context reports
+	 * the cancel), and waits for that prompt's turn to end. Only then does it call this handler.
+	 * Clients send {@code session/close} only to an agent that advertises
+	 * {@code sessionCapabilities.close}; the default {@code initialize} answer does when this
+	 * handler is registered.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface CloseSessionHandler {
 
+		/**
+		 * Answers the client's {@code session/close} request, after the session's work has been
+		 * cancelled.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the empty answer once the session's resources are freed
+		 */
 		Mono<AcpSchema.CloseSessionResponse> handle(AcpSchema.CloseSessionRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling delete session requests.
+	 * Answers {@code session/delete}: the client removes a stored session for good, so that
+	 * {@code session/list} no longer returns it. Register it with
+	 * {@link AsyncAgentBuilder#deleteSessionHandler}, and answer with an empty
+	 * {@link AcpSchema.DeleteSessionResponse}.
+	 *
+	 * <p>Deleting is not closing: unlike for {@link CloseSessionHandler}, the SDK does not cancel
+	 * the session's work first. Clients send {@code session/delete} only to an agent that
+	 * advertises {@code sessionCapabilities.delete}; the default {@code initialize} answer does
+	 * when this handler is registered.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface DeleteSessionHandler {
 
+		/**
+		 * Answers the client's {@code session/delete} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the empty answer once the session is deleted
+		 */
 		Mono<AcpSchema.DeleteSessionResponse> handle(AcpSchema.DeleteSessionRequest request);
 
 	}
 
 	/**
-	 * Functional interface for handling resume session requests.
+	 * Answers {@code session/resume}: the client reopens a session the agent kept, without a replay
+	 * of its history. The agent restores the session, connects to the MCP servers the request
+	 * names, and answers once the session can take prompts. Register it with
+	 * {@link AsyncAgentBuilder#resumeSessionHandler}. To reopen a session with the replay, clients
+	 * use {@code session/load} ({@link LoadSessionHandler}).
+	 *
+	 * <p>ACP forbids sending the history as session updates before the answer. Clients send
+	 * {@code session/resume} only to an agent that advertises {@code sessionCapabilities.resume};
+	 * the default {@code initialize} answer does when this handler is registered.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface ResumeSessionHandler {
 
+		/**
+		 * Answers the client's {@code session/resume} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits the answer, optionally with the session's modes and
+		 * config options, once the session is ready
+		 */
 		Mono<AcpSchema.ResumeSessionResponse> handle(AcpSchema.ResumeSessionRequest request);
 
 	}
@@ -262,11 +482,32 @@ public interface AcpAgent {
 	}
 
 	/**
-	 * Functional interface for handling set config option requests.
+	 * Answers {@code session/set_config_option}: the client changes one of a session's config
+	 * options (a select or a boolean the agent offered). Register it with
+	 * {@link AsyncAgentBuilder#setSessionConfigOptionHandler}. Answer with a
+	 * {@link AcpSchema.SetSessionConfigOptionResponse} that lists all of the session's config
+	 * options with their current values, not only the changed one.
+	 *
+	 * <p>The request's value is a {@code String} for a select option and a {@code Boolean} for a
+	 * boolean option, and the SDK does not check it against the options offered: answer an unknown
+	 * option or value with an {@link com.agentclientprotocol.sdk.error.AcpProtocolException}
+	 * carrying {@link com.agentclientprotocol.sdk.error.AcpErrorCodes#INVALID_PARAMS}. When the
+	 * agent changes an option on its own, it tells the client with a
+	 * {@link AcpSchema.ConfigOptionUpdate} session update instead.
+	 *
+	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
+	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
 	 */
 	@FunctionalInterface
 	interface SetSessionConfigOptionHandler {
 
+		/**
+		 * Answers the client's {@code session/set_config_option} request.
+		 * @param request the request, as the client sent it; never null
+		 * @return a {@code Mono} that emits every config option of the session, with its current
+		 * value
+		 */
 		Mono<AcpSchema.SetSessionConfigOptionResponse> handle(AcpSchema.SetSessionConfigOptionRequest request);
 
 	}
@@ -305,29 +546,51 @@ public interface AcpAgent {
 	}
 
 	/**
-	 * Functional interface for handling cancel notifications.
+	 * Receives {@code session/cancel}: the client's notification that it wants a session's prompt
+	 * turn to stop. Register it with {@link AsyncAgentBuilder#cancelHandler} when work outside the
+	 * prompt handler's {@code Mono} must be stopped, for example a separate process. Most agents
+	 * need none: the running prompt's {@link PromptContext} already reports the cancel.
 	 *
-	 * <p>
-	 * A cancel does not end the prompt turn: stop the prompt's work, send any last
-	 * updates, and answer the prompt with stop reason {@code cancelled}. The session stays
-	 * busy, rejecting a new prompt, until that answer (or an error) is sent (ACP v1, prompt
-	 * turn, Cancellation). If the prompt handler has not answered within the cancel grace
-	 * period (60 seconds unless set with {@code cancelGracePeriod}), the agent cancels it
-	 * and answers {@code cancelled} itself.
-	 * </p>
+	 * <p>Before the handler runs, the SDK marks the session's turn as cancelling and its prompt
+	 * context as cancelled. A cancel does not end the turn: the prompt handler does, by answering
+	 * with stop reason {@code cancelled}, and until then the session refuses a new prompt. If the
+	 * prompt handler has not answered within the cancel grace period (60 seconds unless set with
+	 * {@code cancelGracePeriod}), the SDK cancels it and answers {@code cancelled} itself. The
+	 * handler is called for every {@code session/cancel}, also for a session with no prompt
+	 * running, and when the client closes a session ({@code session/close}), before the
+	 * {@link CloseSessionHandler}.
+	 *
+	 * <p>Implementations run on the transport's thread and must not block it. A notification gets
+	 * no answer: a handler that fails is logged and the failure dropped.
 	 */
 	@FunctionalInterface
 	interface CancelHandler {
 
+		/**
+		 * Handles a {@code session/cancel} for one session.
+		 * @param notification the cancel, naming the session; never null
+		 * @return a {@code Mono} that completes when the handler has done its part
+		 */
 		Mono<Void> handle(AcpSchema.CancelNotification notification);
 
 	}
 
 	/**
-	 * Handles a custom extension request ({@code _}-prefixed method name, ACP v1
-	 * Extensibility) from the client.
-	 * @param <T> the type the params are read as; {@code Object} for the raw JSON value
-	 * (a {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean})
+	 * Answers a custom extension request from the client: a method whose name starts with {@code _}
+	 * (ACP v1 Extensibility), such as {@code _example.com/workspace/buffers}. Register it with
+	 * {@link AsyncAgentBuilder#extRequestHandler(String, TypeRef, ExtRequestHandler)} to read the
+	 * params as a type of your own, or with
+	 * {@link AsyncAgentBuilder#extRequestHandler(String, ExtRequestHandler)} to get the raw JSON
+	 * value. A request for an extension method without a handler is answered {@code -32601} (method
+	 * not found).
+	 *
+	 * <p>Unlike the protocol handlers, it has no schema record: the params are converted to
+	 * {@code T} but not checked, and the result can be any value the JSON mapper can write.
+	 * Implementations follow the rules on {@link PromptHandler}: they run on the transport's thread
+	 * and must not block, return a {@code Mono} and never {@code null}, and fail with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} to answer with a chosen error.
+	 * @param <T> the type the params are read as; {@code Object} for the raw JSON value (a
+	 * {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean})
 	 */
 	@FunctionalInterface
 	interface ExtRequestHandler<T> {
@@ -335,17 +598,24 @@ public interface AcpAgent {
 		/**
 		 * Answers the request.
 		 * @param params the request's params; an omitted params arrives as an empty object
-		 * @return the result, any value the JSON mapper can write. The Mono must not
-		 * complete empty: the request is then answered with an internal error. Answer with
-		 * an empty map when there is nothing to return.
+		 * @return a {@code Mono} that emits the result, any value the JSON mapper can write; an
+		 * empty {@code Mono} is answered with an internal error ({@code -32603}), so emit an empty
+		 * map when there is nothing to return
 		 */
 		Mono<?> handle(T params);
 
 	}
 
 	/**
-	 * Handles a custom extension notification ({@code _}-prefixed method name, ACP v1
-	 * Extensibility) from the client.
+	 * Receives a custom extension notification from the client: a method whose name starts with
+	 * {@code _} (ACP v1 Extensibility). Register it with
+	 * {@link AsyncAgentBuilder#extNotificationHandler(String, TypeRef, ExtNotificationHandler)} to
+	 * read the params as a type of your own, or with
+	 * {@link AsyncAgentBuilder#extNotificationHandler(String, ExtNotificationHandler)} to get the
+	 * raw JSON value. An extension notification without a handler is ignored, as ACP asks.
+	 *
+	 * <p>Implementations run on the transport's thread and must not block it. A notification gets
+	 * no answer: a handler that fails is logged and the failure dropped.
 	 * @param <T> the type the params are read as; {@code Object} for the raw JSON value
 	 */
 	@FunctionalInterface
@@ -353,9 +623,8 @@ public interface AcpAgent {
 
 		/**
 		 * Handles the notification.
-		 * @param params the notification's params; an omitted params arrives as an empty
-		 * object
-		 * @return a Mono that completes when the notification is handled
+		 * @param params the notification's params; an omitted params arrives as an empty object
+		 * @return a {@code Mono} that completes when the notification is handled
 		 */
 		Mono<Void> handle(T params);
 
