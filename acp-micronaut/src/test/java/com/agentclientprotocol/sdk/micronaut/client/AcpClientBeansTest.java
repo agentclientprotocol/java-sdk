@@ -14,6 +14,7 @@ import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
+import com.agentclientprotocol.sdk.integration.AcpClientSettings;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import io.micronaut.context.ApplicationContext;
@@ -81,6 +82,31 @@ class AcpClientBeansTest {
 
 			// the explicit type wins over the URIs also set
 			assertThat(context.getBean(AcpClientTransport.class)).isInstanceOf(StdioAcpClientTransport.class);
+		}
+	}
+
+	/** The capabilities Spring and Quarkus bind too, which this module used to hard-code false. */
+	@Test
+	void elicitationAndBooleanConfigOptionCapabilitiesBind() {
+		try (ApplicationContext context = ApplicationContext.run()) {
+			assertThat(context.getBean(AcpClientConfiguration.class).toSettings().capabilities())
+				.isEqualTo(AcpClientSettings.Capabilities.NONE);
+		}
+		Map<String, Object> properties = Map.of("acp.client.capabilities.elicitation-form", "true",
+				"acp.client.capabilities.elicitation-url", "true",
+				"acp.client.capabilities.boolean-config-options", "true");
+		try (ApplicationContext context = ApplicationContext.run(properties)) {
+			assertThat(context.getBean(AcpClientConfiguration.class).toSettings().capabilities())
+				.isEqualTo(new AcpClientSettings.Capabilities(false, false, false, true, true, true));
+		}
+		try (ApplicationContext context = ApplicationContext
+			.run(Map.of("acp.client.capabilities.elicitation-url", "true"))) {
+			AcpClientSettings.Capabilities capabilities = context.getBean(AcpClientConfiguration.class)
+				.toSettings()
+				.capabilities();
+			assertThat(capabilities.elicitationForm()).isFalse();
+			assertThat(capabilities.elicitationUrl()).isTrue();
+			assertThat(capabilities.booleanConfigOptions()).isFalse();
 		}
 	}
 

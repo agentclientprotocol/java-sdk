@@ -125,7 +125,7 @@ class Updates implements AcpClientCustomizer {
 | `acp.client.transport.stdio.command`, `.args`, `.env.*` | | the agent process; `env` keys keep their case |
 | `acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | `ws://host:port/acp` |
 | `acp.client.transport.http.uri` | | `http://host:port/acp` |
-| `acp.client.capabilities.read-text-file`, `write-text-file`, `terminal` | `false` | advertise one only together with its handler, registered in a customizer |
+| `acp.client.capabilities.read-text-file`, `write-text-file`, `terminal`, `elicitation-form`, `elicitation-url`, `boolean-config-options` | `false` | advertise one only together with its handler, registered in a customizer |
 
 ## Dependencies
 

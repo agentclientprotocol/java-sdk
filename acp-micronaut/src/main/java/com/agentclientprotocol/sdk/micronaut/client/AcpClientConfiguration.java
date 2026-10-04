@@ -34,6 +34,9 @@ import org.jspecify.annotations.Nullable;
  * acp.client.capabilities.read-text-file        false
  * acp.client.capabilities.write-text-file       false
  * acp.client.capabilities.terminal              false
+ * acp.client.capabilities.elicitation-form      false
+ * acp.client.capabilities.elicitation-url       false
+ * acp.client.capabilities.boolean-config-options false
  * </pre>
  */
 @ConfigurationProperties(AcpClientConfiguration.PREFIX)
@@ -133,7 +136,8 @@ public class AcpClientConfiguration {
 			.websocketConnectTimeout(transport.getWebsocket().getConnectTimeout())
 			.httpUri(transport.getHttp().getUri())
 			.capabilities(new AcpClientSettings.Capabilities(capabilities.isReadTextFile(),
-					capabilities.isWriteTextFile(), capabilities.isTerminal(), false, false, false))
+					capabilities.isWriteTextFile(), capabilities.isTerminal(), capabilities.isElicitationForm(),
+					capabilities.isElicitationUrl(), capabilities.isBooleanConfigOptions()))
 			.build();
 	}
 
@@ -357,6 +361,12 @@ public class AcpClientConfiguration {
 
 		private boolean terminal;
 
+		private boolean elicitationForm;
+
+		private boolean elicitationUrl;
+
+		private boolean booleanConfigOptions;
+
 		/**
 		 * Whether to advertise {@code fs/read_text_file}.
 		 * @return whether advertised
@@ -403,6 +413,55 @@ public class AcpClientConfiguration {
 		 */
 		public void setTerminal(boolean terminal) {
 			this.terminal = terminal;
+		}
+
+		/**
+		 * Whether to advertise form-mode elicitation ({@code elicitation.form}).
+		 * @return whether advertised
+		 */
+		public boolean isElicitationForm() {
+			return elicitationForm;
+		}
+
+		/**
+		 * Sets whether to advertise form-mode elicitation.
+		 * @param elicitationForm whether to advertise {@code elicitation.form}
+		 */
+		public void setElicitationForm(boolean elicitationForm) {
+			this.elicitationForm = elicitationForm;
+		}
+
+		/**
+		 * Whether to advertise URL-mode elicitation ({@code elicitation.url}).
+		 * @return whether advertised
+		 */
+		public boolean isElicitationUrl() {
+			return elicitationUrl;
+		}
+
+		/**
+		 * Sets whether to advertise URL-mode elicitation.
+		 * @param elicitationUrl whether to advertise {@code elicitation.url}
+		 */
+		public void setElicitationUrl(boolean elicitationUrl) {
+			this.elicitationUrl = elicitationUrl;
+		}
+
+		/**
+		 * Whether to advertise boolean session config options
+		 * ({@code session.configOptions.boolean}).
+		 * @return whether advertised
+		 */
+		public boolean isBooleanConfigOptions() {
+			return booleanConfigOptions;
+		}
+
+		/**
+		 * Sets whether to advertise boolean session config options.
+		 * @param booleanConfigOptions whether to advertise boolean session config options
+		 */
+		public void setBooleanConfigOptions(boolean booleanConfigOptions) {
+			this.booleanConfigOptions = booleanConfigOptions;
 		}
 
 	}
