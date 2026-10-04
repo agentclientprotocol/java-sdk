@@ -27,6 +27,12 @@ package com.agentclientprotocol.sdk.error;
  * <p>On the asynchronous API the call's {@code Mono} fails with it; the sync API throws it. The SDK
  * does not check prompt content against {@code promptCapabilities}.
  *
+ * <p>It is the caller's failure and is never sent. The one case where a peer must answer a request
+ * for a capability that was not advertised is ACP's: a client asked for an elicitation in a mode
+ * it did not declare answers {@code -32602} (invalid params), which the SDK's client does. A
+ * handler with a similar case throws an {@link AcpProtocolException} with
+ * {@link AcpErrorCodes#INVALID_PARAMS}.
+ *
  * <p>Example:
  * <pre>{@code
  * try {
@@ -39,7 +45,6 @@ package com.agentclientprotocol.sdk.error;
  *
  * @author Mark Pollack
  * @see com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
- * @see #toProtocolException()
  */
 public class AcpCapabilityException extends AcpException {
 
@@ -74,17 +79,6 @@ public class AcpCapabilityException extends AcpException {
 	 */
 	public String getCapability() {
 		return capability;
-	}
-
-	/**
-	 * Returns a protocol exception for a handler to throw when it cannot serve a request because of
-	 * this missing capability: code {@code -32600} (invalid request: the request is not valid for
-	 * the negotiated capabilities), this exception's message, and the capability name as data. ACP
-	 * defines no code of its own for a missing capability. The SDK does not call it.
-	 * @return the protocol exception
-	 */
-	public AcpProtocolException toProtocolException() {
-		return new AcpProtocolException(AcpErrorCodes.INVALID_REQUEST, getMessage(), capability);
 	}
 
 	private static String formatMessage(String capability) {
