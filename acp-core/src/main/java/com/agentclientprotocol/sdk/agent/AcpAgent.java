@@ -81,8 +81,9 @@ import reactor.core.scheduler.Schedulers;
  * <p>Requests the agent sends the client wait at most 60 seconds unless the builder's
  * {@code requestTimeout} says otherwise, the same default as the client builders'. Asynchronous
  * handlers are called on the transport's thread and must not block. Synchronous handlers run on the
- * executor given to {@link SyncAgentBuilder#handlerExecutor}, by default a pool of daemon threads
- * the SDK shares between all synchronous agents in the JVM.
+ * executor given to {@link SyncAgentBuilder#handlerExecutor}, by default a virtual thread per call
+ * on JDK 21 and later, and before that a pool of daemon threads the SDK shares between all
+ * synchronous agents in the JVM.
  *
  * <p>Not to be confused with the class annotation
  * {@link com.agentclientprotocol.sdk.annotation.AcpAgent}, which marks an annotated agent. Where a
@@ -832,9 +833,9 @@ public interface AcpAgent {
 	 * }</pre>
 	 *
 	 * <p>Implementations run on the builder's handler executor
-	 * ({@link SyncAgentBuilder#handlerExecutor(ExecutorService)}), by default a pool of daemon
-	 * threads shared by the synchronous agents in the JVM, not on the transport's thread, so they
-	 * may block. The context's calls block until the client answers: a call waits at most the
+	 * ({@link SyncAgentBuilder#handlerExecutor(ExecutorService)}), by default a virtual thread per
+	 * call on JDK 21 and later (before, a pool of daemon threads shared by the synchronous agents
+	 * in the JVM), not on the transport's thread, so they may block. The context's calls block until the client answers: a call waits at most the
 	 * agent's request timeout and then throws
 	 * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException}, and a call blocked when the
 	 * SDK interrupts the thread throws {@link java.util.concurrent.CancellationException}. One
@@ -1618,8 +1619,8 @@ public interface AcpAgent {
 	 * example on file or network I/O, or on {@link SyncPromptContext} calls to the client.
 	 *
 	 * <p>Every handler runs on the builder's handler executor ({@link #handlerExecutor}), by
-	 * default a pool of daemon threads shared by the synchronous agents in the JVM, not on the
-	 * transport's thread, so it may block. Handlers for different requests run at the same time on
+	 * default a virtual thread per call on JDK 21 and later (before, a pool of daemon threads
+	 * shared by the synchronous agents in the JVM), not on the transport's thread, so it may block. Handlers for different requests run at the same time on
 	 * different threads, so state they share must be thread-safe. The builder turns each handler
 	 * into its asynchronous counterpart on an {@link AsyncAgentBuilder} and builds the agent from
 	 * it, so the rules described there apply: a null handler or a second handler for a method fails
@@ -1654,9 +1655,13 @@ public interface AcpAgent {
 		/**
 		 * Sets the executor the handlers run on, for example
 		 * {@code Executors.newVirtualThreadPerTaskExecutor()} or a framework's worker pool. Without
-		 * it the handlers run on a pool of daemon threads named {@code acp-agent-sync-handler},
-		 * shared by every synchronous agent in the JVM, which has no size limit: each handler
-		 * running at the same time takes a thread of its own. The executor must allow blocking.
+		 * it each handler call runs on a virtual thread of its own on JDK 21 and later, and before
+		 * that on a pool of daemon threads, shared by every synchronous agent in the JVM, which has
+		 * no size limit: each handler running at the same time takes a thread of its own. Either
+		 * way the threads are named {@code acp-agent-sync-handler}. On JDK 21 to 23 a virtual
+		 * thread that blocks inside a {@code synchronized} block pins its carrier thread (JDK 24
+		 * removed that, JEP 491); handlers that do so heavily may want a pool of platform threads
+		 * here. The executor must allow blocking.
 		 * The SDK cancels a handler by interrupting its thread (cancelling the task submitted to
 		 * the executor), and never shuts the executor down; that is the application's job.
 		 * @param executor the executor the handlers run on

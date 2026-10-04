@@ -36,7 +36,7 @@ public final class AcpAgents {
 	}
 
 	/**
-	 * Returns a builder for the agent whose handler methods run on the SDK's own pool, as
+	 * Returns a builder for the agent whose handler methods run on the SDK's default executor, as
 	 * {@link #builder(AgentCandidate, AcpAgentSettings, List, List, List, ExecutorService)}
 	 * builds it with no executor.
 	 * @param agent the {@code @AcpAgent} bean
@@ -77,8 +77,8 @@ public final class AcpAgents {
 	 * @param interceptors the interceptors, in order
 	 * @param resolvers the argument resolvers, in order
 	 * @param returnValueHandlers the return value handlers, in order
-	 * @param handlerExecutor the executor the handler methods run on, or null for the SDK's own
-	 * pool of daemon threads
+	 * @param handlerExecutor the executor the handler methods run on, or null for the SDK's
+	 * default: a virtual thread per call on JDK 21 and later, before that a pool of daemon threads
 	 * @param <T> the agent type
 	 * @return a builder holding everything but the transport
 	 * @throws IllegalArgumentException if neither the user class nor a superclass is marked

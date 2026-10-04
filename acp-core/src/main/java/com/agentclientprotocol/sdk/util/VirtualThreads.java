@@ -7,13 +7,18 @@ package com.agentclientprotocol.sdk.util;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 import org.jspecify.annotations.Nullable;
 
 /**
  * Virtual threads where the JDK has them (21 and later), without needing JDK 21 to compile:
- * the SDK targets Java 17, so it reaches {@code Thread.ofVirtual()} reflectively.
+ * the SDK targets Java 17, so it reaches {@code Thread.ofVirtual()} and
+ * {@code Executors.newThreadPerTaskExecutor} reflectively. On JDK 21 to 23 a virtual thread
+ * that blocks inside a {@code synchronized} block pins its carrier thread; JDK 24 removed that
+ * (JEP 491).
  *
  * <p>Internal to the SDK; not part of its API.
  */
@@ -23,6 +28,9 @@ public final class VirtualThreads {
 	private static final @Nullable MethodHandle NAMED_FACTORY = namedFactory();
 
 	private static final @Nullable MethodHandle IS_VIRTUAL = isVirtualHandle();
+
+	/** {@code Executors.newThreadPerTaskExecutor(ThreadFactory)}, or null before JDK 21. */
+	private static final @Nullable MethodHandle PER_TASK = perTaskHandle();
 
 	private VirtualThreads() {
 	}
@@ -72,6 +80,36 @@ public final class VirtualThreads {
 			thread.setDaemon(true);
 			return thread;
 		};
+	}
+
+	/**
+	 * Returns an executor that starts a virtual thread named {@code name} for each task, as
+	 * {@code Executors.newVirtualThreadPerTaskExecutor()} does, on JDK 21 and later; null
+	 * before. Shutting it down interrupts its running tasks on {@code shutdownNow()}.
+	 * @param name the name of every thread it starts
+	 * @return the executor, or null when the JDK has no virtual threads
+	 */
+	public static @Nullable ExecutorService newPerTaskExecutor(String name) {
+		if (PER_TASK == null || NAMED_FACTORY == null) {
+			return null;
+		}
+		try {
+			return (ExecutorService) PER_TASK.invoke(factoryOrDaemon(name));
+		}
+		catch (Throwable e) {
+			return null;
+		}
+	}
+
+	private static @Nullable MethodHandle perTaskHandle() {
+		try {
+			return MethodHandles.publicLookup()
+				.findStatic(Executors.class, "newThreadPerTaskExecutor",
+						MethodType.methodType(ExecutorService.class, ThreadFactory.class));
+		}
+		catch (ReflectiveOperationException | RuntimeException e) {
+			return null;
+		}
 	}
 
 	private static @Nullable MethodHandle namedFactory() {

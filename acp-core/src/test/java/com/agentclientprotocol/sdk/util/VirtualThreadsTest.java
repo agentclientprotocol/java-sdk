@@ -34,4 +34,21 @@ class VirtualThreadsTest {
 		assertThat(VirtualThreads.isVirtual(current)).isEqualTo(JDK_21);
 	}
 
+	@Test
+	void thePerTaskExecutorStartsANamedVirtualThreadPerTaskOnJdk21AndIsAbsentBefore() throws Exception {
+		java.util.concurrent.ExecutorService executor = VirtualThreads.newPerTaskExecutor("acp-test-task");
+		if (!JDK_21) {
+			assertThat(executor).isNull();
+			return;
+		}
+		try {
+			Thread thread = executor.submit(Thread::currentThread).get(5, TimeUnit.SECONDS);
+			assertThat(VirtualThreads.isVirtual(thread)).isTrue();
+			assertThat(thread.getName()).isEqualTo("acp-test-task");
+		}
+		finally {
+			executor.shutdownNow();
+		}
+	}
+
 }

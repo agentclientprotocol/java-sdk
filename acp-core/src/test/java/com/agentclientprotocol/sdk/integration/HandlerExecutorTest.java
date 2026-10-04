@@ -19,6 +19,7 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +88,49 @@ class HandlerExecutorTest {
 			pair.closeGracefully().block(TIMEOUT);
 			agentPool.shutdownNow();
 			clientPool.shutdownNow();
+		}
+	}
+
+	/**
+	 * Without a handler executor, handlers run on a virtual thread per call on JDK 21 and later,
+	 * and on the SDK's pool of daemon platform threads before.
+	 */
+	@Test
+	void withoutAnExecutorHandlersRunOnVirtualThreadsWhereTheJdkHasThem() {
+		boolean jdk21 = Runtime.version().feature() >= 21;
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AtomicReference<Thread> promptThread = new AtomicReference<>();
+		AtomicReference<Thread> updateThread = new AtomicReference<>();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.initializeHandler(req -> AcpSchema.InitializeResponse.ok())
+			.newSessionHandler(req -> new AcpSchema.NewSessionResponse("s1", null, null))
+			.promptHandler((request, context) -> {
+				promptThread.set(Thread.currentThread());
+				context.sendMessage("hi");
+				return AcpSchema.PromptResponse.endTurn();
+			})
+			.build();
+		AcpSyncClient client = AcpClient.sync(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(n -> updateThread.compareAndSet(null, Thread.currentThread()))
+			.build();
+		try {
+			agent.start();
+			client.initialize();
+			client.newSession(new AcpSchema.NewSessionRequest("/w", List.of()));
+			client.prompt(new AcpSchema.PromptRequest("s1", List.of(new AcpSchema.TextContent("go"))));
+
+			assertThat(VirtualThreads.isVirtual(promptThread.get())).as("agent handler: %s", promptThread.get())
+				.isEqualTo(jdk21);
+			assertThat(promptThread.get().getName()).isEqualTo("acp-agent-sync-handler");
+			assertThat(VirtualThreads.isVirtual(updateThread.get())).as("client handler: %s", updateThread.get())
+				.isEqualTo(jdk21);
+			assertThat(updateThread.get().getName()).isEqualTo("acp-sync-handler");
+		}
+		finally {
+			client.close();
+			agent.close();
+			pair.closeGracefully().block(TIMEOUT);
 		}
 	}
 

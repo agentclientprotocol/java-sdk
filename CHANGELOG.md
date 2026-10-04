@@ -384,6 +384,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Synchronous handlers run on virtual threads by default on JDK 21 and later.** A sync agent or
+  client built without `handlerExecutor(..)` (and `AcpAgentSupport` without one) ran its handlers
+  on a cached pool of daemon platform threads (`acp-agent-sync-handler`, `acp-sync-handler`). Where
+  the JDK has virtual threads, each handler call now runs on a virtual thread of its own, with the
+  same name; the choice is made at run time, so the Java 17 artifacts are unchanged and JDK 17 keeps
+  the pool. Caveat: on JDK 21 to 23 a virtual thread that blocks inside a `synchronized` block pins
+  its carrier thread, and enough pinned handlers can stall every other virtual thread; JDK 24 removed
+  that (JEP 491). Migration: none for most handlers; one that blocks inside `synchronized` on JDK 21
+  to 23 can switch to a `ReentrantLock`, or pass a platform pool to `handlerExecutor(..)` to keep the
+  old behaviour.
+
 - **Timeout work runs on virtual threads on JDK 21 and later.** What a request timeout, the
   stdio drain timer or a `$/cancel_request` triggers used to run on a cached pool of daemon
   platform threads (`acp-timeout-delivery`); where the JDK has virtual threads it now runs on a
