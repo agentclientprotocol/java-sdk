@@ -53,12 +53,15 @@ import reactor.core.scheduler.Schedulers;
  * <h2>Handlers</h2>
  *
  * <p>A request for a method without a handler is answered with JSON-RPC error {@code -32601}
- * (method not found), so register at least {@code initialize}, {@code session/new} and
- * {@code session/prompt}. A handler that fails is answered with an error: an
+ * (method not found). {@code build()} requires a {@code session/prompt} handler; without an
+ * {@code initialize} or {@code session/new} handler the agent answers those with defaults (see
+ * {@link AsyncAgentBuilder#build()}). A handler that fails is answered with an error: an
  * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} with its own code and message,
  * an {@link com.agentclientprotocol.sdk.spec.AcpError} from a call to the client with the error it
- * carries, anything else with {@code -32603} (internal error, message "Internal error"). A notification without a handler, or whose
- * handler fails, is logged and dropped.
+ * carries, a {@link java.util.concurrent.CancellationException} with {@code -32800} (request
+ * cancelled) and its own message, anything else with {@code -32603} (internal error, message
+ * "Internal error"). A notification without a handler, or whose handler fails, is logged and
+ * dropped.
  *
  * <h2>Prompt turns and cancellation</h2>
  *
@@ -212,10 +215,11 @@ public interface AcpAgent {
 	 * session's modes and config options. Register it with
 	 * {@link AsyncAgentBuilder#newSessionHandler}.
 	 *
-	 * <p>ACP requires every agent to support {@code session/new}, but {@code build()} does not
-	 * check for this handler: an agent built without one answers {@code session/new} with
-	 * {@code -32601} (method not found), and no client can open a session. ACP requires the session
-	 * ID to be unique.
+	 * <p>ACP requires every agent to support {@code session/new}. An agent built without this
+	 * handler answers {@code session/new} itself, with a random UUID as the session ID and no modes
+	 * or config options ({@link AcpSchema.NewSessionResponse#withGeneratedId()}), as an annotated
+	 * agent without a {@code @NewSession} method does. Register a handler to keep per-session state
+	 * or offer modes. ACP requires the session ID to be unique.
 	 *
 	 * <p>Implementations follow the rules on {@link PromptHandler}: they run on the transport's
 	 * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
@@ -731,10 +735,11 @@ public interface AcpAgent {
 	 * session's modes and config options. Register it with
 	 * {@link SyncAgentBuilder#newSessionHandler}.
 	 *
-	 * <p>ACP requires every agent to support {@code session/new}, but {@code build()} does not
-	 * check for this handler: an agent built without one answers {@code session/new} with
-	 * {@code -32601} (method not found), and no client can open a session. ACP requires the session
-	 * ID to be unique.
+	 * <p>ACP requires every agent to support {@code session/new}. An agent built without this
+	 * handler answers {@code session/new} itself, with a random UUID as the session ID and no modes
+	 * or config options ({@link AcpSchema.NewSessionResponse#withGeneratedId()}), as an annotated
+	 * agent without a {@code @NewSession} method does. Register a handler to keep per-session state
+	 * or offer modes. ACP requires the session ID to be unique.
 	 *
 	 * <p>Implementations follow the rules on {@link SyncPromptHandler}: they run on the builder's
 	 * handler executor and may block, return the answer and never {@code null}, and throw an
@@ -1307,7 +1312,8 @@ public interface AcpAgent {
 		/**
 		 * Sets the handler for {@code session/new}, which creates an ACP session for a working
 		 * directory. The answer carries the new {@code sessionId}, and optionally the session's
-		 * modes and config options.
+		 * modes and config options. Without this handler the agent answers {@code session/new}
+		 * with a random UUID as the session ID and no modes or config options.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -1576,6 +1582,9 @@ public interface AcpAgent {
 		 * version negotiated with the client and the capabilities its handlers imply
 		 * ({@code loadSessionHandler} advertises {@code loadSession}, {@code listSessionsHandler}
 		 * {@code sessionCapabilities.list}, {@code logoutHandler} {@code auth.logout}, and so on).
+		 * Without a new-session handler, the agent answers {@code session/new} with a random UUID
+		 * as the session ID ({@link AcpSchema.NewSessionResponse#withGeneratedId()}), since ACP
+		 * requires every agent to support it.
 		 * @return the new agent
 		 * @throws IllegalStateException if no prompt handler is registered
 		 */
@@ -1588,6 +1597,11 @@ public interface AcpAgent {
 			if (!methods.contains(AcpSchema.METHOD_INITIALIZE)) {
 				built.request(AcpSchema.METHOD_INITIALIZE, new TypeRef<AcpSchema.InitializeRequest>() {
 				}, (request, agent) -> Mono.just(DefaultInitialize.respond(methods, agentInfo, request)));
+			}
+			if (!methods.contains(AcpSchema.METHOD_SESSION_NEW)) {
+				// Every agent must support session/new (ACP v1, initialization, baseline).
+				built.request(AcpSchema.METHOD_SESSION_NEW, new TypeRef<AcpSchema.NewSessionRequest>() {
+				}, (request, agent) -> Mono.fromSupplier(AcpSchema.NewSessionResponse::withGeneratedId));
 			}
 			return new DefaultAcpAsyncAgent(transport, requestTimeout, promptTimeouts, built);
 		}
@@ -1761,7 +1775,8 @@ public interface AcpAgent {
 		/**
 		 * Sets the handler for {@code session/new}, which creates an ACP session for a working
 		 * directory. The answer carries the new {@code sessionId}, and optionally the session's
-		 * modes and config options.
+		 * modes and config options. Without this handler the agent answers {@code session/new}
+		 * with a random UUID as the session ID and no modes or config options.
 		 * @param handler the handler; must not be null
 		 * @return this builder
 		 */
@@ -2025,7 +2040,8 @@ public interface AcpAgent {
 		 * handlers registered afterwards do not reach it. The agent does nothing until
 		 * {@link AcpSyncAgent#start()} or {@link AcpSyncAgent#run()}. A transport serves one agent,
 		 * so build once per transport. Without an initialize handler, the agent answers
-		 * {@code initialize} with the capabilities its handlers imply (see
+		 * {@code initialize} with the capabilities its handlers imply, and without a new-session
+		 * handler it answers {@code session/new} with a fresh session ID (see
 		 * {@link AsyncAgentBuilder#build()}).
 		 * @return the new agent
 		 * @throws IllegalStateException if no prompt handler is registered

@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
@@ -922,9 +923,10 @@ public final class AcpSchema {
 	 * later message about that session, starting with {@link PromptRequest}.
 	 *
 	 * <p>
-	 * A minimal agent answers {@code new NewSessionResponse(id)}. An annotated agent
-	 * without a {@link com.agentclientprotocol.sdk.annotation.NewSession @NewSession} method
-	 * answers with a random UUID as the id.
+	 * A minimal agent answers {@code new NewSessionResponse(id)}. An agent without a
+	 * new-session handler (a builder agent without {@code newSessionHandler}, an annotated agent
+	 * without a {@link com.agentclientprotocol.sdk.annotation.NewSession @NewSession} method)
+	 * answers {@link #withGeneratedId()}: a random UUID as the id, and no modes or options.
 	 *
 	 * @param sessionId the id of the new ACP session
 	 * @param modes the session's modes and the current one, or {@code null} if the agent has no
@@ -965,6 +967,15 @@ public final class AcpSchema {
 		public NewSessionResponse(String sessionId, @Nullable SessionModeState modes,
 				@Nullable List<SessionConfigOption> configOptions) {
 			this(sessionId, modes, configOptions, null);
+		}
+
+		/**
+		 * Returns a response for a new session with a random UUID as its id, and no modes,
+		 * config options or {@code _meta}: what an agent without a new-session handler answers.
+		 * @return a response with a fresh session id
+		 */
+		public static NewSessionResponse withGeneratedId() {
+			return new NewSessionResponse(UUID.randomUUID().toString());
 		}
 	}
 

@@ -1062,6 +1062,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answered `{"stopReason":"cancelled"}` and logged at DEBUG. Before a cancel, failures are answered
   as before. Behaviour change; covered by the migration line above.
 
+- **A builder agent answers `session/new` without a new-session handler.** ACP requires every
+  agent to support `session/new`; a builder agent built without `newSessionHandler` answered it
+  `-32601`, so no client could open a session. It now answers with a random UUID as the session ID
+  and no modes or config options, as an annotated agent without a `@NewSession` method already did.
+  Both use the new `AcpSchema.NewSessionResponse.withGeneratedId()`. A registered handler replaces
+  the default, and `build()` still requires only a prompt handler.
+
 - **A prompt's updates no longer follow its answer.** ACP requires an agent to send a prompt's
   `session/update` notifications before it answers the prompt, also after `session/cancel`. When
   the SDK answered a prompt itself (the cancel grace period or `maxPromptDuration` passed), a
