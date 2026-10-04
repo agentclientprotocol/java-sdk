@@ -32,7 +32,7 @@ class AcpClientBeansTest {
 	void defaultsAndNoClientWithoutTransportSettings() {
 		try (ApplicationContext context = ApplicationContext.run()) {
 			AcpClientConfiguration config = context.getBean(AcpClientConfiguration.class);
-			assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
+			assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofSeconds(60));
 			assertThat(config.getTransport().getType()).isNull();
 			assertThat(config.getTransport().getStdio().getCommand()).isNull();
 			assertThat(config.getTransport().getStdio().getArgs()).isEmpty();

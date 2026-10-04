@@ -620,6 +620,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The record's constructors stay lenient, since they also read other agents' options.
   **Migration:** pass at least one option and set `currentValue` to one of their values.
 
+- **Breaking (behaviour): one default request timeout, 60 seconds.** The client builders
+  (`AcpClient.sync/async`) and `AcpAgentSupport.Builder` defaulted to 30 seconds while the agent
+  builders defaulted to 60; all now wait 60 seconds for an answer unless `requestTimeout` is set.
+  60 seconds because the agent's requests (a permission prompt, an elicitation) wait on a person,
+  and a client's `session/new` may wait for the agent to start its MCP servers.
+  `AcpAgentSupport.Builder.requestTimeout` now accepts `null`, meaning the SDK default, and an
+  annotated agent no longer restates the default. The Spring Boot property
+  `spring.acp.client.request-timeout` and the Micronaut setting `acp.client.request-timeout`
+  default to 60 s as well. **Migration:** none needed; to keep the old bound, set
+  `requestTimeout(Duration.ofSeconds(30))` (or the property to `30s`).
+
 ### Removed
 
 - **Breaking: `PromptResponse.text(String)` is removed, and a `@Prompt` method's String now reaches

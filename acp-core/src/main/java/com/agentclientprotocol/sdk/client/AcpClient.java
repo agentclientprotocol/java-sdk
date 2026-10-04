@@ -84,7 +84,7 @@ import reactor.core.scheduler.Schedulers;
  *
  * <h2>Timeouts and cancellation</h2>
  *
- * <p>Requests wait at most 30 seconds unless the builder's {@code requestTimeout} says otherwise,
+ * <p>Requests wait at most 60 seconds unless the builder's {@code requestTimeout} says otherwise,
  * and a prompt's answer comes only at the end of its turn, so raise it for real agents. When the
  * timeout passes, or the caller disposes a request's {@code Mono}, the client sends the agent a
  * {@code $/cancel_request} and the call fails; a Java agent then cancels the handler, which for a
@@ -196,7 +196,10 @@ public interface AcpClient {
 
 		private final AcpClientTransport transport;
 
-		private Duration requestTimeout = Duration.ofSeconds(30); // Default timeout
+		/** The SDK's one default request timeout, the same as the agent builders'. */
+		private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
+
+		private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
 		private AcpSchema.@Nullable ClientCapabilities clientCapabilities;
 
@@ -221,7 +224,8 @@ public interface AcpClient {
 		 * the end of the turn. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
 		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
-		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * the turn. Default: 60 seconds, as for the agent builders. Raise it for agents whose
+		 * turns run longer.
 		 * @param requestTimeout the timeout
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code requestTimeout} is null
@@ -713,7 +717,8 @@ public interface AcpClient {
 		 * the end of the turn. When it passes, the call fails with a
 		 * {@link java.util.concurrent.TimeoutException} and the client sends the agent a
 		 * {@code $/cancel_request}; a Java agent then cancels the handler, which for a prompt ends
-		 * the turn. Default: 30 seconds. Raise it for agents whose turns run longer.
+		 * the turn. Default: 60 seconds, as for the agent builders. Raise it for agents whose
+		 * turns run longer.
 		 * @param requestTimeout the timeout
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code requestTimeout} is null

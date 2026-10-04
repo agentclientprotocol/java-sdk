@@ -50,7 +50,7 @@ import reactor.core.publisher.Mono;
  *
  * <p>Calls send nothing until their {@code Mono} is subscribed. An error answer fails the
  * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, whose {@code getCode()} is
- * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (30
+ * the JSON-RPC error code. If the agent does not answer within the builder's request timeout (60
  * seconds by default), the {@code Mono} fails with a {@link java.util.concurrent.TimeoutException};
  * then, or when the caller disposes the {@code Mono} first, the client sends the agent a
  * {@code $/cancel_request}. To send one and still wait for the answer, put
@@ -495,7 +495,7 @@ public class AcpAsyncClient {
 	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
 	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
 	 *
-	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
+	 * <p>The whole turn must fit in the request timeout (60 seconds by default). When it passes,
 	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
 	 * {@code requestTimeout} on the builder for long turns.
 	 * @param promptRequest the session ID and the prompt's content blocks

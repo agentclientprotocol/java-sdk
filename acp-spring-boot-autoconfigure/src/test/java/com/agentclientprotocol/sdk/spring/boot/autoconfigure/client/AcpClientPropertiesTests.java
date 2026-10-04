@@ -22,7 +22,7 @@ class AcpClientPropertiesTests {
 	void defaultValues() {
 		this.runner.run(context -> {
 			AcpClientProperties props = context.getBean(AcpClientProperties.class);
-			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
+			assertThat(props.getRequestTimeout()).isEqualTo(Duration.ofSeconds(60));
 			assertThat(props.getTransport().getType()).isNull();
 			assertThat(props.getTransport().getWebsocket().getUri()).isNull();
 			assertThat(props.getTransport().getWebsocket().getConnectTimeout()).isEqualTo(Duration.ofSeconds(10));

@@ -23,7 +23,7 @@ import org.jspecify.annotations.Nullable;
  * {@code acp.client.transport.stdio.command}, {@code .websocket.uri} or {@code .http.uri}.
  *
  * <pre>
- * acp.client.request-timeout                    30s
+ * acp.client.request-timeout                    60s
  * acp.client.transport.type                     stdio | websocket | http (else from what is set)
  * acp.client.transport.stdio.command, args, env the agent process to start
  * acp.client.transport.websocket.uri            ws://host:port/acp
@@ -40,14 +40,15 @@ public class AcpClientConfiguration {
 	/** The prefix of the client's settings. */
 	public static final String PREFIX = "acp.client";
 
-	private Duration requestTimeout = Duration.ofSeconds(30);
+	private Duration requestTimeout = Duration.ofSeconds(60);
 
 	private Transport transport = new Transport();
 
 	private Capabilities capabilities = new Capabilities();
 
 	/**
-	 * How long a request the client sends may wait for its answer. Default 30 seconds.
+	 * How long a request the client sends may wait for its answer. Default 60 seconds, the
+	 * SDK's default.
 	 * @return the request timeout
 	 */
 	public Duration getRequestTimeout() {

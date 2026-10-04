@@ -117,7 +117,7 @@ class Updates implements AcpClientCustomizer {
 
 | Property | Default | |
 |---|---|---|
-| `acp.client.request-timeout` | `30s` | |
+| `acp.client.request-timeout` | `60s` | |
 | `acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`. When it is unset, the transport is the only one whose command or URI is set; with several set, it is required |
 | `acp.client.transport.stdio.command`, `.args`, `.env.*` | | the agent process; `env` keys keep their case |
 | `acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | `ws://host:port/acp` |

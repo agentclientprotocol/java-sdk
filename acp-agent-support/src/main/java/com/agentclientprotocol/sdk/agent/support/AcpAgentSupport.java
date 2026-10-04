@@ -183,9 +183,13 @@ public class AcpAgentSupport {
 
 		// Build the underlying sync agent
 		var agentBuilder = AcpAgent.sync(transport)
-				.requestTimeout(definition.requestTimeout())
 				.cancelGracePeriod(definition.cancelGracePeriod())
 				.maxPromptDuration(definition.maxPromptDuration());
+		// Unset, the agent builder's default applies: the SDK has one default request timeout.
+		Duration requestTimeout = definition.requestTimeout();
+		if (requestTimeout != null) {
+			agentBuilder.requestTimeout(requestTimeout);
+		}
 
 		// Wire discovered handlers to the agent builder
 		wireHandlers(agentBuilder);
@@ -514,7 +518,7 @@ public class AcpAgentSupport {
 	private record Definition(Map<String, AcpHandlerMethod> handlers, AgentAdvertisement advertisement,
 			ArgumentResolverComposite argumentResolvers,
 			ReturnValueHandlerComposite returnValueHandlers, List<AcpInterceptor> interceptors,
-			Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration) {
+			@Nullable Duration requestTimeout, Duration cancelGracePeriod, Duration maxPromptDuration) {
 	}
 
 	// ========== BUILDER ==========
@@ -540,7 +544,8 @@ public class AcpAgentSupport {
 
 		private @Nullable AcpAgentTransport transport;
 
-		private Duration requestTimeout = Duration.ofSeconds(30);
+		/** Null for the SDK's default, which the agent builder applies. */
+		private @Nullable Duration requestTimeout;
 
 		private Duration cancelGracePeriod = PromptTimeouts.DEFAULT_CANCEL_GRACE_PERIOD;
 
@@ -599,11 +604,14 @@ public class AcpAgentSupport {
 		}
 
 		/**
-		 * Set the request timeout.
-		 * @param timeout the timeout duration
+		 * Set how long the agent waits for the client to answer a request the agent sends,
+		 * such as a permission prompt or a file read. Default: the SDK's default request
+		 * timeout, 60 seconds, the same as for a builder agent ({@code AcpAgent.sync(..)}) and
+		 * a client.
+		 * @param timeout the timeout, or {@code null} for the SDK's default
 		 * @return this builder
 		 */
-		public Builder requestTimeout(Duration timeout) {
+		public Builder requestTimeout(@Nullable Duration timeout) {
 			this.requestTimeout = timeout;
 			return this;
 		}

@@ -43,7 +43,7 @@ import reactor.core.publisher.Mono;
  * }</pre>
  *
  * <p>A call blocks until the answer arrives; it has no time limit of its own beyond the builder's
- * request timeout (30 seconds by default). Failures are thrown:
+ * request timeout (60 seconds by default). Failures are thrown:
  * {@link com.agentclientprotocol.sdk.spec.AcpError} for an error answer, whose {@code getCode()} is
  * the JSON-RPC error code; a {@link RuntimeException} whose cause is a
  * {@link java.util.concurrent.TimeoutException} when no answer came in time, after the client has
@@ -376,7 +376,7 @@ public class AcpSyncClient implements AutoCloseable {
 	 * sent, and is still running when its answer arrives, is not waited for, since it may be the
 	 * one waiting for the prompt. A consumer must therefore not wait for this prompt to complete.
 	 *
-	 * <p>The whole turn must fit in the request timeout (30 seconds by default). When it passes,
+	 * <p>The whole turn must fit in the request timeout (60 seconds by default). When it passes,
 	 * the client sends {@code $/cancel_request}, which makes a Java agent cancel the turn; raise
 	 * {@code requestTimeout} on the builder for long turns.
 	 * @param promptRequest the session ID and the prompt's content blocks

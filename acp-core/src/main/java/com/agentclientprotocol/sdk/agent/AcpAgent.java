@@ -76,8 +76,8 @@ import reactor.core.scheduler.Schedulers;
  * <h2>Timeouts and threads</h2>
  *
  * <p>Requests the agent sends the client wait at most {@link #DEFAULT_REQUEST_TIMEOUT} (60 seconds)
- * unless the builder's {@code requestTimeout} says otherwise; the client builders' default is 30
- * seconds. Asynchronous handlers are called on the transport's thread and must not block.
+ * unless the builder's {@code requestTimeout} says otherwise, the same default as the client
+ * builders'. Asynchronous handlers are called on the transport's thread and must not block.
  * Synchronous handlers run on {@link #SYNC_HANDLER_SCHEDULER}.
  *
  * <p>Not to be confused with the class annotation
@@ -99,7 +99,9 @@ public interface AcpAgent {
 
 	/**
 	 * How long an agent waits for the client to answer a request the agent sent, when the builder's
-	 * {@code requestTimeout} is not set: 60 seconds. The client builders' default is 30 seconds.
+	 * {@code requestTimeout} is not set: 60 seconds, the SDK's one default, which the client builders
+	 * and annotated agents use too. Long enough for a request that waits on the user, such as a
+	 * permission prompt.
 	 */
 	Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
