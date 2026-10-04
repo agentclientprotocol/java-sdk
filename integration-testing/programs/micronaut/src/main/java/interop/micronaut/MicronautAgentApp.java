@@ -1,4 +1,4 @@
-package interop;
+package interop.micronaut;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -8,15 +8,16 @@ import io.micronaut.context.ApplicationContext;
 import io.micronaut.runtime.Micronaut;
 
 /**
- * The launcher contract (integration-testing/README.md, "Contracts") over the acp-micronaut
- * sample: {@code --transport stdio}, or {@code --transport http|ws --port <port>}, which prints
- * {@code READY <port>} once the listener accepts connections. The agent itself is the sample's
- * {@code EchoAgent} bean; this class only maps the flags onto {@code acp.agent.*} settings. Over
+ * The launcher contract (integration-testing/README.md, "Contracts") over a Micronaut application
+ * whose {@code @AcpAgent} bean ({@link MicronautSmokeAgent}) acp-micronaut serves:
+ * {@code --transport stdio}, or {@code --transport http|ws --port <port>}, which prints
+ * {@code READY <port>} once the SDK listener accepts connections. This class only maps the flags
+ * onto {@code acp.agent.*} settings. Over
  * stdio the process exits when its input ends; over HTTP it runs until SIGTERM.
  */
-public final class MicronautAgent {
+public final class MicronautAgentApp {
 
-	private MicronautAgent() {
+	private MicronautAgentApp() {
 	}
 
 	public static void main(String[] args) {
@@ -40,7 +41,7 @@ public final class MicronautAgent {
 		// One listener serves Streamable HTTP and WebSocket upgrades on /acp.
 		properties.put("acp.agent.transport.type", stdio ? "stdio" : "http");
 		properties.put("acp.agent.transport.http.port", port);
-		ApplicationContext context = Micronaut.build(new String[0]).mainClass(MicronautAgent.class).banner(false)
+		ApplicationContext context = Micronaut.build(new String[0]).mainClass(MicronautAgentApp.class).banner(false)
 			.properties(properties).start();
 		if (!stdio) {
 			int bound = context.getBean(AcpAgentRuntime.class).port().orElseThrow();

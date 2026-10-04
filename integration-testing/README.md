@@ -105,7 +105,6 @@ artifact.
 | `quarkus-typescript-http`, `quarkus-typescript-ws` | hand-written: the TypeScript client program against the Quarkus-hosted agent (`programs/quarkus`, an `@AcpAgent` bean served by `acp-quarkus` on the Quarkus HTTP server), running the catalogue steps that agent implements (initialize, sessions, echo chunks, stop reasons, -32601, 1 MB and 8 MB prompts and updates). Run in the `typescript-http`/`typescript-ws` legs of `cross-sdk.yml` |
 | `load-50`, `load-300`, `load-1000` | N Java clients on their own connections, each: initialize, session/new, then 10 (or 5) prompts streaming two updates each |
 | `load-shared-300` | 300 clients sharing one HttpClient, so one HTTP/2 connection |
-| `micronaut-typescript-stdio`, `micronaut-typescript-http` | hand-written: the TypeScript client against the `acp-micronaut` sample agent ([programs/micronaut](programs/micronaut), an annotated `@AcpAgent` bean served by Micronaut) over the steps a plain echo agent answers; over stdio, `stdio.eof-exit` checks that the Micronaut application exits when its input ends. They run in the TypeScript legs of `cross-sdk.yml` |
 
 Over Streamable HTTP the cells also assert, through `matrix.json` facts, what the retired
 hand-written `interop-*` scenarios checked: the negotiated HTTP version on both sides (h2c between

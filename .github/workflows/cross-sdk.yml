@@ -49,15 +49,15 @@ jobs:
           PEER: ${{ github.event.inputs.peer || 'all' }}
         run: |
           # Per peer: its toolchain, its transports (cells x-java-<peer>-<t> and x-<peer>-java-<t>),
-          # and the cache paths of its build. A peer's legs also run its micronaut-<peer>-<t> and
-          # quarkus-<peer>-<t> scenarios (the acp-micronaut sample agent and the Quarkus-hosted agent
-          # against that peer's client), where they exist.
-          # java runs as one leg: the Java <-> Java cells, conformance, load.
+          # and the cache paths of its build. A peer's legs also run its quarkus-<peer>-<t> scenarios
+          # (the Quarkus-hosted agent against that peer's client, with 1 MB and 8 MB payloads), where
+          # they exist. The framework smoke cells (fw-*, load-10-fw-*) run in framework-smoke.yml.
+          # java runs as one leg: the Java <-> Java cells, conformance, load (not load-10-fw-*).
           # kotlin has no Streamable HTTP; its Gradle toolchain is JDK 21 while the SDK and the
           # Java programs stay on 17 (the last version listed is the default).
           peers="$(jq -c . <<'JSON'
           [
-            { "peer": "java", "java": "17", "only": "x-java-java-*,conf-*,load-*" },
+            { "peer": "java", "java": "17", "only": "x-java-java-*,conf-*,load-50,load-300,load-1000,load-shared-300" },
             { "peer": "typescript", "sdk": "typescript-sdk", "java": "17", "node": true,
               "transports": ["stdio", "http", "ws"],
               "cache-paths": "integration-testing/.cache/peers/typescript-sdk@*\n~/.npm" },
@@ -75,11 +75,11 @@ jobs:
           )"
           picked="$(jq -c --arg p "$PEER" '[.[] | select($p == "all" or .peer == $p)]' <<< "$peers")"
           prepare="$(jq -c '{include: [.[] | select(.sdk)
-            | . + {only: (["x-*-\(.peer)-*", "x-\(.peer)-*", "micronaut-\(.peer)-*", "quarkus-\(.peer)-*"] | join(","))}
+            | . + {only: (["x-*-\(.peer)-*", "x-\(.peer)-*", "quarkus-\(.peer)-*"] | join(","))}
             | del(.transports)]}' <<< "$picked")"
           cells="$(jq -c '{include: [.[] as $x | ($x.transports // ["all"])[] as $t
             | $x + (if $t == "all" then {leg: $x.peer} else {leg: "\($x.peer)-\($t)", transport: $t,
-                only: (["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*", "micronaut-\($x.peer)-\($t)*",
+                only: (["x-java-\($x.peer)-\($t)*", "x-\($x.peer)-java-\($t)*",
                   "quarkus-\($x.peer)-\($t)*"]
                   | join(","))} end)
             | del(.transports)]}' <<< "$picked")"
