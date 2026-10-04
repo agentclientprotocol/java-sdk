@@ -30,7 +30,7 @@ import reactor.core.publisher.Mono;
  * <p>Calls to the client return a {@code Mono} and send nothing until it is subscribed. Before
  * {@link #start()} they fail with {@link IllegalStateException}. Once the client's
  * {@code initialize} request has arrived, a call that needs a capability the client did not
- * advertise (reading or writing files, creating a terminal, an elicitation mode) fails with
+ * advertise (reading or writing files, any terminal method, an elicitation mode) fails with
  * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent; before it,
  * nothing is checked. An error answer from the client fails the {@code Mono} with
  * {@link com.agentclientprotocol.sdk.spec.AcpError}. If the client does not answer within the

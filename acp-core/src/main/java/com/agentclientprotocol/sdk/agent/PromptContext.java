@@ -36,7 +36,7 @@ import reactor.core.publisher.Mono;
  *
  * <p>Calls go through the agent ({@link AcpAsyncAgent}) and behave as its calls do. Nothing is sent
  * until the {@code Mono} is subscribed. Once the client has initialized, a call that needs a
- * capability the client did not advertise (reading or writing files, creating a terminal, an
+ * capability the client did not advertise (reading or writing files, any terminal method, an
  * elicitation mode) fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
  * without being sent; check {@link #getClientCapabilities()} first. An error answer fails the
  * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, and no answer within the

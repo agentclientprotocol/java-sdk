@@ -2040,8 +2040,8 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
-	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
-	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 * The SDK checks the ID on neither side. Like every terminal method, the agent sends it only to a
+	 * client that advertised the terminal capability.
 	 * After a {@code terminal/kill} the terminal can still be read.
 	 *
 	 * @param sessionId the ACP session the terminal belongs to
@@ -2122,8 +2122,8 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
-	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
-	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 * The SDK checks the ID on neither side. Like every terminal method, the agent sends it only to a
+	 * client that advertised the terminal capability.
 	 *
 	 * @param sessionId the ACP session the terminal belongs to
 	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
@@ -2185,8 +2185,8 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
-	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
-	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 * The SDK checks the ID on neither side. Like every terminal method, the agent sends it only to a
+	 * client that advertised the terminal capability.
 	 *
 	 * @param sessionId the ACP session the terminal belongs to
 	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}
@@ -2261,8 +2261,8 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * The terminal must be one the agent created with {@code terminal/create} and has not released.
-	 * The SDK checks the ID on neither side, and the agent sends this request without checking the
-	 * client's terminal capability: only {@code terminal/create}, which is checked, gives an ID.
+	 * The SDK checks the ID on neither side. Like every terminal method, the agent sends it only to a
+	 * client that advertised the terminal capability.
 	 *
 	 * @param sessionId the ACP session the terminal belongs to
 	 * @param terminalId the terminal's ID, from {@link CreateTerminalResponse#terminalId()}

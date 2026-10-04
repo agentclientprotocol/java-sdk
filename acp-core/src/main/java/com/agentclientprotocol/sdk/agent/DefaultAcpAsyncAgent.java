@@ -220,14 +220,14 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	@Override
 	public Mono<AcpSchema.TerminalOutputResponse> getTerminalOutput(AcpSchema.TerminalOutputRequest request) {
 		return sendRequest(AcpSchema.METHOD_TERMINAL_OUTPUT, request, new TypeRef<AcpSchema.TerminalOutputResponse>() {
-		});
+		}, NegotiatedCapabilities::supportsTerminal, "terminal");
 	}
 
 	@Override
 	public Mono<AcpSchema.ReleaseTerminalResponse> releaseTerminal(AcpSchema.ReleaseTerminalRequest request) {
 		return sendRequest(AcpSchema.METHOD_TERMINAL_RELEASE, request,
 				new TypeRef<AcpSchema.ReleaseTerminalResponse>() {
-				});
+				}, NegotiatedCapabilities::supportsTerminal, "terminal");
 	}
 
 	@Override
@@ -235,14 +235,14 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			AcpSchema.WaitForTerminalExitRequest request) {
 		return sendRequest(AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, request,
 				new TypeRef<AcpSchema.WaitForTerminalExitResponse>() {
-				});
+				}, NegotiatedCapabilities::supportsTerminal, "terminal");
 	}
 
 	@Override
 	public Mono<AcpSchema.KillTerminalCommandResponse> killTerminal(AcpSchema.KillTerminalCommandRequest request) {
 		return sendRequest(AcpSchema.METHOD_TERMINAL_KILL, request,
 				new TypeRef<AcpSchema.KillTerminalCommandResponse>() {
-				});
+				}, NegotiatedCapabilities::supportsTerminal, "terminal");
 	}
 
 	@Override
