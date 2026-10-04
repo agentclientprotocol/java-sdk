@@ -152,23 +152,40 @@ class Ask implements CommandLineRunner {
 | Value | Where the agent is served |
 |---|---|
 | `stdio`, or unset | Standard input and output. A web application serves the agent on stdio too, unless you set `http`. |
-| `http` | ACP Streamable HTTP. It needs `acp-streamable-http-jetty`; without it the startup fails, naming the module. See the next table for where it is served. |
-| `websocket` | The same as `http`. The endpoint takes WebSocket upgrades on its path where it can (see the next table). |
+| `http` | ACP Streamable HTTP, with WebSocket upgrades on the same path. It needs `acp-http-servlet` in a servlet web application, or `acp-streamable-http-jetty` for the SDK's own listener; without either the startup fails, naming them. See the next table for where it is served. |
+| `websocket` | The same as `http`. |
 
 The value is read in any case. With `http` or `websocket`, the kind of application decides where
 the endpoint runs:
 
 | Application | Endpoint |
 |---|---|
-| Servlet web application (Spring MVC) | `StreamableHttpAcpServlet`, mounted on the application's own server at `spring.acp.agent.transport.http.path` (`server.port`). HTTP and SSE only: it takes no WebSocket upgrades, even with `type=websocket`. The `listener.*` properties are ignored. |
+| Servlet web application (Spring MVC) | `StreamableHttpAcpServlet` (`acp-http-servlet`), mounted on the application's own server at `spring.acp.agent.transport.http.path` (`server.port`, `server.address`, its TLS): Streamable HTTP, SSE and WebSocket upgrades on that one path, with no second server. Requests go through the application's filter chain, so Spring Security, observations and access logs apply to `/acp`, the WebSocket handshake included, and the authenticated principal reaches the endpoint. The endpoint is an `AcpHttpEndpoint` bean the application may wrap or replace. The `listener.*` properties are ignored. |
 | Not a web application | The SDK's Jetty listener (`StreamableHttpAcpAgentTransport`) on `spring.acp.agent.transport.http.listener.port`: HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades on one path. It starts with the context and stops with it, waiting at most 30 seconds. |
 | Reactive web application (WebFlux) | Not supported. The startup fails: "The ACP HTTP transport needs a servlet web application or the standalone listener (acp-streamable-http-jetty); WebFlux is not supported". |
 
-**Servlet shutdown.** Each client connection holds an open SSE response, which Spring Boot's
-graceful shutdown counts as an active request and would wait for, up to
+**Securing `/acp`.** The endpoint has no authentication of its own; protect its path in your
+`SecurityFilterChain` as any other. ACP clients are not browsers, so exempt the path from CSRF; the
+endpoint itself refuses browser requests from foreign origins:
+
+```java
+@Bean
+SecurityFilterChain acpSecurity(HttpSecurity http) throws Exception {
+    return http.authorizeHttpRequests(requests -> requests.requestMatchers("/acp").authenticated())
+        .httpBasic(Customizer.withDefaults())
+        .csrf(csrf -> csrf.ignoringRequestMatchers("/acp"))
+        .build();
+}
+```
+
+**Servlet shutdown.** Each client connection holds an open SSE response or WebSocket, which Spring
+Boot's graceful shutdown counts as an active request and would wait for, up to
 `spring.lifecycle.timeout-per-shutdown-phase` (30 seconds by default). A `SmartLifecycle` in the
-default phase therefore closes the servlet's ACP connections first, waiting at most 30 seconds.
-It stops before graceful shutdown and the web server do.
+default phase therefore drains the endpoint first: SSE streams get a closing comment and complete,
+WebSockets close with 1001 (going away). It stops before graceful shutdown and the web server do.
+
+**Compression.** With `server.compression.enabled`, `text/event-stream` is taken out of the
+compressed MIME types: a compressed SSE stream is held back until the compressor's buffer fills.
 
 ### Client: `spring.acp.client.transport.*`
 
@@ -187,8 +204,7 @@ The rules for choosing one, the same in every framework integration:
 - `type` set: it wins. If its own command or URI is missing, the startup fails, naming that
   property.
 
-The SDK's listener takes both `websocket` and `http` clients. An agent mounted as a servlet takes
-`http` clients only.
+The SDK's listener and an agent mounted as a servlet both take `websocket` and `http` clients.
 
 ## Properties
 

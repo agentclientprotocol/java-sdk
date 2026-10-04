@@ -26,7 +26,7 @@ class AcpAgentTransportAutoConfigurationTests {
 			.withPropertyValues("spring.acp.agent.transport.type=http")
 			.run(context -> {
 				assertThat(context).hasFailed();
-				assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("acp-streamable-http-jetty");
+				assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("acp-http-servlet").hasMessageContaining("acp-streamable-http-jetty");
 			});
 	}
 

@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>ACP Streamable HTTP Jetty</name>
-    <description>Streamable HTTP agent transport using Jetty for listener-backed remote agents</description>
+    <description>The SDK's own ACP listener: an embedded Jetty 12.1 server running the acp-http-servlet host, with Jetty's Jakarta WebSocket implementation, for agents served from a plain Java program</description>
 
     <properties>
         <!-- Coverage floors: measured line 88.13%, branch 78.07-78.44%, less 2 points (parent pom, JaCoCo) -->
@@ -32,13 +32,7 @@
         </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-core</artifactId>
-        </dependency>
-        <!-- The JSON implementation: Jackson 2 by default. Add acp-json-jackson3 to use Jackson 3. -->
-        <dependency>
-            <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-json-jackson2</artifactId>
-            <version>${project.version}</version>
+            <artifactId>acp-http-servlet</artifactId>
         </dependency>
 
         <dependency>
@@ -54,12 +48,8 @@
             <artifactId>jetty-http2-server</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.jetty.websocket</groupId>
-            <artifactId>jetty-websocket-jetty-server</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.jetty.websocket</groupId>
-            <artifactId>jetty-websocket-jetty-api</artifactId>
+            <groupId>org.eclipse.jetty.ee10.websocket</groupId>
+            <artifactId>jetty-ee10-websocket-jakarta-server</artifactId>
         </dependency>
 
         <dependency>
@@ -88,11 +78,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.jetbrains.lincheck</groupId>
-            <artifactId>lincheck</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
@@ -104,20 +89,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <!-- Lincheck (the *LincheckTest classes) attaches its instrumentation agent at
-                 runtime. JDK 21+ warns about a dynamically loaded agent unless
-                 EnableDynamicAgentLoading is set; JDK 17 does not know the flag, hence
-                 IgnoreUnrecognizedVMOptions. @{argLine} keeps JaCoCo's agent. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>@{argLine} -XX:+IgnoreUnrecognizedVMOptions -XX:+EnableDynamicAgentLoading</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

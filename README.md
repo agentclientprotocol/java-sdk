@@ -450,7 +450,8 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | `com.agentclientprotocol.sdk.client` | Client SDK (`AcpClient`, `AcpAsyncClient`, `AcpSyncClient`) |
 | `com.agentclientprotocol.sdk.client.transport` | Client transports (`StdioAcpClientTransport`, `WebSocketAcpClientTransport`, `StreamableHttpAcpClientTransport`) |
 | `com.agentclientprotocol.sdk.agent` | Agent SDK (`AcpAgent`, `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAgentFactory`) |
-| `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; `StreamableHttpAcpAgentTransport` and `StreamableHttpAcpServlet` from acp-streamable-http-jetty) |
+| `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; `StreamableHttpAcpServlet` from acp-http-servlet; `StreamableHttpAcpAgentTransport` from acp-streamable-http-jetty; `StreamableHttpAcpAgentTransportOptions` from acp-http-core) |
+| `com.agentclientprotocol.sdk.http.server` | The host contract from acp-http-core (`AcpHttpEndpoint`, `AcpHttpExchange`, `AcpHttpReply`, `AcpWsHandshake`), for writing a server adapter; unstable |
 | `com.agentclientprotocol.sdk.agent.support` | Annotation-based agent runtime (`AcpAgentSupport`), with its `resolver`, `handler`, `interceptor` and `invocation` extension points |
 | `com.agentclientprotocol.sdk.annotation` | Agent annotations (`@AcpAgent`, `@Prompt`, etc.) |
 | `com.agentclientprotocol.sdk.capabilities` | Capability negotiation (`NegotiatedCapabilities`) |
@@ -466,7 +467,9 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | [`acp-core`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core) | Client and Agent SDKs, stdio, WebSocket, and Streamable HTTP client transports; needs one JSON module |
 | `acp-json-jackson2` | JSON implementation on Jackson 2 (`JacksonAcpJsonMapper`); brought in by the transport and agent-support modules |
 | `acp-json-jackson3` | JSON implementation on Jackson 3 (`Jackson3AcpJsonMapper`) |
-| `acp-streamable-http-jetty` | Jetty-backed Streamable HTTP agent transport for listener-backed remote agents; also accepts WebSocket upgrades on the same path |
+| `acp-http-core` | The framework-neutral ACP endpoint behind every HTTP host: routing, sessions, SSE mailboxes, the status and close-code table, the `Origin` check and shutdown, and the host contract (`com.agentclientprotocol.sdk.http.server`) |
+| `acp-http-servlet` | The endpoint as a Servlet 6 servlet, `StreamableHttpAcpServlet`, with WebSocket upgrades on the same path through Jakarta WebSocket 2.1: Spring MVC, Tomcat, Jetty, Undertow |
+| `acp-streamable-http-jetty` | The SDK's own listener, `StreamableHttpAcpAgentTransport`: embedded Jetty 12.1 running the servlet, for agents served from a plain Java program |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
@@ -481,7 +484,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
 | WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
-| Streamable HTTP in your own Servlet 6 container | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpServlet` (HTTP/SSE only; the WebSocket upgrade needs `StreamableHttpAcpAgentTransport`) | acp-core / acp-streamable-http-jetty |
+| Streamable HTTP and WebSocket in your own Servlet 6 container | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `StreamableHttpAcpServlet` (WebSocket where the container has Jakarta WebSocket 2.1) | acp-core / acp-http-servlet |
 
 ---
 

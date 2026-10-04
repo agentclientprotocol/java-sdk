@@ -29,3 +29,6 @@ reactor.core.publisher.Sinks.Many#tryEmitError(java.lang.Throwable)
 reactor.core.publisher.FluxSink#onCancel(reactor.core.Disposable)
 reactor.core.publisher.MonoSink#onCancel(reactor.core.Disposable)
 reactor.core.publisher.MonoSink#onDispose(reactor.core.Disposable)
+reactor.core.publisher.FluxSink#onRequest(java.util.function.LongConsumer)
+# A FluxSink emission returns the same sink; FluxSink buffers or signals on its own.
+reactor.core.publisher.FluxSink#next(java.lang.Object)

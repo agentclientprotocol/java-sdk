@@ -19,7 +19,9 @@
         <module>acp-json-jackson2</module>
         <module>acp-json-jackson3</module>
         <module>acp-agent-support</module>
+        <module>acp-http-core</module>
         <module>acp-test</module>
+        <module>acp-http-servlet</module>
         <module>acp-streamable-http-jetty</module>
         <module>acp-integration</module>
         <module>acp-spring-boot-autoconfigure</module>
@@ -81,6 +83,12 @@
         <slf4j.version>2.0.18</slf4j.version>
         <jspecify.version>1.0.0</jspecify.version>
         <jetty.version>12.1.12</jetty.version>
+        <!-- The servlet host's APIs, the minimum it compiles against (the container provides
+             them; not managed here, so a framework's BOM keeps its own), and the Tomcat its tests
+             run on, the version Spring Boot 4.1 manages. -->
+        <jakarta-servlet.version>6.0.0</jakarta-servlet.version>
+        <jakarta-websocket.version>2.1.1</jakarta-websocket.version>
+        <tomcat.version>11.0.22</tomcat.version>
         <!-- Micronaut 4 (Java 17) for acp-micronaut and its sample only: its platform BOM is
              imported in those modules' own dependencyManagement, never here. The core version
              is the one the platform manages, for the annotation processor path. -->
@@ -181,8 +189,33 @@
             </dependency>
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-http-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-http-servlet</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
                 <artifactId>acp-streamable-http-jetty</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.ee10.websocket</groupId>
+                <artifactId>jetty-ee10-websocket-jakarta-server</artifactId>
+                <version>${jetty.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
@@ -206,16 +239,6 @@
             </dependency>
 
             <!-- Jetty WebSocket -->
-            <dependency>
-                <groupId>org.eclipse.jetty.websocket</groupId>
-                <artifactId>jetty-websocket-jetty-server</artifactId>
-                <version>${jetty.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.eclipse.jetty.websocket</groupId>
-                <artifactId>jetty-websocket-jetty-api</artifactId>
-                <version>${jetty.version}</version>
-            </dependency>
             <dependency>
                 <groupId>org.eclipse.jetty</groupId>
                 <artifactId>jetty-server</artifactId>

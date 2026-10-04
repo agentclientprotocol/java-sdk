@@ -50,6 +50,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One framework-neutral ACP endpoint and a host contract: `acp-http-core`.** Every protocol rule
+  of the Streamable HTTP and WebSocket transports now lives in one place,
+  `com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint`: routing, sessions, the bounded SSE
+  mailboxes and WebSocket send queue, the status and close-code table, the `Origin` check,
+  keep-alive and drain. A server adapter (a host) only adapts I/O through the contract types
+  `AcpHttpExchange`, `AcpHttpReply` (`Body`, `Empty`, `EventStream`), `SseFrame`, `AcpWsHandshake`,
+  `AcpWsOutbound` and `AcpWsHandler`, all `@UnstableAcpApi`: applications use the hosts the SDK
+  ships. The one neutral WebSocket connection replaces the Jetty-native one.
+- **WebSocket on the servlet, on the application's own server.** `StreamableHttpAcpServlet` (new
+  module `acp-http-servlet`, no Jetty dependency) upgrades `Upgrade: websocket` requests on its own
+  path through Jakarta WebSocket 2.1 (`ServerContainer.upgradeHttpToWebSocket`), on Tomcat, Jetty
+  and Undertow. A container without a Jakarta WebSocket implementation answers the upgrade 501.
+  Its outbound frames are serialized, one write at a time, as Tomcat requires.
+- **Spring Boot: ACP on `server.port`, under the application's security.** A servlet web
+  application now serves Streamable HTTP, SSE and WebSocket on its own server, through its filter
+  chain: Spring Security rules on `/acp` apply to HTTP and to the WebSocket handshake, and the
+  principal reaches the endpoint (`AcpHttpExchange.principal()`). The endpoint is an
+  `AcpHttpEndpoint` bean. With `server.compression.enabled`, `text/event-stream` is no longer
+  compressed.
+- **Shutdown drains open streams.** Closing the endpoint (servlet, listener, Spring's
+  `SmartLifecycle` before graceful shutdown) gives each open SSE stream a closing comment
+  (`: shutting down`) and completes it, and closes each WebSocket with 1001 (going away), so a
+  framework's graceful shutdown never waits for them.
+- **SSE responses carry `X-Accel-Buffering: no`**, so nginx and similar proxies do not buffer
+  them, besides `Cache-Control: no-cache`.
+- **A shared transport TCK in `acp-test`:** `com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck`,
+  the suite every host runs (the servlet on Tomcat 11 and Jetty 12.1, the embedded listener, Spring
+  MVC), with `HttpProbes` for raw HTTP and WebSocket checks. `acp-test` now depends on
+  `junit-jupiter-api`, `assertj-core` and `acp-http-core`.
+
 - **`AcpTransportThreads` in `acp-integration`: the threads a framework's network transports run
   on.** `AcpClientTransports.create(settings, prefix, threads)` and
   `AcpListeners.listener(settings, factory, threads)` take one: `executor(Executor)` for the
@@ -432,6 +462,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added. `sessionUpdateConsumer` stays additive.
 
 ### Changed
+
+- **Breaking: the HTTP transport is split into three modules.** `acp-http-core` (the endpoint and
+  `StreamableHttpAcpAgentTransportOptions`), `acp-http-servlet` (`StreamableHttpAcpServlet`) and
+  `acp-streamable-http-jetty` (`StreamableHttpAcpAgentTransport`, now embedded Jetty running the
+  servlet with Jetty's Jakarta WebSocket implementation). Class names and packages of the public
+  types are unchanged. Migration: an application mounting the servlet in its own container, a
+  Spring MVC application included, depends on `acp-http-servlet` instead of
+  `acp-streamable-http-jetty`, and no longer gets Jetty; an application using the SDK's listener
+  keeps `acp-streamable-http-jetty`. Do not add `acp-streamable-http-jetty` to a Spring Boot
+  application on Tomcat: its Jakarta WebSocket 2.1 API jar would shadow Tomcat 11's 2.2 one.
+- **Breaking: `StreamableHttpAcpServlet` is a host of `AcpHttpEndpoint`.** It gained the
+  constructor `StreamableHttpAcpServlet(AcpHttpEndpoint)` and `endpoint()`; the package-private
+  routing, connection and SSE classes moved to `acp-http-core`. A subclass overriding `doGet`,
+  `doPost` or `doDelete` no longer intercepts anything: `service` hands every request to the
+  endpoint. Migration: wrap the `AcpHttpEndpoint` instead.
+- **Breaking: the shutdown close code of a WebSocket is 1001 (going away)**, not 1000. Clients
+  that treated 1000 as the server's shutdown treat 1001 the same way.
+- `AcpListeners.endpoint(AcpAgentSettings, AcpAgentFactory)` returns the endpoint for a framework
+  that mounts it itself.
 
 - **Breaking: new record components for the bind address and allowed origins.**
   `StreamableHttpAcpAgentTransportOptions` gained `host` and `allowedOrigins`,

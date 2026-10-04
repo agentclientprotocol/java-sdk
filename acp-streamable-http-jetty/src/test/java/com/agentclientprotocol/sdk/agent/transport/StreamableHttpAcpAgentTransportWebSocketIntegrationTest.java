@@ -41,7 +41,6 @@ import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import org.eclipse.jetty.websocket.api.StatusCode;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -282,7 +281,7 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 					""", true).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 
 			assertThat(listener.closeLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
-			assertThat(listener.closeCode.get()).isEqualTo(StatusCode.PROTOCOL);
+			assertThat(listener.closeCode.get()).isEqualTo(1002);
 			assertEventuallyNoConnections(server.transport());
 		}
 	}
