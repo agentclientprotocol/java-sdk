@@ -28,8 +28,7 @@ class AcpAgentHostTest {
 	@Test
 	void servesUntilStoppedAndStopsOnce() throws Exception {
 		AtomicInteger transportEnds = new AtomicInteger();
-		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), pair.agentTransport(),
-				transportEnds::incrementAndGet);
+		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), transportEnds::incrementAndGet);
 		assertThat(host.port()).isEmpty();
 		host.start();
 		host.start(); // once
@@ -50,7 +49,7 @@ class AcpAgentHostTest {
 	void theTransportEndingRunsTheActionOnceOnTheHostsThread() throws Exception {
 		CountDownLatch ran = new CountDownLatch(1);
 		List<String> threads = new java.util.concurrent.CopyOnWriteArrayList<>();
-		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), pair.agentTransport(), () -> {
+		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), () -> {
 			threads.add(Thread.currentThread().getName());
 			ran.countDown();
 		});
@@ -67,7 +66,7 @@ class AcpAgentHostTest {
 	void aTransportThatEndedBeforeTheHostSawItStillCounts() throws Exception {
 		pair.agentTransport().closeGracefully().block(Duration.ofSeconds(5));
 		CountDownLatch ran = new CountDownLatch(1);
-		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), pair.agentTransport(), ran::countDown);
+		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), ran::countDown);
 		assertThat(ran.await(10, TimeUnit.SECONDS)).isTrue();
 		host.stop(Duration.ofSeconds(5));
 	}
@@ -83,7 +82,7 @@ class AcpAgentHostTest {
 			}
 
 		};
-		AcpAgentHost host = new AcpAgentHost(agent(failing), failing, ran::countDown);
+		AcpAgentHost host = new AcpAgentHost(agent(failing), ran::countDown);
 		assertThat(ran.await(10, TimeUnit.SECONDS)).isTrue();
 		assertThat(host.termination().toCompletableFuture().get(5, TimeUnit.SECONDS)).isNull();
 	}
@@ -91,7 +90,7 @@ class AcpAgentHostTest {
 	@Test
 	void aStopThatDoesNotFinishInTimeClosesAtOnce() {
 		TestAgents.StuckAgentTransport stuck = new TestAgents.StuckAgentTransport(pair.agentTransport());
-		AcpAgentHost host = new AcpAgentHost(agent(stuck, Duration.ofSeconds(2)), stuck, () -> {
+		AcpAgentHost host = new AcpAgentHost(agent(stuck, Duration.ofSeconds(2)), () -> {
 		});
 		host.start();
 		host.stop(Duration.ofMillis(50));
@@ -101,7 +100,7 @@ class AcpAgentHostTest {
 	@Test
 	void anInterruptedStopClosesAtOnceAndKeepsTheInterrupt() {
 		TestAgents.StuckAgentTransport stuck = new TestAgents.StuckAgentTransport(pair.agentTransport());
-		AcpAgentHost host = new AcpAgentHost(agent(stuck, Duration.ofSeconds(2)), stuck, () -> {
+		AcpAgentHost host = new AcpAgentHost(agent(stuck, Duration.ofSeconds(2)), () -> {
 		});
 		host.start();
 		Thread.currentThread().interrupt();
@@ -112,7 +111,7 @@ class AcpAgentHostTest {
 
 	@Test
 	void holdsTheJvmUntilTermination() throws Exception {
-		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), pair.agentTransport(), () -> {
+		AcpAgentHost host = new AcpAgentHost(agent(pair.agentTransport()), () -> {
 		});
 		host.start();
 		host.holdJvmUntilTermination();

@@ -70,7 +70,7 @@ public class AcpAgentAutoConfiguration {
 					&& applicationContext instanceof ConfigurableApplicationContext configurable) {
 				onTransportEnd = () -> closeContext(configurable);
 			}
-			return new AcpAgentLifecycle(new AcpAgentHost(agent, transport, onTransportEnd));
+			return new AcpAgentLifecycle(new AcpAgentHost(agent, onTransportEnd));
 		}
 
 	}

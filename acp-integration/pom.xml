@@ -15,7 +15,7 @@
     <description>Framework-neutral building blocks for ACP framework integrations: settings, transports, agent discovery and assembly, and host lifecycles</description>
 
     <properties>
-        <!-- Coverage floors: measured line 99.54%, branch 94.81%, less 2 points (parent pom, JaCoCo) -->
+        <!-- Coverage floors: measured line 99.32%, branch 94.16%, less 2 points (parent pom, JaCoCo) -->
         <jacoco.minimum.line>0.97</jacoco.minimum.line>
         <jacoco.minimum.branch>0.92</jacoco.minimum.branch>
     </properties>
