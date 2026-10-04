@@ -901,17 +901,55 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Load existing session request
+	 * The params of {@code session/load}: asks the agent to reopen an ACP session it kept, in a
+	 * working directory and with the MCP servers it should connect to. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#loadSession
+	 * AcpSyncClient.loadSession} or the {@code AcpAsyncClient} method of the same name. The agent's
+	 * load-session handler ({@link com.agentclientprotocol.sdk.agent.AcpAgent.LoadSessionHandler}
+	 * or a {@link com.agentclientprotocol.sdk.annotation.LoadSession @LoadSession} method) receives
+	 * it, replays the session's conversation to the client as session updates, and answers with a
+	 * {@link LoadSessionResponse}.
+	 *
+	 * <p>
+	 * Only an agent that advertises {@code loadSession} supports it: for any other agent the client
+	 * fails the call with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
+	 * without sending it. The replayed session updates reach the client's session update consumers
+	 * before its call completes. To reopen a session without the replay, use
+	 * {@link ResumeSessionRequest}. The protocol requires absolute paths for {@code cwd} and
+	 * {@code additionalDirectories}; the SDK does not check them. A non-empty
+	 * {@code additionalDirectories} is the complete list of additional workspace roots for the
+	 * session. Send it only to an agent that advertises
+	 * {@code sessionCapabilities.additionalDirectories}; the client does not check this.
+	 *
+	 * @param sessionId the ACP session to reopen, as {@link NewSessionResponse#sessionId()} or
+	 * {@link SessionInfo#sessionId()} gave it
+	 * @param cwd the session's working directory, an absolute path
+	 * @param mcpServers the MCP servers the agent should connect to, possibly empty
+	 * @param additionalDirectories more workspace roots as absolute paths, or {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LoadSessionRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") List<McpServer> mcpServers,
 			@JsonProperty("additionalDirectories") @Nullable List<String> additionalDirectories,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without additional directories or {@code _meta}.
+		 * @param sessionId the ACP session to reopen
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, possibly empty
+		 */
 		public LoadSessionRequest(String sessionId, String cwd, List<McpServer> mcpServers) {
 			this(sessionId, cwd, mcpServers, null, null);
 		}
 
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to reopen
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, possibly empty
+		 * @param additionalDirectories more workspace roots, or {@code null}
+		 */
 		public LoadSessionRequest(String sessionId, String cwd, List<McpServer> mcpServers,
 				@Nullable List<String> additionalDirectories) {
 			this(sessionId, cwd, mcpServers, additionalDirectories, null);
@@ -919,21 +957,39 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Load session response
+	 * The result of {@code session/load}: the reopened ACP session's modes and config options, when
+	 * the agent has them. The agent's load-session handler returns it after it has replayed the
+	 * conversation. The client's {@code loadSession(...)} completes with it, and only after the
+	 * client has handled every replayed session update.
 	 *
-	 * @param modes the session's modes and the current one, if the agent has modes
-	 * @param configOptions the session's config options and their current values, if the
-	 * agent has any
-	 * @param meta reserved metadata
+	 * <p>
+	 * Every component is optional: {@code new LoadSessionResponse(null)} answers for an agent
+	 * without modes or config options, and a peer that answers with an empty or {@code null} result
+	 * gives such a record (see {@link DefaultOnNull}).
+	 *
+	 * @param modes the session's modes and the current one, or {@code null} if the agent has no
+	 * modes
+	 * @param configOptions the session's config options with their current values, or {@code null}
+	 * if the agent has none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LoadSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/**
+		 * Creates a response without config options or {@code _meta}.
+		 * @param modes the session's modes, or {@code null}
+		 */
 		public LoadSessionResponse(@Nullable SessionModeState modes) {
 			this(modes, null, null);
 		}
 
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param modes the session's modes, or {@code null}
+		 * @param configOptions the session's config options, or {@code null}
+		 */
 		public LoadSessionResponse(@Nullable SessionModeState modes,
 				@Nullable List<SessionConfigOption> configOptions) {
 			this(modes, configOptions, null);
@@ -1063,22 +1119,55 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Set session mode request
+	 * The params of {@code session/set_mode}: asks the agent to switch an ACP session to another of
+	 * the modes it offered for it, such as "ask" or "code". A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#setSessionMode
+	 * AcpSyncClient.setSessionMode} or the {@code AcpAsyncClient} method of the same name. The
+	 * agent's set-mode handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.SetSessionModeHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.SetSessionMode @SetSessionMode} method)
+	 * receives it and answers with a {@link SetSessionModeResponse}.
+	 *
+	 * <p>
+	 * The agent offers modes in the {@link SessionModeState} of its answers to {@code session/new},
+	 * {@code session/load} and {@code session/resume}. No capability advertises them, so the client
+	 * sends this request without a capability check. The protocol requires {@code modeId} to be one
+	 * of the session's {@link SessionModeState#availableModes()}; the SDK does not check it.
+	 *
+	 * @param sessionId the ACP session to switch
+	 * @param modeId the {@link SessionMode#id()} of the mode to switch to
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("modeId") String modeId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to switch
+		 * @param modeId the id of the mode to switch to
+		 */
 		public SetSessionModeRequest(String sessionId, String modeId) {
 			this(sessionId, modeId, null);
 		}
 	}
 
 	/**
-	 * Set session mode response
+	 * The result of {@code session/set_mode}: an empty answer that confirms the switch. The agent's
+	 * set-mode handler returns it after switching the session; the client's
+	 * {@code setSessionMode(...)} completes with it.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}). When the agent changes a
+	 * session's mode on its own, it tells the client with a {@link CurrentModeUpdate} session
+	 * update instead.
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SetSessionModeResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public SetSessionModeResponse() {
 			this(null);
 		}
@@ -1146,85 +1235,224 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * List sessions request - lists all sessions, optionally filtered by working directory
+	 * The params of {@code session/list}: asks the agent which ACP sessions it knows, optionally
+	 * only those of one working directory, one page at a time. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#listSessions
+	 * AcpSyncClient.listSessions} or the {@code AcpAsyncClient} method of the same name. The
+	 * agent's list-sessions handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.ListSessionsHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.ListSessions @ListSessions} method) receives it
+	 * and answers with a {@link ListSessionsResponse}.
+	 *
+	 * <p>
+	 * Only an agent that advertises {@code sessionCapabilities.list} supports it: for any other
+	 * agent the client fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it. Listing
+	 * reopens nothing; {@link LoadSessionRequest} and {@link ResumeSessionRequest} do. For the
+	 * first page leave {@code cursor} {@code null}; for each next page send the
+	 * {@link ListSessionsResponse#nextCursor()} of the previous answer.
+	 *
+	 * @param cwd the working directory whose sessions to list, an absolute path, or {@code null}
+	 * for all sessions
+	 * @param cursor the {@code nextCursor} of the previous page, or {@code null} for the first page
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListSessionsRequest(@JsonProperty("cwd") @Nullable String cwd, @JsonProperty("cursor") @Nullable String cursor,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request for the first page, without {@code _meta}.
+		 * @param cwd the working directory to filter by, or {@code null} for all sessions
+		 */
 		public ListSessionsRequest(@Nullable String cwd) {
 			this(cwd, null, null);
 		}
 	}
 
 	/**
-	 * List sessions response
+	 * The result of {@code session/list}: one page of the ACP sessions the agent knows, as
+	 * {@link SessionInfo} records, and a cursor when more pages remain. The agent's list-sessions
+	 * handler builds it; the client's {@code listSessions(...)} completes with it.
+	 *
+	 * <p>
+	 * When {@code nextCursor} is present, send it as the {@code cursor} of the next
+	 * {@link ListSessionsRequest} to get the next page; when it is {@code null}, this is the last
+	 * page. The cursor is opaque: the agent chooses it and the client only sends it back.
+	 * {@code sessions} is required, so an agent with no sessions answers an empty list.
+	 *
+	 * @param sessions the sessions on this page, possibly empty
+	 * @param nextCursor the cursor for the next page, or {@code null} on the last page
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ListSessionsResponse(@JsonProperty("sessions") List<SessionInfo> sessions,
 			@JsonProperty("nextCursor") @Nullable String nextCursor,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a last-page response: no next cursor and no {@code _meta}.
+		 * @param sessions the sessions, possibly empty
+		 */
 		public ListSessionsResponse(List<SessionInfo> sessions) {
 			this(sessions, null, null);
 		}
 	}
 
 	/**
-	 * Close session request - closes a session and cancels in-flight work
+	 * The params of {@code session/close}: tells the agent the client is done with an active ACP
+	 * session, so that the agent stops the session's work and frees what it holds. A client sends
+	 * it with {@link com.agentclientprotocol.sdk.client.AcpSyncClient#closeSession
+	 * AcpSyncClient.closeSession} or the {@code AcpAsyncClient} method of the same name. The
+	 * agent's close-session handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.CloseSessionHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.CloseSession @CloseSession} method) receives it
+	 * and answers with a {@link CloseSessionResponse}.
+	 *
+	 * <p>
+	 * Only an agent that advertises {@code sessionCapabilities.close} supports it: for any other
+	 * agent the client fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it. The
+	 * protocol requires the agent to cancel the session's work as if a {@link CancelNotification}
+	 * had arrived. An agent built with this SDK does that before its close handler runs: it calls
+	 * its cancel handler, cancels a running prompt turn, and waits until that prompt has answered
+	 * {@link StopReason#CANCELLED}. Closing does not delete the session;
+	 * {@link DeleteSessionRequest} does.
+	 *
+	 * @param sessionId the ACP session to close
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CloseSessionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to close
+		 */
 		public CloseSessionRequest(String sessionId) {
 			this(sessionId, null);
 		}
 	}
 
 	/**
-	 * Close session response
+	 * The result of {@code session/close}: an empty answer that confirms the session is closed. The
+	 * agent's close-session handler returns it after freeing the session; the client's
+	 * {@code closeSession(...)} completes with it.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CloseSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public CloseSessionResponse() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Delete session request - permanently deletes a stored session.
+	 * The params of {@code session/delete}: asks the agent to remove a stored ACP session for good,
+	 * so that {@code session/list} no longer returns it. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#deleteSession
+	 * AcpSyncClient.deleteSession} or the {@code AcpAsyncClient} method of the same name. The
+	 * agent's delete-session handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.DeleteSessionHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.DeleteSession @DeleteSession} method) receives
+	 * it and answers with a {@link DeleteSessionResponse}.
 	 *
-	 * <p>Only available if the agent advertises the {@code sessionCapabilities.delete}
-	 * capability.
+	 * <p>
+	 * Only an agent that advertises {@code sessionCapabilities.delete} supports it: for any other
+	 * agent the client fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it. Deleting
+	 * is not closing: unlike for {@link CloseSessionRequest}, the SDK does not cancel the session's
+	 * work first.
+	 *
+	 * @param sessionId the ACP session to delete
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DeleteSessionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to delete
+		 */
 		public DeleteSessionRequest(String sessionId) {
 			this(sessionId, null);
 		}
 	}
 
 	/**
-	 * Delete session response
+	 * The result of {@code session/delete}: an empty answer that confirms the session is deleted.
+	 * The agent's delete-session handler returns it; the client's {@code deleteSession(...)}
+	 * completes with it.
+	 *
+	 * <p>
+	 * It has only {@code _meta}, so a peer that answers with an empty or {@code null} result gives
+	 * this record, with no {@code _meta} (see {@link DefaultOnNull}).
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record DeleteSessionResponse(@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/** Creates the empty response, without {@code _meta}. */
 		public DeleteSessionResponse() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Resume session request - reconnects to existing session without replaying history
+	 * The params of {@code session/resume}: asks the agent to reopen an ACP session it kept,
+	 * without replaying its conversation. A client sends it with
+	 * {@link com.agentclientprotocol.sdk.client.AcpSyncClient#resumeSession
+	 * AcpSyncClient.resumeSession} or the {@code AcpAsyncClient} method of the same name. The
+	 * agent's resume-session handler
+	 * ({@link com.agentclientprotocol.sdk.agent.AcpAgent.ResumeSessionHandler} or a
+	 * {@link com.agentclientprotocol.sdk.annotation.ResumeSession @ResumeSession} method) receives
+	 * it and answers with a {@link ResumeSessionResponse}.
+	 *
+	 * <p>
+	 * Only an agent that advertises {@code sessionCapabilities.resume} supports it: for any other
+	 * agent the client fails the call with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without sending it. Use it
+	 * instead of {@link LoadSessionRequest} when the client keeps the conversation itself, or to
+	 * reconnect to a session the agent still runs; an agent that can continue a session but cannot
+	 * send its history offers only this. Unlike for {@code session/load}, {@code mcpServers} may be
+	 * {@code null}. The protocol requires absolute paths for {@code cwd} and
+	 * {@code additionalDirectories}; the SDK does not check them. A non-empty
+	 * {@code additionalDirectories} is the complete list of additional workspace roots for the
+	 * session. Send it only to an agent that advertises
+	 * {@code sessionCapabilities.additionalDirectories}; the client does not check this.
+	 *
+	 * @param sessionId the ACP session to reopen
+	 * @param cwd the session's working directory, an absolute path
+	 * @param mcpServers the MCP servers the agent should connect to, or {@code null}
+	 * @param additionalDirectories more workspace roots as absolute paths, or {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResumeSessionRequest(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("mcpServers") @Nullable List<McpServer> mcpServers,
 			@JsonProperty("additionalDirectories") @Nullable List<String> additionalDirectories,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without additional directories or {@code _meta}.
+		 * @param sessionId the ACP session to reopen
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, or {@code null}
+		 */
 		public ResumeSessionRequest(String sessionId, String cwd, @Nullable List<McpServer> mcpServers) {
 			this(sessionId, cwd, mcpServers, null, null);
 		}
 
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session to reopen
+		 * @param cwd the working directory, an absolute path
+		 * @param mcpServers the MCP servers, or {@code null}
+		 * @param additionalDirectories more workspace roots, or {@code null}
+		 */
 		public ResumeSessionRequest(String sessionId, String cwd, @Nullable List<McpServer> mcpServers,
 				@Nullable List<String> additionalDirectories) {
 			this(sessionId, cwd, mcpServers, additionalDirectories, null);
@@ -1232,21 +1460,38 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Resume session response
+	 * The result of {@code session/resume}: the resumed ACP session's modes and config options,
+	 * when the agent has them. The agent's resume-session handler returns it without sending the
+	 * earlier conversation; the client's {@code resumeSession(...)} completes with it.
 	 *
-	 * @param modes the session's modes and the current one, if the agent has modes
-	 * @param configOptions the session's config options and their current values, if the
-	 * agent has any
-	 * @param meta reserved metadata
+	 * <p>
+	 * Every component is optional: {@code new ResumeSessionResponse(null)} answers for an agent
+	 * without modes or config options, and a peer that answers with an empty or {@code null} result
+	 * gives such a record (see {@link DefaultOnNull}).
+	 *
+	 * @param modes the session's modes and the current one, or {@code null} if the agent has no
+	 * modes
+	 * @param configOptions the session's config options with their current values, or {@code null}
+	 * if the agent has none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ResumeSessionResponse(@JsonProperty("modes") @Nullable SessionModeState modes,
 			@JsonProperty("configOptions") @Nullable List<SessionConfigOption> configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements DefaultOnNull {
+		/**
+		 * Creates a response without config options or {@code _meta}.
+		 * @param modes the session's modes, or {@code null}
+		 */
 		public ResumeSessionResponse(@Nullable SessionModeState modes) {
 			this(modes, null, null);
 		}
 
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param modes the session's modes, or {@code null}
+		 * @param configOptions the session's config options, or {@code null}
+		 */
 		public ResumeSessionResponse(@Nullable SessionModeState modes,
 				@Nullable List<SessionConfigOption> configOptions) {
 			this(modes, configOptions, null);
@@ -2377,37 +2622,95 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Session information returned by session/list
+	 * One ACP session as {@code session/list} reports it: its id and working directory and, when
+	 * the agent knows them, a title and the time of its last activity. The agent builds one per
+	 * session in a {@link ListSessionsResponse}. A client shows them, for example as a session
+	 * history, and reopens one by passing its {@link #sessionId()} in a {@link LoadSessionRequest}
+	 * or {@link ResumeSessionRequest}.
+	 *
+	 * <p>
+	 * The protocol makes {@code updatedAt} an ISO 8601 timestamp; the SDK keeps it as a string and
+	 * does not check it. A present {@code additionalDirectories} is the session's complete ordered
+	 * list of additional workspace roots; a missing and an empty list both mean none. While a
+	 * session runs, the agent reports a new title or last activity with a {@link SessionInfoUpdate}
+	 * session update.
+	 *
+	 * @param sessionId the session's id
+	 * @param cwd the session's working directory, an absolute path
+	 * @param title a human-readable title, or {@code null}
+	 * @param updatedAt the time of the last activity as an ISO 8601 timestamp, or {@code null}
+	 * @param additionalDirectories the session's additional workspace roots as absolute paths, or
+	 * {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionInfo(@JsonProperty("sessionId") String sessionId, @JsonProperty("cwd") String cwd,
 			@JsonProperty("title") @Nullable String title, @JsonProperty("updatedAt") @Nullable String updatedAt,
 			@JsonProperty("additionalDirectories") @Nullable List<String> additionalDirectories,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates an entry with only an id and a working directory: no title, last activity,
+		 * additional directories or {@code _meta}.
+		 * @param sessionId the session's id
+		 * @param cwd the working directory, an absolute path
+		 */
 		public SessionInfo(String sessionId, String cwd) {
 			this(sessionId, cwd, null, null, null, null);
 		}
 	}
 
 	/**
-	 * Session mode state
+	 * The modes an agent offers for an ACP session, and the one the session is in. An agent that
+	 * has modes returns it as {@code modes} in its answer to {@code session/new}
+	 * ({@link NewSessionResponse}), {@code session/load} ({@link LoadSessionResponse}) and
+	 * {@code session/resume} ({@link ResumeSessionResponse}). A client shows the available modes
+	 * and switches with a {@link SetSessionModeRequest}.
+	 *
+	 * <p>
+	 * The state is a snapshot. When the agent changes the mode on its own, it sends a
+	 * {@link CurrentModeUpdate} session update; the SDK does not keep the current mode for either
+	 * side.
+	 *
+	 * @param currentModeId the {@link SessionMode#id()} of the mode the session is in
+	 * @param availableModes the modes the agent offers for the session
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionModeState(@JsonProperty("currentModeId") String currentModeId,
 			@JsonProperty("availableModes") List<SessionMode> availableModes,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a state without {@code _meta}.
+		 * @param currentModeId the id of the current mode
+		 * @param availableModes the modes offered
+		 */
 		public SessionModeState(String currentModeId, List<SessionMode> availableModes) {
 			this(currentModeId, availableModes, null);
 		}
 	}
 
 	/**
-	 * Session mode
+	 * One mode an agent offers for an ACP session, such as "ask" or "code": an id for the protocol,
+	 * and a name and description for the user. A mode may change how the agent works on prompts and
+	 * what it asks permission for. Modes appear in {@link SessionModeState#availableModes()}; a
+	 * client switches to one by sending its {@link #id()} in a {@link SetSessionModeRequest}.
+	 *
+	 * @param id the mode's id, as {@link SetSessionModeRequest#modeId()} and
+	 * {@link SessionModeState#currentModeId()} name it
+	 * @param name the name to show the user
+	 * @param description more detail to show with the name, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionMode(@JsonProperty("id") String id, @JsonProperty("name") String name,
 			@JsonProperty("description") @Nullable String description,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a mode without {@code _meta}.
+		 * @param id the mode's id
+		 * @param name the name to show the user
+		 * @param description more detail, or {@code null}
+		 */
 		public SessionMode(String id, String name, @Nullable String description) {
 			this(id, name, description, null);
 		}
