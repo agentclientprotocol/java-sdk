@@ -48,8 +48,8 @@ import org.jspecify.annotations.Nullable;
  * does not extend {@link com.agentclientprotocol.sdk.error.AcpException AcpException}.
  *
  * <p>A handler that lets an {@code AcpError} escape does not pass the peer's error on: like any
- * exception other than {@code AcpProtocolException}, it is answered {@code -32603} with this
- * exception's message. To pass the error on unchanged, throw {@code e.getError().toException()}
+ * exception other than {@code AcpProtocolException}, it is answered {@code -32603} ("Internal
+ * error"). To pass the error on unchanged, throw {@code e.getError().toException()}
  * (see {@link AcpSchema.JSONRPCError#toException()}).
  *
  * <p>{@link #getMessage()} is the peer's message, followed by the detail its data carries, if any;

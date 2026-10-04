@@ -7,8 +7,8 @@ package com.agentclientprotocol.sdk.agent.support.resolver;
 /**
  * Thrown when a handler-method parameter cannot be supplied for a call: no resolver supports it, or
  * the resolver lacks what it needs, such as a session id in a method without a session. The call
- * fails, and the client receives an internal error ({@code -32603}) whose message is this
- * exception's message, so keep secrets out of it. Building the agent rejects most such parameters
+ * fails, and the client receives an internal error ({@code -32603}) with the message
+ * "Internal error"; this exception is logged at the agent. Building the agent rejects most such parameters
  * up front, so at run time it usually comes from a custom {@link ArgumentResolver}. To answer with
  * another error code, a resolver throws an {@code AcpProtocolException} instead.
  *

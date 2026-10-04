@@ -426,7 +426,7 @@ class AcpAgentSessionTest {
 			AcpSchema.JSONRPCResponse jsonResponse = (AcpSchema.JSONRPCResponse) response.get();
 			assertThat(jsonResponse.error()).isNotNull();
 			assertThat(jsonResponse.error().code()).isEqualTo(-32603); // Internal error
-			assertThat(jsonResponse.error().message()).isEqualTo("Handler error");
+			assertThat(jsonResponse.error().message()).isEqualTo("Internal error");
 		}
 		finally {
 			transportPair.closeGracefully().block(TIMEOUT);

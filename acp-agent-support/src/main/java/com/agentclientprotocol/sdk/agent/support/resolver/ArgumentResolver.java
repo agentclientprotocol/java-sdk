@@ -75,7 +75,7 @@ public interface ArgumentResolver {
 	 * @return the value, or null to pass null (which fails the call if the parameter is a
 	 * primitive)
 	 * @throws ArgumentResolutionException if the value cannot be supplied; the call fails with an
-	 * internal error ({@code -32603}) carrying its message
+	 * internal error ({@code -32603}), and the exception is logged at the agent
 	 */
 	@Nullable Object resolveArgument(AcpMethodParameter parameter, AcpInvocationContext context);
 

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **A handler's unexpected exception no longer sends its message to the peer.** A request handler
+  that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
+  exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now
+  answered `-32603` with the message "Internal error", on both sides, and the exception is logged
+  at WARN, with its stack trace, by the side that handled the request. An `AcpProtocolException`
+  is unchanged: its code, message and data are the handler's intended answer. Migration: a handler
+  whose exception message the peer should see throws `AcpProtocolException` with that message.
+
 - Jackson 2.22.2 → **2.22.3** and Jackson 3.1.5 → **3.1.7**, clearing CVE-2026-89407, CVE-2026-89425,
   CVE-2026-91776, CVE-2026-91777 (both lines) and CVE-2026-19032, CVE-2026-68497, CVE-2026-83557 (Jackson 3).
   0.18.0 shipped with the affected versions; applications can override the versions now.
