@@ -377,17 +377,20 @@ agent.writeTextFile(...);
 
 ### 8. Error Handling
 
-Handle protocol errors with structured exceptions ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-11-error-handling)):
+A request that fails with a JSON-RPC error code throws `AcpError`; a handler answers with an error by
+throwing `AcpProtocolException`. Handle protocol errors with structured exceptions ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-11-error-handling)):
 
 ```java
 import com.agentclientprotocol.sdk.error.*;
+import com.agentclientprotocol.sdk.spec.AcpError;
 
 try {
     client.prompt(request);
-} catch (AcpProtocolException e) {
-    if (e.isAuthenticationRequired()) {
+} catch (AcpError e) {
+    // The agent answered with an error, or with a response the SDK rejected (see getData())
+    if (e.getCode() == AcpErrorCodes.AUTHENTICATION_REQUIRED) {
         // The agent wants authenticate() first
-    } else if (e.isMethodNotFound()) {
+    } else if (e.getCode() == AcpErrorCodes.METHOD_NOT_FOUND) {
         // Agent doesn't support this method
     }
     System.err.println("Error " + e.getCode() + ": " + e.getMessage());

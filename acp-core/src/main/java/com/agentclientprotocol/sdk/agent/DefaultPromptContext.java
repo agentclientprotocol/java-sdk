@@ -6,12 +6,12 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
-import com.agentclientprotocol.sdk.error.AcpErrorCodes;
-import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentThoughtChunk;
@@ -246,9 +246,10 @@ class DefaultPromptContext implements PromptContext {
 								return Mono.just(options[i]);
 							}
 						}
-						return Mono.error(new AcpProtocolException(AcpErrorCodes.INTERNAL_ERROR,
-								"The client chose option '" + s.optionId() + "', which askChoice did not offer (0 to "
-										+ (options.length - 1) + ")"));
+						return Mono.error(AcpError.rejectedResponse(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
+								"unoffered-option", "The client chose option '" + s.optionId()
+										+ "', which askChoice did not offer (0 to " + (options.length - 1) + ")",
+								Map.of("optionId", s.optionId())));
 					}
 					return Mono.empty();
 				});

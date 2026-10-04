@@ -8,11 +8,14 @@ import org.jspecify.annotations.Nullable;
 
 
 /**
- * Exception representing a JSON-RPC protocol error from the peer.
+ * A JSON-RPC error a handler throws to answer the peer's request with that error: its code,
+ * message and optional data become the error response. Any other exception from a handler is
+ * answered {@code -32603} (internal error).
  *
  * <p>
- * This exception is thrown when the peer returns a JSON-RPC error response. It wraps
- * the error code, message, and optional data from the protocol response.
+ * The caller of a request does not receive this type: a request that failed with an error code,
+ * whether the peer answered with an error or the SDK rejected the peer's response, fails with
+ * {@link com.agentclientprotocol.sdk.spec.AcpError}.
  * </p>
  *
  * <p>
@@ -27,14 +30,10 @@ import org.jspecify.annotations.Nullable;
  * </ul>
  *
  * <p>
- * Example usage:
+ * Example usage, in an agent's authenticate handler:
  * <pre>{@code
- * try {
- *     client.prompt(request).block();
- * } catch (AcpProtocolException e) {
- *     if (e.isAuthenticationRequired()) {
- *         // Ask the user to authenticate
- *     }
+ * if (!credentials.valid()) {
+ *     throw new AcpProtocolException(AcpErrorCodes.AUTHENTICATION_REQUIRED, "Log in first");
  * }
  * }</pre>
  *

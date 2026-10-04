@@ -6,6 +6,7 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +15,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
+import com.agentclientprotocol.sdk.spec.AcpError;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateTerminalResponse;
@@ -141,11 +144,11 @@ class PromptContextHelpersTest {
 	}
 
 	/**
-	 * A client that answers {@code askChoice} with an option ID it was not offered gets a clear
-	 * protocol error, not a {@code NumberFormatException} or {@code ArrayIndexOutOfBoundsException}.
+	 * A client that answers {@code askChoice} with an option ID it was not offered fails the call
+	 * with an {@link AcpError}, as any rejected answer does, not a {@code NumberFormatException} or {@code ArrayIndexOutOfBoundsException}.
 	 */
 	@Test
-	void askChoiceAnsweredWithAnOptionThatWasNotOfferedFailsWithAProtocolError() {
+	void askChoiceAnsweredWithAnOptionThatWasNotOfferedFailsWithAcpError() {
 		for (String answer : List.of("7", "-1", "yes")) {
 			AtomicReference<Throwable> failure = new AtomicReference<>();
 			InMemoryTransportPair pair = InMemoryTransportPair.create();
@@ -169,7 +172,11 @@ class PromptContextHelpersTest {
 				client.prompt(prompt()).block(TIMEOUT);
 
 				assertThat(failure.get()).as("answer %s", answer)
-					.isInstanceOf(AcpProtocolException.class)
+					.isInstanceOfSatisfying(AcpError.class, error -> {
+						assertThat(error.getCode()).isEqualTo(AcpErrorCodes.INTERNAL_ERROR);
+						assertThat(error.getData()).isEqualTo(Map.of("reason", "unoffered-option", "method",
+								AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, "optionId", answer));
+					})
 					.hasMessageContaining(answer);
 			}
 			finally {

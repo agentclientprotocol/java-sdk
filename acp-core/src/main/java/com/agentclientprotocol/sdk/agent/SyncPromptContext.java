@@ -362,7 +362,7 @@ public interface SyncPromptContext {
 	 * @param options the texts to choose from, at least two
 	 * @return the text of the chosen option, or empty if the client cancelled the request
 	 * @throws IllegalArgumentException if fewer than two options are given
-	 * @throws com.agentclientprotocol.sdk.error.AcpProtocolException ({@code -32603}) if the client
+	 * @throws com.agentclientprotocol.sdk.spec.AcpError ({@code -32603}) if the client
 	 * answers with an option ID it was not offered
 	 */
 	Optional<String> askChoice(String question, String... options);

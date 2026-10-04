@@ -13,8 +13,9 @@
  * <ul>
  * <li>{@link com.agentclientprotocol.sdk.error.AcpException} - Base class for all ACP
  * errors</li>
- * <li>{@link com.agentclientprotocol.sdk.error.AcpProtocolException} - JSON-RPC protocol
- * errors</li>
+ * <li>{@link com.agentclientprotocol.sdk.error.AcpProtocolException} - a JSON-RPC error a
+ * handler throws to answer with it; a caller whose request failed with an error code gets a
+ * {@link com.agentclientprotocol.sdk.spec.AcpError}</li>
  * <li>{@link com.agentclientprotocol.sdk.error.AcpCapabilityException} - Capability
  * negotiation errors</li>
  * <li>{@link com.agentclientprotocol.sdk.error.AcpConnectionException} - Transport/connection

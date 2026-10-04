@@ -494,7 +494,7 @@ class AcpAgentSessionTest {
 
 			StepVerifier.create(response)
 				.expectErrorSatisfies(error -> assertThat(error)
-					.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+					.isInstanceOfSatisfying(AcpError.class,
 							e -> assertThat(e.getCode()).isEqualTo(-32603))
 					.hasMessageContaining("The response to fs/read_text_file lacks the required field content"))
 				.verify(TIMEOUT);

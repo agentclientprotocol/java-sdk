@@ -519,7 +519,7 @@ class AcpClientSessionTest {
 			transport.simulateIncomingMessage(
 					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, null));
 		}).expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("carried no result")
-			.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+			.isInstanceOfSatisfying(AcpError.class,
 					e -> assertThat(e.getCode()).isEqualTo(-32603)))
 			.verify(TIMEOUT);
 
@@ -563,7 +563,7 @@ class AcpClientSessionTest {
 					new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), result, null));
 		})
 			.expectErrorSatisfies(error -> assertThat(error)
-				.isInstanceOfSatisfying(com.agentclientprotocol.sdk.error.AcpProtocolException.class,
+				.isInstanceOfSatisfying(AcpError.class,
 						e -> assertThat(e.getCode()).isEqualTo(-32603))
 				.hasMessageContaining("The response to " + method + " lacks the required field " + field))
 			.verify(TIMEOUT);

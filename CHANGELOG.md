@@ -864,7 +864,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`askChoice` fails clearly when the client answers with an option it was not offered.** It
   parsed the chosen option ID as an index, so an unexpected answer failed with
   `NumberFormatException` or `ArrayIndexOutOfBoundsException`. It now fails with an
-  `AcpProtocolException` (`-32603`) naming the ID; a cancelled request still gives an empty result.
+  `AcpError` (`-32603`) naming the ID, with data `{"reason": "unoffered-option", "method":
+  "session/request_permission", "optionId": <id>}`, as any answer the SDK rejects does; a cancelled
+  request still gives an empty result.
 
 - **A request from the agent reaches its client handler only after the session updates sent
   before it.** Requests were handled as they arrived, outside the ordered notification drain, so a
@@ -945,11 +947,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checked for the fields the ACP schema requires, so a peer's `{}` read as a `PromptResponse` whose
   `stopReason()` was null, or a `NewSessionResponse` whose `sessionId()` was null, against the
   records' `@NullMarked` contract. A result is now checked the same way, on both sides and down
-  into nested records: the caller's `Mono` fails with an `AcpProtocolException` with code `-32603`
-  (internal error) and the message `The response to <method> lacks the required field <path>`
-  (for example `modes.currentModeId`). JSON-RPC 2.0 defines no code for an invalid response;
-  `-32603` is the one the SDK already uses for a response without a result. A null result for a
+  into nested records: the caller's `Mono` fails with an `AcpError` with code `-32603` (internal
+  error), the message `The response to <method> lacks the required field <path>` (for example
+  `modes.currentModeId`) and data `{"reason": "missing-required-field", "method": <method>,
+  "field": <path>}`. JSON-RPC 2.0 defines no code for an invalid response. A null result for a
   response type whose fields are all optional still reads as `{}`.
+
+  **A caller catches one type, `AcpError`, for every request that failed with an error code:** a
+  peer's error response, or a response the SDK rejected itself. Besides a missing required field,
+  a response without a result (data reason `missing-result`; it failed with an
+  `AcpProtocolException`) and a result that cannot be read as the method's result type (reason
+  `unreadable-result`; it failed with the mapper's `IllegalArgumentException`) now fail with an
+  `AcpError` with code `-32603`. A rejected response's data is a map with `reason` and `method`;
+  a peer's error carries the peer's data. `askChoice` answered with an option it did not offer
+  fails the same way (reason `unoffered-option`). Timeouts and capability checks keep their own types.
+  `AcpProtocolException` remains what a handler throws to answer with an error. **Migration:**
+  catch `AcpError` instead of `AcpProtocolException` (or `IllegalArgumentException`) around a
+  client or agent call.
 
 - **A failed close is logged as the failure it is.** `AcpSyncClient.closeGracefully()` logged
   "Client didn't close within timeout of 10000 ms" for any failure, also one that happened at once;
