@@ -130,15 +130,47 @@ class AcpClientBeansTest {
 			.rootCause()
 			.hasMessageContaining("Several ACP client transports are configured [WEBSOCKET, HTTP]")
 			.hasMessageContaining("acp.client.transport.type");
-		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.websocket.connect-timeout", "1s")))
-			.rootCause()
-			.hasMessageContaining("An ACP client needs a transport");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "http"))).rootCause()
 			.hasMessageContaining("acp.client.transport.type=http requires acp.client.transport.http.uri");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "websocket"))).rootCause()
 			.hasMessageContaining("acp.client.transport.type=websocket requires acp.client.transport.websocket.uri");
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "stdio"))).rootCause()
 			.hasMessageContaining("acp.client.transport.type=stdio requires acp.client.transport.stdio.command");
+	}
+
+	/** The type binds in any case, as {@code AcpTransportType} reads it everywhere else. */
+	@Test
+	void theTransportTypeBindsInAnyCase() {
+		assertThat(transport(Map.of("acp.client.transport.type", "WebSocket", "acp.client.transport.websocket.uri",
+				"ws://localhost:9/acp", "acp.client.transport.http.uri", "http://localhost:9/acp")))
+			.isInstanceOf(WebSocketAcpClientTransport.class);
+		assertThat(transport(Map.of("acp.client.transport.type", " Http ", "acp.client.transport.http.uri",
+				"http://localhost:9/acp")))
+			.isInstanceOf(StreamableHttpAcpClientTransport.class);
+		assertThat(transport(Map.of("acp.client.transport.type", "StdIO", "acp.client.transport.stdio.command",
+				"my-agent")))
+			.isInstanceOf(StdioAcpClientTransport.class);
+		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "pigeon",
+				"acp.client.transport.http.uri", "http://localhost:9/acp")))
+			.rootCause()
+			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket or http");
+	}
+
+	/**
+	 * As in Spring Boot and {@link AcpClientSettings#hasTransport()}: only a type, a command or a
+	 * URI asks for a client. Another transport setting alone, such as the WebSocket connect
+	 * timeout, creates no client beans.
+	 */
+	@Test
+	void aTransportSettingThatNamesNoAgentCreatesNoClient() {
+		for (String key : List.of("acp.client.transport.websocket.connect-timeout",
+				"acp.client.transport.stdio.args", "acp.client.transport.stdio.env.AGENT_MODE")) {
+			try (ApplicationContext context = ApplicationContext.run(Map.of(key, "1s"))) {
+				assertThat(context.findBean(AcpClientTransport.class)).as(key).isEmpty();
+				assertThat(context.findBean(AcpAsyncClient.class)).as(key).isEmpty();
+				assertThat(context.findBean(AcpSyncClient.class)).as(key).isEmpty();
+			}
+		}
 	}
 
 	@Test

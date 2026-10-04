@@ -13,6 +13,7 @@ import io.micronaut.context.ApplicationContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Every {@code acp.agent.*} setting binds, and the defaults hold when none is set. */
 class AcpAgentConfigurationTest {
@@ -26,6 +27,7 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getCancelGracePeriod()).isEqualTo(Duration.ofSeconds(60));
 			assertThat(config.getMaxPromptDuration()).isEqualTo(Duration.ZERO);
 			assertThat(config.isShutdownOnTransportEnd()).isTrue();
+			assertThat(config.getShutdownTimeout()).isEqualTo(Duration.ofSeconds(10));
 			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
 			assertThat(http.getPort()).isEqualTo(8080);
@@ -48,7 +50,7 @@ class AcpAgentConfigurationTest {
 		Map<String, Object> properties = Map.ofEntries(Map.entry("acp.agent.enabled", "false"),
 				Map.entry("acp.agent.request-timeout", "7s"), Map.entry("acp.agent.cancel-grace-period", "3s"),
 				Map.entry("acp.agent.max-prompt-duration", "2m"),
-				Map.entry("acp.agent.shutdown-on-transport-end", "false"),
+				Map.entry("acp.agent.shutdown-on-transport-end", "false"), Map.entry("acp.agent.shutdown-timeout", "6s"),
 				Map.entry("acp.agent.transport.type", "http"), Map.entry("acp.agent.transport.http.port", "9123"),
 				Map.entry("acp.agent.transport.http.path", "/agents/acp"),
 				Map.entry("acp.agent.transport.http.max-post-body-size", "2MB"),
@@ -66,6 +68,7 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getCancelGracePeriod()).isEqualTo(Duration.ofSeconds(3));
 			assertThat(config.getMaxPromptDuration()).isEqualTo(Duration.ofMinutes(2));
 			assertThat(config.isShutdownOnTransportEnd()).isFalse();
+			assertThat(config.getShutdownTimeout()).isEqualTo(Duration.ofSeconds(6));
 			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.HTTP);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
 			assertThat(http.getPort()).isEqualTo(9123);
@@ -92,6 +95,22 @@ class AcpAgentConfigurationTest {
 					.isEqualToIgnoringCase(value);
 			}
 		}
+	}
+
+	/** The type binds in any case, as {@code AcpTransportType} reads it everywhere else. */
+	@Test
+	void theTransportTypeBindsInAnyCase() {
+		for (Map.Entry<String, AcpTransportType> value : Map
+			.of("WebSocket", AcpTransportType.WEBSOCKET, "Http", AcpTransportType.HTTP, " StdIO ", AcpTransportType.STDIO)
+			.entrySet()) {
+			try (ApplicationContext context = ApplicationContext
+				.run(Map.of("acp.agent.transport.type", value.getKey()))) {
+				assertThat(context.getBean(AcpAgentConfiguration.class).getTransport().getType()).as(value.getKey())
+					.isEqualTo(value.getValue());
+			}
+		}
+		assertThatThrownBy(() -> ApplicationContext.run(Map.of("acp.agent.transport.type", "pigeon")))
+			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket or http");
 	}
 
 }

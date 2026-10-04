@@ -74,10 +74,11 @@ import org.slf4j.LoggerFactory;
  * may also return a {@code Mono}, a {@code CompletionStage} or a single-value Reactive Streams
  * {@code Publisher}, which {@code AcpAgentSupport} waits for.
  *
- * <p>Stopping: closing the context closes the agent gracefully, waiting at most
- * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds, then at
- * once. With {@code micronaut.lifecycle.graceful-shutdown.enabled} the listener drains through
- * Micronaut's graceful shutdown first. An application without an embedded server has no shutdown
+ * <p>Stopping: closing the context closes the agent gracefully, then at once: over stdio after at
+ * most {@code acp.agent.shutdown-timeout} (10 seconds by default), over HTTP after at most
+ * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds. With
+ * {@code micronaut.lifecycle.graceful-shutdown.enabled} the listener drains through Micronaut's
+ * graceful shutdown first. An application without an embedded server has no shutdown
  * hook of Micronaut's, so the runtime registers one that closes the agent and the context on
  * SIGTERM. With {@code acp.agent.enabled=false} this bean does not exist.
  */
@@ -87,7 +88,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpAgentRuntime.class);
 
-	/** Margin over the agent's own shutdown bound when closing waits for it. */
+	/** Margin over the listener's own shutdown bound when closing waits for it. */
 	private static final Duration CLOSE_MARGIN = Duration.ofSeconds(5);
 
 	private final ApplicationContext context;
@@ -213,9 +214,10 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	}
 
 	/**
-	 * Closes the agent gracefully, waiting at most
-	 * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds, then
-	 * at once; the application context's close does this. Later calls do nothing.
+	 * Closes the agent gracefully, then at once: over stdio after at most
+	 * {@code acp.agent.shutdown-timeout} (10 seconds by default), over HTTP after at most
+	 * {@code acp.agent.transport.http.shutdown-timeout} (5 seconds by default) plus 5 seconds. The
+	 * application context's close does this. Later calls do nothing.
 	 */
 	@PreDestroy
 	public void close() {
@@ -238,9 +240,13 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 		}
 	}
 
-	private Duration closeTimeout() {
-		Duration shutdownTimeout = config.getTransport().getHttp().getShutdownTimeout();
-		Duration bound = (shutdownTimeout != null) ? shutdownTimeout : Duration.ofSeconds(5);
+	/** How long {@link #close()} waits for the graceful close, by transport. */
+	Duration closeTimeout() {
+		if (!config.toSettings().servesHttp()) {
+			return config.getShutdownTimeout();
+		}
+		Duration listenerTimeout = config.getTransport().getHttp().getShutdownTimeout();
+		Duration bound = (listenerTimeout != null) ? listenerTimeout : Duration.ofSeconds(5);
 		return bound.plus(CLOSE_MARGIN);
 	}
 

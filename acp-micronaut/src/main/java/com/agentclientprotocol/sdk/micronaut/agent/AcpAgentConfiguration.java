@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
  * acp.agent.cancel-grace-period          60s     after session/cancel, then answer "cancelled"
  * acp.agent.max-prompt-duration          0s      none; else answer -32800 after it
  * acp.agent.shutdown-on-transport-end    true    close the context when stdio input ends
+ * acp.agent.shutdown-timeout             10s     closing waits this long for a stdio agent
  * acp.agent.transport.type               stdio   stdio | http | websocket
  * acp.agent.transport.http.port          8080    0 for an ephemeral port
  * acp.agent.transport.http.path          /acp
@@ -47,6 +48,12 @@ public class AcpAgentConfiguration {
 	/** The prefix of the agent's settings. */
 	public static final String PREFIX = "acp.agent";
 
+	/**
+	 * The default of {@code acp.agent.shutdown-timeout}, 10 seconds: as long as the SDK's own
+	 * graceful close of an agent takes at most.
+	 */
+	public static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
+
 	private boolean enabled = true;
 
 	private Duration requestTimeout = Duration.ofSeconds(60);
@@ -56,6 +63,8 @@ public class AcpAgentConfiguration {
 	private Duration maxPromptDuration = Duration.ZERO;
 
 	private boolean shutdownOnTransportEnd = true;
+
+	private Duration shutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT;
 
 	private Transport transport = new Transport();
 
@@ -160,6 +169,29 @@ public class AcpAgentConfiguration {
 	}
 
 	/**
+	 * Returns how long closing the application context waits for a stdio agent to close
+	 * gracefully, answering or cancelling what is in flight, before it closes the agent at once
+	 * ({@code acp.agent.shutdown-timeout}). Default 10 seconds
+	 * ({@link #DEFAULT_SHUTDOWN_TIMEOUT}), as long as the SDK's graceful close takes at most, so a
+	 * longer value changes nothing. It applies to a single transport (stdio, or an
+	 * {@code AcpAgentTransport} bean of the application's own); the HTTP listener has its own,
+	 * {@code acp.agent.transport.http.shutdown-timeout}. Spring Boot and Quarkus have no such
+	 * property: they wait at most 30 seconds.
+	 * @return the shutdown timeout
+	 */
+	public Duration getShutdownTimeout() {
+		return shutdownTimeout;
+	}
+
+	/**
+	 * Sets how long closing waits for a stdio agent to close gracefully; default 10 seconds.
+	 * @param shutdownTimeout the timeout; zero closes the agent at once
+	 */
+	public void setShutdownTimeout(Duration shutdownTimeout) {
+		this.shutdownTimeout = shutdownTimeout;
+	}
+
+	/**
 	 * Returns the transport properties, {@code acp.agent.transport.*}.
 	 * @return the transport properties
 	 */
@@ -227,7 +259,7 @@ public class AcpAgentConfiguration {
 		 * without it the startup fails naming the module.</li>
 		 * <li>{@code websocket}: the same listener as {@code http}.</li>
 		 * </ul>
-		 * The value is read in lower or upper case.
+		 * The value is read in any case, such as {@code http} or {@code Http}.
 		 * @return the transport type
 		 */
 		public AcpTransportType getType() {
@@ -477,8 +509,10 @@ public class AcpAgentConfiguration {
 			 * Returns how long closing the listener waits for its connections' agents to close
 			 * before it closes the rest at once
 			 * ({@code acp.agent.transport.http.shutdown-timeout}). Default: unset, which keeps the
-			 * SDK's default of 5 seconds. Closing the application context waits for the agent at
-			 * most this long plus 5 seconds. Maps to the transport option {@code shutdownTimeout}.
+			 * SDK's default of 5 seconds. Closing the application context waits for the listener at
+			 * most this long plus 5 seconds. Only the listener reads it: a stdio agent's close is
+			 * bounded by {@code acp.agent.shutdown-timeout}. Maps to the transport option
+			 * {@code shutdownTimeout}.
 			 * @return the timeout, or {@code null} for the SDK's default
 			 */
 			public @Nullable Duration getShutdownTimeout() {

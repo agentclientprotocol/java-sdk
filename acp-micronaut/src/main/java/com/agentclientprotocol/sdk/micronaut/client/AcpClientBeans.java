@@ -18,10 +18,13 @@ import jakarta.inject.Singleton;
 
 /**
  * Creates the application's ACP client from {@code acp.client.*} ({@link AcpClientConfiguration})
- * when any {@code acp.client.transport.*} property is set: its transport, an
+ * when a transport is named, that is when {@code acp.client.transport.type},
+ * {@code .stdio.command}, {@code .websocket.uri} or {@code .http.uri} is set: its transport, an
  * {@link AcpAsyncClient}, and an {@link AcpSyncClient} facade over that same client, so both share
- * one transport connection. Inject either. An application without client properties gets none of
- * these beans.
+ * one transport connection. Inject either. An application that sets none of these four gets none
+ * of these beans, even with other client properties set, such as
+ * {@code acp.client.transport.websocket.connect-timeout}; Spring Boot and Quarkus decide the same
+ * way ({@link com.agentclientprotocol.sdk.integration.AcpClientSettings#hasTransport()}).
  *
  * <p>The beans are singletons, created when first injected or looked up. Creating the client
  * connects its transport (for stdio, starts the agent process); the application then calls
@@ -34,7 +37,7 @@ import jakarta.inject.Singleton;
  * annotated {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
  */
 @Factory
-@Requires(property = AcpClientConfiguration.PREFIX + ".transport")
+@Requires(condition = AcpClientTransportCondition.class)
 public class AcpClientBeans {
 
 	/**

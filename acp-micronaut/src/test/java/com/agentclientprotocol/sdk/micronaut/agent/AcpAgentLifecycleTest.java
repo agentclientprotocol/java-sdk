@@ -97,6 +97,32 @@ class AcpAgentLifecycleTest {
 			.hasMessageContaining(TestAgents.OtherAgent.class.getName());
 	}
 
+	/**
+	 * Closing a stdio (or application-transport) agent waits at most
+	 * {@code acp.agent.shutdown-timeout}, 10 seconds by default, whatever the HTTP listener's
+	 * {@code acp.agent.transport.http.shutdown-timeout} says; the listener's close keeps its own
+	 * bound, that timeout plus 5 seconds.
+	 */
+	@Test
+	void theStdioCloseBoundIsItsOwnSetting() {
+		assertThat(closeTimeout(Map.of())).isEqualTo(Duration.ofSeconds(10));
+		assertThat(closeTimeout(Map.of("acp.agent.transport.http.shutdown-timeout", "60s")))
+			.isEqualTo(Duration.ofSeconds(10));
+		assertThat(closeTimeout(Map.of("acp.agent.shutdown-timeout", "3s"))).isEqualTo(Duration.ofSeconds(3));
+		assertThat(closeTimeout(Map.of("acp.agent.transport.type", "http", "acp.agent.shutdown-timeout", "3s",
+				"acp.agent.transport.http.shutdown-timeout", "2s")))
+			.isEqualTo(Duration.ofSeconds(7));
+		assertThat(closeTimeout(Map.of("acp.agent.transport.type", "http"))).isEqualTo(Duration.ofSeconds(10));
+	}
+
+	private static Duration closeTimeout(Map<String, Object> settings) {
+		Map<String, Object> properties = new HashMap<>(settings);
+		properties.put(TestAgents.IN_MEMORY, "true");
+		try (ApplicationContext context = ApplicationContext.run(properties)) {
+			return context.getBean(AcpAgentRuntime.class).closeTimeout();
+		}
+	}
+
 	static boolean threadNamed(String name) {
 		return Thread.getAllStackTraces().keySet().stream().anyMatch(t -> t.isAlive() && t.getName().equals(name));
 	}

@@ -1048,6 +1048,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Micronaut: `acp.agent.transport.type` and `acp.client.transport.type` bind in any case.**
+  `AcpTransportType` reads the type in any case, as Spring Boot and Quarkus do, but Micronaut's own
+  enum conversion took only `websocket` or `WEBSOCKET`: a mixed-case `WebSocket` failed the agent's
+  startup, and on the client was silently dropped, so the transport was inferred as if no type were
+  set. Both now bind through `AcpTransportType.parse`, and an unknown value fails the startup with
+  "Unknown ACP transport type '...': use stdio, websocket or http" on both sides.
+
+- **Micronaut: only a type, a command or a URI creates the client beans.** Any
+  `acp.client.transport.*` property created them, so `acp.client.transport.websocket.connect-timeout`
+  alone (or `stdio.args`, `stdio.env.*`) made the client beans, which then failed with "An ACP
+  client needs a transport". The beans are now created only when `acp.client.transport.type`,
+  `.stdio.command`, `.websocket.uri` or `.http.uri` is set, the test Spring Boot and
+  `AcpClientSettings.hasTransport()` use. Behaviour change: such a property alone now leaves the
+  application without a client, instead of failing it.
+
+- **Micronaut: a stdio agent's close has its own bound, `acp.agent.shutdown-timeout`** (default
+  `10s`). Closing the context waited for a stdio agent at most
+  `acp.agent.transport.http.shutdown-timeout` plus 5 seconds, a listener setting that a stdio agent
+  otherwise ignores. The HTTP listener keeps that bound; a stdio agent, or an `AcpAgentTransport`
+  bean of the application's own, now waits at most `acp.agent.shutdown-timeout`, then closes at
+  once. The default keeps the old default wait, 10 seconds, which is also as long as the SDK's own
+  graceful close takes at most. Behaviour change: an application that set the HTTP key to bound its
+  stdio agent's close sets `acp.agent.shutdown-timeout` instead.
+
 - **Spring Boot: `spring.acp.agent.enabled=false` turns the agent off on every transport.** The
   stdio transport and the HTTP endpoint already backed off, but `AcpAgentAutoConfiguration` did
   not: it still built the `AcpAgentFactory` from the `@AcpAgent` bean and still served the agent on

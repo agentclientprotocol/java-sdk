@@ -87,11 +87,12 @@ public final class Application {
 | `acp.agent.cancel-grace-period` | `60s` | after `session/cancel`, the SDK answers `cancelled` itself; `0s` for never |
 | `acp.agent.max-prompt-duration` | `0s` (none) | a longer prompt is answered `-32800` |
 | `acp.agent.shutdown-on-transport-end` | `true` | close the context when the stdio input ends |
-| `acp.agent.transport.type` | `stdio` | `stdio`, `http` or `websocket` (the last two mean the same listener) |
+| `acp.agent.shutdown-timeout` | `10s` | how long closing waits for a stdio agent's graceful close, then closes it at once |
+| `acp.agent.transport.type` | `stdio` | `stdio`, `http` or `websocket`, in any case (the last two mean the same listener) |
 | `acp.agent.transport.http.port` | `8080` | the listener's own port; `0` for an ephemeral one (`AcpAgentRuntime.port()`) |
 | `acp.agent.transport.http.path` | `/acp` | |
 | `acp.agent.transport.http.max-post-body-size` | SDK (16MB) | e.g. `4MB` |
-| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `max-concurrent-streams-per-connection`, `shutdown-timeout` | SDK | `StreamableHttpAcpAgentTransportOptions` |
+| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `max-concurrent-streams-per-connection`, `shutdown-timeout` | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
 
 An application bean of type `AcpAgentTransport` replaces stdio, for example the in-memory
 transport of `acp-test` in a test.
@@ -102,7 +103,8 @@ one, not inside it. It serves HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades 
 
 ## A client
 
-A client is configured when `acp.client.transport.*` is set. It has three beans: the transport,
+A client is configured when a transport is named: `acp.client.transport.type`, `.stdio.command`,
+`.websocket.uri` or `.http.uri` is set, as in Spring Boot and Quarkus. It has three beans: the transport,
 an `AcpAsyncClient`, and an `AcpSyncClient` facade over that same client, which is one session on
 one connection. Creating the client bean connects its transport (for stdio, it starts the agent
 process); `initialize()` then performs the ACP handshake. It closes gracefully, once, with the
@@ -123,7 +125,7 @@ class Updates implements AcpClientCustomizer {
 |---|---|---|
 | `acp.client.request-timeout` | `60s` | |
 | `acp.client.prompt-timeout` | none | a longer prompt turn fails and is cancelled |
-| `acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`. When it is unset, the transport is the only one whose command or URI is set; with several set, it is required |
+| `acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`, in any case. When it is unset, the transport is the only one whose command or URI is set; with several set, it is required |
 | `acp.client.transport.stdio.command`, `.args`, `.env.*` | | the agent process; `env` keys keep their case |
 | `acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | `ws://host:port/acp` |
 | `acp.client.transport.http.uri` | | `http://host:port/acp` |

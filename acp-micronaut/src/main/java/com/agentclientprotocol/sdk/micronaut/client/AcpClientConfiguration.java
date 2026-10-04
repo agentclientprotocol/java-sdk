@@ -25,10 +25,13 @@ import org.jspecify.annotations.Nullable;
  * a WebSocket or Streamable HTTP endpoint), set the client's timeouts, and say which capabilities
  * the client advertises. {@link AcpClientBeans} builds the client from them.
  *
- * <p>Setting a transport is what creates the client beans: any {@code acp.client.transport.*}
- * property does, and then {@code acp.client.transport.stdio.command}, {@code .websocket.uri} or
- * {@code .http.uri} must name the agent (with {@code acp.client.transport.type} when more than one
- * is set).
+ * <p>Naming a transport is what creates the client beans: setting
+ * {@code acp.client.transport.type}, {@code .stdio.command}, {@code .websocket.uri} or
+ * {@code .http.uri}, as in Spring Boot and Quarkus. Another transport property alone, such as
+ * {@code .websocket.connect-timeout}, creates none. Then {@code .stdio.command},
+ * {@code .websocket.uri} or {@code .http.uri} must name the agent (with
+ * {@code acp.client.transport.type} when more than one is set). The type binds in any case, such
+ * as {@code websocket} or {@code WebSocket}.
  *
  * <pre>
  * acp.client.request-timeout                    60s
@@ -181,7 +184,8 @@ public class AcpClientConfiguration {
 
 		/**
 		 * Returns the transport ({@code acp.client.transport.type}): {@code stdio},
-		 * {@code websocket} or {@code http}. Maps to {@link AcpClientSettings#transport()}.
+		 * {@code websocket} or {@code http}, in any case. Maps to
+		 * {@link AcpClientSettings#transport()}.
 		 *
 		 * <p>Unset (the default), the transport is the one whose {@code stdio.command},
 		 * {@code websocket.uri} or {@code http.uri} is set; with more than one set, creating the
