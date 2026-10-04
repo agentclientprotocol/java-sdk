@@ -112,7 +112,8 @@ class Updates implements AcpClientCustomizer {        // optional; @Priority ord
 }
 ```
 
-The client beans are created when first injected and closed when the application stops; a bean of
+`AcpClientCustomizer` is `com.agentclientprotocol.sdk.integration.AcpClientCustomizer`, the same
+type in every framework integration. The client beans are created when first injected and closed when the application stops; a bean of
 your own of the same type replaces each. Client callbacks run on SDK threads, not on a Vert.x
 context: from a `Uni` built over a client call, hop back with `emitOn` when you need the context.
 
@@ -123,7 +124,7 @@ Build time (fixed when the application is built):
 | Property | Default | |
 |---|---|---|
 | `quarkus.acp.agent.enabled` | `true` | serve the `@AcpAgent` bean |
-| `quarkus.acp.agent.transport.type` | `stdio` | `stdio` or `http` |
+| `quarkus.acp.agent.transport.type` | `stdio` | `stdio` or `http` (`websocket` means the same as `http`) |
 | `quarkus.acp.agent.transport.http.path` | `/acp` | endpoint path (Streamable HTTP and WebSocket) |
 
 Run time:
@@ -142,7 +143,7 @@ Run time:
 | `quarkus.acp.agent.transport.http.max-provisional-sessions` | 64 | |
 | `quarkus.acp.agent.transport.http.shutdown-timeout` | 5s | |
 | `quarkus.acp.client.request-timeout` | SDK default | |
-| `quarkus.acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`; unset: WebSocket if `websocket.uri`, else HTTP if `http.uri`, else stdio if `stdio.command` |
+| `quarkus.acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`; unset: the one of `stdio.command`, `websocket.uri` and `http.uri` that is set; with several set, it is required |
 | `quarkus.acp.client.transport.stdio.command`, `.args`, `.env.<NAME>` | | the agent process |
 | `quarkus.acp.client.transport.websocket.uri`, `.connect-timeout` | `10s` | |
 | `quarkus.acp.client.transport.http.uri` | | |
