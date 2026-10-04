@@ -67,10 +67,13 @@ import reactor.core.scheduler.Schedulers;
  * <h2>The agent's requests</h2>
  *
  * <p>The agent calls back into the client for files ({@code fs/*}), terminals ({@code terminal/*}),
- * permission and elicitation. Register a handler for each one you support, and advertise the
- * matching capabilities with {@code clientCapabilities(...)}: the builder does not derive them from
- * the handlers, but {@code build()} fails when a capability is advertised without its handlers and
- * warns about a handler whose capability is not advertised. A request without a handler is
+ * permission and elicitation. Register a handler for each one you support. Without
+ * {@code clientCapabilities(...)}, the client advertises what its handlers serve:
+ * {@code fs.readTextFile} and {@code fs.writeTextFile} for their handlers, {@code terminal} once all
+ * five terminal handlers are registered, and form-mode elicitation for an elicitation handler.
+ * Capabilities set with {@code clientCapabilities(...)} replace that derivation entirely; then
+ * {@code build()} fails when a capability is advertised without its handlers and warns about a
+ * handler whose capability is not advertised. A request without a handler is
  * answered {@code -32601} (method not found). A request reaches its handler once the session
  * updates the agent sent before it have been handled (see below); handlers do not wait for each
  * other. Asynchronous handlers are called on the thread that delivered the request or finished the
@@ -269,13 +272,16 @@ public interface AcpClient {
 
 		/**
 		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
-		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
-		 * is the only place they are set, and every initialize request carries them. Register the
-		 * handlers that serve them as well: the builder does not derive the capabilities from the
-		 * handlers, but {@code build()} throws when {@code fs.readTextFile},
+		 * reads and writes, terminals, boolean config options, authentication and elicitation.
+		 * Every initialize request carries them. Set this way they are the whole truth: nothing is
+		 * derived from the handlers, {@code build()} throws when {@code fs.readTextFile},
 		 * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} is advertised without
-		 * its handlers, and logs a warning for a handler whose capability is not. Default:
-		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
+		 * its handlers, and logs a warning for a handler whose capability is not. Default: derived
+		 * from the handlers ({@code fs.readTextFile} and {@code fs.writeTextFile} for their
+		 * handlers, {@code terminal} once all five terminal handlers are registered, form-mode
+		 * elicitation for an elicitation handler), which is {@code new ClientCapabilities()} when
+		 * none is registered. Set them for anything the handlers cannot say: URL-mode elicitation,
+		 * boolean config options, terminal authentication or {@code _meta}. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities the capabilities
 		 * @return this builder
@@ -301,9 +307,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
-		 * file, which should include unsaved changes in the user's editor. Advertise
-		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
-		 * it for you, and warns at {@code build()} if you do not.
+		 * file, which should include unsaved changes in the user's editor. Without
+		 * {@link #clientCapabilities} the client advertises {@code fs.readTextFile} for it; with
+		 * them, advertise it there as well, or {@code build()} warns.
 		 *
 		 * <pre>{@code
 		 * .readTextFileHandler(request -> Mono
@@ -325,8 +331,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code fs/write_text_file}: the agent asks to write a text file,
-		 * which ACP requires the client to create if it does not exist. Advertise
-		 * {@code fs.writeTextFile} in {@link #clientCapabilities} as well.
+		 * which ACP requires the client to create if it does not exist. Without
+		 * {@link #clientCapabilities} the client advertises {@code fs.writeTextFile} for it; with
+		 * them, advertise it there as well.
 		 *
 		 * <pre>{@code
 		 * .writeTextFileHandler(request -> Mono
@@ -372,8 +379,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code terminal/create}: the agent asks to start a command in a new
-		 * terminal and gets back its ID. Advertise {@code terminal} in {@link #clientCapabilities}
-		 * and register the other four terminal handlers as well.
+		 * terminal and gets back its ID. Register the other four terminal handlers as well: with all
+		 * five, the client advertises {@code terminal} unless {@link #clientCapabilities} are set,
+		 * in which case advertise it there.
 		 *
 		 * @param handler the handler; it emits the answer to the agent
 		 * @return this builder
@@ -454,8 +462,9 @@ public interface AcpClient {
 		 *
 		 * <p>A request whose mode ({@code form} or {@code url}) the client did not advertise in its
 		 * elicitation capabilities is answered with {@code -32602} (invalid params) without calling
-		 * the handler. Advertise the modes the handler supports, for example with
-		 * {@link AcpSchema.ElicitationCapabilities#formOnly()}.
+		 * the handler. Without {@link #clientCapabilities} the client advertises form mode for this
+		 * handler; to offer URL mode, advertise the modes the handler supports there, for example
+		 * with {@link AcpSchema.ElicitationCapabilities#formAndUrl()}.
 		 * @param handler the handler; it emits the user's answer
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code handler} is null
@@ -677,23 +686,56 @@ public interface AcpClient {
 			return this;
 		}
 
+		/** The five {@code terminal/*} methods, all served for {@code terminal} to be advertised. */
+		private static final List<String> TERMINAL_METHODS = List.of(AcpSchema.METHOD_TERMINAL_CREATE,
+				AcpSchema.METHOD_TERMINAL_OUTPUT, AcpSchema.METHOD_TERMINAL_RELEASE,
+				AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT, AcpSchema.METHOD_TERMINAL_KILL);
+
+		/**
+		 * The capabilities a client without {@code clientCapabilities(..)} advertises: what its
+		 * handlers serve. Terminals need all five handlers; an elicitation handler advertises form
+		 * mode, the mode every elicitation client renders (URL mode is advertised explicitly). With
+		 * no such handler it is {@code new ClientCapabilities()}. Warns about a partial set of
+		 * terminal handlers, which advertises no terminal.
+		 */
+		private AcpSchema.ClientCapabilities deriveCapabilities() {
+			AcpSchema.ClientCapabilities.Builder derived = AcpSchema.ClientCapabilities.builder();
+			if (this.requestHandlers.containsKey(AcpSchema.METHOD_FS_READ_TEXT_FILE)) {
+				derived.readTextFile();
+			}
+			if (this.requestHandlers.containsKey(AcpSchema.METHOD_FS_WRITE_TEXT_FILE)) {
+				derived.writeTextFile();
+			}
+			List<String> absent = TERMINAL_METHODS.stream()
+				.filter(method -> !this.requestHandlers.containsKey(method))
+				.map(TYPED_REQUEST_SETTERS::get)
+				.toList();
+			if (absent.isEmpty()) {
+				derived.terminal();
+			}
+			else if (absent.size() < TERMINAL_METHODS.size()) {
+				logger.warn("The client has some terminal handlers but not {}, so it does not advertise terminal and "
+						+ "an agent will not call them. Register all five terminal handlers", String.join(", ", absent));
+			}
+			if (this.createElicitationHandler != null) {
+				derived.elicitationForm();
+			}
+			return derived.build();
+		}
+
 		/**
 		 * Fails when the advertised capabilities claim a capability without the handlers that
 		 * serve it, and warns once about handlers for capabilities not advertised.
 		 */
-		private void checkCapabilitiesHaveHandlers() {
-			NegotiatedCapabilities advertised = NegotiatedCapabilities.fromClient(this.clientCapabilities);
+		private void checkCapabilitiesHaveHandlers(AcpSchema.ClientCapabilities capabilities) {
+			NegotiatedCapabilities advertised = NegotiatedCapabilities.fromClient(capabilities);
 			List<String> missing = new ArrayList<>();
 			List<String> unadvertised = new ArrayList<>();
 			checkCapability("fs.readTextFile", advertised.supportsReadTextFile(),
 					List.of(AcpSchema.METHOD_FS_READ_TEXT_FILE), missing, unadvertised);
 			checkCapability("fs.writeTextFile", advertised.supportsWriteTextFile(),
 					List.of(AcpSchema.METHOD_FS_WRITE_TEXT_FILE), missing, unadvertised);
-			checkCapability("terminal", advertised.supportsTerminal(),
-					List.of(AcpSchema.METHOD_TERMINAL_CREATE, AcpSchema.METHOD_TERMINAL_OUTPUT,
-							AcpSchema.METHOD_TERMINAL_RELEASE, AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT,
-							AcpSchema.METHOD_TERMINAL_KILL),
-					missing, unadvertised);
+			checkCapability("terminal", advertised.supportsTerminal(), TERMINAL_METHODS, missing, unadvertised);
 			// An elicitation capability without a mode advertises nothing the agent may ask for.
 			checkCapability("elicitation", advertised.supportsElicitationForm() || advertised.supportsElicitationUrl(),
 					List.of(AcpSchema.METHOD_ELICITATION_CREATE), missing, unadvertised);
@@ -754,7 +796,16 @@ public interface AcpClient {
 		 * later fails the client's requests instead
 		 */
 		public AcpAsyncClient build() {
-			checkCapabilitiesHaveHandlers();
+			// Explicit capabilities win; without them the handlers decide what is advertised
+			AcpSchema.@Nullable ClientCapabilities explicit = this.clientCapabilities;
+			AcpSchema.ClientCapabilities capabilities;
+			if (explicit != null) {
+				checkCapabilitiesHaveHandlers(explicit);
+				capabilities = explicit;
+			}
+			else {
+				capabilities = deriveCapabilities();
+			}
 
 			// Set up session update notification handler: the application's handlers, or else the
 			// default one
@@ -799,7 +850,7 @@ public interface AcpClient {
 			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers, notifications,
 					Function.identity());
 
-			return new AcpAsyncClient(session, transport, clientCapabilities, clientInfo, advertised, promptTimeout);
+			return new AcpAsyncClient(session, transport, capabilities, clientInfo, advertised, promptTimeout);
 		}
 
 		/**
@@ -921,13 +972,16 @@ public interface AcpClient {
 
 		/**
 		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
-		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
-		 * is the only place they are set, and every initialize request carries them. Register the
-		 * handlers that serve them as well: the builder does not derive the capabilities from the
-		 * handlers, but {@code build()} throws when {@code fs.readTextFile},
+		 * reads and writes, terminals, boolean config options, authentication and elicitation.
+		 * Every initialize request carries them. Set this way they are the whole truth: nothing is
+		 * derived from the handlers, {@code build()} throws when {@code fs.readTextFile},
 		 * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} is advertised without
-		 * its handlers, and logs a warning for a handler whose capability is not. Default:
-		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
+		 * its handlers, and logs a warning for a handler whose capability is not. Default: derived
+		 * from the handlers ({@code fs.readTextFile} and {@code fs.writeTextFile} for their
+		 * handlers, {@code terminal} once all five terminal handlers are registered, form-mode
+		 * elicitation for an elicitation handler), which is {@code new ClientCapabilities()} when
+		 * none is registered. Set them for anything the handlers cannot say: URL-mode elicitation,
+		 * boolean config options, terminal authentication or {@code _meta}. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities the capabilities
 		 * @return this builder
@@ -951,9 +1005,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
-		 * file, which should include unsaved changes in the user's editor. Advertise
-		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
-		 * it for you, and warns at {@code build()} if you do not.
+		 * file, which should include unsaved changes in the user's editor. Without
+		 * {@link #clientCapabilities} the client advertises {@code fs.readTextFile} for it; with
+		 * them, advertise it there as well, or {@code build()} warns.
 		 *
 		 * <pre>{@code
 		 * .readTextFileHandler(request -> {
@@ -979,8 +1033,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code fs/write_text_file}: the agent asks to write a text file,
-		 * which ACP requires the client to create if it does not exist. Advertise
-		 * {@code fs.writeTextFile} in {@link #clientCapabilities} as well.
+		 * which ACP requires the client to create if it does not exist. Without
+		 * {@link #clientCapabilities} the client advertises {@code fs.writeTextFile} for it; with
+		 * them, advertise it there as well.
 		 *
 		 * @param handler the handler; it returns the answer to the agent
 		 * @return this builder
@@ -1022,8 +1077,9 @@ public interface AcpClient {
 
 		/**
 		 * Sets the handler for {@code terminal/create}: the agent asks to start a command in a new
-		 * terminal and gets back its ID. Advertise {@code terminal} in {@link #clientCapabilities}
-		 * and register the other four terminal handlers as well.
+		 * terminal and gets back its ID. Register the other four terminal handlers as well: with all
+		 * five, the client advertises {@code terminal} unless {@link #clientCapabilities} are set,
+		 * in which case advertise it there.
 		 *
 		 * @param handler the handler; it returns the answer to the agent
 		 * @return this builder

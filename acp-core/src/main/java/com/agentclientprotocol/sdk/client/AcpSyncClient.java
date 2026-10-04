@@ -153,8 +153,8 @@ public class AcpSyncClient implements AutoCloseable {
 	 *
 	 * <p>The builder is the only place the client's capabilities are set, so what the client
 	 * advertises is also what its handlers honour (an elicitation mode it did not advertise is
-	 * refused). Without {@code clientCapabilities(...)} the client advertises
-	 * {@code new ClientCapabilities()}: no file system and no terminal.
+	 * refused). Without {@code clientCapabilities(...)} the client advertises what its handlers
+	 * serve, and {@code new ClientCapabilities()} (no file system, no terminal) when it has none.
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_INITIALIZE
 	 * @see #initialize(int, Map)

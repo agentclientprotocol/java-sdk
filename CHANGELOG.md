@@ -527,6 +527,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one daemon platform thread per JVM, so that handlers pinning every carrier thread cannot also
   stop the timeouts meant to end them. On JDK 17 nothing changes. Migration: none.
 
+- **The client advertises the capabilities its handlers serve, as the agent side does.** A client
+  builder without `clientCapabilities(..)` now advertises `fs.readTextFile` and `fs.writeTextFile`
+  for their handlers, `terminal` once all five terminal handlers are registered (some but not all
+  log a warning naming the missing ones and advertise no terminal), and form-mode elicitation for
+  a `createElicitationHandler`. Before, it advertised nothing and only warned, so an SDK agent
+  refused to call the handlers. Merge rule: **explicit wins**. Capabilities set with
+  `clientCapabilities(..)` are sent as they are, nothing is derived, and the existing check
+  applies (an advertised capability without its handler fails `build()`; a handler without its
+  capability is a warning). Explicit capabilities are the one source of truth whenever they are
+  given, so the frameworks, which always pass the capabilities their settings name, advertise
+  exactly what the settings say, as before: a handler a customizer adds never widens them.
+  An OR of the two would let a handler silently advertise what a setting turned off. Set
+  capabilities explicitly for what handlers cannot express: URL-mode elicitation, boolean config
+  options, terminal authentication, `_meta`. Migration: none for code that sets
+  `clientCapabilities(..)`. A client that registered handlers without capabilities on purpose,
+  so that agents would not call them, passes `clientCapabilities(new ClientCapabilities())`.
+
 - **Breaking: the prompt context is split into its two layers.** `PromptContext` and
   `SyncPromptContext` keep the convenience layer — `sendMessage`, `sendThought`,
   `sendSessionUpdate`, `readFile`, `tryReadFile` (sync), `writeFile`, `askPermission`, `askChoice`,

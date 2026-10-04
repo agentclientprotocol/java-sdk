@@ -346,13 +346,19 @@ AcpSyncClient client = AcpClient.sync(transport)
 
 Check what features the peer supports before using them ([tutorial](https://github.com/markpollack/acp-java-tutorial/tree/main/module-17-capability-negotiation)):
 
+A client builder without `clientCapabilities(..)` advertises what its handlers serve:
+`fs.readTextFile` and `fs.writeTextFile` for their handlers, `terminal` once all five terminal
+handlers are registered, and form-mode elicitation for an elicitation handler. Set
+`clientCapabilities(..)` for what handlers cannot say (URL-mode elicitation, boolean config
+options, `_meta`); explicit capabilities replace the derived ones, and `build()` fails if one is
+advertised without its handler:
+`ClientCapabilities.builder().readTextFile().writeTextFile().session(ClientSessionCapabilities.withBooleanConfigOptions()).build()`.
+
 ```java
-// Client: advertise capabilities on the builder, check the agent's after initialize
+// Client: the handlers advertise the file capabilities, check the agent's after initialize
 AcpSyncClient client = AcpClient.sync(transport)
-    .clientCapabilities(ClientCapabilities.builder()
-        .fs(new FileSystemCapability(true, true))
-        .session(ClientSessionCapabilities.withBooleanConfigOptions())
-        .build())
+    .readTextFileHandler(req -> new ReadTextFileResponse(read(req.path())))
+    .writeTextFileHandler(req -> write(req.path(), req.content()))
     .build();
 client.initialize();
 

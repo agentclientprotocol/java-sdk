@@ -3304,7 +3304,10 @@ public final class AcpSchema {
 	 * NegotiatedCapabilities}.
 	 *
 	 * <p>
-	 * Advertise exactly what the client serves. The client builder's {@code build()} throws an
+	 * Advertise exactly what the client serves. A client builder without
+	 * {@code clientCapabilities(...)} derives them from its handlers (file reads and writes,
+	 * terminals with all five handlers, form-mode elicitation); set them explicitly for anything
+	 * else, and then the client builder's {@code build()} throws an
 	 * {@link IllegalStateException} when {@code fs.readTextFile}, {@code fs.writeTextFile},
 	 * {@code terminal} or an elicitation mode is advertised without the handlers that serve it, and
 	 * logs a warning for a handler whose capability is not advertised, since an agent will not call

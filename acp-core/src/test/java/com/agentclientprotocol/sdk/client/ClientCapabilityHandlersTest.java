@@ -23,8 +23,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * A client's advertised capabilities must match its handlers: advertising {@code fs.readTextFile},
  * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} without the handler that
  * serves it fails at {@code build()}, naming the setter, instead of every such request from the
- * agent being answered "Method not found". A handler for a capability the client does not
- * advertise is logged once at WARN: an SDK agent will not call it.
+ * agent being answered "Method not found". With capabilities set explicitly, a handler for a
+ * capability the client does not advertise is logged once at WARN: an SDK agent will not call it.
+ * (Without them the handlers decide; see {@code ClientCapabilityDerivationTest}.)
  */
 class ClientCapabilityHandlersTest {
 
@@ -117,6 +118,7 @@ class ClientCapabilityHandlersTest {
 	@Test
 	void aHandlerForACapabilityNotAdvertisedLogsOneWarning() {
 		AcpAsyncClient client = AcpClient.async(new MockAcpClientTransport())
+			.clientCapabilities(new AcpSchema.ClientCapabilities())
 			.readTextFileHandler(request -> Mono.empty())
 			.createTerminalHandler(request -> Mono.empty())
 			.createElicitationHandler(request -> Mono.empty())

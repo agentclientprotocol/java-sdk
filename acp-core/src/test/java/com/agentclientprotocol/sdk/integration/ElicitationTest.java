@@ -264,7 +264,8 @@ class ElicitationTest {
 	}
 
 	@Test
-	void initializingWithoutCapabilitiesAdvertisesNoMode() throws Exception {
+	void initializingWithoutCapabilitiesAdvertisesFormModeOnly() throws Exception {
+		// Without clientCapabilities(..) an elicitation handler advertises form mode, not URL mode
 		CompletableFuture<AcpSchema.JSONRPCResponse> answer = new CompletableFuture<>();
 		MockAcpClientTransport transport = new MockAcpClientTransport((t, message) -> {
 			if (message instanceof AcpSchema.JSONRPCResponse response) {
@@ -279,8 +280,8 @@ class ElicitationTest {
 		});
 
 		transport.simulateIncomingMessage(new AcpSchema.JSONRPCRequest(AcpSchema.JSONRPC_VERSION, "e-4",
-				AcpSchema.METHOD_ELICITATION_CREATE, Map.of("sessionId", SESSION, "mode", "form", "message", "Name?",
-						"requestedSchema", Map.of())));
+				AcpSchema.METHOD_ELICITATION_CREATE, Map.of("sessionId", SESSION, "mode", "url", "message", "Authorize",
+						"elicitationId", "e4", "url", "https://agent.example.com/connect")));
 
 		AcpSchema.JSONRPCResponse response = answer.get(5, TimeUnit.SECONDS);
 		assertThat(response.error()).isNotNull();
