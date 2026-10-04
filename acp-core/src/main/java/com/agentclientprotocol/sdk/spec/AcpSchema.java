@@ -4266,8 +4266,32 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Tool call update, as carried by a permission request. Every field but
-	 * {@code toolCallId} is optional; {@code name} is the tool's programmatic name.
+	 * The tool call a permission request asks about: the
+	 * {@link RequestPermissionRequest#toolCall()} an agent sends with
+	 * {@code session/request_permission}. Only {@link #toolCallId()} is required; the other fields
+	 * describe the action, so the client can show the user what it is asked to allow. The
+	 * four-argument constructor covers the usual case: id, title, kind and status.
+	 *
+	 * <p>
+	 * The protocol defines it as an update to a tool call the agent announced with a
+	 * {@link ToolCall} session update: the id names that tool call, a field left out, {@code null}
+	 * here, is unchanged, and {@code content} and {@code locations}, when present, replace the
+	 * whole list. It has the fields of a {@link ToolCallUpdateNotification} without the
+	 * discriminator.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askPermission(String, ToolKind)
+	 * PromptContext.askPermission} and {@code askChoice} announce a pending tool call first and
+	 * send this with its id, title, kind and status.
+	 *
+	 * @param toolCallId the id of the tool call the request is about
+	 * @param title the human-readable title, or {@code null}
+	 * @param name the tool's programmatic name, or {@code null}
+	 * @param kind the category of tool, or {@code null}
+	 * @param status the execution status, or {@code null}
+	 * @param content the content that replaces the tool call's content, or {@code null}
+	 * @param locations the locations that replace the tool call's locations, or {@code null}
+	 * @param rawInput the raw input sent to the tool, or {@code null}
+	 * @param rawOutput the raw output the tool returned, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	// CPD-OFF: the same components as ToolCallUpdateNotification, by design. Both are the
 	// schema's ToolCallUpdate: bare in a permission request, and as a session update with its
@@ -4280,7 +4304,13 @@ public final class AcpSchema {
 			@JsonProperty("rawOutput") @Nullable Object rawOutput,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 		/**
-		 * A tool call for a permission request: its id, title, kind and status.
+		 * Creates a tool call update with an id, a title, a kind and a status, the usual form for a
+		 * permission request, without a name, content, locations, raw input or output, or
+		 * {@code _meta}.
+		 * @param toolCallId the id of the tool call
+		 * @param title the human-readable title, or {@code null}
+		 * @param kind the category of tool, or {@code null}
+		 * @param status the execution status, or {@code null}
 		 */
 		public ToolCallUpdate(String toolCallId, @Nullable String title, @Nullable ToolKind kind,
 				@Nullable ToolCallStatus status) {
@@ -4585,8 +4615,22 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Tool call content. Content of a type this SDK does not know reads as an
-	 * {@link UnknownToolCallContent}.
+	 * Something a tool call produced, for the client to show with it: one item of the
+	 * {@code content} list of a {@link ToolCall}, a {@link ToolCallUpdateNotification} or a
+	 * {@link ToolCallUpdate}. An agent creates one of the variant records; a client checks the
+	 * variant with {@code instanceof} and shows what it understands.
+	 *
+	 * <p>
+	 * The variants: {@link ToolCallContentBlock} carries an ordinary {@link ContentBlock}, such as
+	 * text or an image; {@link ToolCallDiff} shows a change to a file; {@link ToolCallTerminal}
+	 * embeds the live output of a terminal the agent created.
+	 *
+	 * <p>
+	 * On the wire the {@code type} member names the variant, and each variant record has it as its
+	 * first component. Content of a kind this SDK does not know, or without {@code type}, reads as
+	 * an {@link UnknownToolCallContent}, so the message that carries it is still read. The
+	 * interface is not sealed: end an {@code instanceof} chain with a branch for anything else
+	 * (see {@link AcpSchema} on forward compatibility).
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownToolCallContent.class)
@@ -4598,77 +4642,194 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Tool call content of a kind this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code type} discriminator (null when the peer sent none)
-	 * and every other field, and writes them back unchanged.
+	 * Tool call content of a kind this SDK does not know, kept as received: the peer is on a newer
+	 * protocol version or sent an extension. A client that does not understand it should ignore it;
+	 * a proxy can forward it unchanged.
 	 *
-	 * @param type the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code type} discriminator ({@code null} when the content had none) and every
+	 * other member in {@link #fields()}, an unmodifiable map in wire order, and writes them back
+	 * unchanged. Names are case sensitive: {@code "DIFF"} is unknown content, not a
+	 * {@link ToolCallDiff}.
+	 *
+	 * @param type the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownToolCallContent(@JsonProperty("type") @Nullable String type,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements ToolCallContent {
+		/**
+		 * Creates unknown content. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param type the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownToolCallContent {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * Tool call content block
+	 * Tool call content that is an ordinary {@link ContentBlock}, such as the text a command
+	 * printed or an image it made, for the client to show with the tool call. It is the most common
+	 * variant of {@link ToolCallContent}: an agent wraps the tool's output in it, usually a
+	 * {@link TextContent}.
+	 *
+	 * <p>
+	 * A content block of a kind this SDK does not know reads as an {@link UnknownContentBlock}
+	 * inside it, so the tool call content itself is still a {@code ToolCallContentBlock}.
+	 *
+	 * @param type the discriminator, {@code "content"}
+	 * @param content the content block
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallContentBlock(
 			@JsonProperty("type") String type,
 			@JsonProperty("content") ContentBlock content,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		/**
+		 * Creates content without {@code _meta}. Unlike the shorter constructors of the session
+		 * updates, it still takes the discriminator: pass {@code null} or {@code "content"}.
+		 * @param type {@code null} or {@code "content"}
+		 * @param content the content block
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallContentBlock(String type, ContentBlock content) {
 			this(type, content, null);
 		}
 
+		/**
+		 * Creates content with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type} and it becomes {@code "content"}.
+		 * @param type {@code null} or {@code "content"}
+		 * @param content the content block
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallContentBlock {
 			type = discriminator(type, "content");
 		}
 	}
 
 	/**
-	 * Tool call diff
+	 * Tool call content that shows a change to a file: its path and its text before and after, from
+	 * which the client shows the user a diff. An agent adds one to the tool call that changes the
+	 * file, typically of kind {@link ToolKind#EDIT}.
+	 *
+	 * <p>
+	 * Like {@link ToolCallContentBlock}, it is one item of a tool call's content, but it carries a
+	 * file change instead of a content block. The protocol asks for an absolute path, and
+	 * {@code oldText} is {@code null} for a new file. The SDK checks neither and does not touch the
+	 * file: the record only describes the change.
+	 *
+	 * @param type the discriminator, {@code "diff"}
+	 * @param path the absolute path of the file
+	 * @param oldText the file's text before the change, or {@code null} for a new file
+	 * @param newText the file's text after the change
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallDiff(@JsonProperty("type") String type,
 			@JsonProperty("path") String path, @JsonProperty("oldText") @Nullable String oldText,
 			@JsonProperty("newText") String newText,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		/**
+		 * Creates a diff without {@code _meta}. Unlike the shorter constructors of the session
+		 * updates, it still takes the discriminator: pass {@code null} or {@code "diff"}.
+		 * @param type {@code null} or {@code "diff"}
+		 * @param path the absolute path of the file
+		 * @param oldText the text before the change, or {@code null} for a new file
+		 * @param newText the text after the change
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallDiff(String type, String path, @Nullable String oldText, String newText) {
 			this(type, path, oldText, newText, null);
 		}
 
+		/**
+		 * Creates a diff with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code type} and it becomes {@code "diff"}.
+		 * @param type {@code null} or {@code "diff"}
+		 * @param path the absolute path of the file
+		 * @param oldText the text before the change, or {@code null} for a new file
+		 * @param newText the text after the change
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallDiff {
 			type = discriminator(type, "diff");
 		}
 	}
 
 	/**
-	 * Tool call terminal
+	 * Tool call content that embeds a terminal, so the client shows a command's output live as part
+	 * of the tool call. The terminal is one the agent created with {@code terminal/create}
+	 * ({@link CreateTerminalRequest}), named by the {@link CreateTerminalResponse#terminalId()} the
+	 * client answered with.
+	 *
+	 * <p>
+	 * Like {@link ToolCallContentBlock}, it is one item of a tool call's content, but it carries a
+	 * terminal id instead of a content block. The protocol requires the agent to add the terminal
+	 * to a tool call before it releases the terminal with {@code terminal/release}; the client then
+	 * keeps showing the output after the release. The SDK does not check the order.
+	 *
+	 * @param type the discriminator, {@code "terminal"}
+	 * @param terminalId the id of the terminal, as the client returned it
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallTerminal(@JsonProperty("type") String type,
 			@JsonProperty("terminalId") String terminalId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements ToolCallContent {
+		/**
+		 * Creates terminal content without {@code _meta}. Unlike the shorter constructors of the
+		 * session updates, it still takes the discriminator: pass {@code null} or
+		 * {@code "terminal"}.
+		 * @param type {@code null} or {@code "terminal"}
+		 * @param terminalId the id of the terminal
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallTerminal(String type, String terminalId) {
 			this(type, terminalId, null);
 		}
 
+		/**
+		 * Creates terminal content with every component, as the JSON mapper does. Pass {@code null}
+		 * for {@code type} and it becomes {@code "terminal"}.
+		 * @param type {@code null} or {@code "terminal"}
+		 * @param terminalId the id of the terminal
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code type} is any other name
+		 */
 		public ToolCallTerminal {
 			type = discriminator(type, "terminal");
 		}
 	}
 
 	/**
-	 * Tool call location
+	 * A file a tool call reads or changes, with an optional line, so a client can follow the agent:
+	 * for example, open the file the agent works on as it works. Agents list these in the
+	 * {@code locations} of a {@link ToolCall} or a {@link ToolCallUpdateNotification}.
+	 *
+	 * <p>
+	 * The protocol asks for an absolute path and a line number from 0 up to an unsigned 32-bit
+	 * maximum; the SDK checks neither. This record holds the line as an {@code Integer}, so a
+	 * received line above {@link Integer#MAX_VALUE} cannot be read, and the message that carries it
+	 * fails to read as a whole.
+	 *
+	 * @param path the absolute path of the file
+	 * @param line the line in the file, or {@code null} for none in particular
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ToolCallLocation(@JsonProperty("path") String path, @JsonProperty("line") @Nullable Integer line,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a location without {@code _meta}.
+		 * @param path the absolute path of the file
+		 * @param line the line in the file, or {@code null}
+		 */
 		public ToolCallLocation(String path, @Nullable Integer line) {
 			this(path, line, null);
 		}
@@ -4769,37 +4930,59 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The execution status of a tool call. An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * Where a tool call is in its run: pending, in progress, completed or failed. It is the
+	 * {@code status} of a {@link ToolCall}, a {@link ToolCallUpdateNotification} and a
+	 * {@link ToolCallUpdate}. Agents send one of the constants as the tool call goes on; clients
+	 * compare the value they receive with {@code equals}, or switch on {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * A tool call usually starts pending, moves to in progress when it runs, and ends completed or
+	 * failed, with a {@link ToolCallUpdateNotification} at each step. A tool call announced without
+	 * a status is pending in the protocol, but its status reads as {@code null} here.
+	 *
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "in_progress"}
 	 */
 	public record ToolCallStatus(@JsonValue String value) {
 
-		/** {@code "pending"}. */
+		/**
+		 * {@code "pending"}: the tool call has not started, because its input is still streaming or
+		 * it waits for the user's permission.
+		 */
 		public static final ToolCallStatus PENDING = new ToolCallStatus("pending");
 
-		/** {@code "in_progress"}. */
+		/** {@code "in_progress"}: the tool call is running. */
 		public static final ToolCallStatus IN_PROGRESS = new ToolCallStatus("in_progress");
 
-		/** {@code "completed"}. */
+		/** {@code "completed"}: the tool call completed successfully. */
 		public static final ToolCallStatus COMPLETED = new ToolCallStatus("completed");
 
-		/** {@code "failed"}. */
+		/** {@code "failed"}: the tool call failed with an error. */
 		public static final ToolCallStatus FAILED = new ToolCallStatus("failed");
 
 		private static final List<ToolCallStatus> KNOWN = List.of(PENDING, IN_PROGRESS, COMPLETED, FAILED);
 
+		/**
+		 * Creates a tool call status for a wire value. Prefer {@link #of}, which returns the
+		 * constant for a known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public ToolCallStatus {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns a tool call status for a wire value: the constant when ACP v1 defines the value,
+		 * and otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static ToolCallStatus of(String value) {
@@ -4807,21 +4990,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<ToolCallStatus> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code "in_progress"}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -4830,9 +5017,28 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The kind of tool a tool call invokes. The schema's {@code other} is the catch-all: a
-	 * kind this SDK does not know reads as {@link #OTHER}, as in the Rust SDK (see
-	 * {@link AcpSchema} on forward compatibility).
+	 * The category of a tool call, such as reading a file, editing one or running a command, so a
+	 * client can pick an icon and choose how to show the call's progress. It is the {@code kind} of
+	 * a {@link ToolCall}, a {@link ToolCallUpdateNotification} and a {@link ToolCallUpdate}.
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askPermission(String, ToolKind)
+	 * PromptContext.askPermission} takes one for the tool call it announces, and uses
+	 * {@link #OTHER} when given none.
+	 *
+	 * <p>
+	 * The kinds: {@code read} reads files or data; {@code edit} changes files or content;
+	 * {@code delete} removes files or data; {@code move} moves or renames files; {@code search}
+	 * searches for information; {@code execute} runs commands or code; {@code think} is internal
+	 * reasoning or planning; {@code fetch} gets data from outside, such as a web page;
+	 * {@code switch_mode} switches the session's mode; {@code other} is any other tool, and the
+	 * protocol's default.
+	 *
+	 * <p>
+	 * Unlike {@link ToolCallStatus} and the other open values, it is a Java enum: compare with
+	 * {@code ==} or switch on it. {@link #OTHER} also stands for every kind this SDK does not know:
+	 * a newer peer's kind reads as {@code OTHER} and is written back as {@code "other"}, so the
+	 * name it had is lost (see {@link AcpSchema} on forward compatibility). A tool call without a
+	 * kind reads as {@code null}. Use {@link #value()} for the wire name: {@code toString()}
+	 * returns the constant's Java name, such as {@code SWITCH_MODE}.
 	 */
 	public enum ToolKind {
 
@@ -4846,7 +5052,8 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The wire value.
+		 * Returns the wire value, such as {@code "switch_mode"}, which is not the constant's Java
+		 * name.
 		 * @return the kind's name in ACP
 		 */
 		@JsonValue
@@ -4855,9 +5062,10 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The kind for a wire value; {@link #OTHER} for one this SDK does not know.
-		 * @param value the wire value
-		 * @return the kind
+		 * Returns the kind for a wire value, or {@link #OTHER} for a value this SDK does not know,
+		 * {@code null} included. Names are case sensitive: {@code "READ"} is {@code OTHER}.
+		 * @param value the wire value, or {@code null}
+		 * @return the kind, never {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static ToolKind of(String value) {
@@ -4988,34 +5196,51 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The status of a plan entry. An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * Where a {@link PlanEntry} of the agent's plan stands: pending, in progress or completed.
+	 * Agents send one of the constants on each entry of every {@link Plan}; clients compare the
+	 * value they receive with {@code equals}, or switch on {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * There is no status for a failed or dropped step: the agent changes the plan instead, and
+	 * leaves an entry out of the next plan to remove it.
+	 *
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "in_progress"}
 	 */
 	public record PlanEntryStatus(@JsonValue String value) {
 
-		/** {@code "pending"}. */
+		/** {@code "pending"}: the task has not started yet. */
 		public static final PlanEntryStatus PENDING = new PlanEntryStatus("pending");
 
-		/** {@code "in_progress"}. */
+		/** {@code "in_progress"}: the agent is working on the task. */
 		public static final PlanEntryStatus IN_PROGRESS = new PlanEntryStatus("in_progress");
 
-		/** {@code "completed"}. */
+		/** {@code "completed"}: the task is done. */
 		public static final PlanEntryStatus COMPLETED = new PlanEntryStatus("completed");
 
 		private static final List<PlanEntryStatus> KNOWN = List.of(PENDING, IN_PROGRESS, COMPLETED);
 
+		/**
+		 * Creates a plan entry status for a wire value. Prefer {@link #of}, which returns the
+		 * constant for a known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public PlanEntryStatus {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns a plan entry status for a wire value: the constant when ACP v1 defines the value,
+		 * and otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static PlanEntryStatus of(String value) {
@@ -5023,21 +5248,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<PlanEntryStatus> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code "in_progress"}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -5046,34 +5275,48 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The priority of a plan entry. An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * How much a {@link PlanEntry} matters to the task as a whole: high, medium or low, so a client
+	 * can show which steps of the agent's plan are critical. Agents send one of the constants on
+	 * each entry; clients compare the value they receive with {@code equals}, or switch on
+	 * {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "high"}
 	 */
 	public record PlanEntryPriority(@JsonValue String value) {
 
-		/** {@code "high"}. */
+		/** {@code "high"}: the task is critical to the overall goal. */
 		public static final PlanEntryPriority HIGH = new PlanEntryPriority("high");
 
-		/** {@code "medium"}. */
+		/** {@code "medium"}: the task is important but not critical. */
 		public static final PlanEntryPriority MEDIUM = new PlanEntryPriority("medium");
 
-		/** {@code "low"}. */
+		/** {@code "low"}: the task is nice to have but not essential. */
 		public static final PlanEntryPriority LOW = new PlanEntryPriority("low");
 
 		private static final List<PlanEntryPriority> KNOWN = List.of(HIGH, MEDIUM, LOW);
 
+		/**
+		 * Creates a plan entry priority for a wire value. Prefer {@link #of}, which returns the
+		 * constant for a known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public PlanEntryPriority {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns a plan entry priority for a wire value: the constant when ACP v1 defines the
+		 * value, and otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static PlanEntryPriority of(String value) {
@@ -5081,21 +5324,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<PlanEntryPriority> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code "high"}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -5603,35 +5850,87 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Plan entry
+	 * One step of the agent's {@link Plan}: a task it means to do for the user's request, with its
+	 * priority and its status. The agent sends every entry again, with its current status, in each
+	 * plan update, and the client shows the new list in place of the old one. Entries have no id.
+	 *
+	 * <p>
+	 * All three components are required. The SDK does not check them when sending; a received plan
+	 * with an entry that lacks one is skipped whole (see {@link SessionNotification}). A priority
+	 * or status of a value this SDK does not know is kept.
+	 *
+	 * @param content a human-readable description of the task
+	 * @param priority how much the task matters to the overall goal
+	 * @param status where the task stands now
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PlanEntry(@JsonProperty("content") String content,
 			@JsonProperty("priority") PlanEntryPriority priority, @JsonProperty("status") PlanEntryStatus status,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates an entry without {@code _meta}.
+		 * @param content a human-readable description of the task
+		 * @param priority how much the task matters
+		 * @param status where the task stands now
+		 */
 		public PlanEntry(String content, PlanEntryPriority priority, PlanEntryStatus status) {
 			this(content, priority, status, null);
 		}
 	}
 
 	/**
-	 * Available command
+	 * A slash command the agent offers in an ACP session: its name, what it does, and whether it
+	 * takes input. The agent lists every command it offers in an {@link AvailableCommandsUpdate};
+	 * the client shows them as the user types, and the user runs one by sending a slash and its
+	 * name, such as {@code /web agent client protocol}, as text in a prompt. The agent recognizes
+	 * the command in the prompt's text; the SDK does not route commands.
+	 *
+	 * <p>
+	 * The name is written without the slash, such as {@code create_plan}. A command that takes text
+	 * after its name has an {@link AvailableCommandInput}; one without takes no input. The SDK
+	 * checks neither the name nor the description.
+	 *
+	 * @param name the command's name, without the leading slash
+	 * @param description a human-readable description of what the command does
+	 * @param input the input the command takes, or {@code null} if it takes none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommand(@JsonProperty("name") String name, @JsonProperty("description") String description,
 			@JsonProperty("input") @Nullable AvailableCommandInput input,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a command without {@code _meta}.
+		 * @param name the command's name, without the leading slash
+		 * @param description what the command does
+		 * @param input the input the command takes, or {@code null}
+		 */
 		public AvailableCommand(String name, String description, @Nullable AvailableCommandInput input) {
 			this(name, description, input, null);
 		}
 	}
 
 	/**
-	 * Available command input
+	 * The input a slash command takes: free text the user types after the command's name, which
+	 * reaches the agent as part of the prompt. {@link #hint()} is what the client shows in its
+	 * place until the user types it, such as {@code "query to search for"}.
+	 *
+	 * <p>
+	 * The protocol defines a command's input as one of several kinds; ACP v1 has one, unstructured
+	 * text, which this record is. A received input without a hint lacks a required member, so the
+	 * client skips the whole {@link AvailableCommandsUpdate} that carries it.
+	 *
+	 * @param hint the text shown until the user types the input
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AvailableCommandInput(@JsonProperty("hint") String hint,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates an input without {@code _meta}.
+		 * @param hint the text shown until the user types the input
+		 */
 		public AvailableCommandInput(String hint) {
 			this(hint, null);
 		}
