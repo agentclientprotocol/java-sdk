@@ -2894,10 +2894,13 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * Each component is an object on the wire: present, as {@code {}}, means supported, and
-	 * {@code null} means not. Pass an empty map, {@code Map.of()}, for a supported method. The
-	 * components are typed {@link Object}, and other values do not write {@code {}}: a
-	 * {@link Boolean} writes {@code true}, and a plain {@code new Object()} cannot be written at
-	 * all. A record read from JSON holds a map.
+	 * {@code null} means not. Pass an empty map, {@code Map.of()}, or {@link Boolean#TRUE} for a
+	 * supported method, and {@code null} or {@link Boolean#FALSE} for one that is not: the record
+	 * holds {@code TRUE} as an empty map and {@code FALSE} as {@code null}. The components are
+	 * typed {@link Object}, and other values are written as they are: a plain
+	 * {@code new Object()} cannot be written at all. A record read from JSON holds a map, or
+	 * {@code null}: a value other than an object, such as a peer's {@code false} or {@code true},
+	 * reads as not advertised.
 	 *
 	 * <p>
 	 * The client fails {@code session/list}, {@code session/close}, {@code session/resume},
@@ -2924,6 +2927,46 @@ public final class AcpSchema {
 			@JsonProperty("additionalDirectories") @Nullable Object additionalDirectories,
 			@UnstableAcpApi @JsonProperty("fork") @Nullable Object fork,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+
+		/**
+		 * Normalizes what a caller passes: {@link Boolean#TRUE} becomes {@code {}} (an empty map),
+		 * and {@link Boolean#FALSE} becomes {@code null}, so neither writes a boolean the schema
+		 * forbids.
+		 */
+		public SessionCapabilities {
+			list = supported(list);
+			close = supported(close);
+			resume = supported(resume);
+			delete = supported(delete);
+			additionalDirectories = supported(additionalDirectories);
+			fork = supported(fork);
+		}
+
+		/**
+		 * Reads the capabilities a peer sent: only a JSON object counts as advertised, so a
+		 * {@code false}, a {@code true} or another value the schema forbids reads as {@code null}.
+		 */
+		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+		@SuppressWarnings("unchecked")
+		static SessionCapabilities read(Map<String, Object> json) {
+			Object meta = json.get("_meta");
+			return new SessionCapabilities(objectOnly(json.get("list")), objectOnly(json.get("close")),
+					objectOnly(json.get("resume")), objectOnly(json.get("delete")),
+					objectOnly(json.get("additionalDirectories")), objectOnly(json.get("fork")),
+					(meta instanceof Map) ? (Map<String, Object>) meta : null);
+		}
+
+		private static @Nullable Object supported(@Nullable Object value) {
+			if (Boolean.TRUE.equals(value)) {
+				return Map.of();
+			}
+			return Boolean.FALSE.equals(value) ? null : value;
+		}
+
+		private static @Nullable Object objectOnly(@Nullable Object value) {
+			return (value instanceof Map) ? value : null;
+		}
+
 		/**
 		 * Creates session capabilities without {@code _meta}.
 		 * @param list {@code {}} for {@code session/list}, or {@code null}

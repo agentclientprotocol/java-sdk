@@ -155,6 +155,7 @@
                                 <include>com/agentclientprotocol/sdk/spec/AcpSchemaSerializationTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/DefaultOnNullTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/McpServerConfigurationTest*.class</include>
+                                <include>com/agentclientprotocol/sdk/spec/SessionCapabilitiesWireTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/SessionManagementTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/SessionUpdateDeserializationTest*.class</include>
                                 <include>com/agentclientprotocol/sdk/spec/WireFormatTest*.class</include>

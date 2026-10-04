@@ -1036,6 +1036,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`SessionCapabilities` writes only objects, and reads only objects as advertised.** Its
+  components are typed `Object`: `Boolean.TRUE` wrote `"list":true`, which the schema forbids (a
+  session capability is an object), and on reading any non-null value counted as advertised, so a
+  peer's `"close": false` made `supportsCloseSession()` true. The record now holds `Boolean.TRUE`
+  as `{}` and `Boolean.FALSE` as absent, and reading JSON counts only an object as advertised; a
+  `true`, `false` or other value reads as not advertised. The component types are unchanged.
+
 - **The `acp-agent-support` README's custom return value handler example no longer breaks
   `CompletableFuture`.** The example registered a `CompletableFutureHandler`; custom handlers are
   asked before the built-in ones, so it replaced the built-in `CompletionStage` support and a
