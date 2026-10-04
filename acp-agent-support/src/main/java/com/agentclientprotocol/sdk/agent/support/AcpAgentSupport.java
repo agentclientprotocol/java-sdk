@@ -502,35 +502,15 @@ public class AcpAgentSupport implements AutoCloseable {
 
 		InterceptorChain chain = new InterceptorChain(interceptors);
 		@Nullable Throwable failure = null;
-
 		try {
-			if (!chain.applyPreInvoke(context)) {
-				return null;
-			}
-			Outcome outcome = call.call(context);
-			Object result = chain.applyPostInvoke(context, outcome.result());
-			AcpMethodParameter returnType = outcome.returnType();
-			return (returnType != null) ? returnValueHandlers.handleReturnValue(result, returnType, context) : result;
-		}
-		catch (Exception e) {
-			Object replacement;
 			try {
-				replacement = onError(chain, context, e);
+				return run(chain, context, call);
 			}
-			catch (RuntimeException thrown) {
-				failure = thrown;
-				throw thrown;
+			catch (Exception e) {
+				return recover(chain, context, e);
 			}
-			if (replacement != null) {
-				return replacement;
-			}
-			failure = e;
-			if (e instanceof RuntimeException re) {
-				throw re;
-			}
-			throw new RuntimeException(e);
 		}
-		catch (Error e) {
+		catch (RuntimeException | Error e) {
 			failure = e;
 			throw e;
 		}
@@ -539,30 +519,30 @@ public class AcpAgentSupport implements AutoCloseable {
 		}
 	}
 
-	/**
-	 * Asks the interceptors' {@code onError} for a replacement. An {@link AcpProtocolException}
-	 * one of them throws is the call's answer; anything else it throws is a fault in the
-	 * interceptor, answered as an internal error with the call's own failure kept as suppressed.
-	 */
-	private static @Nullable Object onError(InterceptorChain chain, AcpInvocationContext context, Exception failure) {
-		try {
-			return chain.applyOnError(context, failure);
+	/** The interceptors' preInvoke and postInvoke around the call, and the return value handlers. */
+	private @Nullable Object run(InterceptorChain chain, AcpInvocationContext context, Call call) throws Exception {
+		if (!chain.applyPreInvoke(context)) {
+			return null;
 		}
-		catch (AcpProtocolException answer) {
-			return rethrow(answer, failure);
-		}
-		catch (RuntimeException fault) {
-			return rethrow(new IllegalStateException("An interceptor's onError failed for " + context.getAcpMethod(),
-					fault), failure);
-		}
+		Outcome outcome = call.call(context);
+		Object result = chain.applyPostInvoke(context, outcome.result());
+		AcpMethodParameter returnType = outcome.returnType();
+		return (returnType != null) ? returnValueHandlers.handleReturnValue(result, returnType, context) : result;
 	}
 
-	@SuppressWarnings("ReferenceEquality") // the same exception instance, rethrown, cannot suppress itself
-	private static Object rethrow(RuntimeException thrown, Exception failure) {
-		if (thrown != failure) {
-			thrown.addSuppressed(failure);
+	/**
+	 * The replacement an interceptor's {@code onError} gives for a failed call; without one the
+	 * failure is rethrown, a checked exception wrapped in a {@code RuntimeException}.
+	 */
+	private static Object recover(InterceptorChain chain, AcpInvocationContext context, Exception failure) {
+		Object replacement = chain.applyOnError(context, failure);
+		if (replacement != null) {
+			return replacement;
 		}
-		throw thrown;
+		if (failure instanceof RuntimeException re) {
+			throw re;
+		}
+		throw new RuntimeException(failure);
 	}
 
 	private @Nullable Object[] resolveArguments(AcpHandlerMethod handler, AcpInvocationContext context) {
@@ -898,7 +878,7 @@ public class AcpAgentSupport implements AutoCloseable {
 			Map<String, AcpHandlerMethod> handlers = Map.copyOf(this.handlers);
 			HandlerSignatures.check(handlers, HANDLER_ANNOTATIONS, argumentResolvers, customArgumentResolvers,
 					returnValueHandlers, customReturnValueHandlers);
-			HandlerSignatures.checkSessionSetup(handlers);
+			HandlerSignatures.checkSessionSetup(handlers, agentClasses);
 			HandlerSignatures.checkPrompt(handlers, agentClasses.get(0).getName());
 			AgentAdvertisement advertisement = AgentAdvertisement.of(List.copyOf(agentClasses), handlers,
 					HANDLER_ANNOTATIONS);

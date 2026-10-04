@@ -156,7 +156,10 @@ public interface AcpInterceptor {
 	 * {@code true}, however the call ended: answered, failed, or stopped by a later interceptor.
 	 * Use it to release what {@code preInvoke} took, such as a timer or a logging context, and to
 	 * record how the call ended, such as a span's status or a failure metric. {@code ex} is what
-	 * the call failed with: what a step threw, or what an {@link #onError} threw in its place. It
+	 * the call failed with: what a step threw (a checked exception wrapped in a
+	 * {@code RuntimeException}), or, when an {@link #onError} threw, the
+	 * {@code AcpProtocolException} it threw or the {@code IllegalStateException} that carries
+	 * anything else it threw. It
 	 * is null when the call produced a result, when an {@code onError} returned a replacement, and
 	 * when a {@code preInvoke} returned {@code false}. It does not receive the result; save it as
 	 * a context attribute in {@link #postInvoke} if you need it. An exception thrown here is

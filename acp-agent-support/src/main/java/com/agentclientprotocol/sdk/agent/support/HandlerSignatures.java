@@ -20,6 +20,7 @@ import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandlerCompo
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpMethodParameter;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolverComposite;
+import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.ConfigId;
 import com.agentclientprotocol.sdk.annotation.ConfigValue;
 import com.agentclientprotocol.sdk.annotation.ExtNotification;
@@ -133,14 +134,24 @@ final class HandlerSignatures {
 	/**
 	 * Checks that an agent setting modes or config options has a {@code @NewSession} method to
 	 * offer them: the default {@code session/new} answers with none, so a client would never see
-	 * any to set.
+	 * any to set. Likewise an agent that declares {@code @AcpAgent(additionalDirectories = true)}:
+	 * the default {@code session/new} would drop the directories, which ACP forbids.
+	 * @param agentClasses the agent's classes, whose {@code @AcpAgent} attributes are read
 	 * @throws IllegalStateException if it has none
 	 */
-	static void checkSessionSetup(Map<String, AcpHandlerMethod> handlers) {
+	static void checkSessionSetup(Map<String, AcpHandlerMethod> handlers, List<Class<?>> agentClasses) {
 		if (handlers.containsKey(AcpSchema.METHOD_SESSION_NEW)) {
 			return;
 		}
 		checkModeSetters(handlers);
+		agentClasses.stream()
+			.filter(agentClass -> agentClass.getAnnotation(AcpAgent.class).additionalDirectories())
+			.findFirst()
+			.ifPresent(agentClass -> {
+				throw new IllegalStateException(agentClass.getName() + " declares @AcpAgent(additionalDirectories ="
+						+ " true), which advertises that the agent uses the additional directories a client sends,"
+						+ " but it has no @NewSession method to receive them; add one, or remove the attribute");
+			});
 	}
 
 	/**

@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.agent.support;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -69,8 +70,14 @@ final class AgentAdvertisement {
 	/** An empty capability object, {@code {}}, which advertises a session method. */
 	private static final Map<String, Object> SUPPORTED = Map.of();
 
+	/** What {@code agentCapabilities.sessionCapabilities} carries. */
+	private static final Set<Advertises> SESSION_CAPABILITIES = EnumSet.of(Advertises.LIST_SESSIONS,
+			Advertises.CLOSE_SESSION, Advertises.RESUME_SESSION, Advertises.DELETE_SESSION, Advertises.FORK_SESSION,
+			Advertises.ADDITIONAL_DIRECTORIES);
+
 	/**
-	 * What a handler annotation advertises in the initialize response.
+	 * What a handler annotation, or an {@link AcpAgent} attribute, advertises in the initialize
+	 * response.
 	 */
 	enum Advertises {
 
@@ -97,6 +104,9 @@ final class AgentAdvertisement {
 
 		/** {@code agentCapabilities.sessionCapabilities.fork} (unstable). */
 		FORK_SESSION,
+
+		/** {@code agentCapabilities.sessionCapabilities.additionalDirectories}, from {@link AcpAgent}. */
+		ADDITIONAL_DIRECTORIES,
 
 		/** {@code agentCapabilities.providers} (unstable). */
 		PROVIDERS,
@@ -128,19 +138,16 @@ final class AgentAdvertisement {
 
 	private final boolean mcpSse;
 
-	private final boolean additionalDirectories;
-
 	private final @Nullable Prompt prompt;
 
 	private final Implementation agentInfo;
 
 	private AgentAdvertisement(Set<Advertises> advertised, List<AuthMethod> authMethods, boolean mcpHttp,
-			boolean mcpSse, boolean additionalDirectories, @Nullable Prompt prompt, Implementation agentInfo) {
+			boolean mcpSse, @Nullable Prompt prompt, Implementation agentInfo) {
 		this.advertised = advertised;
 		this.authMethods = authMethods;
 		this.mcpHttp = mcpHttp;
 		this.mcpSse = mcpSse;
-		this.additionalDirectories = additionalDirectories;
 		this.prompt = prompt;
 		this.agentInfo = agentInfo;
 	}
@@ -226,7 +233,6 @@ final class AgentAdvertisement {
 		Map<String, AuthMethod> authMethods = new LinkedHashMap<>();
 		boolean mcpHttp = false;
 		boolean mcpSse = false;
-		boolean additionalDirectories = false;
 		for (Class<?> agentClass : agentClasses) {
 			AcpAgent agent = agentClass.getAnnotation(AcpAgent.class);
 			for (AuthMethod method : agent.authMethods()) {
@@ -234,13 +240,11 @@ final class AgentAdvertisement {
 			}
 			mcpHttp |= agent.mcpHttp();
 			mcpSse |= agent.mcpSse();
-			additionalDirectories |= agent.additionalDirectories();
 		}
-		if (additionalDirectories && !handlers.containsKey(AcpSchema.METHOD_SESSION_NEW)) {
-			throw new IllegalStateException("@AcpAgent(additionalDirectories = true) advertises that the agent uses"
-					+ " the additional directories a client sends, but the agent has no @NewSession method to receive"
-					+ " them; add one, or remove the attribute");
-		}
+		agentClasses.stream()
+			.filter(agentClass -> agentClass.getAnnotation(AcpAgent.class).additionalDirectories())
+			.findAny()
+			.ifPresent(agentClass -> advertised.add(Advertises.ADDITIONAL_DIRECTORIES));
 		if (!handlers.containsKey(AcpSchema.METHOD_AUTHENTICATE)) {
 			authMethods.values()
 				.stream()
@@ -255,7 +259,7 @@ final class AgentAdvertisement {
 		AcpHandlerMethod promptHandler = handlers.get(AcpSchema.METHOD_SESSION_PROMPT);
 		Prompt prompt = (promptHandler != null) ? promptHandler.getMethod().getAnnotation(Prompt.class) : null;
 		return new AgentAdvertisement(Collections.unmodifiableSet(advertised), List.copyOf(authMethods.values()),
-				mcpHttp, mcpSse, additionalDirectories, prompt, agentInfo(agentClasses));
+				mcpHttp, mcpSse, prompt, agentInfo(agentClasses));
 	}
 
 	private static Implementation agentInfo(List<Class<?>> agentClasses) {
@@ -304,13 +308,10 @@ final class AgentAdvertisement {
 	}
 
 	private AgentCapabilities capabilities() {
-		boolean anySession = advertised.contains(Advertises.LIST_SESSIONS)
-				|| advertised.contains(Advertises.CLOSE_SESSION) || advertised.contains(Advertises.RESUME_SESSION)
-				|| advertised.contains(Advertises.DELETE_SESSION) || advertised.contains(Advertises.FORK_SESSION)
-				|| this.additionalDirectories;
+		boolean anySession = SESSION_CAPABILITIES.stream().anyMatch(advertised::contains);
 		SessionCapabilities sessions = anySession ? new SessionCapabilities(supported(Advertises.LIST_SESSIONS),
 				supported(Advertises.CLOSE_SESSION), supported(Advertises.RESUME_SESSION),
-				supported(Advertises.DELETE_SESSION), this.additionalDirectories ? SUPPORTED : null,
+				supported(Advertises.DELETE_SESSION), supported(Advertises.ADDITIONAL_DIRECTORIES),
 				supported(Advertises.FORK_SESSION)) : null;
 		Prompt prompt = this.prompt;
 		return AgentCapabilities.builder()

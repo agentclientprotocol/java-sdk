@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.support.invocation.AcpInvocationContext;
+import com.agentclientprotocol.sdk.error.AcpProtocolException;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -89,20 +90,42 @@ public class InterceptorChain {
 	/**
 	 * Calls {@code onError}, in reverse order, on each interceptor whose {@code preInvoke}
 	 * returned {@code true}, the same interceptors {@link #triggerAfterCompletion} reaches, until
-	 * one returns a replacement. What an interceptor throws ends the walk and reaches the caller,
-	 * which answers with it (see {@link AcpInterceptor#onError}).
+	 * one returns a replacement. What an interceptor throws ends the walk (see
+	 * {@link AcpInterceptor#onError}): an {@code AcpProtocolException} is rethrown as the call's
+	 * answer, and anything else as an {@link IllegalStateException} whose cause it is, a fault in
+	 * the interceptor; either carries {@code ex} as suppressed.
 	 * @param context the call's context
 	 * @param ex what the call threw
 	 * @return the first replacement, or null if no interceptor gave one
+	 * @throws AcpProtocolException if an interceptor threw one
+	 * @throws IllegalStateException if an interceptor threw anything else
 	 */
 	public @Nullable Object applyOnError(AcpInvocationContext context, Throwable ex) {
 		for (int i = this.interceptorIndex; i >= 0; i--) {
-			Object replacement = interceptors.get(i).onError(context, ex);
+			Object replacement;
+			try {
+				replacement = interceptors.get(i).onError(context, ex);
+			}
+			catch (AcpProtocolException answer) {
+				throw withSuppressed(answer, ex);
+			}
+			catch (RuntimeException fault) {
+				throw withSuppressed(new IllegalStateException(
+						"An interceptor's onError failed for " + context.getAcpMethod(), fault), ex);
+			}
 			if (replacement != null) {
 				return replacement;
 			}
 		}
 		return null;
+	}
+
+	@SuppressWarnings("ReferenceEquality") // the same exception instance, rethrown, cannot suppress itself
+	private static RuntimeException withSuppressed(RuntimeException thrown, Throwable failure) {
+		if (thrown != failure) {
+			thrown.addSuppressed(failure);
+		}
+		return thrown;
 	}
 
 	/**
