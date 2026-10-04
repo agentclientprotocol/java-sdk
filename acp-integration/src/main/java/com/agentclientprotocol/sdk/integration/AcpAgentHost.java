@@ -119,7 +119,7 @@ public final class AcpAgentHost implements AcpHost {
 		}
 		Thread action = new Thread(() -> {
 			if (!stopping.get()) {
-				logger.info("ACP agent transport ended");
+				logger.debug("ACP agent transport ended");
 				onTransportEnd.run();
 			}
 		}, TRANSPORT_END_THREAD_NAME);
