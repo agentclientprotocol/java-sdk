@@ -760,6 +760,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK. **Migration:** none needed; to keep the old bound, set
   `requestTimeout(Duration.ofSeconds(30))` (or the property to `30s`).
 
+- **Breaking (behaviour): a client handler is registered once.** On `AcpClient.AsyncSpec` and
+  `SyncSpec`, registering a second handler for a method (a typed setter such as
+  `readTextFileHandler` called twice, `requestHandler`, `notificationHandler`,
+  `extRequestHandler`/`extNotificationHandler` for a method that already has one, or a raw handler
+  and the typed setter for the same method) now throws `IllegalStateException` naming the setter,
+  instead of silently replacing the first. A null handler still throws `IllegalArgumentException`.
+  `sessionUpdateConsumer` stays additive. **Migration:** register each method once; to compose
+  behaviour, do it inside one handler.
+
 ### Removed
 
 - **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public
