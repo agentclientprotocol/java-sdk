@@ -1645,24 +1645,88 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Request permission from user
+	 * The params of {@code session/request_permission}: the agent asks the client to let the user
+	 * approve a tool call, and offers the options to choose from, such as "allow once" and
+	 * "reject". An agent in a prompt turn sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#requestPermission
+	 * requestPermission(...)} on the prompt context, or the method of the same name on
+	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent};
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askPermission(String, ToolKind)
+	 * askPermission} and
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#askChoice(String, String...)
+	 * askChoice} on the prompt context build one for you. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#requestPermissionHandler
+	 * requestPermissionHandler} on the client builder, receives it and answers with a
+	 * {@link RequestPermissionResponse}.
+	 *
+	 * <p>
+	 * Every client is expected to handle it, so it has no capability and the agent checks none; a
+	 * client without the handler answers {@code -32601} (method not found). The request names a
+	 * tool call the agent announced with a {@link ToolCall} session update, so the client can show
+	 * the user what it is asked to allow. {@code askPermission} and {@code askChoice} announce a
+	 * pending tool call with a new random ID, send this request about it, then settle the tool call
+	 * with a {@code tool_call_update}: {@code completed} once the user chose an option, either way,
+	 * and {@code failed} for any other outcome. An agent that sends this request itself announces
+	 * the tool call itself.
+	 *
+	 * <p>
+	 * The user's answer counts against the agent's request timeout, which its builder's
+	 * {@code requestTimeout} sets: a user who takes longer fails the call with a
+	 * {@link java.util.concurrent.TimeoutException}, and the agent sends {@code $/cancel_request}
+	 * for the request. When the client cancels the prompt turn, the protocol requires it to answer
+	 * every pending permission request with {@link PermissionCancelled}; the SDK leaves that to the
+	 * client's handler.
+	 *
+	 * <p>
+	 * Each option's ID should be unique within the request. The SDK checks neither the IDs nor the
+	 * tool call on either side. A client answers {@code -32602} (invalid params) when a required
+	 * field is missing, including one of an option.
+	 *
+	 * @param sessionId the ACP session the tool call belongs to
+	 * @param toolCall the tool call to approve: its ID, and the title, kind and status the client
+	 * shows
+	 * @param options the options the user chooses from
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record RequestPermissionRequest(@JsonProperty("sessionId") String sessionId,
 			@JsonProperty("toolCall") ToolCallUpdate toolCall,
 			@JsonProperty("options") List<PermissionOption> options,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a request without {@code _meta}.
+		 * @param sessionId the ACP session
+		 * @param toolCall the tool call to approve
+		 * @param options the options the user chooses from
+		 */
 		public RequestPermissionRequest(String sessionId, ToolCallUpdate toolCall, List<PermissionOption> options) {
 			this(sessionId, toolCall, options, null);
 		}
 	}
 
 	/**
-	 * Permission response from user
+	 * The result of {@code session/request_permission}: the user's decision, a
+	 * {@link RequestPermissionOutcome}. The client's permission handler returns it, with a
+	 * {@link PermissionSelected} for the option the user chose or a {@link PermissionCancelled}
+	 * once the prompt turn was cancelled; the agent's {@code requestPermission(...)} completes with
+	 * it. On the wire the outcome is an object with its own {@code outcome} member, for example
+	 * {@code {"outcome":{"outcome":"selected","optionId":"allow"}}}.
+	 *
+	 * <p>
+	 * The outcome is required: an answer without it, or with an empty or {@code null} result, fails
+	 * the agent's call with an {@link AcpError} of code {@code -32603}. An outcome of a kind this
+	 * SDK does not know reads as an {@link UnknownPermissionOutcome}.
+	 *
+	 * @param outcome the user's decision
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record RequestPermissionResponse(@JsonProperty("outcome") RequestPermissionOutcome outcome,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a response without {@code _meta}.
+		 * @param outcome the user's decision
+		 */
 		public RequestPermissionResponse(RequestPermissionOutcome outcome) {
 			this(outcome, null);
 		}
@@ -2232,12 +2296,56 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Create elicitation request: the agent asks the client for structured user input.
-	 * The mode is {@code "form"} (a restricted JSON Schema in {@code requestedSchema}) or
-	 * {@code "url"} (an out-of-band interaction at {@code url}, identified by
-	 * {@code elicitationId}). The scope is a session ({@code sessionId}, optionally with
-	 * {@code toolCallId}) or a request ({@code requestId}). An agent must not request a
-	 * mode the client did not advertise in {@link ElicitationCapabilities}.
+	 * The params of {@code elicitation/create}: the agent asks the client to collect structured
+	 * input from the user, with a form or by sending the user to a URL. In form mode the client
+	 * renders {@link #requestedSchema()}, an {@link ElicitationSchema}, as a form; in URL mode it
+	 * opens {@link #url()} outside the client, once the user agrees, for an interaction such as a
+	 * sign-in that the agent's own server handles. Build it with
+	 * {@link #form(String, String, ElicitationSchema) form} or
+	 * {@link #url(String, String, String, String) url}, which scope it to a session. The agent
+	 * sends it with {@link com.agentclientprotocol.sdk.agent.PromptContext#createElicitation
+	 * createElicitation(...)} on the prompt context, or the method of the same name on
+	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent}. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#createElicitationHandler
+	 * createElicitationHandler} on the client builder, receives it and answers with a
+	 * {@link CreateElicitationResponse}.
+	 *
+	 * <p>
+	 * The client advertises each mode it supports ({@link ElicitationCapabilities}), and the
+	 * protocol forbids an agent to request a mode the client did not advertise. The agent fails
+	 * such a call with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
+	 * ({@code elicitation.form} or {@code elicitation.url}) without sending it, and the client
+	 * answers such a request {@code -32602} (invalid params) without calling its handler. Before
+	 * {@code initialize} neither side knows the modes: the request is sent and the handler is
+	 * called. The mode is an open string, compared with {@code equals}, so {@code "FORM"} is not
+	 * form mode. For a mode this SDK does not know, the agent requires only that the client sent an
+	 * elicitation capability, even one with no mode, and the client passes the request to its
+	 * handler, which must not treat it as a known mode.
+	 *
+	 * <p>
+	 * Scope the request with {@link #sessionId()}, optionally with {@link #toolCallId()}, or,
+	 * outside a session, with {@link #requestId()}, the ID of the JSON-RPC request it belongs to.
+	 * Form mode needs {@code requestedSchema}; URL mode needs {@code elicitationId}, unique among
+	 * the agent's open URL elicitations on the connection, and {@code url}. The SDK checks none of
+	 * these on either side; {@code message} and {@code mode} must not be {@code null}. The user's
+	 * answer counts against the agent's request timeout, as for a {@link RequestPermissionRequest}.
+	 *
+	 * <p>
+	 * Form mode must not ask for secrets such as passwords, API keys or tokens: the protocol
+	 * requires URL mode for them. The URL must not carry credentials or personal data, and the
+	 * protocol requires the client to show it and ask the user before opening it.
+	 *
+	 * @param sessionId the ACP session the elicitation belongs to, or {@code null} for a request
+	 * scope
+	 * @param toolCallId the tool call within the session, or {@code null}
+	 * @param requestId the ID of the JSON-RPC request the elicitation belongs to, a string or a
+	 * number, or {@code null} for a session scope
+	 * @param message what the agent asks for and why, shown to the user
+	 * @param mode the mode, {@link #MODE_FORM} or {@link #MODE_URL}
+	 * @param requestedSchema the form's fields, for form mode, or {@code null}
+	 * @param elicitationId the elicitation's ID, for URL mode, or {@code null}
+	 * @param url the URL to open, for URL mode, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationRequest(@JsonProperty("sessionId") @Nullable String sessionId,
@@ -2247,14 +2355,21 @@ public final class AcpSchema {
 			@JsonProperty("elicitationId") @Nullable String elicitationId, @JsonProperty("url") @Nullable String url,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
-		/** The form mode: the client renders {@code requestedSchema} as a form. */
+		/** The form mode, {@value}: the client renders {@code requestedSchema} as a form. */
 		public static final String MODE_FORM = "form";
 
-		/** The URL mode: the client opens {@code url} out of band, with the user's consent. */
+		/**
+		 * The URL mode, {@value}: the client opens {@code url} outside the client, once the user
+		 * agrees.
+		 */
 		public static final String MODE_URL = "url";
 
 		/**
-		 * Creates a form-mode elicitation request scoped to a session.
+		 * Creates a form-mode request scoped to a session, without a tool call or {@code _meta}.
+		 * @param sessionId the ACP session
+		 * @param message what the agent asks for and why
+		 * @param schema the form's fields
+		 * @return the request
 		 */
 		public static CreateElicitationRequest form(String sessionId, String message,
 				ElicitationSchema schema) {
@@ -2263,7 +2378,13 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Creates a URL-mode elicitation request scoped to a session.
+		 * Creates a URL-mode request scoped to a session, without a tool call or {@code _meta}.
+		 * @param sessionId the ACP session
+		 * @param message what the agent asks for and why
+		 * @param elicitationId the elicitation's ID, unique among the agent's open URL elicitations
+		 * on the connection
+		 * @param url the URL to open
+		 * @return the request
 		 */
 		public static CreateElicitationRequest url(String sessionId, String message,
 				String elicitationId, String url) {
@@ -2273,65 +2394,115 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Create elicitation response: the user's answer. The action is {@code accept},
-	 * {@code decline} or {@code cancel}; {@code content} is optional and only meaningful
-	 * on {@code accept} (an accepted URL elicitation normally has none). Its values are
-	 * strings, integers, numbers, booleans or string arrays.
+	 * The result of {@code elicitation/create}: what the user did, an {@link ElicitationAction},
+	 * and the form content when the user accepted a form. The client's elicitation handler returns
+	 * it, built with {@link #accept(Map)}, {@link #accept()}, {@link #decline()} or
+	 * {@link #cancel()}; the agent's {@code createElicitation(...)} completes with it. Compare the
+	 * action with {@code equals}, for example
+	 * {@code ElicitationAction.ACCEPT.equals(response.action())}, not with {@code ==}.
+	 *
+	 * <p>
+	 * Accept means the user submitted the form, or agreed to open the URL; for URL mode it does not
+	 * mean the interaction there has finished. Decline means the user said no, and cancel that the
+	 * user dismissed the request without choosing. The protocol requires the agent to handle
+	 * decline, cancel and failure, for example by falling back or by failing the operation.
+	 *
+	 * <p>
+	 * {@code content} maps the form's property names to the values the user entered: strings,
+	 * integers, numbers, booleans or lists of strings. It is only meaningful on accept, and
+	 * normally {@code null} for URL mode. The SDK checks neither the values against the form nor
+	 * their types, on either side, so the agent should check them again. An answer without an
+	 * action fails the agent's call with an {@link AcpError} of code {@code -32603}; an action this
+	 * SDK does not know is kept.
+	 *
+	 * @param action what the user did
+	 * @param content the form content on accept, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CreateElicitationResponse(@JsonProperty("action") ElicitationAction action,
 			@JsonProperty("content") @Nullable Map<String, Object> content,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
-		/** The user accepted, submitting the given form content. */
+		/**
+		 * Returns an answer that the user accepted the form, with its content.
+		 * @param content the property names and the values the user entered
+		 * @return the answer
+		 */
 		public static CreateElicitationResponse accept(Map<String, Object> content) {
 			return new CreateElicitationResponse(ElicitationAction.ACCEPT, content, null);
 		}
 
-		/** The user accepted without content, as for a URL elicitation the user agreed to open. */
+		/**
+		 * Returns an answer that the user accepted, without content, as for a URL elicitation the
+		 * user agreed to open.
+		 * @return the answer
+		 */
 		public static CreateElicitationResponse accept() {
 			return new CreateElicitationResponse(ElicitationAction.ACCEPT, null, null);
 		}
 
+		/**
+		 * Returns an answer that the user declined.
+		 * @return the answer
+		 */
 		public static CreateElicitationResponse decline() {
 			return new CreateElicitationResponse(ElicitationAction.DECLINE, null, null);
 		}
 
+		/**
+		 * Returns an answer that the user dismissed the request without choosing.
+		 * @return the answer
+		 */
 		public static CreateElicitationResponse cancel() {
 			return new CreateElicitationResponse(ElicitationAction.CANCEL, null, null);
 		}
 	}
 
 	/**
-	 * The user's answer to an elicitation ({@code CreateElicitationResponse.action}). An
-	 * open value: a value this SDK does not know (a newer peer) is kept and written back
-	 * unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns
-	 * them for their wire values, so a known value read from the wire is one of them.
+	 * What the user did with an elicitation: the {@link CreateElicitationResponse#action()} a
+	 * client answers {@code elicitation/create} with. Clients send one of the constants; agents
+	 * compare the value they receive with {@code equals}, or switch on {@link #value()}, not with
+	 * {@code ==}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants. The protocol
+	 * forbids an agent to treat an unknown action as a known one.
+	 *
+	 * @param value the wire value, such as {@code "accept"}
 	 */
 	public record ElicitationAction(@JsonValue String value) {
 
-		/** {@code "accept"}: the user submitted the form or consented to open the URL. */
+		/** {@code "accept"}: the user submitted the form, or agreed to open the URL. */
 		public static final ElicitationAction ACCEPT = new ElicitationAction("accept");
 
 		/** {@code "decline"}: the user explicitly declined. */
 		public static final ElicitationAction DECLINE = new ElicitationAction("decline");
 
-		/** {@code "cancel"}: the user dismissed the interaction without choosing. */
+		/** {@code "cancel"}: the user dismissed the request without choosing. */
 		public static final ElicitationAction CANCEL = new ElicitationAction("cancel");
 
 		private static final List<ElicitationAction> KNOWN = List.of(ACCEPT, DECLINE, CANCEL);
 
+		/**
+		 * Creates an action for a wire value. Prefer {@link #of}, which returns the constant for a
+		 * known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public ElicitationAction {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns an action for a wire value: the constant when ACP v1 defines the value, and
+		 * otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static ElicitationAction of(String value) {
@@ -2339,21 +2510,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<ElicitationAction> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code accept}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -2362,20 +2537,60 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Complete elicitation notification: the agent tells the client that the external
-	 * interaction of an accepted URL-mode elicitation has finished. Clients must ignore
-	 * unknown or already-completed IDs.
+	 * The params of {@code elicitation/complete}, a notification: the agent tells the client that
+	 * the interaction of a URL-mode elicitation, at its URL, has finished. Sending it is optional.
+	 * The agent sends it with
+	 * {@link com.agentclientprotocol.sdk.agent.PromptContext#completeElicitation
+	 * completeElicitation(...)} on the prompt context, or the method of the same name on
+	 * {@code AcpAsyncAgent} or {@code AcpSyncAgent}, with the
+	 * {@link CreateElicitationRequest#elicitationId()} of the request, and the protocol allows it
+	 * only to the client that received that request. The client's handler, set with
+	 * {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#completeElicitationHandler
+	 * completeElicitationHandler} on the client builder, receives it.
+	 *
+	 * <p>
+	 * The protocol requires the client to ignore an ID it does not know or has already seen
+	 * completed. The SDK passes every notification to the handler, so the handler makes that check.
+	 * The agent sends it without checking the client's capabilities, and neither side checks the
+	 * ID: a notification without one reaches the client's handler with a {@code null} ID.
+	 *
+	 * @param elicitationId the ID of the URL elicitation that finished
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record CompleteElicitationNotification(@JsonProperty("elicitationId") String elicitationId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the notification without {@code _meta}.
+		 * @param elicitationId the ID of the URL elicitation that finished
+		 */
 		public CompleteElicitationNotification(String elicitationId) {
 			this(elicitationId, null);
 		}
 	}
 
 	/**
-	 * Elicitation schema - JSON Schema describing form fields for user input.
+	 * The form of a form-mode elicitation: a flat JSON Schema object whose properties are the
+	 * form's fields. It is the {@link CreateElicitationRequest#requestedSchema()} the client
+	 * renders. {@link #properties()} maps each field's name to an
+	 * {@link ElicitationPropertySchema}, such as a {@link StringPropertySchema}, and
+	 * {@link #required()} lists the names the user must fill in. Build it with
+	 * {@link #ElicitationSchema(Map, List)}, which sets the type to {@code "object"}.
+	 *
+	 * <p>
+	 * The type is always {@code "object"}, and the protocol reads a missing type that way. The
+	 * other constructors write the type they are given, and leave it out when it is {@code null};
+	 * the SDK checks neither the type nor the names in {@code required}. A property of a type this
+	 * SDK does not know reads as an {@link UnknownElicitationPropertySchema}. The protocol asks the
+	 * client to fill in declared defaults and to check the values before answering, and the agent
+	 * to check them again.
+	 *
+	 * @param type the schema type, {@code "object"}, or {@code null}
+	 * @param properties the form's fields by name, or {@code null}
+	 * @param required the names of the fields the user must fill in, or {@code null}
+	 * @param title the form's title, or {@code null}
+	 * @param description what the form is for, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationSchema(@JsonProperty("type") @Nullable String type,
@@ -2383,11 +2598,25 @@ public final class AcpSchema {
 			@JsonProperty("required") @Nullable List<String> required, @JsonProperty("title") @Nullable String title,
 			@JsonProperty("description") @Nullable String description,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates a schema without {@code _meta}.
+		 * @param type the schema type, {@code "object"}, or {@code null}
+		 * @param properties the form's fields by name, or {@code null}
+		 * @param required the names of the required fields, or {@code null}
+		 * @param title the form's title, or {@code null}
+		 * @param description what the form is for, or {@code null}
+		 */
 		public ElicitationSchema(@Nullable String type, @Nullable Map<String, ElicitationPropertySchema> properties,
 				@Nullable List<String> required, @Nullable String title, @Nullable String description) {
 			this(type, properties, required, title, description, null);
 		}
 
+		/**
+		 * Creates an object schema with these fields, without a title, description or
+		 * {@code _meta}.
+		 * @param properties the form's fields by name, or {@code null}
+		 * @param required the names of the required fields, or {@code null}
+		 */
 		public ElicitationSchema(@Nullable Map<String, ElicitationPropertySchema> properties, @Nullable List<String> required) {
 			this("object", properties, required, null, null, null);
 		}
@@ -2582,26 +2811,50 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Elicitation capabilities, advertised by the client during initialize. A mode is
-	 * supported only when its object is present and non-null: {@code {}} advertises no
-	 * mode. Use {@link #formOnly()}, {@link #urlOnly()} or {@link #formAndUrl()}.
+	 * The elicitation modes a client supports: the {@link ClientCapabilities#elicitation()} it
+	 * sends in {@code initialize}. A mode is advertised only when its object is present and not
+	 * {@code null}, so {@code {}}, or both modes {@code null}, advertises no mode. Build it with
+	 * {@link #formOnly()}, {@link #urlOnly()} or {@link #formAndUrl()}.
+	 *
+	 * <p>
+	 * The agent reads it through
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} ({@code supportsElicitationForm()} and
+	 * {@code supportsElicitationUrl()}), and refuses to send an elicitation of a mode the client
+	 * did not advertise; the client answers such a request {@code -32602} itself
+	 * (see {@link CreateElicitationRequest}). A client builder that advertises a mode without a
+	 * {@code createElicitationHandler} fails at {@code build()}. Only the two modes of the protocol
+	 * can be advertised here: other members are dropped when it is read.
+	 *
+	 * @param form form mode, or {@code null} if the client does not support it
+	 * @param url URL mode, or {@code null} if the client does not support it
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationCapabilities(@JsonProperty("form") @Nullable ElicitationFormCapabilities form,
 			@JsonProperty("url") @Nullable ElicitationUrlCapabilities url,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
 
-		/** Advertises form mode only. */
+		/**
+		 * Returns capabilities that advertise form mode only.
+		 * @return the capabilities
+		 */
 		public static ElicitationCapabilities formOnly() {
 			return new ElicitationCapabilities(new ElicitationFormCapabilities(), null, null);
 		}
 
-		/** Advertises URL mode only. */
+		/**
+		 * Returns capabilities that advertise URL mode only.
+		 * @return the capabilities
+		 */
 		public static ElicitationCapabilities urlOnly() {
 			return new ElicitationCapabilities(null, new ElicitationUrlCapabilities(), null);
 		}
 
-		/** Advertises both form and URL mode. */
+		/**
+		 * Returns capabilities that advertise both form and URL mode.
+		 * @return the capabilities
+		 */
 		public static ElicitationCapabilities formAndUrl() {
 			return new ElicitationCapabilities(new ElicitationFormCapabilities(), new ElicitationUrlCapabilities(),
 					null);
@@ -2609,20 +2862,30 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Form-mode elicitation capabilities. Its presence advertises form mode.
+	 * The marker that a client supports form-mode elicitation: present as
+	 * {@link ElicitationCapabilities#form()}, it advertises the mode, whatever it holds. It has
+	 * only {@code _meta}, and is {@code {}} on the wire.
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationFormCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/** Creates the marker, without {@code _meta}. */
 		public ElicitationFormCapabilities() {
 			this(null);
 		}
 	}
 
 	/**
-	 * URL-mode elicitation capabilities. Its presence advertises URL mode.
+	 * The marker that a client supports URL-mode elicitation: present as
+	 * {@link ElicitationCapabilities#url()}, it advertises the mode, whatever it holds. It has only
+	 * {@code _meta}, and is {@code {}} on the wire.
+	 *
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ElicitationUrlCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/** Creates the marker, without {@code _meta}. */
 		public ElicitationUrlCapabilities() {
 			this(null);
 		}
@@ -5790,37 +6053,52 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * The kind of a permission option, which a client may use to choose an icon or a default. An open value: a value this SDK does not know (a newer peer) is kept and
-	 * written back unchanged, so it never fails the message (see {@link AcpSchema} on forward
-	 * compatibility). The constants name the values ACP v1 defines; {@link #of} returns them
-	 * for their wire values, so a known value read from the wire is one of them.
+	 * What choosing a {@link PermissionOption} means: allow or reject, once or always. The client
+	 * uses it to pick an icon and how to show the option; an "always" kind asks the client to
+	 * remember the choice for later requests, which the SDK does not do for it. Senders use the
+	 * constants; receivers compare the value they receive with {@code equals}, or switch on
+	 * {@link #value()}.
 	 *
-	 * @param value the wire value
+	 * <p>
+	 * An open value: a value this SDK does not know, from a newer peer, is kept and written back
+	 * unchanged, and its {@link #isKnown()} is {@code false}, so it never fails the message
+	 * (see {@link AcpSchema} on forward compatibility). {@link #of} returns the constant for a
+	 * known wire value, so a known value read from the wire is one of the constants.
+	 *
+	 * @param value the wire value, such as {@code "allow_once"}
 	 */
 	public record PermissionOptionKind(@JsonValue String value) {
 
-		/** {@code "allow_once"}. */
+		/** {@code "allow_once"}: allow the operation this time only. */
 		public static final PermissionOptionKind ALLOW_ONCE = new PermissionOptionKind("allow_once");
 
-		/** {@code "allow_always"}. */
+		/** {@code "allow_always"}: allow the operation and remember the choice. */
 		public static final PermissionOptionKind ALLOW_ALWAYS = new PermissionOptionKind("allow_always");
 
-		/** {@code "reject_once"}. */
+		/** {@code "reject_once"}: reject the operation this time only. */
 		public static final PermissionOptionKind REJECT_ONCE = new PermissionOptionKind("reject_once");
 
-		/** {@code "reject_always"}. */
+		/** {@code "reject_always"}: reject the operation and remember the choice. */
 		public static final PermissionOptionKind REJECT_ALWAYS = new PermissionOptionKind("reject_always");
 
 		private static final List<PermissionOptionKind> KNOWN = List.of(ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS);
 
+		/**
+		 * Creates a kind for a wire value. Prefer {@link #of}, which returns the constant for a
+		 * known value; a value created here still equals that constant.
+		 * @param value the wire value
+		 * @throws NullPointerException if {@code value} is {@code null}
+		 */
 		public PermissionOptionKind {
 			Objects.requireNonNull(value, "value");
 		}
 
 		/**
-		 * The value for a wire string: the constant when ACP v1 defines it.
+		 * Returns a kind for a wire value: the constant when ACP v1 defines the value, and
+		 * otherwise a new, unknown value.
 		 * @param value the wire value
 		 * @return the constant, or a new value for an unknown string
+		 * @throws NullPointerException if {@code value} is {@code null}
 		 */
 		@JsonCreator(mode = JsonCreator.Mode.DELEGATING)
 		public static PermissionOptionKind of(String value) {
@@ -5828,21 +6106,25 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * The values ACP v1 defines, in schema order.
-		 * @return the known values
+		 * Returns the values ACP v1 defines, in schema order.
+		 * @return the constants, in an unmodifiable list
 		 */
 		public static List<PermissionOptionKind> known() {
 			return KNOWN;
 		}
 
 		/**
-		 * Whether ACP v1 defines this value.
-		 * @return true for a known value
+		 * Returns whether ACP v1 defines this value; a value from a newer peer is not known.
+		 * @return {@code true} for the value of one of the constants
 		 */
 		public boolean isKnown() {
 			return KNOWN.contains(this);
 		}
 
+		/**
+		 * Returns the wire value, such as {@code allow_once}.
+		 * @return the wire value
+		 */
 		@Override
 		public String toString() {
 			return value;
@@ -6446,20 +6728,51 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Permission option
+	 * One choice a permission request offers the user: its ID, the label the client shows, and its
+	 * {@link PermissionOptionKind}, such as allow once or reject always. The user's answer, a
+	 * {@link PermissionSelected}, names the chosen option by its {@link #optionId()}.
+	 *
+	 * <p>
+	 * All three components are required, and the ID should be unique within the request; the SDK
+	 * checks neither when sending. {@code askPermission} on the prompt context offers
+	 * {@code "allow"} ("Allow", allow once) and {@code "deny"} ("Deny", reject once);
+	 * {@code askChoice} offers one option per text, with its position
+	 * ({@code "0"}, {@code "1"}, and so on) as the ID and the kind allow once.
+	 *
+	 * @param optionId the option's ID, unique within the request
+	 * @param name the label the client shows the user
+	 * @param kind what choosing the option means, a hint for the client
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionOption(@JsonProperty("optionId") String optionId, @JsonProperty("name") String name,
 			@JsonProperty("kind") PermissionOptionKind kind,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates an option without {@code _meta}.
+		 * @param optionId the option's ID
+		 * @param name the label the client shows
+		 * @param kind what choosing the option means
+		 */
 		public PermissionOption(String optionId, String name, PermissionOptionKind kind) {
 			this(optionId, name, kind, null);
 		}
 	}
 
 	/**
-	 * Request permission outcome. An outcome this SDK does not know reads as an
-	 * {@link UnknownPermissionOutcome}.
+	 * The user's decision on a permission request: the {@link RequestPermissionResponse#outcome()}
+	 * a client answers {@code session/request_permission} with. {@link PermissionSelected} carries
+	 * the ID of the option the user chose, whether it allows or rejects;
+	 * {@link PermissionCancelled} says the prompt turn was cancelled before the user answered.
+	 *
+	 * <p>
+	 * On the wire the {@code outcome} member names the variant, and each variant record has it as
+	 * its first component. An outcome of a kind this SDK does not know, or one without
+	 * {@code outcome}, reads as an {@link UnknownPermissionOutcome}. The interface is not sealed:
+	 * end an {@code instanceof} chain with a branch for anything else
+	 * (see {@link AcpSchema} on forward compatibility). {@code askPermission} and {@code askChoice}
+	 * on the prompt context treat every outcome other than {@code PermissionSelected} as a
+	 * cancelled request.
 	 */
 	@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "outcome", include = JsonTypeInfo.As.EXISTING_PROPERTY,
 			visible = true, defaultImpl = UnknownPermissionOutcome.class)
@@ -6470,53 +6783,118 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * A permission outcome of a kind this SDK does not know: the peer is newer, or sent an
-	 * extension. It keeps the {@code outcome} discriminator (null when the peer sent none)
-	 * and every other field, and writes them back unchanged.
+	 * A permission outcome of a kind this SDK does not know, kept as received: the client is on a
+	 * newer protocol version or sent an extension. {@code askPermission} and {@code askChoice} on
+	 * the prompt context treat it as a cancelled request.
 	 *
-	 * @param outcome the discriminator as received
-	 * @param fields every other field, in wire order
+	 * <p>
+	 * It keeps the {@code outcome} discriminator ({@code null} when the outcome had none) and every
+	 * other member in {@link #fields()}, an unmodifiable map in wire order, and writes them back
+	 * unchanged. Names are case sensitive: {@code "SELECTED"} is an unknown outcome, not a
+	 * {@link PermissionSelected}.
+	 *
+	 * @param outcome the discriminator as received, or {@code null}
+	 * @param fields every other member, in wire order
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record UnknownPermissionOutcome(@JsonProperty("outcome") @Nullable String outcome,
 			@JsonAnySetter @JsonAnyGetter Map<String, Object> fields) implements RequestPermissionOutcome {
+		/**
+		 * Creates an unknown outcome. The fields are copied in their order, and {@code null} fields
+		 * become an empty map.
+		 * @param outcome the discriminator, or {@code null}
+		 * @param fields every other member
+		 */
 		public UnknownPermissionOutcome {
 			fields = unknownFields(fields);
 		}
 	}
 
 	/**
-	 * Permission cancelled
+	 * The outcome of a permission request that ended because the prompt turn was cancelled before
+	 * the user answered. The protocol requires a client that cancels a prompt turn
+	 * ({@code session/cancel}) to answer every pending permission request of the turn with it. The
+	 * SDK does not answer for the client, so a permission handler that waits for the user answers
+	 * with it once the turn is cancelled.
+	 *
+	 * <p>
+	 * {@code askPermission} on the prompt context returns {@code false} for it and
+	 * {@code askChoice} completes empty (an empty {@code Optional} on the blocking prompt context);
+	 * both mark their tool call {@code failed}. The schema gives this outcome no {@code _meta}: the
+	 * record has none, and a {@code _meta} member on the wire is dropped.
+	 *
+	 * @param outcome the discriminator, {@code "cancelled"}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionCancelled(
 			@JsonProperty("outcome") String outcome)
 			implements RequestPermissionOutcome {
+		/**
+		 * Creates the outcome, as the JSON mapper does. Pass {@code null} for {@code outcome}, or
+		 * use the constructor without arguments, and it becomes {@code "cancelled"}.
+		 * @param outcome {@code null} or {@code "cancelled"}
+		 * @throws IllegalArgumentException if {@code outcome} is any other name
+		 */
 		public PermissionCancelled {
 			outcome = discriminator(outcome, "cancelled");
 		}
 
+		/** Creates the cancelled outcome. */
 		public PermissionCancelled() {
 			this("cancelled");
 		}
 	}
 
 	/**
-	 * Permission selected
+	 * The outcome of a permission request the user answered: {@link #optionId()} is the ID of the
+	 * {@link PermissionOption} the user chose, whether it allows or rejects. A client handler
+	 * answers with {@link #PermissionSelected(String) new PermissionSelected(optionId)}. The
+	 * protocol lets a client choose for the user, by the user's settings, with the same outcome.
+	 *
+	 * <p>
+	 * The SDK does not check that the ID is one the request offered. {@code askChoice} on the
+	 * prompt context checks it: for an ID it did not offer it fails with an {@link AcpError} of
+	 * code {@code -32603} whose data has the reason {@code "unoffered-option"} and the
+	 * {@code "optionId"}, after it marked its tool call {@code completed}. {@code askPermission}
+	 * returns {@code true} only for its own {@code "allow"} option, and {@code false} for any other
+	 * ID.
+	 *
+	 * @param outcome the discriminator, {@code "selected"}
+	 * @param optionId the ID of the option the user chose
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PermissionSelected(
 			@JsonProperty("outcome") String outcome,
 			@JsonProperty("optionId") String optionId,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) implements RequestPermissionOutcome {
+		/**
+		 * Creates an outcome without {@code _meta}. Unlike {@link #PermissionSelected(String)}, it
+		 * still takes the discriminator: pass {@code null} or {@code "selected"}.
+		 * @param outcome {@code null} or {@code "selected"}
+		 * @param optionId the chosen option's ID
+		 * @throws IllegalArgumentException if {@code outcome} is any other name
+		 */
 		public PermissionSelected(String outcome, String optionId) {
 			this(outcome, optionId, null);
 		}
 
+		/**
+		 * Creates an outcome with every component, as the JSON mapper does. Pass {@code null} for
+		 * {@code outcome}, or use a shorter constructor, and it becomes {@code "selected"}.
+		 * @param outcome {@code null} or {@code "selected"}
+		 * @param optionId the chosen option's ID
+		 * @param meta the {@code _meta} map, or {@code null}
+		 * @throws IllegalArgumentException if {@code outcome} is any other name
+		 */
 		public PermissionSelected {
 			outcome = discriminator(outcome, "selected");
 		}
 
+		/**
+		 * Creates the outcome for the option with this ID, without {@code _meta}.
+		 * @param optionId the chosen option's ID
+		 */
 		public PermissionSelected(String optionId) {
 			this("selected", optionId);
 		}
