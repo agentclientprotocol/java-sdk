@@ -51,8 +51,8 @@ class ClientCapabilitiesBuilderTest {
 	/**
 	 * Test that clientCapabilities set via the builder are sent to the agent.
 	 * <p>
-	 * BUG: Currently the clientCapabilities() builder method is ignored - the agent
-	 * receives default capabilities instead of the custom ones configured.
+	 * Regression test: the clientCapabilities() builder method was once ignored, and the
+	 * agent received default capabilities instead of the custom ones configured.
 	 */
 	@Test
 	void clientCapabilitiesBuilderMethodSendsCapabilitiesToAgent() throws Exception {
@@ -92,7 +92,7 @@ class ClientCapabilitiesBuilderTest {
 		assertThat(capabilitiesLatch.await(5, TimeUnit.SECONDS)).isTrue();
 		assertThat(receivedCapabilities.get()).isNotNull();
 
-		// BUG: These assertions currently FAIL because builder capabilities are ignored
+		// These assertions failed while builder capabilities were ignored
 		assertThat(receivedCapabilities.get().fs())
 			.as("File system capabilities should be set from builder")
 			.isNotNull();
