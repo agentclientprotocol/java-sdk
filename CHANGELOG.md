@@ -80,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing. Before, stopping a turn and keeping its answer took
   `contextWrite(RequestCancellation.cancelWhen(trigger))`, which no completion menu offers and the
   sync client could not use; `RequestCancellation` stays, for `$/cancel_request` on any request.
+  Migration: none; `prompt(request)` is unchanged. To stop a turn and keep its answer, replace
+  `prompt(request).contextWrite(RequestCancellation.cancelWhen(trigger))` with
+  `prompt(request, stop)` and call `stop.cancel()`.
 
 - **Builder handlers receive their agent.** Every typed request setter of `AcpAgent.async(..)`
   and `AcpAgent.sync(..)` except `promptHandler` has an overload taking an
@@ -90,8 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AtomicReference` holding the built agent:
   `.setSessionConfigOptionHandler((request, agent) -> { agent.sendSessionUpdate(request.sessionId(), update); return response; })`.
   One-argument handlers are unchanged. The two interfaces are top-level types in
-  `com.agentclientprotocol.sdk.agent`. `AcpAgent.AsyncAgentBuilder` and `SyncAgentBuilder` are now
-  `final`; their constructors were already package-private, so nothing could extend them.
+  `com.agentclientprotocol.sdk.agent`. Migration: none; a handler that read the built agent from
+  an `AtomicReference` can take it as its second parameter instead:
+  `.loadSessionHandler(request -> agentRef.get()...)` → `.loadSessionHandler((request, agent) -> agent...)`.
 
 - **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
   `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;
@@ -99,7 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `promptEmbeddedContext()`, `mcpHttp()` and `mcpSse()`. Each sets one flag and keeps the others
   (and the nested record's `_meta`), so `ClientCapabilities.builder().readTextFile().terminal().build()`
   replaces `fs(new FileSystemCapability(true, false)).terminal(true)` and its two adjacent booleans.
-  The setters that take the nested records stay.
+  The setters that take the nested records stay. Migration: none; optionally
+  `.fs(new FileSystemCapability(true, true))` → `.readTextFile().writeTextFile()` and
+  `.loadSession(true)` → `.loadSession()`.
 
 - **Micronaut: `acp.client.capabilities.elicitation-form`, `elicitation-url` and
   `boolean-config-options`** (default `false`), as Spring Boot and Quarkus already offer. The
@@ -453,12 +459,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PromptRequest.text(sessionId, text)` (a prompt of one text block). Each equals, and writes the
   same JSON as, the long form.
 
-- **`defaultSessionUpdateConsumer(..)` on `AcpClient.AsyncSpec` and `SyncSpec`:** a session
-  update consumer used only while no `sessionUpdateConsumer` is added, so a framework can set a
-  default (such as logging each update at DEBUG) that the application's own consumer replaces,
+- **`defaultSessionUpdateHandler(..)` on `AcpClient.AsyncSpec` and `SyncSpec`:** a session
+  update handler used only while no `sessionUpdateHandler` is added, so a framework can set a
+  default (such as logging each update at DEBUG) that the application's own handler replaces,
   whichever is registered first. The Spring Boot autoconfiguration and the Micronaut and Quarkus
-  client beans now set their DEBUG-logging consumer this way; it used to run beside every consumer a customizer
-  added. `sessionUpdateConsumer` stays additive.
+  client beans now set their DEBUG-logging handler this way; it used to run beside every handler a customizer
+  added. `sessionUpdateHandler` stays additive. (Snapshots before the rename below called these
+  `defaultSessionUpdateConsumer` and `sessionUpdateConsumer`.)
 
 ### Changed
 
@@ -575,12 +582,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A test double implementing `PromptContext` or `SyncPromptContext` drops those ten methods and
   implements `client()`.
 
+- **Breaking: `AcpAgent.AsyncAgentBuilder` and `AcpAgent.SyncAgentBuilder` are `final`.** Their
+  constructors were already package-private, so no code outside the SDK could extend them; the
+  modifier makes that explicit and lets the builders grow overloads safely. Migration: none; build
+  agents with `AcpAgent.async(transport)` and `AcpAgent.sync(transport)`, and wrap a builder
+  rather than subclass it.
+
 - **Breaking: one vocabulary for session updates.** The client builders' setters are handlers,
   like every other setter, and the prompt context sends session updates with the same verb as
   the agent and the test kit (`AcpAsyncAgent.sendSessionUpdate`, `AcpSyncAgent.sendSessionUpdate`,
   `MockAcpAgent.sendSessionUpdate`). Renamed outright, without deprecated aliases:
   `AcpClient.AsyncSpec`/`SyncSpec.sessionUpdateConsumer(..)` → `sessionUpdateHandler(..)`,
-  `defaultSessionUpdateConsumer(..)` → `defaultSessionUpdateHandler(..)`, and
+  `defaultSessionUpdateConsumer(..)` (snapshots only) → `defaultSessionUpdateHandler(..)`, and
   `PromptContext.sendUpdate(update)` / `SyncPromptContext.sendUpdate(update)` →
   `sendSessionUpdate(update)`. Behaviour and parameter types are unchanged, and so is the
   registration error a raw `notificationHandler("session/update", ..)` gets, which now names
