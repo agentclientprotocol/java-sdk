@@ -3321,6 +3321,9 @@ public final class AcpSchema {
 	 *
 	 * <pre>{@code
 	 * ClientCapabilities caps = ClientCapabilities.builder()
+	 *     .readTextFile()
+	 *     .terminal()
+	 *     .elicitationForm()
 	 *     .session(ClientSessionCapabilities.withBooleanConfigOptions())
 	 *     .build();
 	 * }</pre>
@@ -3415,6 +3418,64 @@ public final class AcpSchema {
 			 */
 			public Builder terminal(@Nullable Boolean terminal) {
 				this.terminal = terminal;
+				return this;
+			}
+
+			/**
+			 * Advertises {@code fs.readTextFile}, keeping the {@code fs.writeTextFile} flag as it
+			 * is. Register a {@code readTextFileHandler} on the client builder as well.
+			 * @return this builder
+			 */
+			public Builder readTextFile() {
+				FileSystemCapability current = this.fs;
+				this.fs = new FileSystemCapability(true, (current != null) ? current.writeTextFile() : null,
+						(current != null) ? current.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises {@code fs.writeTextFile}, keeping the {@code fs.readTextFile} flag as it
+			 * is. Register a {@code writeTextFileHandler} on the client builder as well.
+			 * @return this builder
+			 */
+			public Builder writeTextFile() {
+				FileSystemCapability current = this.fs;
+				this.fs = new FileSystemCapability((current != null) ? current.readTextFile() : null, true,
+						(current != null) ? current.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises the {@code terminal/*} methods, as {@code terminal(true)} does. Register
+			 * all five terminal handlers on the client builder as well.
+			 * @return this builder
+			 */
+			public Builder terminal() {
+				this.terminal = true;
+				return this;
+			}
+
+			/**
+			 * Advertises form-mode elicitation, keeping URL mode as it is. Register a
+			 * {@code createElicitationHandler} on the client builder as well.
+			 * @return this builder
+			 */
+			public Builder elicitationForm() {
+				ElicitationCapabilities current = this.elicitation;
+				this.elicitation = new ElicitationCapabilities(new ElicitationFormCapabilities(),
+						(current != null) ? current.url() : null, (current != null) ? current.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises URL-mode elicitation, keeping form mode as it is. Register a
+			 * {@code createElicitationHandler} on the client builder as well.
+			 * @return this builder
+			 */
+			public Builder elicitationUrl() {
+				ElicitationCapabilities current = this.elicitation;
+				this.elicitation = new ElicitationCapabilities((current != null) ? current.form() : null,
+						new ElicitationUrlCapabilities(), (current != null) ? current.meta() : null);
 				return this;
 			}
 
@@ -3764,6 +3825,15 @@ public final class AcpSchema {
 			}
 
 			/**
+			 * Advertises {@code session/load}, as {@code loadSession(true)} does.
+			 * @return this builder
+			 */
+			public Builder loadSession() {
+				this.loadSession = true;
+				return this;
+			}
+
+			/**
 			 * Sets the other optional session methods the agent serves, such as
 			 * {@code session/list} and {@code session/close}.
 			 * @param sessionCapabilities the session capabilities, or {@code null} for none
@@ -3791,6 +3861,64 @@ public final class AcpSchema {
 			 */
 			public Builder promptCapabilities(@Nullable PromptCapabilities promptCapabilities) {
 				this.promptCapabilities = promptCapabilities;
+				return this;
+			}
+
+			/**
+			 * Advertises that the agent accepts image content in prompts, keeping the other prompt
+			 * flags as they are.
+			 * @return this builder
+			 */
+			public Builder promptImage() {
+				PromptCapabilities p = this.promptCapabilities;
+				this.promptCapabilities = new PromptCapabilities((p != null) ? p.audio() : null,
+						(p != null) ? p.embeddedContext() : null, true, (p != null) ? p.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises that the agent accepts audio content in prompts, keeping the other prompt
+			 * flags as they are.
+			 * @return this builder
+			 */
+			public Builder promptAudio() {
+				PromptCapabilities p = this.promptCapabilities;
+				this.promptCapabilities = new PromptCapabilities(true, (p != null) ? p.embeddedContext() : null,
+						(p != null) ? p.image() : null, (p != null) ? p.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises that the agent accepts embedded resources in prompts, keeping the other
+			 * prompt flags as they are.
+			 * @return this builder
+			 */
+			public Builder promptEmbeddedContext() {
+				PromptCapabilities p = this.promptCapabilities;
+				this.promptCapabilities = new PromptCapabilities((p != null) ? p.audio() : null, true,
+						(p != null) ? p.image() : null, (p != null) ? p.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises that the agent accepts MCP servers over HTTP, keeping SSE as it is.
+			 * @return this builder
+			 */
+			public Builder mcpHttp() {
+				McpCapabilities m = this.mcpCapabilities;
+				this.mcpCapabilities = new McpCapabilities(true, (m != null) ? m.sse() : null,
+						(m != null) ? m.meta() : null);
+				return this;
+			}
+
+			/**
+			 * Advertises that the agent accepts MCP servers over SSE, keeping HTTP as it is.
+			 * @return this builder
+			 */
+			public Builder mcpSse() {
+				McpCapabilities m = this.mcpCapabilities;
+				this.mcpCapabilities = new McpCapabilities((m != null) ? m.http() : null, true,
+						(m != null) ? m.meta() : null);
 				return this;
 			}
 

@@ -80,4 +80,59 @@ class CapabilitiesBuilderTest {
 				new AcpSchema.AgentCapabilities(true, session, mcp, prompt, auth, providers, Map.of("k", "v")));
 	}
 
+	@Test
+	void clientBuilderLeadsToEachCapability() {
+		var caps = AcpSchema.ClientCapabilities.builder()
+			.readTextFile()
+			.writeTextFile()
+			.terminal()
+			.elicitationForm()
+			.elicitationUrl()
+			.build();
+
+		assertThat(caps).isEqualTo(AcpSchema.ClientCapabilities.builder()
+			.fs(new AcpSchema.FileSystemCapability(true, true))
+			.terminal(true)
+			.elicitation(AcpSchema.ElicitationCapabilities.formAndUrl())
+			.build());
+	}
+
+	@Test
+	void clientGuidedSettersKeepTheOtherFlags() {
+		var readOnly = AcpSchema.ClientCapabilities.builder().readTextFile().build();
+		assertThat(readOnly.fs()).isEqualTo(new AcpSchema.FileSystemCapability(true, false));
+		assertThat(readOnly.terminal()).isFalse();
+		assertThat(readOnly.elicitation()).isNull();
+
+		var fsMeta = new AcpSchema.FileSystemCapability(false, true, Map.of("k", "v"));
+		var merged = AcpSchema.ClientCapabilities.builder()
+			.fs(fsMeta)
+			.readTextFile()
+			.elicitation(AcpSchema.ElicitationCapabilities.urlOnly())
+			.elicitationForm()
+			.build();
+		assertThat(merged.fs()).isEqualTo(new AcpSchema.FileSystemCapability(true, true, Map.of("k", "v")));
+		assertThat(merged.elicitation()).isEqualTo(AcpSchema.ElicitationCapabilities.formAndUrl());
+	}
+
+	@Test
+	void agentBuilderLeadsToEachCapability() {
+		var caps = AcpSchema.AgentCapabilities.builder()
+			.loadSession()
+			.promptImage()
+			.promptEmbeddedContext()
+			.mcpHttp()
+			.build();
+
+		assertThat(caps).isEqualTo(AcpSchema.AgentCapabilities.builder()
+			.loadSession(true)
+			.promptCapabilities(new AcpSchema.PromptCapabilities(false, true, true))
+			.mcpCapabilities(new AcpSchema.McpCapabilities(true, false))
+			.build());
+
+		var all = AcpSchema.AgentCapabilities.builder().promptAudio().mcpSse().build();
+		assertThat(all.promptCapabilities()).isEqualTo(new AcpSchema.PromptCapabilities(true, false, false));
+		assertThat(all.mcpCapabilities()).isEqualTo(new AcpSchema.McpCapabilities(false, true));
+	}
+
 }

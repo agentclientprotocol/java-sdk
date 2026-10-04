@@ -72,6 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport's platform-thread pools on every JDK, for an application that has not opted into
   virtual threads.
 
+- **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
+  `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;
+  `AgentCapabilities.builder()` gains `loadSession()`, `promptImage()`, `promptAudio()`,
+  `promptEmbeddedContext()`, `mcpHttp()` and `mcpSse()`. Each sets one flag and keeps the others
+  (and the nested record's `_meta`), so `ClientCapabilities.builder().readTextFile().terminal().build()`
+  replaces `fs(new FileSystemCapability(true, false)).terminal(true)` and its two adjacent booleans.
+  The setters that take the nested records stay.
+
 - **Micronaut: `acp.client.capabilities.elicitation-form`, `elicitation-url` and
   `boolean-config-options`** (default `false`), as Spring Boot and Quarkus already offer. The
   Micronaut client configuration hard-coded the three as not advertised, so a Micronaut client
