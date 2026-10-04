@@ -198,6 +198,10 @@ public class AcpSyncClient implements AutoCloseable {
 	 * Logs in with one of the authentication methods the agent listed in its {@code initialize}
 	 * answer ({@code authenticate}). Needed only for an agent that requires it; such an agent
 	 * answers other requests with {@code -32000} (authentication required) until then.
+	 *
+	 * <p>Pass the ID of an {@link AcpSchema.AuthMethodAgent}. Do not pass an
+	 * {@link AcpSchema.AuthMethodTerminal}: for that one the client runs the agent program itself,
+	 * in a terminal, outside this connection. This method does not check the method's type.
 	 * @param request the ID of the chosen authentication method
 	 * @return the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE

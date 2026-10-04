@@ -72,12 +72,16 @@ import org.slf4j.LoggerFactory;
  * <li>Every other union reads an unknown variant as its {@code Unknown*} record
  * ({@link UnknownSessionUpdate}, {@link UnknownContentBlock},
  * {@link UnknownToolCallContent}, {@link UnknownSessionConfigOption},
- * {@link UnknownPermissionOutcome}, {@link UnknownElicitationPropertySchema},
- * {@link UnknownMultiSelectItems}). The record keeps the discriminator and every other field
- * and writes them back unchanged, so a proxy forwards what it received and an application
- * can log or count what it does not understand. A receiver that does not understand the
- * variant ignores it, as the schema's {@code x-deserialize-skip-invalid-items} asks for list
- * items.</li>
+ * {@link UnknownPermissionOutcome}, {@link UnknownElicitationPropertySchema}). The record
+ * keeps the discriminator and every other field and writes them back unchanged, so a proxy
+ * forwards what it received and an application can log or count what it does not understand.
+ * A receiver that does not understand the variant ignores it, as the schema's
+ * {@code x-deserialize-skip-invalid-items} asks for list items.</li>
+ * <li>{@link MultiSelectItems} is the exception: its shapes have no shared discriminator, so
+ * the SDK tells them apart by their members. Items of an unknown {@code type} read as
+ * {@link UntitledMultiSelectItems} and lose the members that record does not have; only items
+ * with no {@code type}, {@code enum} or {@code anyOf} member read as
+ * {@link UnknownMultiSelectItems}.</li>
  * <li>{@link ToolKind}, whose schema has the catch-all value {@code other}, reads an unknown
  * kind as {@link ToolKind#OTHER}. It is a Java enum.</li>
  * <li>Every other enumeration ({@link StopReason}, {@link ToolCallStatus},
@@ -707,8 +711,10 @@ public final class AcpSchema {
 	 * <p>
 	 * By the protocol, the agent answers with the client's protocol version if it supports it,
 	 * and otherwise with the latest version it supports; a client that does not support the
-	 * answer should disconnect. The SDK enforces neither side of this: the initialize handler
-	 * chooses the version, and the client does not check it.
+	 * answer should disconnect. A builder agent without an initialize handler, and an annotated
+	 * agent whose {@code @Initialize} method returns no version, answer this way: the client's
+	 * version when the SDK speaks it, otherwise the latest the SDK speaks. An initialize handler
+	 * that sets a version chooses it, unchecked, and the client does not check the answer.
 	 *
 	 * @param protocolVersion the protocol version for this connection
 	 * @param agentCapabilities what the agent offers, or {@code null}

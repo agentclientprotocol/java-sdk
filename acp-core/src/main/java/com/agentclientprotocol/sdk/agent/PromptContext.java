@@ -40,7 +40,9 @@ import reactor.core.publisher.Mono;
  * elicitation mode) fails with {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}
  * without being sent; check {@link #getClientCapabilities()} first. An error answer fails the
  * {@code Mono} with {@link com.agentclientprotocol.sdk.spec.AcpError}, and no answer within the
- * agent's request timeout fails it with a {@link java.util.concurrent.TimeoutException}. When the
+ * agent's request timeout fails it with a {@link java.util.concurrent.TimeoutException} (the
+ * blocking {@link SyncPromptContext} throws an
+ * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException} wrapping it instead). When the
  * SDK cancels the handler (after the cancel grace period, or for a {@code $/cancel_request}), it
  * disposes the handler's {@code Mono}: requests still waiting inside it are cancelled, and the
  * client is sent a {@code $/cancel_request} for each. Once the prompt has been answered, its
@@ -326,7 +328,8 @@ public interface PromptContext {
 	 * does with the kind {@code other}.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @return a {@code Mono} emitting {@code true} only if the user chose "Allow"; {@code false} if
-	 * the user denied or the client cancelled the request
+	 * the user denied, or the client answered without a selected option (it cancelled the
+	 * request, or sent an outcome this SDK does not know)
 	 */
 	Mono<Boolean> askPermission(String action);
 
@@ -336,14 +339,15 @@ public interface PromptContext {
 	 * so the context first announces one: a {@code tool_call} session update with a new random ID,
 	 * the action as its title, the kind, and status {@code pending}. The permission request names
 	 * that tool call, and once the user answered, a {@code tool_call_update} sets its status to
-	 * {@code completed} (answered, either way) or {@code failed} (the client cancelled the
-	 * request). For a tool call the agent announced itself, send {@link #requestPermission}
-	 * instead.
+	 * {@code completed} (an option was selected, either way) or {@code failed} (any other
+	 * outcome: the client cancelled the request, or sent an outcome this SDK does not know). For a
+	 * tool call the agent announced itself, send {@link #requestPermission} instead.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @param kind the kind of tool call, which clients use to pick an icon, for example
 	 * {@code execute} for a command
 	 * @return a {@code Mono} emitting {@code true} only if the user chose "Allow"; {@code false} if
-	 * the user denied or the client cancelled the request
+	 * the user denied, or the client answered without a selected option (it cancelled the
+	 * request, or sent an outcome this SDK does not know)
 	 */
 	Mono<Boolean> askPermission(String action, AcpSchema.ToolKind kind);
 
@@ -356,7 +360,8 @@ public interface PromptContext {
 	 * @param question the question, shown to the user as the tool call's title
 	 * @param options the texts to choose from, at least two
 	 * @return a {@code Mono} emitting the text of the chosen option, or completing empty if the
-	 * client cancelled the request; it fails with {@link IllegalArgumentException} if fewer than
+	 * client answered without a selected option (it cancelled the request, or sent an outcome
+	 * this SDK does not know); it fails with {@link IllegalArgumentException} if fewer than
 	 * two options are given, and with an
 	 * {@link com.agentclientprotocol.sdk.spec.AcpError} ({@code -32603}) if the client
 	 * answers with an option ID it was not offered

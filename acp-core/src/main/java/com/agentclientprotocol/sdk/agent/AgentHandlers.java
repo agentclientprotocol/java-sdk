@@ -16,8 +16,9 @@ import reactor.core.publisher.Mono;
 /**
  * The JSON-RPC methods an agent serves, held as data: for each method, the type its params
  * are read as and the handler that answers them. The {@link AcpAgent} builders collect one
- * registration per handler they are given (a later one for the same method replaces an
- * earlier one); {@link DefaultAcpAsyncAgent} installs them in its session when it starts.
+ * registration per handler they are given (a second one for the same method throws
+ * {@link IllegalStateException}); {@link DefaultAcpAsyncAgent} installs them in its session when
+ * it starts.
  *
  * @author Mark Pollack
  */

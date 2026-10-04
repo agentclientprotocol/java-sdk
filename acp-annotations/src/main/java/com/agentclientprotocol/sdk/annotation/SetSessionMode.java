@@ -21,9 +21,9 @@ import java.lang.annotation.Target;
  *
  * <p>ACP requires the mode id to be one of the {@code availableModes} the agent offered; the SDK
  * does not check it. When the agent changes a session's mode itself, it tells the client with a
- * {@code CurrentModeUpdate} session update. ACP plans to replace modes with config options
- * ({@link SetSessionConfigOption}); until then, an agent with mode-like settings should offer
- * both.
+ * {@code CurrentModeUpdate} session update. In ACP, session config options
+ * ({@link SetSessionConfigOption}) supersede modes; an agent with mode-like settings should send
+ * both, and keep them in step, so clients that only know modes still work.
  *
  * <p>The method can take a {@code SetSessionModeRequest} (session id and {@code modeId}), a
  * {@link SessionId @SessionId} {@code String} and the connection parameters (see

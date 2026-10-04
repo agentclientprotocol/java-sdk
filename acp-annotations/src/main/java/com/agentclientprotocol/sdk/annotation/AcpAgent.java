@@ -69,7 +69,10 @@ import java.lang.annotation.Target;
  * another method, a {@link SessionId} parameter on a method without a session (extension methods
  * included), a prompt context outside a {@link Prompt} method, or a {@link ConfigId} or
  * {@link ConfigValue} parameter outside a {@link SetSessionConfigOption} method. A parameter a
- * custom argument resolver supplies is the application's to check.
+ * custom argument resolver supplies is the application's to check. On an {@link ExtRequest} or
+ * {@link ExtNotification} method, every parameter that is not a connection parameter is read
+ * from the params, so a prompt context there is not rejected when the agent is built; instead
+ * every {@code @ExtRequest} call is answered with {@code -32602} (invalid params).
  *
  * <p><b>Return values.</b> A request handler returns its method's response, or a {@code Mono}, a
  * {@code CompletionStage} or a single-value Reactive Streams {@code Publisher} of it, which the

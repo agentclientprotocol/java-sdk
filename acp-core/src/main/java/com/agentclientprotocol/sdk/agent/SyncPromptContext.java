@@ -342,8 +342,9 @@ public interface SyncPromptContext {
 	 * "Allow" and "Deny" for a tool call of kind {@code other} titled with the action, announced
 	 * first with a {@code tool_call} update.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
-	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied or the
-	 * client cancelled the request
+	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied, or the
+	 * client answered without a selected option (it cancelled the request, or sent an outcome
+	 * this SDK does not know)
 	 */
 	boolean askPermission(String action);
 
@@ -353,8 +354,9 @@ public interface SyncPromptContext {
 	 * tool call of that kind, asks permission for it, and settles it once answered.
 	 * @param action what the agent wants to do, shown to the user as the tool call's title
 	 * @param kind the kind of tool call, for example {@code execute} for a command
-	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied or the
-	 * client cancelled the request
+	 * @return {@code true} only if the user chose "Allow"; {@code false} if the user denied, or the
+	 * client answered without a selected option (it cancelled the request, or sent an outcome
+	 * this SDK does not know)
 	 */
 	boolean askPermission(String action, AcpSchema.ToolKind kind);
 
@@ -364,7 +366,8 @@ public interface SyncPromptContext {
 	 * are the given texts.
 	 * @param question the question, shown to the user as the tool call's title
 	 * @param options the texts to choose from, at least two
-	 * @return the text of the chosen option, or empty if the client cancelled the request
+	 * @return the text of the chosen option, or empty if the client answered without a selected
+	 * option (it cancelled the request, or sent an outcome this SDK does not know)
 	 * @throws IllegalArgumentException if fewer than two options are given
 	 * @throws com.agentclientprotocol.sdk.spec.AcpError ({@code -32603}) if the client
 	 * answers with an option ID it was not offered

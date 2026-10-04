@@ -4,7 +4,8 @@
 
 /**
  * Builds an ACP client from {@code acp.client.*}: {@link AcpClientBeans} provides the
- * transport, an {@code AcpAsyncClient} customized by every {@link AcpClientCustomizer} bean,
+ * transport, an {@code AcpAsyncClient} customized by every
+ * {@link com.agentclientprotocol.sdk.integration.AcpClientCustomizer AcpClientCustomizer} bean,
  * and an {@code AcpSyncClient} over it.
  *
  * <p>

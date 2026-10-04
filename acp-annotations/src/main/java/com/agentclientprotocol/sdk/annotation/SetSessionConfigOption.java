@@ -46,11 +46,15 @@ import java.lang.annotation.Target;
  * public SetSessionConfigOptionResponse set(@SessionId String sessionId, @ConfigId String id,
  *         @ConfigValue String model) {
  *     if (!"model".equals(id) || !Set.of("fast", "deep").contains(model)) {
- *         throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "No option " + id + " = " +
- * model);     }     models.put(sessionId, model);     return new
- * SetSessionConfigOptionResponse(List.of(SessionConfigSelect.model("model", "Model",
- * model, List.of(new SessionConfigSelectOption("fast", "Fast"),                     new
- * SessionConfigSelectOption("deep", "Deep"))))); } }</pre>
+ *         throw new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS,
+ *                 "No option " + id + " = " + model);
+ *     }
+ *     models.put(sessionId, model);
+ *     return new SetSessionConfigOptionResponse(List.of(SessionConfigSelect.model("model", "Model",
+ *             model, List.of(new SessionConfigSelectOption("fast", "Fast"),
+ *                     new SessionConfigSelectOption("deep", "Deep")))));
+ * }
+ * }</pre>
  *
  * @author Mark Pollack
  * @since 0.12.0

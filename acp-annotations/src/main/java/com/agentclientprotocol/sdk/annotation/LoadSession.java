@@ -31,13 +31,17 @@ import java.lang.annotation.Target;
  *
  * <p>Example usage:
  * <pre>{@code
- * private final Map<String, List<String>> history = new ConcurrentHashMap<>();
+ * record Turn(boolean fromUser, String text) {
+ * }
+ *
+ * private final Map<String, List<Turn>> history = new ConcurrentHashMap<>();
  *
  * @LoadSession
  * public LoadSessionResponse load(LoadSessionRequest request, AcpSyncAgent agent) {
- *     for (String message : history.getOrDefault(request.sessionId(), List.of())) {
- *         agent.sendSessionUpdate(request.sessionId(),
- *                 new AgentMessageChunk(new TextContent(message)));
+ *     for (Turn turn : history.getOrDefault(request.sessionId(), List.of())) {
+ *         TextContent text = new TextContent(turn.text());
+ *         agent.sendSessionUpdate(request.sessionId(), turn.fromUser()
+ *                 ? new UserMessageChunk(text) : new AgentMessageChunk(text));
  *     }
  *     return new LoadSessionResponse(null, null);  // no modes, no config options
  * }
