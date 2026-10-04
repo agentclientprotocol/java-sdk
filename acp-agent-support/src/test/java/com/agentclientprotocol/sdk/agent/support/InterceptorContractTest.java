@@ -240,6 +240,21 @@ class InterceptorContractTest {
 		assertThat(endings.get(AcpSchema.METHOD_SESSION_PROMPT)).isSameAs(mapped);
 	}
 
+	@Test
+	void negativeDurationsAreRejectedByTheSetters() {
+		AcpAgentSupport.Builder builder = AcpAgentSupport.create(new FailingAgent());
+		assertThatThrownBy(() -> builder.cancelGracePeriod(Duration.ofSeconds(-1)))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("cancelGracePeriod");
+		assertThatThrownBy(() -> builder.maxPromptDuration(Duration.ofSeconds(-1)))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("maxPromptDuration");
+		assertThatThrownBy(() -> builder.cancelGracePeriod(null)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> builder.maxPromptDuration(null)).isInstanceOf(IllegalArgumentException.class);
+		assertThat(builder.cancelGracePeriod(Duration.ZERO).maxPromptDuration(Duration.ZERO).buildFactory())
+			.isNotNull();
+	}
+
 	/** Records each step it sees as "step name method". */
 	static class Recording implements AcpInterceptor {
 
