@@ -96,12 +96,15 @@ class StreamableHttpJettyArchitectureTest {
 		.dependOnClassesThat(AGENT_RUNTIME_BEYOND_THE_CONNECTION_SEAM.or(SDK_INTERNALS))
 		.because("a transport sits beneath the session and the runtime that use it");
 
-	/** Nested classes count as their top-level class. */
+	/**
+	 * The embedded listener is a launcher: it runs the servlet host on Jetty and holds no protocol
+	 * rule of its own (no JSON-RPC message, routing, session or connection class).
+	 */
 	@ArchTest
-	static final ArchRule noClassCycles = slices()
-		.assignedFrom(topLevelClassesIn("com.agentclientprotocol.sdk.agent.transport"))
-		.should()
-		.beFreeOfCycles();
+	static final ArchRule isOnlyALauncher = noClasses().should()
+		.dependOnClassesThat(resideInAnyPackage("com.agentclientprotocol.sdk.spec..", "com.agentclientprotocol.sdk.http.server..")
+			.or(belongToAnyOf(RemoteAcpConnection.class)))
+		.because("the protocol lives in acp-http-core and the I/O in the servlet host; the listener only starts Jetty");
 
 	static SliceAssignment topLevelClassesIn(String... packages) {
 		List<String> names = Arrays.asList(packages);
@@ -133,7 +136,7 @@ class StreamableHttpJettyArchitectureTest {
 	 */
 	public static final class ThisModule implements LocationProvider {
 
-		static final Class<?> ANCHOR = StreamableHttpAcpServlet.class;
+		static final Class<?> ANCHOR = StreamableHttpAcpAgentTransport.class;
 
 		@Override
 		public Set<Location> get(Class<?> testClass) {

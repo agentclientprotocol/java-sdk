@@ -5,10 +5,14 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Locale;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
+import com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint;
+import com.agentclientprotocol.sdk.http.server.AcpHttpReply;
 import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpListenerHost;
 import com.agentclientprotocol.sdk.integration.AcpListeners;
@@ -23,7 +27,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebAppli
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.jspecify.annotations.Nullable;
+import org.springframework.boot.web.server.AbstractConfigurableWebServerFactory;
+import org.springframework.boot.web.server.Compression;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.core.Ordered;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -32,18 +41,24 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Serves the application's {@code @AcpAgent} bean over ACP Streamable HTTP when
- * {@code spring.acp.agent.transport.type} is {@code http} (or {@code websocket}, the same) and
- * {@code acp-streamable-http-jetty} is on the classpath. The starter does not bring that module, so
- * add it yourself. Each client connection gets its own agent from the {@link AcpAgentFactory} that
+ * {@code spring.acp.agent.transport.type} is {@code http} (or {@code websocket}, the same) and the
+ * SDK's servlet host ({@code acp-http-servlet}) is on the classpath. The starter does not bring it,
+ * so add it yourself: {@code acp-http-servlet} for a servlet web application, or
+ * {@code acp-streamable-http-jetty} (which includes it) for the SDK's own listener. Each client connection gets its own agent from the {@link AcpAgentFactory} that
  * {@link AcpAgentAutoConfiguration} creates, and every one of them calls the same bean.
  *
  * <p>Where the endpoint is served depends on the kind of application:
  * <ul>
- * <li>A servlet web application mounts the {@link StreamableHttpAcpServlet} on its own server at
- * {@code spring.acp.agent.transport.http.path}: HTTP and SSE, no WebSocket. A bean named
- * {@code acpServletRegistration} of the application's own replaces the registration. Before the
- * server's graceful shutdown, the servlet's connections are closed (waiting at most 30 seconds),
- * since each holds an open SSE response that the shutdown would otherwise wait for.</li>
+ * <li>A servlet web application mounts the {@link StreamableHttpAcpServlet} on its own server
+ * ({@code server.port}) at {@code spring.acp.agent.transport.http.path}: Streamable HTTP, SSE and
+ * WebSocket upgrades on that one path, through the application's filter chain, so Spring
+ * Security, observations and access logs apply to ACP as to any other endpoint. The endpoint
+ * itself is an {@link AcpHttpEndpoint} bean, which an application may wrap or replace; a bean
+ * named {@code acpServletRegistration} of the application's own replaces the registration. Before
+ * the server's graceful shutdown, in an earlier {@code SmartLifecycle} phase, the endpoint drains:
+ * SSE streams get a closing comment and complete, WebSockets close with 1001, so the shutdown
+ * never waits for them. With {@code server.compression} on, {@code text/event-stream} is taken out
+ * of the compressed types, since a compressed SSE stream is held back until the buffer fills.</li>
  * <li>A non-web application gets the SDK's {@link StreamableHttpAcpAgentTransport}, listening on
  * {@code spring.acp.agent.transport.http.listener.port} (default 8080) with HTTP/1.1, cleartext
  * HTTP/2 and WebSocket upgrades on the same path. It starts with the context and stops with it,
@@ -72,21 +87,68 @@ public class AcpAgentHttpAutoConfiguration {
 	static class ServletConfiguration {
 
 		@Bean
+		@ConditionalOnMissingBean
+		AcpHttpEndpoint acpHttpEndpoint(AcpAgentFactory agentFactory, AcpAgentProperties properties) {
+			return AcpListeners.endpoint(properties.toSettings(), agentFactory);
+		}
+
+		@Bean
 		@ConditionalOnMissingBean(name = "acpServletRegistration")
-		ServletRegistrationBean<StreamableHttpAcpServlet> acpServletRegistration(AcpAgentFactory agentFactory,
+		ServletRegistrationBean<StreamableHttpAcpServlet> acpServletRegistration(AcpHttpEndpoint acpHttpEndpoint,
 				AcpAgentProperties properties) {
 			AcpAgentSettings settings = properties.toSettings();
 			ServletRegistrationBean<StreamableHttpAcpServlet> registration = new ServletRegistrationBean<>(
-					AcpListeners.servlet(settings, agentFactory), settings.http().path());
+					new StreamableHttpAcpServlet(acpHttpEndpoint), settings.http().path());
 			registration.setName("acp");
 			registration.setAsyncSupported(true);
 			return registration;
 		}
 
 		@Bean
+		@ConditionalOnClass(name = "org.springframework.boot.web.server.AbstractConfigurableWebServerFactory")
+		static SseCompressionExclusion acpSseCompressionExclusion() {
+			return new SseCompressionExclusion();
+		}
+
+		@Bean
 		AcpServletLifecycle acpServletLifecycle(
 				@Qualifier("acpServletRegistration") ServletRegistrationBean<?> acpServletRegistration) {
 			return new AcpServletLifecycle(acpServletRegistration);
+		}
+
+	}
+
+	/**
+	 * Takes {@code text/event-stream} out of the server's compressed types when
+	 * {@code server.compression} is on: a compressing output stream holds SSE events back until
+	 * its buffer fills, and proxies then cut the stream. Runs after Boot's own customizer, which
+	 * applies the properties.
+	 */
+	static class SseCompressionExclusion
+			implements WebServerFactoryCustomizer<AbstractConfigurableWebServerFactory>, Ordered {
+
+		@Override
+		public void customize(AbstractConfigurableWebServerFactory factory) {
+			Compression compression = factory.getCompression();
+			if (compression == null || !compression.getEnabled()) {
+				return;
+			}
+			compression.setMimeTypes(withoutEventStream(compression.getMimeTypes()));
+			compression.setAdditionalMimeTypes(withoutEventStream(compression.getAdditionalMimeTypes()));
+		}
+
+		private static String[] withoutEventStream(String @Nullable [] types) {
+			if (types == null) {
+				return new String[0];
+			}
+			return Arrays.stream(types)
+				.filter(type -> !type.trim().toLowerCase(Locale.ROOT).startsWith(AcpHttpReply.EVENT_STREAM))
+				.toArray(String[]::new);
+		}
+
+		@Override
+		public int getOrder() {
+			return Ordered.LOWEST_PRECEDENCE;
 		}
 
 	}

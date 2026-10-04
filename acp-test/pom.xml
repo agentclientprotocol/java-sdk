@@ -39,6 +39,23 @@
             <artifactId>acp-json-jackson2</artifactId>
         </dependency>
 
+        <!-- The transport TCK (com.agentclientprotocol.sdk.test.http): the endpoint's options, the
+             JUnit suite every host subclasses, and its assertions. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-http-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+        </dependency>
+
         <!-- Reactor for async operations -->
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -54,11 +71,6 @@
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

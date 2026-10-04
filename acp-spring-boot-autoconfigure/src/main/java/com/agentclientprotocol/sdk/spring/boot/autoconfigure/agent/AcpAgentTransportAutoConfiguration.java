@@ -31,8 +31,8 @@ import org.springframework.context.annotation.Configuration;
  * logging do by default, so turn the banner off and send logging to standard error. The transport
  * bean has no destroy method; the agent's lifecycle closes it when it stops the agent.
  *
- * <p>With {@code type} {@code http} or {@code websocket} but no {@code acp-streamable-http-jetty}
- * on the classpath, the startup fails with an error naming the module. Nothing here applies when
+ * <p>With {@code type} {@code http} or {@code websocket} but neither {@code acp-http-servlet} nor
+ * {@code acp-streamable-http-jetty} on the classpath, the startup fails with an error naming them. Nothing here applies when
  * {@code spring.acp.agent.enabled=false}.
  */
 @AutoConfiguration
@@ -70,7 +70,8 @@ public class AcpAgentTransportAutoConfiguration {
 		Object acpAgentHttpTransportMissing(AcpAgentProperties properties) {
 			throw new IllegalStateException("spring.acp.agent.transport.type="
 					+ properties.toSettings().transport().value() + " needs "
-					+ "com.agentclientprotocol:acp-streamable-http-jetty on the classpath");
+					+ "com.agentclientprotocol:acp-http-servlet (served on the application's server) or "
+					+ "com.agentclientprotocol:acp-streamable-http-jetty (the SDK's own listener) on the classpath");
 		}
 
 	}
