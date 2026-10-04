@@ -371,6 +371,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: an interceptor's `onError` can answer with an error of its own, and reaches only the
+  interceptors that saw the call.** What `onError` threw used to be logged and ignored, so the
+  client got the original failure, and the migration note for the removed `@AcpExceptionHandler`
+  (handle the exception in `onError` and throw `AcpProtocolException`) did not work. Now an
+  `AcpProtocolException` thrown from `onError` is the answer, with its code, message and data;
+  any other exception thrown there is a fault in the interceptor and is answered `-32603`. Either
+  ends the walk, and the original failure is attached as suppressed. `onError` was also called on
+  every interceptor, including those whose `preInvoke` never ran or threw; it now reaches exactly
+  the interceptors that get `afterCompletion`, those whose `preInvoke` returned `true`.
+  Migration: an `onError` that throws expecting to be ignored should log and return `null`
+  instead; one that relied on seeing failures from a `preInvoke` that did not pass should move
+  that handling into its `preInvoke`.
+
 - **A supported Jackson floor, checked at startup: Jackson 2.18.1 or later for
   `acp-json-jackson2`, Jackson 3.0.0 or later for `acp-json-jackson3`.** Frameworks manage their
   own Jackson version, and the SDK stated none: an older Jackson (Vert.x 4.5's jackson-core 2.16.1

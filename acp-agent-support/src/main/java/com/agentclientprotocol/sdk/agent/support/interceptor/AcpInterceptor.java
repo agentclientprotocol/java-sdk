@@ -26,7 +26,8 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@link #postInvoke} on each, in reverse order, with the value the method returned, before a
  *   return value handler turns it into the response.</li>
  *   <li>If {@code preInvoke}, an argument resolver, the method or the return value handler threw:
- *   {@link #onError} on each, in reverse order, until one returns a replacement result.</li>
+ *   {@link #onError}, in reverse order, on each interceptor whose {@code preInvoke} returned
+ *   {@code true}, until one returns a replacement result or throws.</li>
  *   <li>{@link #afterCompletion}, in reverse order, on each interceptor whose {@code preInvoke}
  *   returned {@code true}, once, however the call ended.</li>
  * </ol>
@@ -61,8 +62,9 @@ import org.jspecify.annotations.Nullable;
  * <p>Implementations must be thread-safe: one instance serves every call, from every session and
  * connection, concurrently. The steps of one call run on that call's handler thread, so they may
  * block; keep per-call state in the context's attributes, not in fields. An exception thrown from
- * {@code postInvoke}, {@code onError} or {@code afterCompletion} is logged and ignored; one thrown
- * from {@code preInvoke} fails the call like an exception from the handler method.
+ * {@code postInvoke} or {@code afterCompletion} is logged and ignored; one thrown from
+ * {@code preInvoke} fails the call like an exception from the handler method, and one thrown from
+ * {@code onError} replaces the failure (see {@link #onError}).
  *
  * @author Mark Pollack
  * @since 1.0.0
@@ -128,10 +130,16 @@ public interface AcpInterceptor {
 	 * it must be the method's response, such as a {@code PromptResponse}; another type is answered
 	 * with an internal error. For a notification, a replacement only ends the failure.
 	 *
-	 * <p>It is called on every interceptor, also on those whose {@code preInvoke} did not run
-	 * because an earlier one threw. An exception thrown here is logged and ignored, and the
-	 * original failure goes on: throwing an {@code AcpProtocolException} from {@code onError} does
-	 * not change the error the client receives.
+	 * <p>To answer with a specific JSON-RPC error instead, throw an {@code AcpProtocolException}
+	 * with that code: it becomes the failure the client receives, with its code, message and data,
+	 * and the remaining interceptors' {@code onError} are not called. Any other exception thrown
+	 * here is taken as a fault in the interceptor and answered as an internal error
+	 * ({@code -32603}). Either way the original failure is attached to the thrown exception as
+	 * suppressed, for the log.
+	 *
+	 * <p>It is called only on the interceptors whose {@code preInvoke} returned {@code true}, the
+	 * same ones that get {@link #afterCompletion}: not on one whose {@code preInvoke} threw or
+	 * returned {@code false}, nor on those after it, which never saw the call.
 	 * @implSpec Returns null.
 	 * @param context the call's context
 	 * @param ex what was thrown, as the step threw it
