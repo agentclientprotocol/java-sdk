@@ -52,6 +52,11 @@ final class PromptAnswer {
 		return this.state.get() == State.CANCELLING;
 	}
 
+	/** Whether the prompt has been answered, by its handler or by a deadline. */
+	boolean isAnswered() {
+		return this.state.get() == State.ANSWERED;
+	}
+
 	/**
 	 * The handler answered (or failed).
 	 * @return whether its answer is the prompt's answer; false when a deadline answered first

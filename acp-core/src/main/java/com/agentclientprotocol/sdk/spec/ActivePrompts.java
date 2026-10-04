@@ -54,6 +54,9 @@ final class ActivePrompts {
 		/** Completes when the turn ends and releases its session. */
 		private final Sinks.Empty<Void> ended = Sinks.empty();
 
+		/** Set when the turn ends, before its answer is published. */
+		private volatile boolean over;
+
 		/** Runs when a cancel arrives; set by {@link PromptDeadlines} to start the grace period. */
 		private volatile @Nullable Runnable onCancelRequested;
 
@@ -64,6 +67,14 @@ final class ActivePrompts {
 
 		PromptAnswer answer() {
 			return this.answer;
+		}
+
+		/**
+		 * Whether the prompt has been answered: a deadline claimed the answer, or the turn ended,
+		 * which it does just before any answer is published.
+		 */
+		boolean isAnswered() {
+			return this.over || this.answer.isAnswered();
 		}
 
 		/**
@@ -142,6 +153,7 @@ final class ActivePrompts {
 	 * @return whether this call released the session
 	 */
 	boolean end(Turn turn, String reason) {
+		turn.over = true;
 		if (this.active.remove(turn.sessionId(), turn)) {
 			logger.debug("Prompt lock released for sessionId={} requestId={} ({})", turn.sessionId(),
 					turn.requestId(), reason);

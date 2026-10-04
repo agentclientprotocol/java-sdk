@@ -44,7 +44,8 @@ import org.jspecify.annotations.Nullable;
  * {@link java.util.concurrent.TimeoutException}. When the SDK cancels the handler (after the
  * cancel grace period, or for a {@code $/cancel_request}), it interrupts the handler's thread, and
  * a call blocked at that moment throws {@link java.util.concurrent.CancellationException} and
- * leaves the thread's interrupt flag set. The context does not check that its turn is still active.
+ * leaves the thread's interrupt flag set. Once the prompt has been answered, its updates are
+ * dropped (see {@link #sendUpdate}); its other calls are not checked against the turn.
  *
  * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
  * for test doubles, and include {@link #async()}.
@@ -65,7 +66,10 @@ public interface SyncPromptContext {
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
 	 * plan, and so on, for this prompt's session ({@link #getSessionId()}). Returns once the
 	 * notification has been handed to the transport. The Java client hands a turn's updates to its
-	 * consumers in order, before the prompt's answer. To update another session, use
+	 * consumers in order, before the prompt's answer. Once the prompt has been answered, by the
+	 * handler or by the SDK when a prompt deadline passed, the SDK's context drops further
+	 * updates (logged at DEBUG) and returns at once: ACP requires a prompt's updates to precede
+	 * its answer. To update another session, use
 	 * {@link AcpSyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}.
 	 * @param update the update
 	 */

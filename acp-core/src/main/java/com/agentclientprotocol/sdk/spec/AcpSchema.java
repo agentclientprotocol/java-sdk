@@ -1689,9 +1689,9 @@ public final class AcpSchema {
 	 *
 	 * <p>
 	 * The protocol requires an agent to send a turn's updates before it answers the prompt, also
-	 * after a {@code session/cancel}. When the SDK answers a prompt itself, because the cancel
-	 * grace period or the maximum prompt duration passed, a prompt handler that keeps running and
-	 * sends more updates sends them after that answer (see {@link PromptTimeouts}).
+	 * after a {@code session/cancel}. The SDK's prompt contexts drop the updates a handler sends
+	 * once its prompt has been answered, by the handler or by the SDK when the cancel grace period
+	 * or the maximum prompt duration passed (see {@link PromptTimeouts}).
 	 *
 	 * <p>
 	 * The Java client skips, with a warning in the log, a received notification it cannot read or

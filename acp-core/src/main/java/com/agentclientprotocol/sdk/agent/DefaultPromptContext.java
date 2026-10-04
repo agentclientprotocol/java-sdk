@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpError;
@@ -58,6 +59,9 @@ class DefaultPromptContext implements PromptContext {
 
 	private final PromptCancellations.Signal cancellation;
 
+	/** Whether this context's prompt has been answered: its updates are then dropped. */
+	private final BooleanSupplier answered;
+
 	/**
 	 * Creates a new prompt context wrapping the given agent.
 	 * @param agent The agent to delegate to
@@ -68,6 +72,8 @@ class DefaultPromptContext implements PromptContext {
 		this.sessionId = sessionId;
 		this.cancellation = (agent instanceof DefaultAcpAsyncAgent running) ? running.promptSignal(sessionId)
 				: new PromptCancellations.Signal();
+		this.answered = (agent instanceof DefaultAcpAsyncAgent running) ? running.promptAnswered(sessionId)
+				: () -> false;
 	}
 
 	// ========================================================================
@@ -76,7 +82,15 @@ class DefaultPromptContext implements PromptContext {
 
 	@Override
 	public Mono<Void> sendUpdate(AcpSchema.SessionUpdate update) {
-		return agent.sendSessionUpdate(sessionId, update);
+		return Mono.defer(() -> {
+			if (this.answered.getAsBoolean()) {
+				// ACP: a prompt's session/update notifications must precede its answer.
+				logger.debug("Dropped a {} update for session {}: its prompt has been answered",
+						update.getClass().getSimpleName(), sessionId);
+				return Mono.empty();
+			}
+			return agent.sendSessionUpdate(sessionId, update);
+		});
 	}
 
 	@Override
@@ -213,14 +227,13 @@ class DefaultPromptContext implements PromptContext {
 			ToolCall announce = new ToolCall("tool_call", toolCallId, title, null, kind, ToolCallStatus.PENDING, null, null,
 					null, null, null);
 			ToolCallUpdate toolCall = new ToolCallUpdate(toolCallId, title, kind, ToolCallStatus.PENDING);
-			return agent.sendSessionUpdate(sessionId, announce)
+			return sendUpdate(announce)
 				.then(requestPermission(new RequestPermissionRequest(sessionId, toolCall, options)))
 				.flatMap(response -> {
 					ToolCallStatus status = (response.outcome() instanceof PermissionSelected) ? ToolCallStatus.COMPLETED
 							: ToolCallStatus.FAILED;
-					return agent
-						.sendSessionUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, null, null, null,
-								status, null, null, null, null, null))
+					return sendUpdate(new ToolCallUpdateNotification("tool_call_update", toolCallId, null, null, null,
+							status, null, null, null, null, null))
 						.thenReturn(response);
 				});
 		});

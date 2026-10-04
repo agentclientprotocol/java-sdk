@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -412,6 +413,24 @@ public class AcpAgentSession implements AcpSession {
 	public boolean hasActivePrompt(String sessionId) {
 		Assert.hasText(sessionId, "The sessionId can not be empty");
 		return activePrompts.isActive(sessionId);
+	}
+
+	/**
+	 * Whether the prompt now running on {@code sessionId} has been answered, by its handler or by
+	 * the session when a prompt deadline passed, as the session sees it later: the SDK's prompt
+	 * contexts ask it before each update, since ACP requires a prompt's updates to precede its
+	 * answer. The answer is about the prompt running at this call; when none is, it is always
+	 * {@code false}.
+	 * @param sessionId the logical ACP session ID
+	 * @return a check, true once that prompt has been answered
+	 */
+	public BooleanSupplier promptAnswered(String sessionId) {
+		Assert.hasText(sessionId, "The sessionId can not be empty");
+		ActivePrompts.Turn turn = activePrompts.current(sessionId);
+		if (turn == null) {
+			return () -> false;
+		}
+		return turn::isAnswered;
 	}
 
 	/**

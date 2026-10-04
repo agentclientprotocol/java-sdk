@@ -241,7 +241,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timers run on the SDK's shared timeout timer, with no new threads. Cancelling a sync handler
   interrupts its thread (the SDK's sync handler scheduler interrupts on cancel); a handler that
   ignores the interrupt, or any handler that keeps running after its subscription is cancelled,
-  and sends more updates sends them after the answer. `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
+  has the updates it then sends through its prompt context dropped (see Fixed). `AcpErrorCodes.REQUEST_CANCELLED` (`-32800`) is new.
 - **`session_info_update`** (`AcpSchema.SessionInfoUpdate`): the agent tells the client the
   session's title and last activity time. Stable in ACP v1. Known limit: the schema lets a peer
   send `null` to clear a field; the record reads an explicit `null` like a missing field and never
@@ -1042,6 +1042,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON-RPC error.
 
 ### Fixed
+
+- **A prompt's updates no longer follow its answer.** ACP requires an agent to send a prompt's
+  `session/update` notifications before it answers the prompt, also after `session/cancel`. When
+  the SDK answered a prompt itself (the cancel grace period or `maxPromptDuration` passed), a
+  handler that kept running could still send updates through its prompt context, and they went out
+  after the answer; so could a handler that sent through its context after returning its own
+  answer. Once a prompt has been answered, by its handler or by the SDK, `PromptContext.sendUpdate`
+  and `SyncPromptContext.sendUpdate` (and the helpers built on them, such as `sendMessage`) drop
+  the update and log it at DEBUG, without its content; the `Mono` completes empty. The check uses
+  the prompt's answered-once state that decides who answers. Updates sent with
+  `sendSessionUpdate` outside a prompt context are not affected.
 
 - **A builder agent advertises `providers` for any provider handler.** Without an initialize
   handler, a builder agent advertised `providers` only for a `providers/list` handler, while an

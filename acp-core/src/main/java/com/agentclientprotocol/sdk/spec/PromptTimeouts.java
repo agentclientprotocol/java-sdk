@@ -24,8 +24,8 @@ import com.agentclientprotocol.sdk.util.Assert;
  * would keep its session busy for good. Whichever limit passes, the SDK cancels the handler (a sync
  * handler's thread is interrupted) and sends the answer itself; exactly one answer goes to each
  * prompt, and the session updates the handler sent before it reach the client first. A handler
- * should stop when cancelled: updates it sends after the SDK's answer reach the client after the
- * turn has ended.
+ * should stop when cancelled: updates it sends through its prompt context after the SDK's answer
+ * are dropped, since ACP requires a prompt's updates to precede its answer.
  *
  * <ul>
  * <li>The cancel grace period starts when {@code session/cancel} arrives, not with the prompt. When

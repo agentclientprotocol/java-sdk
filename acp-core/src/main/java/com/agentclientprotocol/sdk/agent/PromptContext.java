@@ -43,8 +43,9 @@ import reactor.core.publisher.Mono;
  * agent's request timeout fails it with a {@link java.util.concurrent.TimeoutException}. When the
  * SDK cancels the handler (after the cancel grace period, or for a {@code $/cancel_request}), it
  * disposes the handler's {@code Mono}: requests still waiting inside it are cancelled, and the
- * client is sent a {@code $/cancel_request} for each. The context does not check that its turn is
- * still active. Its methods may be called from several threads at once.
+ * client is sent a {@code $/cancel_request} for each. Once the prompt has been answered, its
+ * updates are dropped (see {@link #sendUpdate}); its other calls are not checked against the
+ * turn. Its methods may be called from several threads at once.
  *
  * <p>Implementations: the SDK supplies the context handlers receive; implement this interface only
  * for test doubles.
@@ -64,7 +65,10 @@ public interface PromptContext {
 	 * Sends a {@code session/update} notification to the client, carrying one
 	 * {@link AcpSchema.SessionUpdate}: a message or thought chunk, a tool call or its update, a
 	 * plan, and so on, for this prompt's session ({@link #getSessionId()}). The Java client hands a
-	 * turn's updates to its consumers in order, before the prompt's answer. To update another
+	 * turn's updates to its consumers in order, before the prompt's answer. Once the prompt has
+	 * been answered, by the handler or by the SDK when a prompt deadline passed, the SDK's context
+	 * drops further updates (logged at DEBUG) and the {@code Mono} completes empty: ACP requires a
+	 * prompt's updates to precede its answer. To update another
 	 * session, use {@link AcpAsyncAgent#sendSessionUpdate(String, AcpSchema.SessionUpdate)}.
 	 * @param update the update
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport

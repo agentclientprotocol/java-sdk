@@ -10,6 +10,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
+import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
+import com.agentclientprotocol.sdk.agent.SyncPromptContext;
+import com.agentclientprotocol.sdk.agent.PromptContext;
 import com.agentclientprotocol.sdk.agent.AcpAsyncAgent;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
@@ -152,6 +155,111 @@ class PromptCancellationTest {
 		finally {
 			client.closeGracefully().block(TIMEOUT);
 			agent.closeGracefully().block(TIMEOUT);
+			pair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	/**
+	 * ACP: after {@code session/cancel} the agent may send updates, but "MUST ensure that it does
+	 * so before responding to the session/prompt request". A handler that keeps sending after
+	 * the grace period passed and the agent answered {@code cancelled} has its updates dropped.
+	 */
+	@Test
+	void updatesFromAHandlerStillRunningAfterTheForcedAnswerAreDropped() throws Exception {
+		Sinks.Empty<Void> firstUpdateSent = Sinks.empty();
+		java.util.concurrent.atomic.AtomicReference<PromptContext> contextRef = new java.util.concurrent.atomic.AtomicReference<>();
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpAsyncAgent agent = AcpAgent.async(pair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.cancelGracePeriod(Duration.ofMillis(200))
+			.initializeHandler(request -> Mono
+				.just(new AcpSchema.InitializeResponse(1, new AcpSchema.AgentCapabilities(), List.of())))
+			.newSessionHandler(request -> Mono.just(new AcpSchema.NewSessionResponse(SESSION, null, null)))
+			.promptHandler((request, context) -> {
+				contextRef.set(context);
+				return context.sendMessage("before")
+					.doOnSuccess(v -> firstUpdateSent.tryEmitEmpty())
+					.then(Mono.never());
+			})
+			.build();
+		agent.start().block(TIMEOUT);
+
+		java.util.concurrent.atomic.AtomicBoolean answered = new java.util.concurrent.atomic.AtomicBoolean();
+		List<String> afterAnswer = new CopyOnWriteArrayList<>();
+		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> Mono.fromRunnable(() -> {
+				if (answered.get()) {
+					afterAnswer.add(notification.update().toString());
+				}
+			}))
+			.build();
+		try {
+			client.initialize().block(TIMEOUT);
+			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+			Mono<AcpSchema.PromptResponse> prompt = client.prompt(AcpSchema.PromptRequest.text(SESSION, "work"))
+				.doOnNext(response -> answered.set(true))
+				.cache();
+			prompt.subscribe(response -> {
+			}, error -> {
+			});
+			firstUpdateSent.asMono().block(TIMEOUT);
+			client.cancel(new AcpSchema.CancelNotification(SESSION)).block(TIMEOUT);
+			assertThat(prompt.block(TIMEOUT).stopReason()).isEqualTo(AcpSchema.StopReason.CANCELLED);
+
+			// The handler, still running, keeps sending through its prompt context.
+			PromptContext context = contextRef.get();
+			context.sendMessage("late message").block(TIMEOUT);
+			context.sendUpdate(new AcpSchema.AgentThoughtChunk(new AcpSchema.TextContent("late thought")))
+				.block(TIMEOUT);
+			// Anything sent arrives before the answer to a later request on the same connection.
+			client.sendExtRequest("_x/probe", java.util.Map.of()).onErrorResume(e -> Mono.empty()).block(TIMEOUT);
+
+			assertThat(afterAnswer).isEmpty();
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			agent.closeGracefully().block(TIMEOUT);
+			pair.closeGracefully().block(TIMEOUT);
+		}
+	}
+
+	/** The same for a sync handler's context, and once the handler answered the prompt itself. */
+	@Test
+	void updatesThroughASyncContextAfterThePromptWasAnsweredAreDropped() throws Exception {
+		java.util.concurrent.atomic.AtomicReference<SyncPromptContext> contextRef = new java.util.concurrent.atomic.AtomicReference<>();
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.newSessionHandler(request -> new AcpSchema.NewSessionResponse(SESSION, null, null))
+			.promptHandler((request, context) -> {
+				contextRef.set(context);
+				context.sendMessage("during");
+				return AcpSchema.PromptResponse.endTurn();
+			})
+			.build();
+		agent.start();
+
+		java.util.concurrent.atomic.AtomicBoolean answered = new java.util.concurrent.atomic.AtomicBoolean();
+		List<String> seen = new CopyOnWriteArrayList<>();
+		AcpAsyncClient client = AcpClient.async(pair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.sessionUpdateConsumer(notification -> Mono.fromRunnable(
+					() -> seen.add((answered.get() ? "after " : "before ") + notification.update().getClass().getSimpleName())))
+			.build();
+		try {
+			client.initialize().block(TIMEOUT);
+			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of())).block(TIMEOUT);
+			client.prompt(AcpSchema.PromptRequest.text(SESSION, "work")).doOnNext(r -> answered.set(true)).block(TIMEOUT);
+
+			contextRef.get().sendMessage("after the answer");
+			client.sendExtRequest("_x/probe", java.util.Map.of()).onErrorResume(e -> Mono.empty()).block(TIMEOUT);
+
+			assertThat(seen).containsExactly("before AgentMessageChunk");
+		}
+		finally {
+			client.closeGracefully().block(TIMEOUT);
+			agent.close();
 			pair.closeGracefully().block(TIMEOUT);
 		}
 	}

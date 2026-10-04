@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
@@ -147,6 +148,15 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 	PromptCancellations.Signal promptSignal(String sessionId) {
 		PromptCancellations.Signal signal = promptCancellations.current(sessionId);
 		return (signal != null) ? signal : new PromptCancellations.Signal();
+	}
+
+	/**
+	 * Whether the prompt running on {@code sessionId} has been answered; always false when no
+	 * prompt is running (a context built outside a running prompt).
+	 */
+	BooleanSupplier promptAnswered(String sessionId) {
+		AcpAgentSession current = this.session;
+		return (current != null) ? current.promptAnswered(sessionId) : () -> false;
 	}
 
 	private <T> AcpAgentSession.NotificationHandler sessionHandler(AgentHandlers.Notification<T> registration) {

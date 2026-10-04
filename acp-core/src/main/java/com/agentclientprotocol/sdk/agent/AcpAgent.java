@@ -1120,8 +1120,9 @@ public interface AcpAgent {
 
 		/**
 		 * Sets how long a prompt handler has to answer after {@code session/cancel}. When it
-		 * passes, the agent cancels the handler, which interrupts its thread if it is blocked (what
-		 * it sends if it keeps running is its own), and answers the prompt itself with stop reason
+		 * passes, the agent cancels the handler, which interrupts its thread if it is blocked (updates
+		 * it sends through its prompt context if it keeps running are dropped), and answers the
+		 * prompt itself with stop reason
 		 * {@code cancelled}, as ACP requires of a cancelled prompt; that ends the turn, so the
 		 * session accepts a new prompt. Updates the handler sent before that answer reach the
 		 * client first. Default: 60 seconds ({@link PromptTimeouts#DEFAULT_CANCEL_GRACE_PERIOD});

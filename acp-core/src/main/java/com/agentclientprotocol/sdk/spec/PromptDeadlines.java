@@ -27,7 +27,9 @@ import reactor.core.publisher.MonoSink;
  * ends just before it is published, and it is queued on the transport behind every message
  * the handler had already sent, its {@code session/update}s included. A handler that keeps
  * running after its subscription is cancelled (a blocking sync handler does) and sends more
- * updates sends them after the answer, against the protocol; that is the handler's to stop.
+ * updates through its prompt context has them dropped: before each update the context asks the
+ * prompt's turn, which counts as answered once this {@link PromptAnswer} is claimed or the turn
+ * has ended, and ACP requires a prompt's updates to precede its answer.
  * </p>
  */
 final class PromptDeadlines {
