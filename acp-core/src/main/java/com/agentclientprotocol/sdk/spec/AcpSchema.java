@@ -2177,15 +2177,45 @@ public final class AcpSchema {
 	// ---------------------------
 
 	/**
-	 * Client capabilities. Build them with {@link #builder()}, which reaches every field;
-	 * the no-argument constructor is the builder's starting point (no file system access,
-	 * no terminal).
+	 * What a client tells the agent it can do, sent in the {@code initialize} request: the file
+	 * system and terminal methods it serves, the config option kinds and authentication method
+	 * types it handles, and the elicitation modes it supports. Build it with {@link #builder()} and
+	 * set it with {@link com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec#clientCapabilities
+	 * clientCapabilities(...)} on the client builder (or the sync builder's method of the same
+	 * name); the client sends it in {@code initialize()}. The agent reads it as a
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}.
+	 *
+	 * <p>
+	 * Advertise exactly what the client serves. The client builder's {@code build()} throws an
+	 * {@link IllegalStateException} when {@code fs.readTextFile}, {@code fs.writeTextFile},
+	 * {@code terminal} or an elicitation mode is advertised without the handlers that serve it, and
+	 * logs a warning for a handler whose capability is not advertised, since an agent will not call
+	 * it. An agent built with this SDK fails its own file read and write, {@code terminal/create}
+	 * and elicitation calls with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} when the client did not
+	 * advertise them, without sending them.
+	 *
+	 * <p>
+	 * {@code new ClientCapabilities()} and an empty builder advertise no file system access and no
+	 * terminal. A {@code null} component is left out of the JSON and counts as not advertised.
+	 * Capabilities this SDK does not model are dropped when the record is read from JSON; put
+	 * custom capabilities in {@code _meta}.
 	 *
 	 * <pre>{@code
 	 * ClientCapabilities caps = ClientCapabilities.builder()
 	 *     .session(ClientSessionCapabilities.withBooleanConfigOptions())
 	 *     .build();
 	 * }</pre>
+	 *
+	 * @param fs the {@code fs/*} methods the client serves, or {@code null} for none
+	 * @param terminal whether the client serves the {@code terminal/*} methods, or {@code null},
+	 * read as {@code false}
+	 * @param session the session features the client supports, such as boolean config options, or
+	 * {@code null} for none
+	 * @param auth the authentication method types the client handles, or {@code null} for none
+	 * @param elicitation the elicitation modes the client supports, or {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientCapabilities(@JsonProperty("fs") @Nullable FileSystemCapability fs,
@@ -2194,17 +2224,28 @@ public final class AcpSchema {
 			@JsonProperty("auth") @Nullable AuthCapabilities auth,
 			@JsonProperty("elicitation") @Nullable ElicitationCapabilities elicitation,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the capabilities of a client that serves no file system or terminal methods:
+		 * {@code fs} with both flags {@code false}, {@code terminal} {@code false}, and nothing
+		 * else. {@link #builder()} starts from the same values.
+		 */
 		public ClientCapabilities() {
 			this(new FileSystemCapability(), false, null, null, null, null);
 		}
 
+		/**
+		 * Creates capabilities with file system and terminal support only, without session, auth,
+		 * elicitation or {@code _meta}.
+		 * @param fs the {@code fs/*} methods the client serves, or {@code null}
+		 * @param terminal whether the client serves the {@code terminal/*} methods, or {@code null}
+		 */
 		public ClientCapabilities(@Nullable FileSystemCapability fs, @Nullable Boolean terminal) {
 			this(fs, terminal, null, null, null, null);
 		}
 
 		/**
-		 * A builder starting from {@code new ClientCapabilities()}: no file system access,
-		 * no terminal, and no session, auth, elicitation or {@code _meta}.
+		 * Returns a builder that starts from {@code new ClientCapabilities()}: no file system
+		 * access, no terminal, and no session, auth, elicitation or {@code _meta}.
 		 * @return a new builder
 		 */
 		public static Builder builder() {
@@ -2212,7 +2253,10 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Builds {@link ClientCapabilities}.
+		 * Builds {@link ClientCapabilities} one component at a time, without positional
+		 * {@code null}s. Get one from {@link ClientCapabilities#builder()}. Each setter replaces
+		 * one component, and {@link #build()} can be called more than once. A builder is not safe
+		 * for use by several threads at once.
 		 */
 		public static final class Builder {
 
@@ -2232,8 +2276,11 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code fs}.
-			 * @param fs the {@code fs/*} methods the client serves
+			 * Sets the {@code fs/*} methods the client serves. For each flag set to {@code true},
+			 * register the matching handler ({@code readTextFileHandler} or
+			 * {@code writeTextFileHandler}) on the client builder as well, or its {@code build()}
+			 * throws.
+			 * @param fs the file system capability, or {@code null} to advertise none
 			 * @return this builder
 			 */
 			public Builder fs(@Nullable FileSystemCapability fs) {
@@ -2242,8 +2289,11 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code terminal}.
-			 * @param terminal whether the client serves the {@code terminal/*} methods
+			 * Sets whether the client serves the {@code terminal/*} methods. When {@code true},
+			 * register all five terminal handlers on the client builder as well, or its
+			 * {@code build()} throws.
+			 * @param terminal {@code true} if the client serves the terminal methods; {@code false}
+			 * or {@code null} if not
 			 * @return this builder
 			 */
 			public Builder terminal(@Nullable Boolean terminal) {
@@ -2252,8 +2302,10 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code session}.
-			 * @param session session capabilities, such as boolean config options
+			 * Sets the session features the client supports, for example
+			 * {@link ClientSessionCapabilities#withBooleanConfigOptions()} for a client that
+			 * handles boolean config options.
+			 * @param session the session capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder session(@Nullable ClientSessionCapabilities session) {
@@ -2262,8 +2314,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code auth}.
-			 * @param auth authentication capabilities, such as terminal auth
+			 * Sets the authentication method types the client handles, for example
+			 * {@code new AuthCapabilities(true)} for a client that can run terminal auth methods.
+			 * @param auth the auth capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder auth(@Nullable AuthCapabilities auth) {
@@ -2272,8 +2325,10 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code elicitation}.
-			 * @param elicitation the elicitation modes the client supports
+			 * Sets the elicitation modes the client supports, for example
+			 * {@link ElicitationCapabilities#formOnly()}. With a mode set, register an elicitation
+			 * handler on the client builder as well, or its {@code build()} throws.
+			 * @param elicitation the elicitation capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder elicitation(@Nullable ElicitationCapabilities elicitation) {
@@ -2282,8 +2337,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code meta}.
-			 * @param meta optional {@code _meta}
+			 * Sets the {@code _meta} map.
+			 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 			 * @return this builder
 			 */
 			public Builder meta(@Nullable Map<String, Object> meta) {
@@ -2292,7 +2347,7 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Builds the capabilities.
+			 * Returns capabilities with the components set so far.
 			 * @return the capabilities
 			 */
 			public ClientCapabilities build() {
@@ -2304,23 +2359,39 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Session capabilities the client advertises.
+	 * Session features a client supports beyond the baseline, as the {@code session} component of
+	 * {@link ClientCapabilities}. Today that is only the config option kinds it handles beyond
+	 * {@code select}, and ACP defines one: {@code boolean}. Use {@link #withBooleanConfigOptions()}
+	 * for a client that handles boolean config options.
 	 *
-	 * @param configOptions which config option kinds beyond {@code select} the client
-	 * supports
-	 * @param meta reserved metadata
+	 * <p>
+	 * An agent checks it with {@code supportsBooleanConfigOptions()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}, and should offer {@link SessionConfigBoolean} options only to a
+	 * client that advertises it. The SDK checks this on neither side. A {@code null}
+	 * {@code configOptions} advertises no extra kinds.
+	 *
+	 * @param configOptions the config option kinds beyond {@code select} the client handles, or
+	 * {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record ClientSessionCapabilities(
 			@JsonProperty("configOptions") @Nullable SessionConfigOptionsCapabilities configOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the session capabilities without {@code _meta}.
+		 * @param configOptions the config option kinds beyond {@code select}, or {@code null}
+		 */
 		public ClientSessionCapabilities(@Nullable SessionConfigOptionsCapabilities configOptions) {
 			this(configOptions, null);
 		}
 
 		/**
-		 * The session capabilities of a client that supports {@code boolean} config options.
-		 * @return {@code {"configOptions": {"boolean": {}}}}
+		 * Returns the session capabilities of a client that handles boolean config options, written
+		 * {@code {"configOptions":{"boolean":{}}}}. Pass it to
+		 * {@link ClientCapabilities.Builder#session}.
+		 * @return the session capabilities
 		 */
 		public static ClientSessionCapabilities withBooleanConfigOptions() {
 			return new ClientSessionCapabilities(SessionConfigOptionsCapabilities.withBoolean());
@@ -2328,23 +2399,36 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Config option kinds the client supports beyond {@code select}.
+	 * The config option kinds a client handles beyond {@code select}, as
+	 * {@link ClientSessionCapabilities#configOptions()}. ACP defines one, {@code boolean}: when
+	 * present, an agent may offer {@link SessionConfigBoolean} options, and the client may send
+	 * boolean values in {@code session/set_config_option}. Most code uses
+	 * {@link ClientSessionCapabilities#withBooleanConfigOptions()} rather than this record.
 	 *
-	 * @param booleanOptions present (even empty) when the client supports {@code boolean}
-	 * config options; written as {@code "boolean"}
-	 * @param meta reserved metadata
+	 * <p>
+	 * The component is named {@code booleanOptions} because {@code boolean} is a Java keyword; on
+	 * the wire it is the member {@code "boolean"}.
+	 *
+	 * @param booleanOptions the marker for boolean config options, or {@code null} if the client
+	 * does not handle them
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionConfigOptionsCapabilities(
 			@JsonProperty("boolean") @Nullable BooleanConfigOptionCapabilities booleanOptions,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the capabilities without {@code _meta}.
+		 * @param booleanOptions the marker for boolean config options, or {@code null}
+		 */
 		public SessionConfigOptionsCapabilities(@Nullable BooleanConfigOptionCapabilities booleanOptions) {
 			this(booleanOptions, null);
 		}
 
 		/**
-		 * The capabilities of a client that supports {@code boolean} config options.
-		 * @return {@code {"boolean": {}}}
+		 * Returns the capabilities of a client that handles boolean config options, written
+		 * {@code {"boolean":{}}}.
+		 * @return the capabilities
 		 */
 		public static SessionConfigOptionsCapabilities withBoolean() {
 			return new SessionConfigOptionsCapabilities(new BooleanConfigOptionCapabilities());
@@ -2352,36 +2436,103 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Present when the client supports {@code boolean} config options.
+	 * The marker that a client handles boolean config options, as
+	 * {@link SessionConfigOptionsCapabilities#booleanOptions()}. It carries only {@code _meta}: its
+	 * presence, written {@code {}}, is the capability, and {@code null} in its place means the
+	 * client does not handle them.
 	 *
-	 * @param meta reserved metadata
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record BooleanConfigOptionCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/** Creates the marker without {@code _meta}, written {@code {}}. */
 		public BooleanConfigOptionCapabilities() {
 			this(null);
 		}
 	}
 
 	/**
-	 * File system capabilities
+	 * Which {@code fs/*} methods a client serves, as the {@code fs} component of
+	 * {@link ClientCapabilities}: {@code fs/read_text_file} ({@link ReadTextFileRequest}) and
+	 * {@code fs/write_text_file} ({@link WriteTextFileRequest}). With them an agent reads and
+	 * writes files through the client, which can include unsaved changes in the user's editor. An
+	 * agent checks them with {@code supportsReadTextFile()} and {@code supportsWriteTextFile()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}.
+	 *
+	 * <p>
+	 * A flag set to {@code true} needs its handler on the client builder
+	 * ({@code readTextFileHandler} or {@code writeTextFileHandler}), or the builder's
+	 * {@code build()} throws. An agent built with this SDK fails a read or write the client did not
+	 * advertise with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}, without
+	 * sending it. {@code null} counts as {@code false}.
+	 *
+	 * @param readTextFile whether the client serves {@code fs/read_text_file}, or {@code null},
+	 * read as {@code false}
+	 * @param writeTextFile whether the client serves {@code fs/write_text_file}, or {@code null},
+	 * read as {@code false}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record FileSystemCapability(@JsonProperty("readTextFile") @Nullable Boolean readTextFile,
 			@JsonProperty("writeTextFile") @Nullable Boolean writeTextFile,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the capability without {@code _meta}.
+		 * @param readTextFile whether the client serves {@code fs/read_text_file}, or {@code null}
+		 * @param writeTextFile whether the client serves {@code fs/write_text_file}, or
+		 * {@code null}
+		 */
 		public FileSystemCapability(@Nullable Boolean readTextFile, @Nullable Boolean writeTextFile) {
 			this(readTextFile, writeTextFile, null);
 		}
 
+		/**
+		 * Creates the capability of a client that serves neither method: both flags {@code false}.
+		 */
 		public FileSystemCapability() {
 			this(false, false);
 		}
 	}
 
 	/**
-	 * Agent capabilities. Build them with {@link #builder()}, which reaches every field;
-	 * the no-argument constructor is the builder's starting point.
+	 * What an agent tells the client it can do, sent in its {@code initialize} answer as
+	 * {@link InitializeResponse#agentCapabilities()}: whether it loads sessions, which other
+	 * optional session methods it serves, which MCP server transports and prompt content it
+	 * accepts, whether it supports {@code logout}, and its provider support. Build it with
+	 * {@link #builder()}. The client reads it as a
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}, returned by {@code getAgentCapabilities()} on the client.
+	 *
+	 * <p>
+	 * Agents built with this SDK derive it from their handlers unless they answer
+	 * {@code initialize} themselves. A builder agent without an initialize handler, and an
+	 * annotated agent, advertise each optional method they have a handler for: a load-session
+	 * handler advertises {@code loadSession}, a list-sessions handler
+	 * {@code sessionCapabilities.list}, a logout handler {@code auth.logout}, and so on. An
+	 * annotated agent also takes its MCP transports from
+	 * {@link com.agentclientprotocol.sdk.annotation.AcpAgent @AcpAgent} and its prompt content from
+	 * {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt}, and lays the answer of an
+	 * {@link com.agentclientprotocol.sdk.annotation.Initialize @Initialize} method over the derived
+	 * one. A builder agent with
+	 * {@link com.agentclientprotocol.sdk.agent.AcpAgent.AsyncAgentBuilder#initializeHandler
+	 * initializeHandler} sends what its handler returns. Neither derives
+	 * {@code sessionCapabilities.additionalDirectories}; advertise it from an initialize handler or
+	 * an {@code @Initialize} method.
+	 *
+	 * <p>
+	 * The client fails {@code session/load}, {@code session/list}, {@code session/close},
+	 * {@code session/delete}, {@code session/resume}, {@code logout} and the fork and provider
+	 * calls with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}, without
+	 * sending them, when the agent did not advertise them. It does not check prompt content, MCP
+	 * server types or additional directories against these capabilities; check those with
+	 * {@code NegotiatedCapabilities} before sending.
+	 *
+	 * <p>
+	 * {@code new AgentCapabilities()} and an empty builder advertise no {@code session/load}, no
+	 * MCP servers over HTTP or SSE, and only text and resource links in prompts, which every agent
+	 * must accept. A {@code null} component is left out of the JSON and counts as not advertised.
+	 * Capabilities this SDK does not model are dropped when the record is read from JSON.
 	 *
 	 * <pre>{@code
 	 * AgentCapabilities caps = AgentCapabilities.builder()
@@ -2389,6 +2540,19 @@ public final class AcpSchema {
 	 *     .auth(AgentAuthCapabilities.withLogout())
 	 *     .build();
 	 * }</pre>
+	 *
+	 * @param loadSession whether the agent serves {@code session/load}, or {@code null}, read as
+	 * {@code false}
+	 * @param sessionCapabilities the other optional session methods the agent serves, or
+	 * {@code null} for none
+	 * @param mcpCapabilities the MCP server transports beyond stdio the agent accepts, or
+	 * {@code null} for none
+	 * @param promptCapabilities the prompt content beyond text and resource links the agent
+	 * accepts, or {@code null} for none
+	 * @param auth the authentication features the agent supports, such as {@code logout}, or
+	 * {@code null} for none
+	 * @param providers the agent's provider support, or {@code null} for none
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentCapabilities(@JsonProperty("loadSession") @Nullable Boolean loadSession,
@@ -2398,24 +2562,45 @@ public final class AcpSchema {
 			@JsonProperty("auth") @Nullable AgentAuthCapabilities auth,
 			@UnstableAcpApi @JsonProperty("providers") @Nullable ProvidersCapabilities providers,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the capabilities of a minimal agent: no {@code session/load}, no MCP servers over
+		 * HTTP or SSE, and no image, audio or embedded context in prompts. {@link #builder()}
+		 * starts from the same values.
+		 */
 		public AgentCapabilities() {
 			this(false, null, new McpCapabilities(), new PromptCapabilities(), null, null, null);
 		}
 
+		/**
+		 * Creates capabilities without session, auth or provider capabilities or {@code _meta}.
+		 * @param loadSession whether the agent serves {@code session/load}, or {@code null}
+		 * @param mcpCapabilities the MCP server transports beyond stdio, or {@code null}
+		 * @param promptCapabilities the prompt content beyond text and resource links, or
+		 * {@code null}
+		 */
 		public AgentCapabilities(@Nullable Boolean loadSession, @Nullable McpCapabilities mcpCapabilities,
 				@Nullable PromptCapabilities promptCapabilities) {
 			this(loadSession, null, mcpCapabilities, promptCapabilities, null, null, null);
 		}
 
+		/**
+		 * Creates capabilities without auth or provider capabilities.
+		 * @param loadSession whether the agent serves {@code session/load}, or {@code null}
+		 * @param sessionCapabilities the other optional session methods, or {@code null}
+		 * @param mcpCapabilities the MCP server transports beyond stdio, or {@code null}
+		 * @param promptCapabilities the prompt content beyond text and resource links, or
+		 * {@code null}
+		 * @param meta the {@code _meta} map, or {@code null}
+		 */
 		public AgentCapabilities(@Nullable Boolean loadSession, @Nullable SessionCapabilities sessionCapabilities,
 				@Nullable McpCapabilities mcpCapabilities, @Nullable PromptCapabilities promptCapabilities, @Nullable Map<String, Object> meta) {
 			this(loadSession, sessionCapabilities, mcpCapabilities, promptCapabilities, null, null, meta);
 		}
 
 		/**
-		 * A builder starting from {@code new AgentCapabilities()}: no {@code session/load},
-		 * default MCP and prompt capabilities, and no session, auth or provider capabilities
-		 * or {@code _meta}.
+		 * Returns a builder that starts from {@code new AgentCapabilities()}: no
+		 * {@code session/load}, no MCP servers over HTTP or SSE, only text and resource links in
+		 * prompts, and no session, auth or provider capabilities or {@code _meta}.
 		 * @return a new builder
 		 */
 		public static Builder builder() {
@@ -2423,7 +2608,10 @@ public final class AcpSchema {
 		}
 
 		/**
-		 * Builds {@link AgentCapabilities}.
+		 * Builds {@link AgentCapabilities} one component at a time, without positional
+		 * {@code null}s. Get one from {@link AgentCapabilities#builder()}. Each setter replaces one
+		 * component, and {@link #build()} can be called more than once. A builder is not safe for
+		 * use by several threads at once.
 		 */
 		public static final class Builder {
 
@@ -2445,8 +2633,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code loadSession}.
-			 * @param loadSession whether the agent supports {@code session/load}
+			 * Sets whether the agent serves {@code session/load}.
+			 * @param loadSession {@code true} if the agent serves {@code session/load};
+			 * {@code false} or {@code null} if not
 			 * @return this builder
 			 */
 			public Builder loadSession(@Nullable Boolean loadSession) {
@@ -2455,8 +2644,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code sessionCapabilities}.
-			 * @param sessionCapabilities the optional session methods the agent supports
+			 * Sets the other optional session methods the agent serves, such as
+			 * {@code session/list} and {@code session/close}.
+			 * @param sessionCapabilities the session capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder sessionCapabilities(@Nullable SessionCapabilities sessionCapabilities) {
@@ -2465,8 +2655,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code mcpCapabilities}.
-			 * @param mcpCapabilities the MCP transports the agent supports
+			 * Sets the MCP server transports beyond stdio the agent accepts.
+			 * @param mcpCapabilities the MCP capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder mcpCapabilities(@Nullable McpCapabilities mcpCapabilities) {
@@ -2475,8 +2665,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code promptCapabilities}.
-			 * @param promptCapabilities the prompt content the agent accepts
+			 * Sets the prompt content beyond text and resource links the agent accepts.
+			 * @param promptCapabilities the prompt capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder promptCapabilities(@Nullable PromptCapabilities promptCapabilities) {
@@ -2485,8 +2675,9 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code auth}.
-			 * @param auth authentication capabilities, such as logout
+			 * Sets the authentication features the agent supports, for example
+			 * {@link AgentAuthCapabilities#withLogout()} for an agent that serves {@code logout}.
+			 * @param auth the auth capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			public Builder auth(@Nullable AgentAuthCapabilities auth) {
@@ -2495,8 +2686,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code providers}.
-			 * @param providers provider capabilities (unstable)
+			 * Sets the agent's provider support, which advertises the {@code providers/*} methods.
+			 * @param providers the provider capabilities, or {@code null} for none
 			 * @return this builder
 			 */
 			@UnstableAcpApi
@@ -2506,8 +2697,8 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Sets {@code meta}.
-			 * @param meta optional {@code _meta}
+			 * Sets the {@code _meta} map.
+			 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 			 * @return this builder
 			 */
 			public Builder meta(@Nullable Map<String, Object> meta) {
@@ -2516,7 +2707,7 @@ public final class AcpSchema {
 			}
 
 			/**
-			 * Builds the capabilities.
+			 * Returns capabilities with the components set so far.
 			 * @return the capabilities
 			 */
 			public AgentCapabilities build() {
@@ -2528,21 +2719,36 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Authentication capabilities the agent advertises.
+	 * Authentication features an agent supports besides {@code authenticate}, as
+	 * {@link AgentCapabilities#auth()}. Today that is only {@code logout}: use
+	 * {@link #withLogout()} for an agent that serves it. The ways a client can log in are not here;
+	 * they are {@link InitializeResponse#authMethods()}.
 	 *
-	 * @param logout present (even empty) when the agent supports the {@code logout} method
-	 * @param meta reserved metadata
+	 * <p>
+	 * A builder agent without an initialize handler advertises {@code logout} when it has a
+	 * {@code logoutHandler}, and an annotated agent when it has a
+	 * {@link com.agentclientprotocol.sdk.annotation.Logout @Logout} method. The client fails
+	 * {@code logout} with an {@link com.agentclientprotocol.sdk.error.AcpCapabilityException},
+	 * without sending it, when {@code logout} is {@code null}.
+	 *
+	 * @param logout {@code {}} if the agent serves {@code logout}, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AgentAuthCapabilities(@JsonProperty("logout") @Nullable LogoutCapabilities logout,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the auth capabilities without {@code _meta}.
+		 * @param logout {@code {}} for {@code logout}, or {@code null}
+		 */
 		public AgentAuthCapabilities(@Nullable LogoutCapabilities logout) {
 			this(logout, null);
 		}
 
 		/**
-		 * The capabilities of an agent that supports {@code logout}.
-		 * @return {@code {"logout": {}}}
+		 * Returns the auth capabilities of an agent that serves {@code logout}, written
+		 * {@code {"logout":{}}}. Pass it to {@link AgentCapabilities.Builder#auth}.
+		 * @return the auth capabilities
 		 */
 		public static AgentAuthCapabilities withLogout() {
 			return new AgentAuthCapabilities(new LogoutCapabilities());
@@ -2550,20 +2756,52 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Present when the agent supports the {@code logout} method.
+	 * The marker that an agent serves {@code logout}, as {@link AgentAuthCapabilities#logout()}. It
+	 * carries only {@code _meta}: its presence, written {@code {}}, is the capability, and
+	 * {@code null} in its place means the agent does not serve {@code logout}.
 	 *
-	 * @param meta reserved metadata
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record LogoutCapabilities(@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/** Creates the marker without {@code _meta}, written {@code {}}. */
 		public LogoutCapabilities() {
 			this(null);
 		}
 	}
 
 	/**
-	 * Session capabilities advertised by the agent. Presence of a non-null field
-	 * signals support for that session method.
+	 * Which optional session methods an agent serves besides {@code session/load}, as
+	 * {@link AgentCapabilities#sessionCapabilities()}: {@code session/list}, {@code session/close},
+	 * {@code session/resume}, {@code session/delete} and {@code session/fork}, and whether it
+	 * accepts {@code additionalDirectories} on session requests. Every agent serves
+	 * {@code session/new}, {@code session/prompt}, {@code session/cancel} and
+	 * {@code session/update}; {@code session/load} has its own flag,
+	 * {@link AgentCapabilities#loadSession()}.
+	 *
+	 * <p>
+	 * Each component is an object on the wire: present, as {@code {}}, means supported, and
+	 * {@code null} means not. Pass an empty map, {@code Map.of()}, for a supported method. The
+	 * components are typed {@link Object}, and other values do not write {@code {}}: a
+	 * {@link Boolean} writes {@code true}, and a plain {@code new Object()} cannot be written at
+	 * all. A record read from JSON holds a map.
+	 *
+	 * <p>
+	 * The client fails {@code session/list}, {@code session/close}, {@code session/resume},
+	 * {@code session/delete} and {@code session/fork} calls with an
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException}, without sending them, when
+	 * the matching component is {@code null}. It does not check {@code additionalDirectories}. A
+	 * builder agent without an initialize handler and an annotated agent advertise list, close,
+	 * resume, delete and fork from their handlers, but never {@code additionalDirectories}.
+	 *
+	 * @param list {@code {}} if the agent serves {@code session/list}, or {@code null}
+	 * @param close {@code {}} if the agent serves {@code session/close}, or {@code null}
+	 * @param resume {@code {}} if the agent serves {@code session/resume}, or {@code null}
+	 * @param delete {@code {}} if the agent serves {@code session/delete}, or {@code null}
+	 * @param additionalDirectories {@code {}} if the agent accepts {@code additionalDirectories} on
+	 * session requests and may report them in {@link SessionInfo}, or {@code null}
+	 * @param fork {@code {}} if the agent serves {@code session/fork}, or {@code null}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SessionCapabilities(@JsonProperty("list") @Nullable Object list, @JsonProperty("close") @Nullable Object close,
@@ -2571,15 +2809,40 @@ public final class AcpSchema {
 			@JsonProperty("additionalDirectories") @Nullable Object additionalDirectories,
 			@UnstableAcpApi @JsonProperty("fork") @Nullable Object fork,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates session capabilities without {@code _meta}.
+		 * @param list {@code {}} for {@code session/list}, or {@code null}
+		 * @param close {@code {}} for {@code session/close}, or {@code null}
+		 * @param resume {@code {}} for {@code session/resume}, or {@code null}
+		 * @param delete {@code {}} for {@code session/delete}, or {@code null}
+		 * @param additionalDirectories {@code {}} for {@code additionalDirectories}, or
+		 * {@code null}
+		 * @param fork {@code {}} for {@code session/fork}, or {@code null}
+		 */
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
 				@Nullable Object delete, @Nullable Object additionalDirectories, @Nullable Object fork) {
 			this(list, close, resume, delete, additionalDirectories, fork, null);
 		}
 
+		/**
+		 * Creates session capabilities for list, close and resume only, without delete, additional
+		 * directories, fork or {@code _meta}.
+		 * @param list {@code {}} for {@code session/list}, or {@code null}
+		 * @param close {@code {}} for {@code session/close}, or {@code null}
+		 * @param resume {@code {}} for {@code session/resume}, or {@code null}
+		 */
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume) {
 			this(list, close, resume, null, null, null);
 		}
 
+		/**
+		 * Creates session capabilities for list, close, resume and fork only, without delete,
+		 * additional directories or {@code _meta}.
+		 * @param list {@code {}} for {@code session/list}, or {@code null}
+		 * @param close {@code {}} for {@code session/close}, or {@code null}
+		 * @param resume {@code {}} for {@code session/resume}, or {@code null}
+		 * @param fork {@code {}} for {@code session/fork}, or {@code null}
+		 */
 		public SessionCapabilities(@Nullable Object list, @Nullable Object close, @Nullable Object resume,
 				@Nullable Object fork) {
 			this(list, close, resume, null, null, fork);
@@ -2587,31 +2850,92 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * MCP capabilities supported by agent
+	 * Which MCP server transports beyond stdio an agent accepts, as
+	 * {@link AgentCapabilities#mcpCapabilities()}: HTTP and SSE. Every agent accepts
+	 * {@link McpServerStdio} servers; a client passes {@link McpServerHttp} or {@link McpServerSse}
+	 * servers in {@code session/new}, {@code session/load} or {@code session/resume} only when the
+	 * matching flag is {@code true}.
+	 *
+	 * <p>
+	 * An annotated agent takes the flags from the {@code mcpHttp} and {@code mcpSse} attributes of
+	 * {@link com.agentclientprotocol.sdk.annotation.AcpAgent @AcpAgent}; a builder agent without an
+	 * initialize handler advertises both {@code false}. The SDK checks the MCP server types on
+	 * neither side: a client checks {@code supportsMcpHttp()} and {@code supportsMcpSse()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} before it sends them.
+	 *
+	 * @param http whether the agent accepts MCP servers over HTTP, or {@code null}, read as
+	 * {@code false}
+	 * @param sse whether the agent accepts MCP servers over SSE, or {@code null}, read as
+	 * {@code false}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record McpCapabilities(@JsonProperty("http") @Nullable Boolean http, @JsonProperty("sse") @Nullable Boolean sse,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the MCP capabilities without {@code _meta}.
+		 * @param http whether the agent accepts MCP servers over HTTP, or {@code null}
+		 * @param sse whether the agent accepts MCP servers over SSE, or {@code null}
+		 */
 		public McpCapabilities(@Nullable Boolean http, @Nullable Boolean sse) {
 			this(http, sse, null);
 		}
 
+		/**
+		 * Creates the MCP capabilities of an agent that accepts only stdio MCP servers: both flags
+		 * {@code false}.
+		 */
 		public McpCapabilities() {
 			this(false, false);
 		}
 	}
 
 	/**
-	 * Prompt capabilities
+	 * Which content beyond text and resource links an agent accepts in {@code session/prompt}, as
+	 * {@link AgentCapabilities#promptCapabilities()}: images, audio and embedded resources. Every
+	 * agent accepts {@link TextContent} and {@link ResourceLink} blocks; a client sends
+	 * {@link ImageContent}, {@link AudioContent} or an embedded {@link Resource} only when the
+	 * matching flag is {@code true}.
+	 *
+	 * <p>
+	 * An annotated agent takes the flags from the {@code image}, {@code audio} and
+	 * {@code embeddedContext} attributes of its
+	 * {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt} method; a builder agent without
+	 * an initialize handler advertises all three {@code false}. The SDK checks prompt content on
+	 * neither side: a client checks {@code supportsImageContent()}, {@code supportsAudioContent()}
+	 * and {@code supportsEmbeddedContext()} on
+	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities} before it sends such blocks. Note the component order: audio,
+	 * embedded context, image.
+	 *
+	 * @param audio whether the agent accepts {@link AudioContent} blocks, or {@code null}, read as
+	 * {@code false}
+	 * @param embeddedContext whether the agent accepts {@link Resource} blocks, which embed a
+	 * resource's contents in the prompt, or {@code null}, read as {@code false}
+	 * @param image whether the agent accepts {@link ImageContent} blocks, or {@code null}, read as
+	 * {@code false}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record PromptCapabilities(@JsonProperty("audio") @Nullable Boolean audio,
 			@JsonProperty("embeddedContext") @Nullable Boolean embeddedContext, @JsonProperty("image") @Nullable Boolean image,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the prompt capabilities without {@code _meta}. The order is audio, embedded
+		 * context, image.
+		 * @param audio whether the agent accepts audio, or {@code null}
+		 * @param embeddedContext whether the agent accepts embedded resources, or {@code null}
+		 * @param image whether the agent accepts images, or {@code null}
+		 */
 		public PromptCapabilities(@Nullable Boolean audio, @Nullable Boolean embeddedContext, @Nullable Boolean image) {
 			this(audio, embeddedContext, image, null);
 		}
 
+		/**
+		 * Creates the prompt capabilities of an agent that accepts only text and resource links:
+		 * all three flags {@code false}.
+		 */
 		public PromptCapabilities() {
 			this(false, false, false);
 		}
@@ -4565,15 +4889,30 @@ public final class AcpSchema {
 	}
 
 	/**
-	 * Authentication capabilities the client advertises.
+	 * The authentication method types a client handles beyond the default, as the {@code auth}
+	 * component of {@link ClientCapabilities}. Today that is only {@code terminal}: when
+	 * {@code true}, the agent may offer {@link AuthMethodTerminal} methods, which the client runs
+	 * as an interactive process instead of passing them to {@code authenticate}.
 	 *
-	 * @param terminal whether the client supports {@code terminal} auth methods (default
-	 * false)
-	 * @param meta reserved metadata
+	 * <p>
+	 * Set {@code terminal} only when the client can run the agent's command again in an interactive
+	 * terminal. The client SDK does not run terminal auth methods; the application does. An
+	 * annotated agent leaves its terminal auth methods out of its {@code initialize} answer unless
+	 * the client sets {@code terminal}; other agents check it with {@code supportsTerminalAuth()}
+	 * on {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
+	 * NegotiatedCapabilities}.
+	 *
+	 * @param terminal whether the client handles {@code terminal} auth methods, or {@code null},
+	 * read as {@code false}
+	 * @param meta the {@code _meta} map, reserved for extensions, or {@code null}
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record AuthCapabilities(@JsonProperty("terminal") @Nullable Boolean terminal,
 			@JsonProperty("_meta") @Nullable Map<String, Object> meta) {
+		/**
+		 * Creates the auth capabilities without {@code _meta}.
+		 * @param terminal whether the client handles {@code terminal} auth methods, or {@code null}
+		 */
 		public AuthCapabilities(@Nullable Boolean terminal) {
 			this(terminal, null);
 		}
