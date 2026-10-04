@@ -61,6 +61,24 @@ class BuilderDefaultsTest {
 		assertThat(capabilities.auth().logout()).isNotNull();
 	}
 
+	/** Any of the three provider methods advertises providers, as for an annotated agent. */
+	@Test
+	void anyProviderHandlerAdvertisesProviders() {
+		InMemoryTransportPair setOnly = InMemoryTransportPair.create();
+		AcpSyncAgent setter = AcpAgent.sync(setOnly.agentTransport())
+			.promptHandler((request, context) -> PromptResponse.endTurn())
+			.setProviderHandler(request -> new AcpSchema.SetProviderResponse())
+			.build();
+		assertThat(initialize(setOnly, setter).agentCapabilities().providers()).isNotNull();
+
+		InMemoryTransportPair disableOnly = InMemoryTransportPair.create();
+		AcpSyncAgent disabler = AcpAgent.sync(disableOnly.agentTransport())
+			.promptHandler((request, context) -> PromptResponse.endTurn())
+			.disableProviderHandler(request -> new AcpSchema.DisableProviderResponse())
+			.build();
+		assertThat(initialize(disableOnly, disabler).agentCapabilities().providers()).isNotNull();
+	}
+
 	@Test
 	void theDefaultInitializeSendsTheBuildersAgentInfo() {
 		InMemoryTransportPair pair = InMemoryTransportPair.create();

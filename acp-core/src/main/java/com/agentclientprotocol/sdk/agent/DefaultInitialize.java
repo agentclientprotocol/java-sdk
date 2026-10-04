@@ -14,7 +14,8 @@ import org.jspecify.annotations.Nullable;
  * The {@code initialize} answer of a builder agent without an initialize handler: the protocol
  * version negotiated with the client, and the capabilities its registered handlers imply
  * ({@code session/load} advertises {@code loadSession}, {@code session/list} advertises
- * {@code sessionCapabilities.list}, {@code logout} advertises {@code auth.logout}, and so on),
+ * {@code sessionCapabilities.list}, {@code logout} advertises {@code auth.logout}, any of the three
+ * {@code providers/*} methods advertises {@code providers}, and so on),
  * as an annotated agent derives them from its annotations.
  */
 final class DefaultInitialize {
@@ -44,8 +45,10 @@ final class DefaultInitialize {
 			.loadSession(methods.contains(AcpSchema.METHOD_SESSION_LOAD))
 			.sessionCapabilities(sessions)
 			.auth(methods.contains(AcpSchema.METHOD_LOGOUT) ? AcpSchema.AgentAuthCapabilities.withLogout() : null)
-			.providers(methods.contains(AcpSchema.METHOD_PROVIDERS_LIST) ? new AcpSchema.ProvidersCapabilities(null)
-					: null)
+			.providers(methods.contains(AcpSchema.METHOD_PROVIDERS_LIST)
+					|| methods.contains(AcpSchema.METHOD_PROVIDERS_SET)
+					|| methods.contains(AcpSchema.METHOD_PROVIDERS_DISABLE) ? new AcpSchema.ProvidersCapabilities(null)
+							: null)
 			.build();
 		return new AcpSchema.InitializeResponse(negotiate(request.protocolVersion()), capabilities, null, agentInfo,
 				null);

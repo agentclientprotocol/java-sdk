@@ -1043,6 +1043,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A builder agent advertises `providers` for any provider handler.** Without an initialize
+  handler, a builder agent advertised `providers` only for a `providers/list` handler, while an
+  annotated agent does for any of the three provider methods; with only a set or disable handler
+  the client refused those calls. It now advertises `providers` for any of them.
+
 - **`SessionCapabilities` writes only objects, and reads only objects as advertised.** Its
   components are typed `Object`: `Boolean.TRUE` wrote `"list":true`, which the schema forbids (a
   session capability is an object), and on reading any non-null value counted as advertised, so a
