@@ -16,6 +16,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
@@ -68,14 +69,16 @@ import reactor.core.scheduler.Schedulers;
  * <p>The agent calls back into the client for files ({@code fs/*}), terminals ({@code terminal/*}),
  * permission and elicitation. Register a handler for each one you support, and advertise the
  * matching capabilities with {@code clientCapabilities(...)}: the builder does not derive them from
- * the handlers. A request without a handler is answered {@code -32601} (method not found). A
- * request reaches its handler once the session updates the agent sent before it have been handled
- * (see below); handlers do not wait for each other. Asynchronous handlers are called on the thread
- * that delivered the request or finished the last of those updates, and must not block; synchronous
- * handlers run on the executor given to {@link SyncSpec#handlerExecutor}, by default a pool of
- * daemon threads the SDK shares between all synchronous clients in the JVM. A handler that fails is
- * answered with an error: an {@link AcpProtocolException} with its own code, anything else with
- * {@code -32603} (internal error).
+ * the handlers, but {@code build()} fails when a capability is advertised without its handlers and
+ * warns about a handler whose capability is not advertised. A request without a handler is
+ * answered {@code -32601} (method not found). A request reaches its handler once the session
+ * updates the agent sent before it have been handled (see below); handlers do not wait for each
+ * other. Asynchronous handlers are called on the thread that delivered the request or finished the
+ * last of those updates, and must not block; synchronous handlers run on the executor given to
+ * {@link SyncSpec#handlerExecutor}, by default a pool of daemon threads the SDK shares between all
+ * synchronous clients in the JVM. A handler that fails is answered with an error: an
+ * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
+ * error).
  *
  * <h2>Session updates and ordering</h2>
  *
@@ -267,8 +270,10 @@ public interface AcpClient {
 		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
 		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
 		 * is the only place they are set, and every initialize request carries them. Register the
-		 * handlers that serve them as well: the builder neither derives the capabilities from the
-		 * handlers nor checks that they match, except for elicitation modes. Default:
+		 * handlers that serve them as well: the builder does not derive the capabilities from the
+		 * handlers, but {@code build()} throws when {@code fs.readTextFile},
+		 * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} is advertised without
+		 * its handlers, and logs a warning for a handler whose capability is not. Default:
 		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities the capabilities
@@ -297,7 +302,7 @@ public interface AcpClient {
 		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
 		 * file, which should include unsaved changes in the user's editor. Advertise
 		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
-		 * it for you.
+		 * it for you, and warns at {@code build()} if you do not.
 		 *
 		 * <pre>{@code
 		 * .readTextFileHandler(request -> Mono
@@ -671,6 +676,55 @@ public interface AcpClient {
 			return this;
 		}
 
+		/**
+		 * Fails when the advertised capabilities claim a capability without the handlers that
+		 * serve it, and warns once about handlers for capabilities not advertised.
+		 */
+		private void checkCapabilitiesHaveHandlers() {
+			NegotiatedCapabilities advertised = NegotiatedCapabilities.fromClient(this.clientCapabilities);
+			List<String> missing = new ArrayList<>();
+			List<String> unadvertised = new ArrayList<>();
+			checkCapability("fs.readTextFile", advertised.supportsReadTextFile(),
+					List.of(AcpSchema.METHOD_FS_READ_TEXT_FILE), missing, unadvertised);
+			checkCapability("fs.writeTextFile", advertised.supportsWriteTextFile(),
+					List.of(AcpSchema.METHOD_FS_WRITE_TEXT_FILE), missing, unadvertised);
+			checkCapability("terminal", advertised.supportsTerminal(),
+					List.of(AcpSchema.METHOD_TERMINAL_CREATE, AcpSchema.METHOD_TERMINAL_OUTPUT,
+							AcpSchema.METHOD_TERMINAL_RELEASE, AcpSchema.METHOD_TERMINAL_WAIT_FOR_EXIT,
+							AcpSchema.METHOD_TERMINAL_KILL),
+					missing, unadvertised);
+			// An elicitation capability without a mode advertises nothing the agent may ask for.
+			checkCapability("elicitation", advertised.supportsElicitationForm() || advertised.supportsElicitationUrl(),
+					List.of(AcpSchema.METHOD_ELICITATION_CREATE), missing, unadvertised);
+			if (!missing.isEmpty()) {
+				throw new IllegalStateException("The client advertises capabilities it has no handler for: "
+						+ String.join("; ", missing)
+						+ ". Register the handlers, or do not advertise the capabilities in clientCapabilities(..)");
+			}
+			if (!unadvertised.isEmpty()) {
+				logger.warn("The client has handlers for capabilities it does not advertise, so an agent will not "
+						+ "call them: {}. Advertise the capabilities in clientCapabilities(..)",
+						String.join("; ", unadvertised));
+			}
+		}
+
+		private void checkCapability(String capability, boolean advertised, List<String> methods,
+				List<String> missing, List<String> unadvertised) {
+			List<String> absent = new ArrayList<>();
+			List<String> present = new ArrayList<>();
+			for (String method : methods) {
+				boolean handled = AcpSchema.METHOD_ELICITATION_CREATE.equals(method)
+						? this.createElicitationHandler != null : this.requestHandlers.containsKey(method);
+				(handled ? present : absent).add(TYPED_REQUEST_SETTERS.get(method));
+			}
+			if (advertised && !absent.isEmpty()) {
+				missing.add(capability + " needs " + String.join(", ", absent));
+			}
+			else if (!advertised && !present.isEmpty()) {
+				unadvertised.add(String.join(", ", present) + " (" + capability + ")");
+			}
+		}
+
 		/** The raw setters are for methods the SDK does not model; a modelled one has its setter. */
 		private static void refuseTyped(String method, Map<String, String> typedSetters, String rawSetter) {
 			String setter = typedSetters.get(method);
@@ -692,11 +746,15 @@ public interface AcpClient {
 		 * the agent process. Call {@link AcpAsyncClient#initialize()} next. A transport carries one
 		 * client, so build once per transport.
 		 * @return the client
-		 * @throws IllegalStateException if the transport refuses to connect at once, for example
-		 * because it is already connected; a connection that fails later fails the client's
-		 * requests instead
+		 * @throws IllegalStateException if the capabilities advertise {@code fs.readTextFile},
+		 * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} without the handlers
+		 * that serve them (the message names the missing setters); or if the transport refuses to
+		 * connect at once, for example because it is already connected; a connection that fails
+		 * later fails the client's requests instead
 		 */
 		public AcpAsyncClient build() {
+			checkCapabilitiesHaveHandlers();
+
 			// Set up session update notification handler: the application's consumers, or else the
 			// default one
 			List<Function<AcpSchema.SessionNotification, Mono<Void>>> consumers = new ArrayList<>(
@@ -861,8 +919,10 @@ public interface AcpClient {
 		 * Sets the capabilities the client advertises to the agent in {@code initialize}: file
 		 * reads and writes, terminals, boolean config options, authentication and elicitation. This
 		 * is the only place they are set, and every initialize request carries them. Register the
-		 * handlers that serve them as well: the builder neither derives the capabilities from the
-		 * handlers nor checks that they match, except for elicitation modes. Default:
+		 * handlers that serve them as well: the builder does not derive the capabilities from the
+		 * handlers, but {@code build()} throws when {@code fs.readTextFile},
+		 * {@code fs.writeTextFile}, {@code terminal} or {@code elicitation} is advertised without
+		 * its handlers, and logs a warning for a handler whose capability is not. Default:
 		 * {@code new ClientCapabilities()}, no file system and no terminal. Build them with
 		 * {@link AcpSchema.ClientCapabilities#builder()}.
 		 * @param clientCapabilities the capabilities
@@ -889,7 +949,7 @@ public interface AcpClient {
 		 * Sets the handler for {@code fs/read_text_file}: the agent asks for the content of a text
 		 * file, which should include unsaved changes in the user's editor. Advertise
 		 * {@code fs.readTextFile} in {@link #clientCapabilities} as well; the builder does not do
-		 * it for you.
+		 * it for you, and warns at {@code build()} if you do not.
 		 *
 		 * <pre>{@code
 		 * .readTextFileHandler(request -> {

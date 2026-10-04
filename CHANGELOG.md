@@ -788,6 +788,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returning a `Mono`. **Migration:** use the typed setter the exception names; on the sync
   builder, drop the `Mono` from a raw notification handler (`params -> { ... }`).
 
+- **Breaking (behaviour): a client's advertised capabilities must have their handlers.**
+  `AcpClient.AsyncSpec`/`SyncSpec.build()` now throws `IllegalStateException` when the client
+  capabilities advertise `fs.readTextFile` without `readTextFileHandler`, `fs.writeTextFile`
+  without `writeTextFileHandler`, `terminal` without all five terminal handlers
+  (`createTerminalHandler`, `terminalOutputHandler`, `releaseTerminalHandler`,
+  `waitForTerminalExitHandler`, `killTerminalHandler`), or an elicitation mode without
+  `createElicitationHandler`; the message names every missing setter. Such a client used to build,
+  and the agent's requests were answered "Method not found". A handler for a capability the client
+  does not advertise logs one WARN, since an SDK agent will not call it. The Spring Boot
+  (`spring.acp.client.capabilities.*`), Micronaut (`acp.client.capabilities.*`) and Quarkus
+  (`quarkus.acp.client.capabilities.*`) client beans add the setting that advertised the capability
+  to the message. The test `MockAcpClient` no longer
+  advertises `terminal`, which it never served. **Migration:** register the handlers (in an
+  `AcpClientCustomizer` when the capabilities come from properties), or stop advertising the
+  capability.
+
 ### Removed
 
 - **Breaking: `AcpAgent.logger` and `AcpClient.logger` are removed.** As fields of public

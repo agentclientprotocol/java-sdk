@@ -99,17 +99,37 @@ class AcpClientAutoConfigurationTests {
 	}
 
 	@Test
-	void customCapabilities() {
+	void capabilitiesFromPropertiesWithTheirHandlersBuild() {
 		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class)
 			.withPropertyValues("spring.acp.client.capabilities.read-text-file=true",
 					"spring.acp.client.capabilities.write-text-file=true",
 					"spring.acp.client.capabilities.terminal=true")
+			.withBean(AcpClientCustomizer.class, () -> spec -> spec.readTextFileHandler(request -> Mono.empty())
+				.writeTextFileHandler(request -> Mono.empty())
+				.createTerminalHandler(request -> Mono.empty())
+				.terminalOutputHandler(request -> Mono.empty())
+				.releaseTerminalHandler(request -> Mono.empty())
+				.waitForTerminalExitHandler(request -> Mono.empty())
+				.killTerminalHandler(request -> Mono.empty()))
 			.run(context -> {
+				assertThat(context).hasNotFailed();
 				AcpClientProperties props = context.getBean(AcpClientProperties.class);
 				assertThat(props.getCapabilities().isReadTextFile()).isTrue();
 				assertThat(props.getCapabilities().isWriteTextFile()).isTrue();
 				assertThat(props.getCapabilities().isTerminal()).isTrue();
 			});
+	}
+
+	@Test
+	void aCapabilityPropertyWithoutItsHandlerFailsNamingTheProperty() {
+		this.runner.withUserConfiguration(InMemoryTransportConfiguration.class)
+			.withPropertyValues("spring.acp.client.capabilities.read-text-file=true",
+					"spring.acp.client.capabilities.terminal=true")
+			.run(context -> assertThat(context).getFailure()
+				.hasStackTraceContaining("readTextFileHandler")
+				.hasStackTraceContaining("The capabilities come from spring.acp.client.capabilities.read-text-file=true, "
+						+ "spring.acp.client.capabilities.terminal=true:")
+				.satisfies(failure -> assertThat(failure).hasStackTraceContaining("IllegalStateException")));
 	}
 
 	@Test
@@ -257,6 +277,21 @@ class AcpClientAutoConfigurationTests {
 			agent.closeGracefully();
 		}
 		return received;
+	}
+
+	@Test
+	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
+		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
+
+		assertThat(AcpClientAutoConfiguration.namingTheSettings(sdk, "spring.acp.client", true, true, true))
+			.hasMessageContaining("spring.acp.client.capabilities.read-text-file=true, "
+					+ "spring.acp.client.capabilities.write-text-file=true, spring.acp.client.capabilities.terminal=true")
+			.hasCause(sdk);
+		assertThat(AcpClientAutoConfiguration.namingTheSettings(sdk, "spring.acp.client", false, false, false))
+			.isSameAs(sdk);
+		IllegalStateException other = new IllegalStateException("Already connected");
+		assertThat(AcpClientAutoConfiguration.namingTheSettings(other, "spring.acp.client", true, true, true))
+			.isSameAs(other);
 	}
 
 	record OrderedCustomizer(int order, String name, List<String> applied) implements AcpClientCustomizer, Ordered {

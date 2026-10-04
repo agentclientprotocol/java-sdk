@@ -1,6 +1,8 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.client;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
@@ -51,7 +53,38 @@ public class AcpClientAutoConfiguration {
 			spec.promptTimeout(promptTimeout);
 		}
 		customizers.orderedStream().forEach(customizer -> customizer.customize(spec));
-		return spec.build();
+		try {
+			return spec.build();
+		}
+		catch (IllegalStateException ex) {
+			throw namingTheSettings(ex, "spring.acp.client", caps.isReadTextFile(), caps.isWriteTextFile(),
+					caps.isTerminal());
+		}
+	}
+
+	/**
+	 * Adds to the SDK's error about an advertised capability without its handler which of the
+	 * capability properties it came from: register the handler in an {@link AcpClientCustomizer}, or
+	 * stop advertising it.
+	 */
+	static IllegalStateException namingTheSettings(IllegalStateException error, String prefix, boolean readTextFile,
+			boolean writeTextFile, boolean terminal) {
+		String message = String.valueOf(error.getMessage());
+		List<String> settings = new ArrayList<>();
+		if (readTextFile && message.contains("fs.readTextFile needs")) {
+			settings.add(prefix + ".capabilities.read-text-file=true");
+		}
+		if (writeTextFile && message.contains("fs.writeTextFile needs")) {
+			settings.add(prefix + ".capabilities.write-text-file=true");
+		}
+		if (terminal && message.contains("terminal needs")) {
+			settings.add(prefix + ".capabilities.terminal=true");
+		}
+		if (settings.isEmpty()) {
+			return error;
+		}
+		return new IllegalStateException(message + ". The capabilities come from " + String.join(", ", settings)
+				+ ": register the handlers in an AcpClientCustomizer, or set the properties to false", error);
 	}
 
 	private static Mono<Void> logSessionUpdate(AcpSchema.SessionNotification notification) {

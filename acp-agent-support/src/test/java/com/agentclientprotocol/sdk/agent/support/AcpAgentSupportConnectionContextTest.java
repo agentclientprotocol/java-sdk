@@ -111,6 +111,7 @@ class AcpAgentSupportConnectionContextTest {
 		client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
 			.clientCapabilities(readOnlyFiles(true))
+			.readTextFileHandler(request -> Mono.empty())
 			.build();
 
 		client.initialize().block(TIMEOUT);
@@ -203,6 +204,7 @@ class AcpAgentSupportConnectionContextTest {
 		client = AcpClient.async(pair.clientTransport())
 			.requestTimeout(TIMEOUT)
 			.clientCapabilities(readOnlyFiles(true))
+			.readTextFileHandler(request -> Mono.empty())
 			.build();
 
 		client.initialize().block(TIMEOUT);
@@ -286,7 +288,11 @@ class AcpAgentSupportConnectionContextTest {
 
 	private static AcpAsyncClient client(AcpClientTransport transport, ClientCapabilities capabilities,
 			List<String> updates) {
-		return AcpClient.async(transport).requestTimeout(TIMEOUT).clientCapabilities(capabilities).sessionUpdateConsumer(notification -> {
+		AcpClient.AsyncSpec spec = AcpClient.async(transport).requestTimeout(TIMEOUT).clientCapabilities(capabilities);
+		if (Boolean.TRUE.equals(capabilities.fs().readTextFile())) {
+			spec.readTextFileHandler(request -> Mono.empty());
+		}
+		return spec.sessionUpdateConsumer(notification -> {
 			if (notification.update() instanceof AgentMessageChunk chunk && chunk.content() instanceof TextContent text) {
 				updates.add(text.text());
 			}

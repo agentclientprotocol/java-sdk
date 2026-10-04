@@ -97,7 +97,7 @@ public class MockAcpClient {
 
 	/**
 	 * Initializes the connection with the agent.
-	 * Advertises all capabilities (file read, file write, terminal) by default.
+	 * Advertises file read and write, which it handles, and no terminal.
 	 * @return The initialize response
 	 */
 	public AcpSchema.InitializeResponse initialize() {
@@ -326,8 +326,9 @@ public class MockAcpClient {
 			MockAcpClient mockClient = new MockAcpClient(null, transport, requestTimeout);
 
 			AcpAsyncClient delegate = AcpClient.async(transport)
-				// Mock client advertises all capabilities (file read, file write, terminal)
-				.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), true))
+				// The mock client advertises what it has handlers for: file read and write. It has no
+				// terminal handlers, so it does not advertise terminal.
+				.clientCapabilities(new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(true, true), false))
 				.requestTimeout(requestTimeout)
 				.sessionUpdateConsumer(notification -> {
 					mockClient.receivedUpdates.add(notification);

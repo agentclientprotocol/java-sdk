@@ -25,6 +25,7 @@ import org.mockito.Answers;
 import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -96,10 +97,29 @@ class HostsAndProducersTest {
 
 		List<String> customized = new java.util.ArrayList<>();
 		AcpAsyncClient client = producers.acpAsyncClient(pair.clientTransport(),
-				List.of(spec -> customized.add("first"), spec -> customized.add("second")));
+				List.of(spec -> customized.add("first"), spec -> customized.add("second"),
+						// serves the file reads the configuration advertises
+						spec -> spec.readTextFileHandler(request -> Mono.empty())));
 		assertThat(customized).containsExactly("first", "second");
 		assertThat(producers.acpSyncClient(client)).isNotNull();
 		producers.close(client);
+	}
+
+	@Test
+	void aCapabilitySettingWithoutItsHandlerFailsNamingTheSetting() {
+		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
+		when(config.client().capabilities().readTextFile()).thenReturn(true);
+		when(config.client().capabilities().elicitationForm()).thenReturn(true);
+		AcpClientProducers producers = new AcpClientProducers(config);
+
+		assertThatThrownBy(
+				() -> producers.acpAsyncClient(InMemoryTransportPair.create().clientTransport(), List.of()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("readTextFileHandler")
+			.hasMessageContaining("createElicitationHandler")
+			.hasMessageContaining("quarkus.acp.client.capabilities.read-text-file=true")
+			.hasMessageContaining("quarkus.acp.client.capabilities.elicitation-form=true")
+			.hasMessageNotContaining("elicitation-url");
 	}
 
 	@Test
@@ -171,6 +191,29 @@ class HostsAndProducersTest {
 			client.close();
 			agent.closeGracefully();
 		}
+	}
+
+	@Test
+	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
+		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
+		AcpRuntimeConfig.Capabilities all = mock(AcpRuntimeConfig.Capabilities.class);
+		when(all.readTextFile()).thenReturn(true);
+		when(all.writeTextFile()).thenReturn(true);
+		when(all.terminal()).thenReturn(true);
+		when(all.elicitationForm()).thenReturn(true);
+		when(all.elicitationUrl()).thenReturn(true);
+
+		assertThat(AcpClientProducers.namingTheSettings(sdk, all))
+			.hasMessageContaining("quarkus.acp.client.capabilities.read-text-file=true, "
+					+ "quarkus.acp.client.capabilities.write-text-file=true, "
+					+ "quarkus.acp.client.capabilities.terminal=true, "
+					+ "quarkus.acp.client.capabilities.elicitation-form=true, "
+					+ "quarkus.acp.client.capabilities.elicitation-url=true")
+			.hasCause(sdk);
+		assertThat(AcpClientProducers.namingTheSettings(sdk, mock(AcpRuntimeConfig.Capabilities.class)))
+			.isSameAs(sdk);
+		IllegalStateException other = new IllegalStateException("Already connected");
+		assertThat(AcpClientProducers.namingTheSettings(other, all)).isSameAs(other);
 	}
 
 	@Test

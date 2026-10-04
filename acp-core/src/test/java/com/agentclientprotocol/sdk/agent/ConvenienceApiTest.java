@@ -23,6 +23,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ClientCapabilities;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateTerminalResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.FileSystemCapability;
 import com.agentclientprotocol.sdk.spec.AcpSchema.InitializeResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.KillTerminalCommandResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PermissionCancelled;
@@ -537,6 +538,7 @@ class ConvenienceApiTest {
 				return Mono.just(new TerminalOutputResponse("hello\n", false, null));
 			})
 			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 			.build();
 
 		agent.start();
@@ -578,6 +580,7 @@ class ConvenienceApiTest {
 			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(null, "SIGKILL")))
 			.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("", false, null)))
 			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 			.build();
 
 		agent.start();
@@ -623,6 +626,7 @@ class ConvenienceApiTest {
 			.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(0, null)))
 			.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("", false, null)))
 			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 			.build();
 
 		agent.start();
@@ -671,6 +675,7 @@ class ConvenienceApiTest {
 				}
 				return Mono.just(new ReleaseTerminalResponse());
 			})
+			.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 			.build();
 
 		agent.start();

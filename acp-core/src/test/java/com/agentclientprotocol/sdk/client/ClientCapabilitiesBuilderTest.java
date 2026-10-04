@@ -76,7 +76,7 @@ class ClientCapabilitiesBuilderTest {
 		ClientCapabilities customCaps = new ClientCapabilities(fsCaps, true);
 
 		// Build client with custom capabilities via builder
-		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+		AcpAsyncClient client = servingEveryCapability(AcpClient.async(transportPair.clientTransport()))
 			.requestTimeout(TIMEOUT)
 			.clientCapabilities(customCaps) // This should be sent to agent
 			.build();
@@ -157,7 +157,7 @@ class ClientCapabilitiesBuilderTest {
 		AcpAsyncAgent agent = capturingAgent(received);
 		ClientCapabilities caps = new ClientCapabilities(new FileSystemCapability(true, true), true);
 
-		AcpAsyncClient client = AcpClient.async(transportPair.clientTransport())
+		AcpAsyncClient client = servingEveryCapability(AcpClient.async(transportPair.clientTransport()))
 			.requestTimeout(TIMEOUT)
 			.clientCapabilities(caps)
 			.build();
@@ -182,6 +182,11 @@ class ClientCapabilitiesBuilderTest {
 			.requestTimeout(TIMEOUT)
 			.clientCapabilities(caps)
 			.clientInfo(info)
+			.createTerminalHandler(request -> null)
+			.terminalOutputHandler(request -> null)
+			.releaseTerminalHandler(request -> null)
+			.waitForTerminalExitHandler(request -> null)
+			.killTerminalHandler(request -> null)
 			.build();
 		agent.start().subscribe();
 
@@ -191,6 +196,17 @@ class ClientCapabilitiesBuilderTest {
 		assertThat(received.get()).isEqualTo(new AcpSchema.InitializeRequest(1, caps, info, Map.of("trace", "t")));
 		client.closeGracefully();
 		agent.closeGracefully().block(TIMEOUT);
+	}
+
+	/** A client advertising files and terminals must serve them, or it does not build. */
+	private static AcpClient.AsyncSpec servingEveryCapability(AcpClient.AsyncSpec spec) {
+		return spec.readTextFileHandler(request -> Mono.empty())
+			.writeTextFileHandler(request -> Mono.empty())
+			.createTerminalHandler(request -> Mono.empty())
+			.terminalOutputHandler(request -> Mono.empty())
+			.releaseTerminalHandler(request -> Mono.empty())
+			.waitForTerminalExitHandler(request -> Mono.empty())
+			.killTerminalHandler(request -> Mono.empty());
 	}
 
 	private AcpAsyncAgent capturingAgent(AtomicReference<AcpSchema.InitializeRequest> received) {

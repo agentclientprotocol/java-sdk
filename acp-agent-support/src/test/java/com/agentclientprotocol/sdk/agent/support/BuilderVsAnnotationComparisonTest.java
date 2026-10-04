@@ -26,6 +26,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ReadTextFileResponse;
+import com.agentclientprotocol.sdk.spec.AcpSchema.KillTerminalCommandResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ReleaseTerminalResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TerminalOutputResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
@@ -356,6 +357,7 @@ class BuilderVsAnnotationComparisonTest {
 					.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(0, null)))
 					.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("hello\n", false, null)))
 					.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+					.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 					.build();
 
 			client.initialize().block(TIMEOUT);
@@ -424,6 +426,7 @@ class BuilderVsAnnotationComparisonTest {
 					.waitForTerminalExitHandler(req -> Mono.just(new WaitForTerminalExitResponse(0, null)))
 					.terminalOutputHandler(req -> Mono.just(new TerminalOutputResponse("hello\n", false, null)))
 					.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+					.killTerminalHandler(req -> Mono.just(new KillTerminalCommandResponse()))
 					.build();
 
 			client.initialize().block(TIMEOUT);

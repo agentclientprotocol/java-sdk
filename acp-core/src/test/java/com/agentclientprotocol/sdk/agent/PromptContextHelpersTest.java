@@ -89,6 +89,7 @@ class PromptContextHelpersTest {
 				released.countDown();
 				return Mono.just(new ReleaseTerminalResponse());
 			})
+			.killTerminalHandler(req -> Mono.just(new AcpSchema.KillTerminalCommandResponse()))
 			.build();
 
 		agent.start().block(TIMEOUT);
@@ -344,6 +345,7 @@ class PromptContextHelpersTest {
 			.waitForTerminalExitHandler(req -> Mono.just(new AcpSchema.WaitForTerminalExitResponse(0, null)))
 			.terminalOutputHandler(req -> Mono.just(new AcpSchema.TerminalOutputResponse("...tail", true, null)))
 			.releaseTerminalHandler(req -> Mono.just(new ReleaseTerminalResponse()))
+			.killTerminalHandler(req -> Mono.just(new AcpSchema.KillTerminalCommandResponse()))
 			.build();
 		agent.start();
 		connect(client);
@@ -396,6 +398,7 @@ class PromptContextHelpersTest {
 				released.countDown();
 				return Mono.just(new ReleaseTerminalResponse());
 			})
+			.killTerminalHandler(req -> Mono.just(new AcpSchema.KillTerminalCommandResponse()))
 			.build();
 	}
 

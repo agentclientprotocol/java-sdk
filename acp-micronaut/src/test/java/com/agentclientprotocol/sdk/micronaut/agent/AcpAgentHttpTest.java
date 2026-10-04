@@ -53,7 +53,8 @@ class AcpAgentHttpTest {
 		int port = runtime.port().orElseThrow();
 		assertThat(port).isPositive();
 		conversation(Map.of("acp.client.transport.http.uri", "http://localhost:" + port + "/agent",
-				"acp.client.capabilities.read-text-file", "true", "acp.client.capabilities.terminal", "true"));
+				"acp.client.capabilities.read-text-file", "true", "acp.client.capabilities.terminal", "true",
+				TestCustomizers.SERVES_FILES_AND_TERMINALS, "true"));
 		// the configured capabilities, as the agent negotiated them on the wire
 		NegotiatedCapabilities caps = agent.clientCapabilities.get(agent.clientCapabilities.size() - 1);
 		assertThat(caps.supportsReadTextFile()).isTrue();

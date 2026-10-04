@@ -23,6 +23,9 @@ public final class TestCustomizers {
 	/** Switches the beans below on. */
 	public static final String RECORDING = "test.client.recording";
 
+	/** Switches {@link FilesAndTerminals} on. */
+	public static final String SERVES_FILES_AND_TERMINALS = "test.client.serves-files-and-terminals";
+
 	private TestCustomizers() {
 	}
 
@@ -83,6 +86,28 @@ public final class TestCustomizers {
 		@Override
 		public void customize(com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec spec) {
 			record.customizers.add("first");
+		}
+
+	}
+
+	/**
+	 * Serves file reads and terminals, so a test may advertise them with
+	 * {@code acp.client.capabilities.*}: a client that advertises a capability must have its
+	 * handlers. The agents under test never call them.
+	 */
+	@Singleton
+	@Order(30)
+	@Requires(property = SERVES_FILES_AND_TERMINALS, value = "true")
+	public static class FilesAndTerminals implements AcpClientCustomizer {
+
+		@Override
+		public void customize(com.agentclientprotocol.sdk.client.AcpClient.AsyncSpec spec) {
+			spec.readTextFileHandler(request -> Mono.empty())
+				.createTerminalHandler(request -> Mono.empty())
+				.terminalOutputHandler(request -> Mono.empty())
+				.releaseTerminalHandler(request -> Mono.empty())
+				.waitForTerminalExitHandler(request -> Mono.empty())
+				.killTerminalHandler(request -> Mono.empty());
 		}
 
 	}

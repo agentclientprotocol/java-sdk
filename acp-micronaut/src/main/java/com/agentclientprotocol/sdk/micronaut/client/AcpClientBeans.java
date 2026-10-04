@@ -74,6 +74,8 @@ public class AcpClientBeans {
 	 * @param config the client settings
 	 * @param customizers every customizer bean, in bean order
 	 * @return the async client
+	 * @throws IllegalStateException if a capability setting is true but no customizer registers
+	 * the handlers that serve it; the message names the setting and the missing setters
 	 */
 	@Singleton
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientConfiguration config,
@@ -92,7 +94,38 @@ public class AcpClientBeans {
 			spec.promptTimeout(config.getPromptTimeout());
 		}
 		customizers.forEach(customizer -> customizer.customize(spec));
-		return spec.build();
+		try {
+			return spec.build();
+		}
+		catch (IllegalStateException ex) {
+			throw namingTheSettings(ex, AcpClientConfiguration.PREFIX, caps.isReadTextFile(), caps.isWriteTextFile(),
+					caps.isTerminal());
+		}
+	}
+
+	/**
+	 * Adds to the SDK's error about an advertised capability without its handler which of the
+	 * capability settings it came from: register the handler in an {@link AcpClientCustomizer}, or
+	 * stop advertising it.
+	 */
+	static IllegalStateException namingTheSettings(IllegalStateException error, String prefix, boolean readTextFile,
+			boolean writeTextFile, boolean terminal) {
+		String message = String.valueOf(error.getMessage());
+		List<String> settings = new ArrayList<>();
+		if (readTextFile && message.contains("fs.readTextFile needs")) {
+			settings.add(prefix + ".capabilities.read-text-file=true");
+		}
+		if (writeTextFile && message.contains("fs.writeTextFile needs")) {
+			settings.add(prefix + ".capabilities.write-text-file=true");
+		}
+		if (terminal && message.contains("terminal needs")) {
+			settings.add(prefix + ".capabilities.terminal=true");
+		}
+		if (settings.isEmpty()) {
+			return error;
+		}
+		return new IllegalStateException(message + ". The capabilities come from " + String.join(", ", settings)
+				+ ": register the handlers in an AcpClientCustomizer, or set the settings to false", error);
 	}
 
 	/**

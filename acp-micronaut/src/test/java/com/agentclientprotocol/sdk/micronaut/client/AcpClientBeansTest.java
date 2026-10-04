@@ -125,6 +125,30 @@ class AcpClientBeansTest {
 		}
 	}
 
+	@Test
+	void aCapabilitySettingWithoutItsHandlerFailsNamingTheSetting() {
+		assertThatThrownBy(() -> {
+			try (ApplicationContext context = ApplicationContext.run(Map.of("acp.client.transport.http.uri",
+					"http://localhost:9/acp", "acp.client.capabilities.write-text-file", "true"))) {
+				context.getBean(AcpAsyncClient.class);
+			}
+		}).hasStackTraceContaining("writeTextFileHandler")
+			.hasStackTraceContaining("The capabilities come from acp.client.capabilities.write-text-file=true:");
+	}
+
+	@Test
+	void theCapabilityErrorNamesOnlyTheSettingsThatAdvertisedAMissingHandler() {
+		IllegalStateException sdk = new IllegalStateException("The client advertises capabilities it has no handler for: fs.readTextFile needs readTextFileHandler; fs.writeTextFile needs writeTextFileHandler; terminal needs killTerminalHandler; elicitation needs createElicitationHandler");
+
+		assertThat(AcpClientBeans.namingTheSettings(sdk, "acp.client", true, true, true))
+			.hasMessageContaining("acp.client.capabilities.read-text-file=true, "
+					+ "acp.client.capabilities.write-text-file=true, acp.client.capabilities.terminal=true")
+			.hasCause(sdk);
+		assertThat(AcpClientBeans.namingTheSettings(sdk, "acp.client", false, false, false)).isSameAs(sdk);
+		IllegalStateException other = new IllegalStateException("Already connected");
+		assertThat(AcpClientBeans.namingTheSettings(other, "acp.client", true, true, true)).isSameAs(other);
+	}
+
 	private static AcpClientTransport transport(Map<String, Object> properties) {
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
 			return context.getBean(AcpClientTransport.class);
