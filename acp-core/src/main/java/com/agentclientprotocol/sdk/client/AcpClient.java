@@ -217,6 +217,9 @@ public interface AcpClient {
 
 		private final List<Function<AcpSchema.SessionNotification, Mono<Void>>> sessionUpdateConsumers = new ArrayList<>();
 
+		/** Receives the session updates only while no consumer is added. */
+		private @Nullable Function<AcpSchema.SessionNotification, Mono<Void>> defaultSessionUpdateConsumer;
+
 		private @Nullable Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> createElicitationHandler;
 
 		private AsyncSpec(AcpClientTransport transport) {
@@ -491,7 +494,8 @@ public interface AcpClient {
 		 * turn are all handled when {@code prompt} returns. A slow consumer therefore delays
 		 * responses, and the wait counts against the request timeout. A consumer must not wait for
 		 * a prompt in flight to complete: that prompt waits for the consumer. A consumer that fails
-		 * is logged, and the next notification follows.
+		 * is logged, and the next notification follows. Consumers add up; the first one added
+		 * replaces the {@link #defaultSessionUpdateConsumer default consumer}, if one is set.
 		 * @param sessionUpdateConsumer the consumer
 		 * @return this builder
 		 * @throws IllegalArgumentException if {@code sessionUpdateConsumer} is null
@@ -500,6 +504,28 @@ public interface AcpClient {
 				Function<AcpSchema.SessionNotification, Mono<Void>> sessionUpdateConsumer) {
 			Assert.notNull(sessionUpdateConsumer, "Session update consumer must not be null");
 			this.sessionUpdateConsumers.add(sessionUpdateConsumer);
+			return this;
+		}
+
+		/**
+		 * Sets the consumer that receives {@code session/update} notifications when no
+		 * {@link #sessionUpdateConsumer} is added: a default that the application's own consumers
+		 * replace rather than run beside, whichever is registered first. It is meant for
+		 * frameworks, which set a default (such as logging each update at DEBUG) before handing
+		 * the builder to the application's customizers. It is delivered like a consumer added
+		 * with {@code sessionUpdateConsumer}.
+		 * @param consumer the default consumer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code consumer} is null
+		 * @throws IllegalStateException if a default consumer is already set
+		 */
+		public AsyncSpec defaultSessionUpdateConsumer(Function<AcpSchema.SessionNotification, Mono<Void>> consumer) {
+			Assert.notNull(consumer, "Default session update consumer must not be null");
+			if (this.defaultSessionUpdateConsumer != null) {
+				throw new IllegalStateException(
+						"A default session update consumer is already set; defaultSessionUpdateConsumer was called twice");
+			}
+			this.defaultSessionUpdateConsumer = consumer;
 			return this;
 		}
 
@@ -671,17 +697,24 @@ public interface AcpClient {
 		 * requests instead
 		 */
 		public AcpAsyncClient build() {
-			// Set up session update notification handler
-			if (!sessionUpdateConsumers.isEmpty()) {
-				notificationHandlers.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
+			// Set up session update notification handler: the application's consumers, or else the
+			// default one
+			List<Function<AcpSchema.SessionNotification, Mono<Void>>> consumers = new ArrayList<>(
+					sessionUpdateConsumers);
+			Function<AcpSchema.SessionNotification, Mono<Void>> defaultConsumer = this.defaultSessionUpdateConsumer;
+			if (consumers.isEmpty() && defaultConsumer != null) {
+				consumers.add(defaultConsumer);
+			}
+			Map<String, AcpClientSession.NotificationHandler> notifications = new HashMap<>(notificationHandlers);
+			if (!consumers.isEmpty()) {
+				notifications.put(AcpSchema.METHOD_SESSION_UPDATE, params -> {
 					AcpSchema.SessionNotification notification = transport.unmarshalParams(params,
 							new TypeRef<AcpSchema.SessionNotification>() {
 							});
 					logger.debug("Received session update for session: {}", notification.sessionId());
 
 					// Call all registered consumers
-					return Mono
-						.when(sessionUpdateConsumers.stream().map(consumer -> consumer.apply(notification)).toList());
+					return Mono.when(consumers.stream().map(consumer -> consumer.apply(notification)).toList());
 				});
 			}
 
@@ -704,8 +737,8 @@ public interface AcpClient {
 			}
 
 			// Create session with request and notification handlers
-			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers,
-					new HashMap<>(notificationHandlers), Function.identity());
+			AcpSession session = new AcpClientSession(requestTimeout, transport, handlers, notifications,
+					Function.identity());
 
 			return new AcpAsyncClient(session, transport, clientCapabilities, clientInfo, advertised, promptTimeout);
 		}
@@ -1069,6 +1102,26 @@ public interface AcpClient {
 			// Convert sync consumer to async Function
 			asyncSpec.sessionUpdateConsumer(notification -> Mono
 				.fromRunnable(HandlerFailures.guard(() -> sessionUpdateConsumer.accept(notification)))
+				.subscribeOn(this.handlerScheduler)
+				.then());
+			return this;
+		}
+
+		/**
+		 * Sets the consumer that receives {@code session/update} notifications when no
+		 * {@link #sessionUpdateConsumer} is added; the application's own consumers replace it,
+		 * whichever is registered first. Meant for frameworks; see
+		 * {@link AsyncSpec#defaultSessionUpdateConsumer(Function)}. It runs on the handler
+		 * executor.
+		 * @param consumer the default consumer
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code consumer} is null
+		 * @throws IllegalStateException if a default consumer is already set
+		 */
+		public SyncSpec defaultSessionUpdateConsumer(Consumer<AcpSchema.SessionNotification> consumer) {
+			Assert.notNull(consumer, "Default session update consumer must not be null");
+			asyncSpec.defaultSessionUpdateConsumer(notification -> Mono
+				.fromRunnable(HandlerFailures.guard(() -> consumer.accept(notification)))
 				.subscribeOn(this.handlerScheduler)
 				.then());
 			return this;

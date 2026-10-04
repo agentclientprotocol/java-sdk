@@ -193,6 +193,72 @@ class AcpClientAutoConfigurationTests {
 		}
 	}
 
+	@Test
+	void anApplicationConsumerReplacesTheDebugLoggingDefault() {
+		ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+			.getLogger(AcpClientAutoConfiguration.class);
+		ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logged = new ch.qos.logback.core.read.ListAppender<>();
+		logged.start();
+		ch.qos.logback.classic.Level level = logger.getLevel();
+		logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+		logger.addAppender(logged);
+		try {
+			// Without an application consumer, the default logs each update at DEBUG.
+			assertThat(promptAndCollect(null)).isEmpty();
+			assertThat(logged.list).anySatisfy(event -> assertThat(event.getFormattedMessage())
+				.startsWith("Session update for session-1"));
+
+			// With one, the default is replaced, not run beside it.
+			logged.list.clear();
+			assertThat(promptAndCollect(spec -> {
+			})).singleElement();
+			assertThat(logged.list).noneSatisfy(event -> assertThat(event.getFormattedMessage())
+				.startsWith("Session update for"));
+		}
+		finally {
+			logger.detachAppender(logged);
+			logger.setLevel(level);
+		}
+	}
+
+	/**
+	 * Prompts an agent that sends one update; with a customizer, it also adds a consumer that
+	 * collects the updates, which the method returns.
+	 */
+	private List<AcpSchema.SessionNotification> promptAndCollect(AcpClientCustomizer customizer) {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpSyncAgent agent = AcpAgent.sync(pair.agentTransport())
+			.initializeHandler(request -> AcpSchema.InitializeResponse.ok())
+			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-1", null, null))
+			.promptHandler((request, prompt) -> {
+				prompt.sendMessage("hello");
+				return AcpSchema.PromptResponse.endTurn();
+			})
+			.build();
+		agent.start();
+		List<AcpSchema.SessionNotification> received = new CopyOnWriteArrayList<>();
+		ApplicationContextRunner contextRunner = this.runner.withBean(AcpClientTransport.class, pair::clientTransport);
+		if (customizer != null) {
+			contextRunner = contextRunner.withBean(AcpClientCustomizer.class,
+					() -> spec -> spec.sessionUpdateConsumer(notification -> {
+						received.add(notification);
+						return Mono.empty();
+					}));
+		}
+		try {
+			contextRunner.run(context -> {
+				AcpSyncClient client = context.getBean(AcpSyncClient.class);
+				client.initialize();
+				client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()));
+				client.prompt(new AcpSchema.PromptRequest("session-1", List.of(new AcpSchema.TextContent("hi"))));
+			});
+		}
+		finally {
+			agent.closeGracefully();
+		}
+		return received;
+	}
+
 	record OrderedCustomizer(int order, String name, List<String> applied) implements AcpClientCustomizer, Ordered {
 
 		@Override

@@ -34,8 +34,9 @@ import reactor.core.publisher.Mono;
  * {@code initialize()}, and closes gracefully, once, with the application context.
  *
  * <p>
- * The builder gets the configured request timeout and capabilities and a session-update
- * consumer that logs at DEBUG, then every {@link AcpClientCustomizer} bean in order. Replace
+ * The builder gets the configured request timeout and capabilities and a default
+ * session-update consumer that logs at DEBUG, which a consumer an application adds replaces,
+ * then every {@link AcpClientCustomizer} bean in order. Replace
  * the transport with an application bean annotated
  * {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
  */
@@ -84,8 +85,9 @@ public class AcpClientBeans {
 					new AcpSchema.FileSystemCapability(caps.isReadTextFile(), caps.isWriteTextFile()),
 					caps.isTerminal()))
 			// Session updates always have a consumer, so the SDK does not warn about an
-			// unhandled session/update; an application adds its own through a customizer.
-			.sessionUpdateConsumer(AcpClientBeans::logSessionUpdate);
+			// unhandled session/update. This one only logs at DEBUG; a consumer an
+			// application adds through a customizer replaces it.
+			.defaultSessionUpdateConsumer(AcpClientBeans::logSessionUpdate);
 		if (config.getPromptTimeout() != null) {
 			spec.promptTimeout(config.getPromptTimeout());
 		}

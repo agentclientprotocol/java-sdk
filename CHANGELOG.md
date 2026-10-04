@@ -308,6 +308,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PromptRequest.text(sessionId, text)` (a prompt of one text block). Each equals, and writes the
   same JSON as, the long form.
 
+- **`defaultSessionUpdateConsumer(..)` on `AcpClient.AsyncSpec` and `SyncSpec`:** a session
+  update consumer used only while no `sessionUpdateConsumer` is added, so a framework can set a
+  default (such as logging each update at DEBUG) that the application's own consumer replaces,
+  whichever is registered first. The Spring Boot autoconfiguration and the Micronaut and Quarkus
+  client beans now set their DEBUG-logging consumer this way; it used to run beside every consumer a customizer
+  added. `sessionUpdateConsumer` stays additive.
+
 ### Changed
 
 - **A supported Jackson floor, checked at startup: Jackson 2.18.1 or later for

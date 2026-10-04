@@ -103,6 +103,77 @@ class HostsAndProducersTest {
 	}
 
 	@Test
+	void anApplicationConsumerReplacesTheDebugLoggingDefault() {
+		org.jboss.logmanager.Logger logger = org.jboss.logmanager.LogContext.getLogContext()
+			.getLogger(AcpClientProducers.class.getName());
+		List<String> logged = new java.util.concurrent.CopyOnWriteArrayList<>();
+		java.util.logging.Handler handler = new java.util.logging.Handler() {
+			@Override
+			public void publish(java.util.logging.LogRecord record) {
+				logged.add(String.valueOf(record.getMessage()));
+			}
+
+			@Override
+			public void flush() {
+			}
+
+			@Override
+			public void close() {
+			}
+		};
+		handler.setLevel(java.util.logging.Level.ALL);
+		java.util.logging.Level level = logger.getLevel();
+		logger.setLevel(java.util.logging.Level.FINE);
+		logger.addHandler(handler);
+		try {
+			// Without an application consumer, the default logs each update at DEBUG.
+			promptWith(List.of());
+			assertThat(logged).anySatisfy(message -> assertThat(message).startsWith("Session update for"));
+
+			// With one, the default is replaced, not run beside it.
+			logged.clear();
+			List<AcpSchema.SessionNotification> received = new java.util.concurrent.CopyOnWriteArrayList<>();
+			promptWith(List.of(spec -> spec.sessionUpdateConsumer(notification -> {
+				received.add(notification);
+				return Mono.empty();
+			})));
+			assertThat(received).singleElement();
+			assertThat(logged).noneSatisfy(message -> assertThat(message).startsWith("Session update for"));
+		}
+		finally {
+			logger.removeHandler(handler);
+			logger.setLevel(level);
+		}
+	}
+
+	/** The client bean, customized, prompts an agent that sends one session update. */
+	private static void promptWith(
+			List<com.agentclientprotocol.sdk.quarkus.AcpClientCustomizer> customizers) {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		com.agentclientprotocol.sdk.agent.AcpSyncAgent agent = com.agentclientprotocol.sdk.agent.AcpAgent
+			.sync(pair.agentTransport())
+			.newSessionHandler(request -> new AcpSchema.NewSessionResponse("session-1", null, null))
+			.promptHandler((request, context) -> {
+				context.sendMessage("hello");
+				return AcpSchema.PromptResponse.endTurn();
+			})
+			.build();
+		agent.start();
+		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
+		AcpClientProducers producers = new AcpClientProducers(config);
+		AcpSyncClient client = producers.acpSyncClient(producers.acpAsyncClient(pair.clientTransport(), customizers));
+		try {
+			client.initialize();
+			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()));
+			client.prompt(new AcpSchema.PromptRequest("session-1", List.of(new AcpSchema.TextContent("hi"))));
+		}
+		finally {
+			client.close();
+			agent.closeGracefully();
+		}
+	}
+
+	@Test
 	void capabilitiesFollowTheConfiguration() {
 		AcpRuntimeConfig.Capabilities none = mock(AcpRuntimeConfig.Capabilities.class);
 		AcpSchema.ClientCapabilities nothing = AcpClientProducers.capabilities(none);

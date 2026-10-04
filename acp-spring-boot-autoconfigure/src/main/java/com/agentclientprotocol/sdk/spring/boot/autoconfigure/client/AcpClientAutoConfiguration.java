@@ -43,8 +43,9 @@ public class AcpClientAutoConfiguration {
 			.requestTimeout(properties.getRequestTimeout())
 			.clientCapabilities(clientCapabilities)
 			// Session updates always have a consumer, so the SDK does not warn about an
-			// unhandled session/update; an application adds its own through a customizer.
-			.sessionUpdateConsumer(AcpClientAutoConfiguration::logSessionUpdate);
+			// unhandled session/update. This one only logs at DEBUG; a consumer an
+			// application adds through a customizer replaces it.
+			.defaultSessionUpdateConsumer(AcpClientAutoConfiguration::logSessionUpdate);
 		Duration promptTimeout = properties.getPromptTimeout();
 		if (promptTimeout != null) {
 			spec.promptTimeout(promptTimeout);

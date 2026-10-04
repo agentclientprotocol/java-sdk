@@ -72,7 +72,8 @@ public class AcpClientProducers {
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, @All List<AcpClientCustomizer> customizers) {
 		AcpClient.AsyncSpec spec = AcpClient.async(transport)
 			.clientCapabilities(capabilities(config.client().capabilities()))
-			.sessionUpdateConsumer(AcpClientProducers::logSessionUpdate);
+			// Replaced by a consumer a customizer adds.
+			.defaultSessionUpdateConsumer(AcpClientProducers::logSessionUpdate);
 		config.client().requestTimeout().ifPresent(spec::requestTimeout);
 		config.client().promptTimeout().ifPresent(spec::promptTimeout);
 		customizers.forEach(customizer -> customizer.customize(spec));
