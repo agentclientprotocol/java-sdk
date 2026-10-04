@@ -40,8 +40,6 @@ import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 
 import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.CONTENT_TYPE_EVENT_STREAM;
 import static com.agentclientprotocol.sdk.agent.transport.StreamableHttpRouting.HEADER_CONNECTION_ID;
@@ -128,8 +126,6 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 	 */
 	private final transient ConcurrentMap<StreamableHttpConnection, Runnable> initializing = new ConcurrentHashMap<>();
 
-	private transient volatile @Nullable Scheduler keepAliveScheduler;
-
 	private transient volatile Consumer<Throwable> exceptionHandler = error -> logger
 		.error("Streamable HTTP ACP connection error", error);
 
@@ -186,11 +182,13 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 		if (interval.isZero() || keepAliveTask != null) {
 			return;
 		}
-		Scheduler scheduler = Schedulers.newSingle("acp-streamable-http-keepalive", true);
-		this.keepAliveScheduler = scheduler;
 		// A comment every interval keeps proxies from cutting idle streams and surfaces
-		// dead subscribers (the write fails) without waiting for the next real event.
-		this.keepAliveTask = Flux.interval(interval, interval, scheduler)
+		// dead subscribers (the write fails) without waiting for the next real event. Timed
+		// on the SDK's shared timer, and written off it, so a slow write cannot delay a
+		// timeout; no thread of the servlet's own.
+		this.keepAliveTask = Flux.interval(interval, interval, AcpSchedulers.timeouts())
+			.onBackpressureDrop()
+			.publishOn(AcpSchedulers.timeoutDelivery(), 1)
 			.subscribe(tick -> connections.values().forEach(connection -> {
 				try {
 					connection.keepAlive();
@@ -240,10 +238,6 @@ public class StreamableHttpAcpServlet extends HttpServlet {
 			Disposable task = this.keepAliveTask;
 			if (task != null) {
 				task.dispose();
-			}
-			Scheduler scheduler = this.keepAliveScheduler;
-			if (scheduler != null) {
-				scheduler.dispose();
 			}
 			List<StreamableHttpConnection> closingConnections = List.copyOf(connections.values());
 			connections.clear();

@@ -23,6 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The network transports can run on the application's executor.**
+  `StreamableHttpAcpClientTransportOptions.builder().executor(Executor)` runs the Streamable HTTP
+  client's work (the default `HttpClient`, handing over HTTP results, reading each SSE stream) on
+  that executor; `new WebSocketAcpClientTransport(URI, AcpJsonMapper, Executor)` runs the WebSocket
+  client's `HttpClient` and its frame writer on it; and
+  `StreamableHttpAcpAgentTransportOptions.builder().executor(Executor)` (JDK 21 and later) serves
+  the listener on Jetty's `VirtualThreadPool` with every task on it. None of them creates a pool of
+  its own then, and none shuts the executor down: the application owns it. A JDK `HttpClient` still
+  keeps its one selector thread, and Jetty's `VirtualThreadPool` parks one platform thread while
+  the listener runs.
+- **`virtualThreads(boolean)` on `StreamableHttpAcpClientTransportOptions.Builder` and
+  `StreamableHttpAcpAgentTransportOptions.Builder`** (default `true`): `false` keeps the
+  transport's platform-thread pools on every JDK, for an application that has not opted into
+  virtual threads.
+
 - **Micronaut: `acp.client.capabilities.elicitation-form`, `elicitation-url` and
   `boolean-config-options`** (default `false`), as Spring Boot and Quarkus already offer. The
   Micronaut client configuration hard-coded the three as not advertised, so a Micronaut client
@@ -383,6 +398,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added. `sessionUpdateConsumer` stays additive.
 
 ### Changed
+
+- **The network transports use virtual threads by default on JDK 21 and later.** Without an
+  executor, the Streamable HTTP client runs its work on a virtual thread per task
+  (`acp-streamable-http`) instead of its three bounded pools (`acp-streamable-http-client`,
+  `-signal`, `-sse`); the WebSocket client runs its `HttpClient` and its writer on virtual threads
+  (`acp-ws-client`) instead of a cached pool and the `acp-ws-client-outbound` thread; and the
+  listener serves on Jetty's `VirtualThreadPool` (`acp-listener-*`) with its timer on a virtual
+  thread, instead of `qtp*` and `Scheduler-*` platform threads. The choice is made at run time;
+  JDK 17 keeps the pools. `httpWorkerThreads`, `httpSignalThreads` and `httpQueueCapacity` now
+  size only those pools, and `maxSseStreams` still bounds the streams. The same JDK 21 to 23
+  `synchronized` pinning caveat applies (fixed in JDK 24, JEP 491). Migration: none; set
+  `virtualThreads(false)` on either options builder to keep the platform pools on JDK 21.
+- **The servlet's SSE keep-alive no longer has a thread of its own.** Each
+  `StreamableHttpAcpServlet` (and so each listener) started a daemon thread
+  (`acp-streamable-http-keepalive`) for its keep-alive comments; they are now timed on the SDK's
+  shared timer and written off it. Migration: none.
+- **`StreamableHttpAcpAgentTransportOptions`' canonical constructor takes two more components**,
+  `executor` and `virtualThreads`, and the client options' canonical constructor takes them too;
+  the client options keep their four-argument constructor. Migration: build the listener options
+  with `StreamableHttpAcpAgentTransportOptions.builder()`, or pass `null, true` for the new
+  components.
 
 - **Synchronous handlers run on virtual threads by default on JDK 21 and later.** A sync agent or
   client built without `handlerExecutor(..)` (and `AcpAgentSupport` without one) ran its handlers

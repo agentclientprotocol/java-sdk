@@ -9,9 +9,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
@@ -25,7 +27,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * One open Server-Sent Events stream of a Streamable HTTP client: reads its events on a
- * thread of its own, turns each into a JSON-RPC message, and hands it to the
+ * thread of the transport's executor, held while the stream is open, turns each into a JSON-RPC message, and hands it to the
  * {@link Listener}. Reconnecting is the listener's business; the stream only reports that
  * it ended without being closed.
  */
@@ -101,15 +103,32 @@ final class SseStream {
 	}
 
 	/**
-	 * Starts reading on {@code executor}, whose threads bound the number of open streams.
-	 * @throws AcpConnectionException when every thread already reads a stream; the stream
-	 * is closed
+	 * Starts reading on a thread of {@code executor}, holding one of {@code permits} until the
+	 * read ends: the permits bound the number of open streams.
+	 * @throws AcpConnectionException when no permit is left, or the executor refuses the
+	 * reader; the stream is closed
 	 */
-	void start(ExecutorService executor, int maxStreams) {
+	void start(Executor executor, Semaphore permits, int maxStreams) {
+		if (!permits.tryAcquire()) {
+			close();
+			throw new AcpConnectionException("Maximum active SSE streams exceeded: " + maxStreams);
+		}
+		FutureTask<Void> task = new FutureTask<>(this::readLoop, null);
+		this.readerTask = task;
 		try {
-			this.readerTask = executor.submit(this::readLoop);
+			// The permit is released outside the FutureTask: a reader cancelled before it
+			// runs never enters readLoop, but still returns its permit.
+			executor.execute(() -> {
+				try {
+					task.run();
+				}
+				finally {
+					permits.release();
+				}
+			});
 		}
 		catch (RejectedExecutionException e) {
+			permits.release();
 			close();
 			throw new AcpConnectionException("Maximum active SSE streams exceeded: " + maxStreams, e);
 		}

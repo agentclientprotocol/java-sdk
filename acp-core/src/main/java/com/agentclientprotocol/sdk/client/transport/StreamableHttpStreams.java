@@ -8,7 +8,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +51,14 @@ final class StreamableHttpStreams {
 
 	private final AcpJsonMapper jsonMapper;
 
-	private final ExecutorService sseExecutor;
+	/** Runs the stream readers: the application's executor, or the transport's own pool. */
+	private final Executor sseExecutor;
+
+	/** The pool this transport created for the readers, shut down on clear; else null. */
+	private final @Nullable ExecutorService ownedSseExecutor;
+
+	/** One per open stream; bounds the streams on whichever executor reads them. */
+	private final Semaphore sseStreamPermits;
 
 	private final int maxSseStreams;
 
@@ -78,14 +87,23 @@ final class StreamableHttpStreams {
 	}
 
 	StreamableHttpStreams(StreamableHttpRequests requests, StreamableHttpRoutes routes, AcpJsonMapper jsonMapper,
-			int maxSseStreams, Owner owner) {
+			int maxSseStreams, @Nullable Executor executor, Owner owner) {
 		this.requests = requests;
 		this.routes = routes;
 		this.jsonMapper = jsonMapper;
 		this.maxSseStreams = maxSseStreams;
-		this.sseExecutor = new ThreadPoolExecutor(maxSseStreams, maxSseStreams, 0, TimeUnit.MILLISECONDS,
-				new SynchronousQueue<>(), StreamableHttpRequests.daemonThreadFactory("acp-streamable-http-sse"),
-				new ThreadPoolExecutor.AbortPolicy());
+		this.sseStreamPermits = new Semaphore(maxSseStreams);
+		if (executor != null) {
+			this.sseExecutor = executor;
+			this.ownedSseExecutor = null;
+		}
+		else {
+			ExecutorService own = new ThreadPoolExecutor(maxSseStreams, maxSseStreams, 0, TimeUnit.MILLISECONDS,
+					new SynchronousQueue<>(), StreamableHttpRequests.daemonThreadFactory("acp-streamable-http-sse"),
+					new ThreadPoolExecutor.AbortPolicy());
+			this.sseExecutor = own;
+			this.ownedSseExecutor = own;
+		}
 		this.onFailure = owner.onFailure();
 		this.listener = new SseStream.Listener() {
 
@@ -200,7 +218,7 @@ final class StreamableHttpStreams {
 	}
 
 	private void start(SseStream stream) {
-		stream.start(sseExecutor, maxSseStreams);
+		stream.start(sseExecutor, sseStreamPermits, maxSseStreams);
 	}
 
 	/**
@@ -276,13 +294,15 @@ final class StreamableHttpStreams {
 		sessionStreams.values().forEach(SseStream::close);
 	}
 
-	/** Closes and forgets every stream and stops the reader threads. */
+	/** Closes and forgets every stream and stops the reader threads the transport owns. */
 	void clear() {
 		Optional.ofNullable(connectionStream.getAndSet(null)).ifPresent(SseStream::close);
 		sessionStreams.values().forEach(SseStream::close);
 		sessionStreams.clear();
 		sessionStreamOpenOperations.clear();
-		sseExecutor.shutdownNow();
+		if (ownedSseExecutor != null) {
+			ownedSseExecutor.shutdownNow();
+		}
 	}
 
 }

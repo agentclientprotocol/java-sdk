@@ -58,10 +58,14 @@ import reactor.core.publisher.Sinks;
  * <p>The default HTTP client asks for HTTP/2. Over {@code https} it negotiates it; over plain
  * {@code http} the transport first sends a bodiless GET so that a server that speaks
  * cleartext HTTP/2 (h2c) can upgrade the connection, and uses HTTP/1.1 for every request when
- * the server does not. The default client keeps cookies in a cookie manager of its own and
- * runs on a bounded pool of daemon threads; {@link StreamableHttpAcpClientTransportOptions}
- * sets its sizes and the number of SSE streams. Pass an {@link HttpClient} of your own for TLS,
- * proxy or authentication settings.
+ * the server does not. The default client keeps cookies in a cookie manager of its own.
+ *
+ * <p>On JDK 21 and later the transport's work (the default client's, handing over HTTP
+ * results, and reading each SSE stream) runs on a virtual thread per task; before, on bounded
+ * pools of daemon threads, which {@link StreamableHttpAcpClientTransportOptions} sizes. The
+ * options also set the number of SSE streams, or name an executor of the application's that the
+ * work runs on instead. Either way the JDK's {@link HttpClient} keeps one selector thread of its
+ * own. Pass an {@link HttpClient} of your own for TLS, proxy or authentication settings.
  *
  * <p>{@link #closeGracefully()} closes the streams and sends {@code DELETE} for the connection,
  * waiting at most five seconds for the answer; {@link #close()} does the same and blocks for up
@@ -130,11 +134,11 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 
 	/**
 	 * Creates a transport for the endpoint at {@code endpointUri}, with the default HTTP client
-	 * sized by {@code options}.
+	 * sized by {@code options}, or running on the options' executor when it is set.
 	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
 	 * its path
 	 * @param jsonMapper the mapper that reads and writes the messages
-	 * @param options the transport's limits
+	 * @param options the transport's limits and executor
 	 * @throws IllegalArgumentException if an argument is null or the URI's scheme is not
 	 * {@code http} or {@code https}
 	 */
@@ -161,8 +165,9 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	/**
 	 * Creates a transport for the endpoint at {@code endpointUri} that sends its requests with
 	 * {@code httpClient} and has the limits of {@code options}. The options' worker threads
-	 * size only the default client, so they do not apply here. The transport does not close
-	 * the client or its executor.
+	 * size only the default client, so they do not apply here; their executor, when set, still
+	 * runs the transport's own work (handing over results and reading the SSE streams). The
+	 * transport does not close the client or its executor.
 	 * @param endpointUri the agent's endpoint: an {@code http} or {@code https} URI including
 	 * its path
 	 * @param jsonMapper the mapper that reads and writes the messages
@@ -173,7 +178,7 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 	 */
 	public StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClient httpClient,
 			StreamableHttpAcpClientTransportOptions options) {
-		this(endpointUri, jsonMapper, new HttpClientBundle(httpClient, null), options);
+		this(endpointUri, jsonMapper, bundle(httpClient, options), options);
 	}
 
 	private StreamableHttpAcpClientTransport(URI endpointUri, AcpJsonMapper jsonMapper, HttpClientBundle bundle,
@@ -190,10 +195,15 @@ public class StreamableHttpAcpClientTransport implements AcpClientTransport {
 		this.jsonMapper = jsonMapper;
 		this.requests = new StreamableHttpRequests(endpointUri, bundle, options);
 		this.routes = new StreamableHttpRoutes(jsonMapper);
-		this.streams = new StreamableHttpStreams(requests, routes, jsonMapper, options.maxSseStreams(),
+		this.streams = new StreamableHttpStreams(requests, routes, jsonMapper, options.maxSseStreams(), bundle.workExecutor(),
 				new StreamableHttpStreams.Owner(this::processInbound, closing::get, this::terminateAfterSseFailure,
 						error -> this.exceptionHandler.accept(error), this::answerUnreadable));
 		this.inbound = new StreamableHttpInbound(routes, streams, jsonMapper);
+	}
+
+	private static HttpClientBundle bundle(HttpClient httpClient, StreamableHttpAcpClientTransportOptions options) {
+		Assert.notNull(options, "The transport options can not be null");
+		return HttpClientBundle.of(httpClient, options);
 	}
 
 	private static HttpClientBundle createDefaultHttpClient(StreamableHttpAcpClientTransportOptions options) {
