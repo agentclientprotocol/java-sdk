@@ -47,10 +47,11 @@ import org.jspecify.annotations.Nullable;
  * {@link com.agentclientprotocol.sdk.error.AcpTimeoutException AcpTimeoutException}. This class
  * does not extend {@link com.agentclientprotocol.sdk.error.AcpException AcpException}.
  *
- * <p>A handler that lets an {@code AcpError} escape does not pass the peer's error on: like any
- * exception other than {@code AcpProtocolException}, it is answered {@code -32603} ("Internal
- * error"). To pass the error on unchanged, throw {@code e.getError().toException()}
- * (see {@link AcpSchema.JSONRPCError#toException()}).
+ * <p>A handler that lets an {@code AcpError} escape answers its own request with the error this
+ * exception carries, unchanged: the peer's code, message and data, or for a rejected response the
+ * SDK's {@code -32603} and data. So a handler that calls the other side and has nothing to add
+ * just lets the failure propagate. To answer with a different error, catch it and throw an
+ * {@link com.agentclientprotocol.sdk.error.AcpProtocolException} instead.
  *
  * <p>{@link #getMessage()} is the peer's message, followed by the detail its data carries, if any;
  * for a rejected response it is the SDK's message alone. It leaves out the code, which

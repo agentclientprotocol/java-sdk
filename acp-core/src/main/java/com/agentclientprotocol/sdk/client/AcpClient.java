@@ -77,8 +77,9 @@ import reactor.core.scheduler.Schedulers;
  * last of those updates, and must not block; synchronous handlers run on the executor given to
  * {@link SyncSpec#handlerExecutor}, by default a pool of daemon threads the SDK shares between all
  * synchronous clients in the JVM. A handler that fails is answered with an error: an
- * {@link AcpProtocolException} with its own code, anything else with {@code -32603} (internal
- * error).
+ * {@link AcpProtocolException} with its own code, an {@code AcpError} from a call to the agent
+ * with the error it carries, anything else with {@code -32603} (internal error, message
+ * "Internal error").
  *
  * <h2>Session updates and ordering</h2>
  *

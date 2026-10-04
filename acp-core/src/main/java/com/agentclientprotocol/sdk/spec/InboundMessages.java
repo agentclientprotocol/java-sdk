@@ -89,7 +89,8 @@ final class InboundMessages {
 
 	/**
 	 * The response to a request whose handling failed: an {@link AcpProtocolException} keeps
-	 * its code, message and data (it is the handler's intended answer), a cancellation
+	 * its code, message and data (it is the handler's intended answer), an {@link AcpError}
+	 * that escaped the handler passes on the error it carries unchanged, a cancellation
 	 * ({@link #isCancellation}) is the handler cancelling its own work (ACP v1 internal
 	 * cancellation: the same {@code -32800} as a cancel from the caller), anything else is an
 	 * internal error with the generic message {@value #INTERNAL_ERROR_MESSAGE}: an exception's
@@ -111,6 +112,12 @@ final class InboundMessages {
 		if (error instanceof AcpProtocolException protocolException) {
 			return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null,
 					AcpSchema.JSONRPCError.from(protocolException));
+		}
+		if (error instanceof AcpError peerError) {
+			// A request the handler made failed and the handler let it escape: the peer's
+			// error is passed on as it is, code, message and data.
+			LOGGER.debug("The {} handler let a peer error escape; passed on {}", request.method(), peerError.getCode());
+			return new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, request.id(), null, peerError.getError());
 		}
 		if (isCancellation(error)) {
 			String message = error.getMessage();

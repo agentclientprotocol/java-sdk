@@ -152,4 +152,28 @@ class HandlerFailureAnswerTest {
 		assertThat(error.getData()).isEqualTo(Map.of("id", 7));
 	}
 
+	@Test
+	void aPeerErrorThatEscapesAHandlerPassesThePeersCodeMessageAndDataOn() {
+		// The agent's handler asks the client for something the client does not serve, and
+		// lets the client's -32601 escape.
+		connect(agent().extRequestHandler("_x/proxy",
+				params -> agentRef.get().sendExtRequest("_client/missing", Map.of())), clientSpec());
+
+		AcpError error = failure(() -> client.sendExtRequest("_x/proxy", Map.of()).block(TIMEOUT));
+
+		assertThat(error.getCode()).isEqualTo(AcpErrorCodes.METHOD_NOT_FOUND);
+		assertThat(error.getError().message()).contains("_client/missing");
+	}
+
+	@Test
+	void aPeerErrorWithDataThatEscapesAHandlerKeepsItsData() {
+		AcpSchema.JSONRPCError peerError = new AcpSchema.JSONRPCError(AcpErrorCodes.RESOURCE_NOT_FOUND,
+				"Resource not found", Map.of("uri", "file:///missing.txt"));
+		connect(agent().extRequestHandler("_x/proxy", params -> Mono.error(new AcpError(peerError))), clientSpec());
+
+		AcpError error = failure(() -> client.sendExtRequest("_x/proxy", Map.of()).block(TIMEOUT));
+
+		assertThat(error.getError()).isEqualTo(peerError);
+	}
+
 }

@@ -124,7 +124,8 @@ public interface AcpInterceptor {
 	 * Called when {@code preInvoke}, an argument resolver, the handler method or the return value
 	 * handler threw. Return null to leave the failure as it is: if every interceptor does, a
 	 * request's client receives the error the exception maps to ({@code AcpProtocolException} keeps
-	 * its code, anything else is an internal error, {@code -32603}). Return a replacement to answer
+	 * its code, an {@code AcpError} from a call to the client passes that error on, anything else
+	 * is an internal error, {@code -32603}). Return a replacement to answer
 	 * with it instead; the remaining interceptors' {@code onError} are then not called. A
 	 * replacement is used as the result as it is, without a return value handler, so for a request
 	 * it must be the method's response, such as a {@code PromptResponse}; another type is answered

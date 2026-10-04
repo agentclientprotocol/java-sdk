@@ -606,9 +606,8 @@ public final class AcpSchema {
 
 		/**
 		 * Returns this error as an {@link AcpProtocolException} with the same code, message and
-		 * data, for example so a proxy's handler can throw an error it received and pass it on
-		 * unchanged. The SDK does not use it for the errors it receives: the caller of a failed
-		 * request gets an {@link AcpError}.
+		 * data. The SDK does not use it for the errors it receives: the caller of a failed request
+		 * gets an {@link AcpError}, which a handler can let escape to pass the error on as it is.
 		 * @return a protocol exception carrying this error's code, message and data
 		 */
 		public AcpProtocolException toException() {
