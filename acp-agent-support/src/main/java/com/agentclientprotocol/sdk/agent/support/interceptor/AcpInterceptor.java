@@ -29,7 +29,8 @@ import org.jspecify.annotations.Nullable;
  *   {@link #onError}, in reverse order, on each interceptor whose {@code preInvoke} returned
  *   {@code true}, until one returns a replacement result or throws.</li>
  *   <li>{@link #afterCompletion}, in reverse order, on each interceptor whose {@code preInvoke}
- *   returned {@code true}, once, however the call ended.</li>
+ *   returned {@code true}, once, however the call ended, with the exception it failed with, if
+ *   any.</li>
  * </ol>
  *
  * <p>Interceptors see every handler method call, extension methods and the {@code session/cancel}
@@ -51,7 +52,7 @@ import org.jspecify.annotations.Nullable;
  *     }
  *
  *     @Override
- *     public void afterCompletion(AcpInvocationContext context) {
+ *     public void afterCompletion(AcpInvocationContext context, Throwable ex) {
  *         long start = context.getAttribute("start", Long.class).orElseThrow();
  *         long millis = (System.nanoTime() - start) / 1_000_000;
  *         log.log(System.Logger.Level.INFO, "{0} took {1} ms", context.getAcpMethod(), millis);
@@ -153,14 +154,18 @@ public interface AcpInterceptor {
 	/**
 	 * Called once at the end of every call in which this interceptor's {@code preInvoke} returned
 	 * {@code true}, however the call ended: answered, failed, or stopped by a later interceptor.
-	 * Use it to release what {@code preInvoke} took, such as a timer or a logging context. It
-	 * receives neither the result nor the exception; save them as context attributes in
-	 * {@link #postInvoke} or {@link #onError} if you need them. An exception thrown here is logged
-	 * and ignored.
+	 * Use it to release what {@code preInvoke} took, such as a timer or a logging context, and to
+	 * record how the call ended, such as a span's status or a failure metric. {@code ex} is what
+	 * the call failed with: what a step threw, or what an {@link #onError} threw in its place. It
+	 * is null when the call produced a result, when an {@code onError} returned a replacement, and
+	 * when a {@code preInvoke} returned {@code false}. It does not receive the result; save it as
+	 * a context attribute in {@link #postInvoke} if you need it. An exception thrown here is
+	 * logged and ignored.
 	 * @implSpec Does nothing.
 	 * @param context the call's context
+	 * @param ex the exception the call failed with, or null if it did not fail
 	 */
-	default void afterCompletion(AcpInvocationContext context) {
+	default void afterCompletion(AcpInvocationContext context, @Nullable Throwable ex) {
 		// Default: no-op
 	}
 

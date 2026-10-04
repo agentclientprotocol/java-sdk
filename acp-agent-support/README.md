@@ -330,12 +330,15 @@ public class LoggingInterceptor implements AcpInterceptor {
     @Override
     public Object onError(AcpInvocationContext context, Throwable error) {
         log.error("Error in {}: {}", context.getAcpMethod(), error.getMessage());
-        return null;  // Return null to re-throw, or return a replacement value
+        // Return null to keep the failure, return a replacement response, or throw an
+        // AcpProtocolException to answer with that JSON-RPC error instead
+        return null;
     }
 
     @Override
-    public void afterCompletion(AcpInvocationContext context) {
-        // Always called, even if exceptions occur
+    public void afterCompletion(AcpInvocationContext context, Throwable ex) {
+        // Called once for each call whose preInvoke returned true, however it ended;
+        // ex is what the call failed with, or null
     }
 
     @Override

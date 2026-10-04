@@ -446,7 +446,7 @@ class AcpAgentSupportTest {
 			}
 
 			@Override
-			public void afterCompletion(AcpInvocationContext context) {
+			public void afterCompletion(AcpInvocationContext context, Throwable ex) {
 				completions.computeIfAbsent(context.getAcpMethod(), m -> new AtomicInteger()).incrementAndGet();
 			}
 		};

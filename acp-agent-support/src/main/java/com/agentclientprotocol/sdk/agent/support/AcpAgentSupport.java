@@ -501,6 +501,7 @@ public class AcpAgentSupport implements AutoCloseable {
 				.build();
 
 		InterceptorChain chain = new InterceptorChain(interceptors);
+		@Nullable Throwable failure = null;
 
 		try {
 			if (!chain.applyPreInvoke(context)) {
@@ -512,17 +513,29 @@ public class AcpAgentSupport implements AutoCloseable {
 			return (returnType != null) ? returnValueHandlers.handleReturnValue(result, returnType, context) : result;
 		}
 		catch (Exception e) {
-			Object replacement = onError(chain, context, e);
+			Object replacement;
+			try {
+				replacement = onError(chain, context, e);
+			}
+			catch (RuntimeException thrown) {
+				failure = thrown;
+				throw thrown;
+			}
 			if (replacement != null) {
 				return replacement;
 			}
+			failure = e;
 			if (e instanceof RuntimeException re) {
 				throw re;
 			}
 			throw new RuntimeException(e);
 		}
+		catch (Error e) {
+			failure = e;
+			throw e;
+		}
 		finally {
-			chain.triggerAfterCompletion(context, null);
+			chain.triggerAfterCompletion(context, failure);
 		}
 	}
 

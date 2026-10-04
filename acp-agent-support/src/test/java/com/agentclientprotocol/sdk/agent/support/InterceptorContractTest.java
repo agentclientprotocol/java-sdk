@@ -199,6 +199,47 @@ class InterceptorContractTest {
 			.getCode()).isEqualTo(AcpErrorCodes.AUTHENTICATION_REQUIRED);
 	}
 
+	@Test
+	void afterCompletionReceivesTheFailureOrNull() {
+		Map<String, Object> endings = new ConcurrentHashMap<>();
+		AcpInterceptor recorder = new AcpInterceptor() {
+			@Override
+			public void afterCompletion(AcpInvocationContext context, Throwable ex) {
+				endings.put(context.getAcpMethod(), (ex != null) ? ex : "none");
+			}
+		};
+		AcpAsyncClient client = connect(AcpAgentSupport.create(new FailingAgent()).interceptor(recorder));
+
+		client.sendExtRequest("_test/ok", Map.of()).block(TIMEOUT);
+		failure(() -> prompt(client));
+
+		assertThat(endings).containsEntry("_test/ok", "none");
+		assertThat(endings.get(AcpSchema.METHOD_SESSION_PROMPT)).isInstanceOf(AcpProtocolException.class)
+			.hasFieldOrPropertyWithValue("code", AcpErrorCodes.RESOURCE_NOT_FOUND);
+	}
+
+	@Test
+	void afterCompletionReceivesTheExceptionOnErrorThrew() {
+		AcpProtocolException mapped = new AcpProtocolException(AcpErrorCodes.INVALID_PARAMS, "mapped");
+		Map<String, Object> endings = new ConcurrentHashMap<>();
+		AcpInterceptor interceptor = new AcpInterceptor() {
+			@Override
+			public Object onError(AcpInvocationContext context, Throwable ex) {
+				throw mapped;
+			}
+
+			@Override
+			public void afterCompletion(AcpInvocationContext context, Throwable ex) {
+				endings.put(context.getAcpMethod(), (ex != null) ? ex : "none");
+			}
+		};
+		AcpAsyncClient client = connect(AcpAgentSupport.create(new FailingAgent()).interceptor(interceptor));
+
+		failure(() -> prompt(client));
+
+		assertThat(endings.get(AcpSchema.METHOD_SESSION_PROMPT)).isSameAs(mapped);
+	}
+
 	/** Records each step it sees as "step name method". */
 	static class Recording implements AcpInterceptor {
 
@@ -232,7 +273,7 @@ class InterceptorContractTest {
 		}
 
 		@Override
-		public void afterCompletion(AcpInvocationContext context) {
+		public void afterCompletion(AcpInvocationContext context, Throwable ex) {
 			calls.add("afterCompletion " + name + (AcpSchema.METHOD_SESSION_NEW.equals(context.getAcpMethod())
 					? " " + context.getAcpMethod() : ""));
 		}
