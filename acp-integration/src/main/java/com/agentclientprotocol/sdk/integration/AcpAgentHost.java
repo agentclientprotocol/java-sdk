@@ -17,19 +17,31 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * One agent on one transport: stdio, or an application's own transport. Starting, stopping and
- * the end of the transport are the SDK's own lifecycle: {@link AcpAgentSupport#start()}, its
- * {@link AcpAgentSupport#close() AutoCloseable close} (graceful, bounded, then at once) and its
- * agent's {@code awaitTermination()}.
+ * The {@link AcpHost} for one agent on one transport: stdio, or a transport bean the application
+ * provides (an in-memory transport in tests, for one). Build the agent with
+ * {@link AcpAgents#builder}, set its transport ({@link AcpAgentTransports#stdio()}), build it,
+ * and give it to this host with the action to run when the client ends the transport. For the
+ * SDK's HTTP and WebSocket listener, which serves many clients, use {@link AcpListenerHost}.
  *
- * <p>
- * When the transport ends by itself (for stdio: the client closed the agent's input and every
- * answer has been written), the agent has no one left to serve, and the host runs the
- * {@code onTransportEnd} action the framework gave it, typically "close my container". That
- * action is latched: it runs at most once, on a thread of the host's own (never the transport's,
- * since closing the container stops this host, which closes the transport), also when the
- * transport ended before anyone looked, and never when the host itself stopped the agent.
- * </p>
+ * <p>The host drives the SDK's own lifecycle: {@link #start()} calls
+ * {@link AcpAgentSupport#start()}; a stop runs {@link AcpAgentSupport#close()} (graceful, at most
+ * about 10 seconds, then at once) on a daemon thread named {@code acp-agent-stop}, and
+ * {@link #stop(Duration)} closes the agent at once when that does not finish within its timeout.
+ * {@link #termination()} follows the agent's {@code awaitTermination()}, and completes normally
+ * also when the transport ended with an error. {@link #port()} is always empty.
+ *
+ * <p>When the transport ends by itself (for stdio: the client closed the agent's input and
+ * every answer has been written), the agent has no one left to serve, and the host runs
+ * {@code onTransportEnd}, typically "close my container" or "exit the application". The host
+ * runs it at most once, on a new non-daemon thread named {@code acp-agent-transport-end}, never
+ * on a transport thread: closing the container stops this host, which closes the transport, and
+ * the JVM waits for the action to finish. It also runs when the transport ended before the host
+ * started or saw it, and it does not run when the host's own stop ended the transport. The
+ * host itself never reads {@link AcpAgentSettings#shutdownOnTransportEnd()}: when that setting
+ * is false, the framework passes an action that does nothing.
+ *
+ * <p>The host is safe for use from several threads; {@link #start()} and the stop methods
+ * share one lock.
  */
 public final class AcpAgentHost implements AcpHost {
 
@@ -55,10 +67,12 @@ public final class AcpAgentHost implements AcpHost {
 	private @Nullable CompletableFuture<@Nullable Void> stopped;
 
 	/**
-	 * A host for an agent built on its transport.
-	 * @param agent the agent
-	 * @param onTransportEnd what to do when the transport ends by itself, such as closing the
-	 * container; fixed here, so no end is missed
+	 * Creates a host for an agent built on its transport, not yet started. The host watches the
+	 * agent's termination from here on, so the action is fixed now and no end of the transport is
+	 * missed, even one before {@link #start()}.
+	 * @param agent the agent, built with its transport and not started
+	 * @param onTransportEnd what to run once when the transport ends by itself, such as closing
+	 * the container; an action that does nothing when the application should keep running
 	 */
 	public AcpAgentHost(AcpAgentSupport agent, Runnable onTransportEnd) {
 		this.agent = agent;

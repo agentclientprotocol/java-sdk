@@ -16,14 +16,22 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The client transport {@link AcpClientSettings} describe. The rule, the same in every framework:
+ * Creates the client transport the {@link AcpClientSettings} describe, by one rule that every
+ * framework applies, so the same configuration selects the same transport everywhere:
  * <ul>
- * <li>an explicit {@code transport.type} wins, and fails without its command or URI;</li>
+ * <li>an explicit {@code transport.type} wins, and fails when its command or URI is missing;</li>
  * <li>otherwise exactly one of {@code transport.stdio.command}, {@code transport.websocket.uri}
- * and {@code transport.http.uri} selects the transport; more than one fails, naming them;</li>
- * <li>with none, there is no transport (a client-only application that configures no client, or
- * an agent-only one).</li>
+ * and {@code transport.http.uri} selects the transport, and setting more than one fails, naming
+ * the transports found and the {@code transport.type} key that chooses one;</li>
+ * <li>with none, there is no transport, and the framework creates no client: an agent-only
+ * application, or one that configures no client.</li>
  * </ul>
+ *
+ * <p>Pass the framework's property prefix, such as {@code quarkus.acp.client}, so the error
+ * messages name the keys the user wrote. The stdio transport starts the agent process with the
+ * settings' arguments and added environment; the WebSocket transport uses the settings' connect
+ * timeout; each transport uses the default JSON mapper. A transport is not connected here:
+ * building the client on it does that, and one transport serves one client.
  */
 public final class AcpClientTransports {
 
@@ -34,10 +42,11 @@ public final class AcpClientTransports {
 	}
 
 	/**
-	 * The transport the settings describe, naming {@code acp.client.*} keys in errors.
+	 * Returns the transport the settings describe, as {@link #create(AcpClientSettings, String)}
+	 * does, with errors that name {@code acp.client.*} keys.
 	 * @param settings the client settings
 	 * @return the transport, or empty when no transport is configured
-	 * @throws IllegalStateException when several transports are configured with no type, or the
+	 * @throws IllegalStateException if several transports are configured with no type, or the
 	 * type lacks its command or URI
 	 */
 	public static Optional<AcpClientTransport> create(AcpClientSettings settings) {
@@ -45,13 +54,15 @@ public final class AcpClientTransports {
 	}
 
 	/**
-	 * The transport the settings describe.
+	 * Returns the transport the settings describe, by the rule above. Empty exactly when
+	 * {@link AcpClientSettings#hasTransport()} is false.
 	 * @param settings the client settings
 	 * @param prefix the framework's prefix of the client keys, such as {@code spring.acp.client},
 	 * which error messages name
-	 * @return the transport, or empty when no transport is configured
-	 * @throws IllegalStateException when several transports are configured with no type, or the
-	 * type lacks its command or URI
+	 * @return the transport, not connected, or empty when no transport is configured
+	 * @throws IllegalStateException if several transports are configured with no type (the
+	 * message names {@code <prefix>.transport.type}), or the type lacks its command or URI (the
+	 * message names the missing key)
 	 */
 	public static Optional<AcpClientTransport> create(AcpClientSettings settings, String prefix) {
 		AcpTransportType type = type(settings, prefix);

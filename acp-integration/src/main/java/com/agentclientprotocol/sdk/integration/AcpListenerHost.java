@@ -15,10 +15,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The SDK's Streamable HTTP listener ({@code acp-streamable-http-jetty}, on its own port; HTTP/1.1,
- * cleartext HTTP/2 and WebSocket upgrades on one path), serving one agent per connection. It ends
- * only when stopped: a listener serves many clients, so no client leaving ends it. Create the
- * listener with {@link AcpListeners#listener}.
+ * The {@link AcpHost} for the SDK's own Streamable HTTP listener from
+ * {@code acp-streamable-http-jetty}: a Jetty server on its own port that serves HTTP/1.1,
+ * cleartext HTTP/2 and WebSocket upgrades on one path, with one agent per connection. Use it when
+ * the agent is served over {@code http} or {@code websocket} and the framework has no Servlet
+ * container to mount the SDK's servlet in (then see {@link AcpServletHost}). Create the listener
+ * with {@link AcpListeners#listener}, after checking {@link AcpListeners#isListenerAvailable()}.
+ * For one agent on stdio, use {@link AcpAgentHost}.
+ *
+ * <p>How it differs from {@link AcpAgentHost}: there is no transport-end action, because the
+ * listener ends only when stopped; a listener serves many clients, so no client leaving ends it.
+ * Nor is {@link #holdJvmUntilTermination()} needed: Jetty's threads are not daemons and keep the
+ * JVM running until the stop. {@link #start()} binds the port and waits for it at most 30
+ * seconds, holding the host's lock meanwhile, so a stop that arrives during the start waits for
+ * the start to return. {@link #port()} then gives the bound port, the way to learn the port
+ * chosen for port 0. A stop closes every connection as
+ * {@code StreamableHttpAcpAgentTransport.closeGracefully()} does, bounded by the endpoint's
+ * shutdown timeout (5 seconds unless {@link AcpAgentSettings.Limits#shutdownTimeout()} sets one).
+ * {@link #stop(Duration)} has nothing faster to fall back on: when its timeout passes, it returns
+ * while that close goes on. {@link #termination()} completes when the listener has stopped.
+ *
+ * <p>The host is safe for use from several threads.
  */
 public final class AcpListenerHost implements AcpHost {
 
@@ -38,14 +55,23 @@ public final class AcpListenerHost implements AcpHost {
 	private @Nullable CompletableFuture<@Nullable Void> stopped;
 
 	/**
-	 * A host for the listener.
-	 * @param listener the listener, not started
+	 * Creates a host for the listener, not yet started.
+	 * @param listener the listener from {@link AcpListeners#listener}, not started
 	 */
 	public AcpListenerHost(StreamableHttpAcpAgentTransport listener) {
 		this.listener = listener;
 		this.termination = listener.awaitTermination().toFuture();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Binds the listener's port, waiting at most 30 seconds, and logs the port at INFO. A
+	 * listener whose start failed cannot be started again.
+	 * @throws IllegalStateException if the listener does not start within 30 seconds
+	 * @throws RuntimeException if the server cannot start, for example because the port is in
+	 * use; a checked cause such as a {@code BindException} arrives wrapped
+	 */
 	@Override
 	public void start() {
 		synchronized (lock) {

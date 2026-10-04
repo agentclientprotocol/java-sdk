@@ -12,15 +12,21 @@ import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTranspo
 import org.jspecify.annotations.Nullable;
 
 /**
- * How the application's {@code @AcpAgent} is served, whatever framework hosts it. A framework
- * binds its own configuration onto a {@link #builder()} (or, from plain key/value configuration,
- * calls {@link #from(SettingsSource, String)}); a value left unset keeps the SDK's default, so
- * no default is decided twice.
+ * How the application's {@code @AcpAgent} is served, in a form every framework shares: whether it
+ * is served, its timeouts, what happens when stdio ends, the transport, and the HTTP endpoint's
+ * path, port and limits. The framework binds its own configuration onto a {@link #builder()}
+ * (Spring Boot and Micronaut {@code @ConfigurationProperties}, Quarkus {@code @ConfigMapping}), or
+ * reads plain key/value configuration with {@link #from(SettingsSource, String)}, and hands the
+ * result to {@link AcpAgents#builder} and {@link AcpListeners}.
+ *
+ * <p>A value left unset (null) keeps the SDK's default, so no default is decided twice: the
+ * framework passes on only what the user wrote. The keys, under the framework's prefix (such as
+ * {@code spring.acp.agent}), and their defaults:
  *
  * <pre>
  * enabled                                               true
- * request-timeout                                       SDK default (agent-to-client requests)
- * cancel-grace-period                                   SDK default
+ * request-timeout                                       SDK default, 60s (agent-to-client requests)
+ * cancel-grace-period                                   SDK default, 60s
  * max-prompt-duration                                   SDK default (none)
  * shutdown-on-transport-end                             true
  * transport.type                                        stdio | http | websocket (same as http)
@@ -32,30 +38,36 @@ import org.jspecify.annotations.Nullable;
  * transport.http.listener.max-concurrent-streams-per-connection   SDK default
  * </pre>
  *
+ * <p>The framework, not this record, acts on {@code enabled} (no agent when false) and
+ * {@code shutdownOnTransportEnd} (which {@code onTransportEnd} action it gives an
+ * {@link AcpAgentHost}). The record checks only that its parts are present; the SDK builders
+ * reject a negative grace period or prompt duration, and the HTTP options reject out-of-range
+ * limits, when the agent or endpoint is built.
+ *
  * @param enabled whether the {@code @AcpAgent} is served
  * @param requestTimeout how long a request the agent sends to the client waits for its answer;
  * null for the SDK default
  * @param cancelGracePeriod how long a prompt handler has after {@code session/cancel}; null for
  * the SDK default
- * @param maxPromptDuration how long a prompt may run; null for the SDK default (no limit)
+ * @param maxPromptDuration how long a prompt turn may run; null for the SDK default (no limit)
  * @param shutdownOnTransportEnd whether the application stops when a single transport (stdio)
  * ends by itself
  * @param transport the transport; {@link AcpTransportType#WEBSOCKET} means the same as
  * {@link AcpTransportType#HTTP}
- * @param http the Streamable HTTP endpoint
+ * @param http the Streamable HTTP endpoint, used only when {@link #servesHttp()}
  */
 public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeout,
 		@Nullable Duration cancelGracePeriod, @Nullable Duration maxPromptDuration, boolean shutdownOnTransportEnd,
 		AcpTransportType transport, Http http) {
 
-	/** The default endpoint path. */
+	/** The default endpoint path: {@value}. */
 	public static final String DEFAULT_PATH = "/acp";
 
-	/** The default port of the SDK's own listener. */
+	/** The default port of the SDK's own listener: {@value}. */
 	public static final int DEFAULT_LISTENER_PORT = 8080;
 
 	/**
-	 * Settings, each checked.
+	 * Creates the settings, checking that the transport and endpoint are present.
 	 * @throws NullPointerException if {@code transport} or {@code http} is null
 	 */
 	public AcpAgentSettings {
@@ -64,16 +76,17 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * The Streamable HTTP endpoint, wherever it is served: in the framework's own server, or by
-	 * the SDK's listener.
-	 * @param path the endpoint path
+	 * The agent's Streamable HTTP endpoint, wherever it is served: as the SDK's servlet in the
+	 * framework's own server, or by the SDK's listener. The path and limits apply to both; the
+	 * listener part only to the SDK's listener.
+	 * @param path the endpoint path, such as {@value AcpAgentSettings#DEFAULT_PATH}
 	 * @param limits the message and stream bounds
 	 * @param listener the SDK listener's own settings
 	 */
 	public record Http(String path, Limits limits, Listener listener) {
 
 		/**
-		 * An endpoint, each part checked.
+		 * Creates an endpoint, checking each part.
 		 * @throws NullPointerException if a part is null
 		 */
 		public Http {
@@ -85,9 +98,11 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * Message and stream bounds of the endpoint; each null keeps the SDK default
-	 * ({@link StreamableHttpAcpAgentTransportOptions}).
-	 * @param maxPostBodyBytes the largest inbound message (POST body or WebSocket text message)
+	 * The message and stream bounds of the endpoint, for the servlet and the listener alike. Each
+	 * null keeps the SDK default; {@link AcpAgentSettings#toOptions(boolean)} turns them into
+	 * {@link StreamableHttpAcpAgentTransportOptions}, which documents each default and range.
+	 * @param maxPostBodyBytes the largest inbound message in bytes (POST body or WebSocket text
+	 * message)
 	 * @param keepAliveInterval the interval between SSE keep-alive comments; zero disables them
 	 * @param mailboxCapacity the events retained per outbound stream while none is attached
 	 * @param maxPendingSseEvents the events queued for one SSE subscriber before it is closed
@@ -103,8 +118,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * Settings of the SDK's own listener only; inside a framework's server they mean nothing.
-	 * @param port the port; 0 for an ephemeral one
+	 * The settings of the SDK's own listener; a framework's own server ignores them.
+	 * @param port the port, {@value AcpAgentSettings#DEFAULT_LISTENER_PORT} by default; 0 for an
+	 * ephemeral one, which {@link AcpHost#port()} reports once started
 	 * @param maxConcurrentStreamsPerConnection the HTTP/2 streams one client connection may hold
 	 * open; null for the SDK default
 	 */
@@ -112,19 +128,24 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * Whether the agent is served over Streamable HTTP (and WebSocket) rather than one transport.
-	 * @return true for {@code http} and {@code websocket}
+	 * Returns whether the agent is served over Streamable HTTP (and WebSocket) rather than on one
+	 * transport. A framework uses it to choose between an {@link AcpListenerHost} or servlet and
+	 * an {@link AcpAgentHost}.
+	 * @return true for {@code http} and {@code websocket}, false for {@code stdio}
 	 */
 	public boolean servesHttp() {
 		return transport != AcpTransportType.STDIO;
 	}
 
 	/**
-	 * The SDK transport options for the endpoint's limits; an unset limit keeps the SDK default.
-	 * Needs {@code acp-streamable-http-jetty} on the classpath.
+	 * Returns the SDK transport options for the endpoint's limits; an unset limit keeps the SDK
+	 * default. {@link AcpListeners} calls it; a framework that creates the endpoint itself (as
+	 * Quarkus does for its servlet and WebSocket route) calls it too. Needs
+	 * {@code acp-streamable-http-jetty} on the classpath.
 	 * @param listener true for the SDK's own listener, which also takes the listener's stream
 	 * limit; false inside a framework's server
 	 * @return the options
+	 * @throws IllegalArgumentException if a limit is out of the range the options accept
 	 */
 	public StreamableHttpAcpAgentTransportOptions toOptions(boolean listener) {
 		Limits limits = http.limits();
@@ -149,7 +170,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * A builder with every default.
+	 * Returns a builder holding every default: served, stdio, path
+	 * {@value #DEFAULT_PATH}, listener port {@value #DEFAULT_LISTENER_PORT}, and the SDK's
+	 * defaults for the rest.
 	 * @return a new builder
 	 */
 	public static Builder builder() {
@@ -157,15 +180,19 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	}
 
 	/**
-	 * The settings under a prefix of key/value configuration, keys in kebab case, such as
-	 * {@code acp.agent.request-timeout} and {@code acp.agent.transport.http.listener.port} for
-	 * prefix {@code acp.agent}. Durations are ISO-8601 ({@code PT30S}) or an amount with a unit
-	 * ({@code 30s}, {@code 500ms}, {@code 2m}); sizes are bytes or an amount with {@code KB},
-	 * {@code MB} or {@code GB}.
+	 * Reads the settings under a prefix of key/value configuration, for a framework without typed
+	 * binding. Keys are in kebab case, such as {@code acp.agent.request-timeout} and
+	 * {@code acp.agent.transport.http.listener.port} for prefix {@code acp.agent}; an empty prefix
+	 * reads the bare keys. A blank value counts as unset. Durations are ISO-8601
+	 * ({@code PT30S}) or a whole amount with a unit {@code ms}, {@code s}, {@code m}, {@code h} or
+	 * {@code d} ({@code 30s}, {@code 500ms}); a bare number is milliseconds. Sizes are bytes or an
+	 * amount with {@code KB}, {@code MB} or {@code GB} (powers of 1024). Booleans are
+	 * {@code true} or {@code false} in any case.
 	 * @param source the configuration
 	 * @param prefix the prefix of the agent's keys, such as {@code acp.agent}
 	 * @return the settings
-	 * @throws IllegalArgumentException naming the key, if a value does not parse
+	 * @throws IllegalArgumentException if a value does not parse; the message names the full key
+	 * and the value
 	 */
 	public static AcpAgentSettings from(SettingsSource source, String prefix) {
 		SettingsReader read = new SettingsReader(source, prefix);
@@ -198,7 +225,11 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		return builder.build();
 	}
 
-	/** Builds {@link AcpAgentSettings}; every setting has a default. */
+	/**
+	 * Builds {@link AcpAgentSettings}, flat: the endpoint's path, limits and listener settings
+	 * are set here directly, and {@link #build()} groups them. Every setting has a default, so a
+	 * framework sets only what the user configured. Not safe for use from several threads.
+	 */
 	public static final class Builder {
 
 		private boolean enabled = true;
@@ -237,7 +268,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets whether the agent is served. Default true.
+		 * Sets whether the agent is served. Default true; false serves no agent even when the
+		 * application has an {@code @AcpAgent} bean.
 		 * @param enabled whether the agent is served
 		 * @return this builder
 		 */
@@ -247,8 +279,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the agent's request timeout.
-		 * @param requestTimeout the timeout, or null for the SDK default
+		 * Sets how long a request the agent sends to the client (a permission prompt, a file
+		 * read) waits for its answer.
+		 * @param requestTimeout the timeout, or null for the SDK default (60 seconds)
 		 * @return this builder
 		 */
 		public Builder requestTimeout(@Nullable Duration requestTimeout) {
@@ -257,8 +290,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the cancel grace period.
-		 * @param cancelGracePeriod the grace period, or null for the SDK default
+		 * Sets how long a {@code @Prompt} method has to return after {@code session/cancel}
+		 * before the SDK answers the turn {@code cancelled} itself and interrupts the method.
+		 * @param cancelGracePeriod the grace period, zero for none, or null for the SDK default
+		 * (60 seconds)
 		 * @return this builder
 		 */
 		public Builder cancelGracePeriod(@Nullable Duration cancelGracePeriod) {
@@ -267,8 +302,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the maximum prompt duration.
-		 * @param maxPromptDuration the duration, or null for the SDK default (none)
+		 * Sets the longest a prompt turn may run before the SDK answers it with error
+		 * {@code -32800} (request cancelled).
+		 * @param maxPromptDuration the duration, zero for none, or null for the SDK default
+		 * (none)
 		 * @return this builder
 		 */
 		public Builder maxPromptDuration(@Nullable Duration maxPromptDuration) {
@@ -277,8 +314,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets whether the application stops when a single transport ends by itself. Default
-		 * true.
+		 * Sets whether the application stops when a single transport (stdio) ends by itself,
+		 * that is, when the client closed the agent's input. Default true. The framework acts on
+		 * it through the action it gives {@link AcpAgentHost}.
 		 * @param shutdownOnTransportEnd whether to stop at transport end
 		 * @return this builder
 		 */
@@ -288,7 +326,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the transport. Default {@link AcpTransportType#STDIO}.
+		 * Sets the transport. Default {@link AcpTransportType#STDIO};
+		 * {@link AcpTransportType#WEBSOCKET} means the same as {@link AcpTransportType#HTTP}.
 		 * @param transport the transport
 		 * @return this builder
 		 */
@@ -298,7 +337,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the endpoint path. Default {@value AcpAgentSettings#DEFAULT_PATH}.
+		 * Sets the HTTP endpoint's path, for the servlet and the listener alike. Default
+		 * {@value AcpAgentSettings#DEFAULT_PATH}.
 		 * @param path the path
 		 * @return this builder
 		 */
@@ -308,8 +348,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the largest inbound message.
-		 * @param maxPostBodyBytes the size in bytes, or null for the SDK default
+		 * Sets the largest message the endpoint accepts from a client: a larger POST body is
+		 * answered 413, and a larger WebSocket text message closes the connection.
+		 * @param maxPostBodyBytes the size in bytes, or null for the SDK default (16 MB)
 		 * @return this builder
 		 */
 		public Builder maxPostBodyBytes(@Nullable Long maxPostBodyBytes) {
@@ -318,8 +359,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the interval between SSE keep-alive comments.
-		 * @param keepAliveInterval the interval, zero for none, or null for the SDK default
+		 * Sets the interval between keep-alive comments on open SSE streams, which stop proxies
+		 * from cutting idle streams.
+		 * @param keepAliveInterval the interval, zero for none, or null for the SDK default (15
+		 * seconds)
 		 * @return this builder
 		 */
 		public Builder keepAliveInterval(@Nullable Duration keepAliveInterval) {
@@ -328,8 +371,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the events retained per unattached outbound stream.
-		 * @param mailboxCapacity the capacity, or null for the SDK default
+		 * Sets how many unsent events one SSE stream keeps while no client is reading it, to
+		 * send when the client reconnects; one more closes the connection.
+		 * @param mailboxCapacity the capacity, or null for the SDK default (1024)
 		 * @return this builder
 		 */
 		public Builder mailboxCapacity(@Nullable Integer mailboxCapacity) {
@@ -338,8 +382,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the events queued for one SSE subscriber.
-		 * @param maxPendingSseEvents the limit, or null for the SDK default
+		 * Sets how many events may be queued for a client reading an SSE stream; one more
+		 * detaches that client, keeping the events for its next GET.
+		 * @param maxPendingSseEvents the limit, or null for the SDK default (1024)
 		 * @return this builder
 		 */
 		public Builder maxPendingSseEvents(@Nullable Integer maxPendingSseEvents) {
@@ -348,8 +393,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the frames queued for one WebSocket connection.
-		 * @param maxWebSocketPendingFrames the limit, or null for the SDK default
+		 * Sets how many frames may be queued for one WebSocket connection; one more closes the
+		 * connection.
+		 * @param maxWebSocketPendingFrames the limit, or null for the SDK default (1024)
 		 * @return this builder
 		 */
 		public Builder maxWebSocketPendingFrames(@Nullable Integer maxWebSocketPendingFrames) {
@@ -358,8 +404,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the provisional session streams per connection.
-		 * @param maxProvisionalSessions the limit, or null for the SDK default
+		 * Sets how many session streams a connection may open before the agent knows the
+		 * session, as a client does before {@code session/load}; a further one is refused.
+		 * @param maxProvisionalSessions the limit, or null for the SDK default (64)
 		 * @return this builder
 		 */
 		public Builder maxProvisionalSessions(@Nullable Integer maxProvisionalSessions) {
@@ -368,8 +415,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets how long closing the endpoint waits for its connections.
-		 * @param shutdownTimeout the timeout, or null for the SDK default
+		 * Sets how long closing the endpoint waits for its connections' agents to close before
+		 * it closes the rest at once. Closing never waits for a client.
+		 * @param shutdownTimeout the timeout, or null for the SDK default (5 seconds)
 		 * @return this builder
 		 */
 		public Builder shutdownTimeout(@Nullable Duration shutdownTimeout) {
@@ -378,7 +426,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the SDK listener's port. Default {@value AcpAgentSettings#DEFAULT_LISTENER_PORT}.
+		 * Sets the SDK listener's port; a framework's own server ignores it. Default
+		 * {@value AcpAgentSettings#DEFAULT_LISTENER_PORT}.
 		 * @param listenerPort the port; 0 for an ephemeral one
 		 * @return this builder
 		 */
@@ -388,8 +437,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets the HTTP/2 streams per client connection of the SDK listener.
-		 * @param maxConcurrentStreamsPerConnection the limit, or null for the SDK default
+		 * Sets how many HTTP/2 streams one client connection to the SDK listener may hold open;
+		 * a framework's own server ignores it.
+		 * @param maxConcurrentStreamsPerConnection the limit, or null for the SDK default (1024)
 		 * @return this builder
 		 */
 		public Builder maxConcurrentStreamsPerConnection(@Nullable Integer maxConcurrentStreamsPerConnection) {
@@ -398,7 +448,7 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * The settings.
+		 * Builds the settings from the values set so far. The builder can be used again.
 		 * @return the settings
 		 */
 		public AcpAgentSettings build() {

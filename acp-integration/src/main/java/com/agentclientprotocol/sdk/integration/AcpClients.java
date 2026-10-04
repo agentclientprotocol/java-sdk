@@ -20,8 +20,18 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * Builds the application's client the same way in every framework: one async client on the
- * transport, and a sync facade over that same client.
+ * Builds the application's ACP client the same way in every framework: one
+ * {@link AcpAsyncClient} on the transport from {@link AcpClientTransports}, configured from the
+ * {@link AcpClientSettings} and the application's {@link AcpClientCustomizer}s, and one
+ * {@link AcpSyncClient} facade over that same client. A framework exposes both as beans, and
+ * closes the async one through an {@link AcpClientHost} when the container shuts down.
+ *
+ * <p>What the shared code does: it advertises the settings' capabilities, applies the request
+ * and prompt timeouts, sets a default session-update consumer that logs each update at DEBUG
+ * (so the SDK does not warn about updates nobody handles), applies the customizers in order,
+ * and turns a missing-handler error into one that names the framework's capability settings.
+ * What the framework does: create the transport, collect the customizer beans in its bean
+ * order, and pass its own property prefix so errors name its keys.
  */
 public final class AcpClients {
 
@@ -31,12 +41,15 @@ public final class AcpClients {
 	}
 
 	/**
-	 * The async client, naming {@code acp.client.*} keys in errors; see
-	 * {@link #async(AcpClientTransport, AcpClientSettings, List, String)}.
+	 * Returns the async client as
+	 * {@link #async(AcpClientTransport, AcpClientSettings, List, String)} builds it, with errors
+	 * that name {@code acp.client.*} keys.
 	 * @param transport the client transport
 	 * @param settings the client settings
 	 * @param customizers the customizers, in order
-	 * @return the client
+	 * @return the client, not yet initialized
+	 * @throws IllegalStateException if a capability setting is true but no customizer registers
+	 * the handlers that serve it, or the transport refuses to connect
 	 */
 	public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
 			List<? extends AcpClientCustomizer> customizers) {
@@ -44,18 +57,25 @@ public final class AcpClients {
 	}
 
 	/**
-	 * The async client: the settings' capabilities, request timeout (unset keeps the SDK
-	 * default) and prompt timeout (unset: none), a default session-update consumer that logs at
-	 * DEBUG, which a consumer a customizer adds replaces, then the customizers in order. The
-	 * client connects when the application calls {@code initialize()}.
-	 * @param transport the client transport
+	 * Returns the async client on the transport: the settings' capabilities, their request
+	 * timeout (unset keeps the SDK default, 60 seconds) and prompt timeout (unset: none), a
+	 * default session-update consumer, then the customizers in order. The default consumer logs
+	 * each update at DEBUG; the first consumer a customizer adds with
+	 * {@code sessionUpdateConsumer} replaces it, rather than running beside it. Building the
+	 * client connects the transport (for stdio, starts the agent process); the ACP handshake
+	 * waits for the application's {@code initialize()}.
+	 * @param transport the client transport, not yet used by another client
 	 * @param settings the client settings
 	 * @param customizers the customizers, in order
 	 * @param prefix the framework's prefix of the client keys, such as {@code spring.acp.client},
 	 * which errors name
-	 * @return the client
+	 * @return the client, not yet initialized
 	 * @throws IllegalStateException if a capability setting is true but no customizer registers
-	 * the handlers that serve it; the message names the setting and the missing setters
+	 * the handlers that serve it; the message names the SDK's missing setters and the settings,
+	 * such as {@code spring.acp.client.capabilities.terminal=true}. A customizer that calls
+	 * {@code defaultSessionUpdateConsumer} also fails, since the default is already set, and so
+	 * does a transport that refuses to connect: one already connected, or a stdio command that
+	 * cannot be started
 	 */
 	public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
 			List<? extends AcpClientCustomizer> customizers, String prefix) {
@@ -110,10 +130,11 @@ public final class AcpClients {
 	}
 
 	/**
-	 * The sync facade over the one async client: one session on one transport connection.
-	 * Building a sync client from the transport instead would connect it a second time, which the
-	 * SDK refuses.
-	 * @param async the async client
+	 * Returns a sync facade over the async client, so the application can inject either and both
+	 * use one connection. Build the sync client this way, never a second client on the same
+	 * transport: that would connect the transport a second time, which the SDK refuses. Closing
+	 * the async client (through {@link AcpClientHost}) also ends the facade.
+	 * @param async the async client from {@link #async}
 	 * @return the sync client
 	 */
 	public static AcpSyncClient sync(AcpAsyncClient async) {
