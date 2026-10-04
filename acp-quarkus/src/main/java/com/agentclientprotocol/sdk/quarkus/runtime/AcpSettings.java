@@ -65,7 +65,8 @@ public final class AcpSettings {
 					http.maxWebSocketPendingFrames().isPresent() ? http.maxWebSocketPendingFrames().getAsInt() : null)
 			.maxProvisionalSessions(
 					http.maxProvisionalSessions().isPresent() ? http.maxProvisionalSessions().getAsInt() : null)
-			.shutdownTimeout(http.shutdownTimeout().orElse(null));
+			.shutdownTimeout(http.shutdownTimeout().orElse(null))
+			.allowedOrigins(http.allowedOrigins().orElse(List.of()));
 	}
 
 	/**

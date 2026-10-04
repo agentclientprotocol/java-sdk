@@ -5,6 +5,8 @@
 package com.agentclientprotocol.sdk.micronaut.agent;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
@@ -27,7 +29,9 @@ import org.jspecify.annotations.Nullable;
  * acp.agent.shutdown-on-transport-end    true    close the context when stdio input ends
  * acp.agent.shutdown-timeout             10s     closing waits this long for a stdio agent
  * acp.agent.transport.type               stdio   stdio | http | websocket
+ * acp.agent.transport.http.host          (unset) loopback only; 0.0.0.0 for every interface
  * acp.agent.transport.http.port          8080    0 for an ephemeral port
+ * acp.agent.transport.http.allowed-origins (none) browser origins accepted besides loopback
  * acp.agent.transport.http.path          /acp
  * acp.agent.transport.http.max-post-body-size, keep-alive-interval, mailbox-capacity,
  *     max-pending-sse-events, max-web-socket-pending-frames, max-provisional-sessions,
@@ -231,6 +235,8 @@ public class AcpAgentConfiguration {
 			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
 			.maxProvisionalSessions(http.getMaxProvisionalSessions())
 			.shutdownTimeout(http.getShutdownTimeout())
+			.listenerHost(http.getHost())
+			.allowedOrigins(http.getAllowedOrigins())
 			.listenerPort(http.getPort())
 			.maxConcurrentStreamsPerConnection(http.getMaxConcurrentStreamsPerConnection())
 			.build();
@@ -305,7 +311,11 @@ public class AcpAgentConfiguration {
 		@ConfigurationProperties("http")
 		public static class Http {
 
+			private @Nullable String host;
+
 			private int port = 8080;
+
+			private List<String> allowedOrigins = new ArrayList<>();
 
 			private String path = AcpAgentSettings.DEFAULT_PATH;
 
@@ -324,6 +334,51 @@ public class AcpAgentConfiguration {
 			private @Nullable Integer maxConcurrentStreamsPerConnection;
 
 			private @Nullable Duration shutdownTimeout;
+
+			/**
+			 * Returns the address the listener binds ({@code acp.agent.transport.http.host}).
+			 * Default: unset, which binds the loopback interface only ({@code 127.0.0.1}, and
+			 * {@code ::1} where the machine has IPv6), so only programs on the same machine can
+			 * connect. {@code 0.0.0.0} exposes the agent on every interface. The listener is the
+			 * SDK's own server, not Micronaut's: Micronaut's security filters do not apply to it
+			 * and it has no authentication of its own, so expose it only behind a proxy or
+			 * firewall that controls who connects. Maps to {@link AcpAgentSettings.Listener#host()}.
+			 * @return the host, or {@code null} for loopback only
+			 */
+			public @Nullable String getHost() {
+				return host;
+			}
+
+			/**
+			 * Sets the address the listener binds; see {@link #getHost()}.
+			 * @param host a host name or address, or {@code null} for loopback only
+			 */
+			public void setHost(@Nullable String host) {
+				this.host = host;
+			}
+
+			/**
+			 * Returns the browser origins the listener accepts besides the loopback ones
+			 * ({@code acp.agent.transport.http.allowed-origins}), such as
+			 * {@code https://app.example.com}, or {@code *} for any. A request without an
+			 * {@code Origin} header, or from {@code http(s)://localhost}, {@code 127.0.0.1} or
+			 * {@code [::1]} on any port, is always accepted; any other origin is answered 403, over
+			 * HTTP and on the WebSocket handshake. Default empty. Maps to
+			 * {@link AcpAgentSettings.Http#allowedOrigins()}.
+			 * @return the origins
+			 */
+			public List<String> getAllowedOrigins() {
+				return allowedOrigins;
+			}
+
+			/**
+			 * Sets the browser origins accepted besides the loopback ones; see
+			 * {@link #getAllowedOrigins()}.
+			 * @param allowedOrigins the origins
+			 */
+			public void setAllowedOrigins(List<String> allowedOrigins) {
+				this.allowedOrigins = allowedOrigins;
+			}
 
 			/**
 			 * Returns the listener's port ({@code acp.agent.transport.http.port}). Default 8080;

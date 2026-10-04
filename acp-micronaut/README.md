@@ -89,6 +89,8 @@ public final class Application {
 | `acp.agent.shutdown-on-transport-end` | `true` | close the context when the stdio input ends |
 | `acp.agent.shutdown-timeout` | `10s` | how long closing waits for a stdio agent's graceful close, then closes it at once |
 | `acp.agent.transport.type` | `stdio` | `stdio`, `http` or `websocket`, in any case (the last two mean the same listener) |
+| `acp.agent.transport.http.host` | loopback | the address the listener binds; unset binds `127.0.0.1` and `::1` only, `0.0.0.0` every interface (an explicit opt-in: the listener has no authentication) |
+| `acp.agent.transport.http.allowed-origins` | none | browser origins accepted besides `localhost`, `127.0.0.1` and `[::1]`; any other `Origin` is answered 403, over HTTP and on the WebSocket handshake; `*` for any |
 | `acp.agent.transport.http.port` | `8080` | the listener's own port; `0` for an ephemeral one (`AcpAgentRuntime.port()`) |
 | `acp.agent.transport.http.path` | `/acp` | |
 | `acp.agent.transport.http.max-post-body-size` | SDK (16MB) | e.g. `4MB` |
@@ -100,6 +102,14 @@ transport of `acp-test` in a test.
 **HTTP runs on its own port.** Streamable HTTP and WebSocket are served by the SDK's Jetty
 listener (`StreamableHttpAcpAgentTransport`). It runs next to Micronaut's HTTP server if you have
 one, not inside it. It serves HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades on one path.
+
+**Micronaut's security does not apply to it.** Because the listener is the SDK's own server,
+Micronaut's filters, `micronaut-security` rules, CORS, TLS and metrics never see its requests. It
+binds the loopback interface by default, so only programs on the same machine can connect, and it
+refuses browser requests from foreign origins. Setting `acp.agent.transport.http.host=0.0.0.0`
+exposes an endpoint without authentication to the network: put a proxy that authenticates in front
+of it. This is the interim arrangement for 0.80.0; serving ACP on Micronaut's own server, where its
+security applies, is planned for 0.81.0.
 
 ## A client
 

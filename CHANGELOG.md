@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The SDK's listener binds the loopback interface by default.** `StreamableHttpAcpAgentTransport`
+  set a port and no host on its Jetty connector, so it listened on every network interface, and
+  anyone who could reach the machine could start an agent: the endpoint has no authentication of
+  its own. It now binds `127.0.0.1`, and `::1` too where the machine has IPv6, unless told
+  otherwise. Remote exposure is an explicit opt-in: `StreamableHttpAcpAgentTransportOptions.builder()
+  .host("0.0.0.0")` (or one address), `spring.acp.agent.transport.http.listener.host` (Spring Boot,
+  non-web applications), `acp.agent.transport.http.host` (Micronaut) and
+  `transport.http.listener.host` in `AcpAgentSettings`. Servers a framework runs (a Spring MVC
+  servlet container, Quarkus) keep the framework's own bind settings (`server.address`,
+  `quarkus.http.host`). Migration: a deployment that reached the listener from another machine or
+  a container sets the host to `0.0.0.0`, ideally behind a proxy that authenticates.
+
+- **Browser requests from a foreign origin are refused (403).** Any web page the user visited could
+  POST to, or open a WebSocket to, an agent on `localhost` (cross-site requests, DNS rebinding).
+  Every host now checks the `Origin` header, on HTTP requests and on the WebSocket handshake: a
+  request without one (any non-browser client) is served, and so is one from
+  `http(s)://localhost`, `127.0.0.1` or `[::1]` on any port; any other origin gets 403 unless it is
+  listed. The rule lives in the shared endpoint code, so the servlet, the SDK listener (HTTP and
+  WebSocket) and Quarkus (servlet and WebSocket route) all apply it. New:
+  `StreamableHttpAcpAgentTransportOptions.Builder.allowedOrigins(Collection)` (`*` for any) and
+  `isOriginAllowed(String)`; `spring.acp.agent.transport.http.allowed-origins`,
+  `acp.agent.transport.http.allowed-origins` (Micronaut),
+  `quarkus.acp.agent.transport.http.allowed-origins`, and `transport.http.allowed-origins` in
+  `AcpAgentSettings`. Migration: a browser application served from another origin that talks to
+  the agent directly lists that origin.
+
+
 - **A handler's unexpected exception no longer sends its message to the peer.** A request handler
   that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
   exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now
@@ -405,6 +432,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added. `sessionUpdateConsumer` stays additive.
 
 ### Changed
+
+- **Breaking: new record components for the bind address and allowed origins.**
+  `StreamableHttpAcpAgentTransportOptions` gained `host` and `allowedOrigins`,
+  `AcpAgentSettings.Http` gained `allowedOrigins`, and `AcpAgentSettings.Listener` gained `host`
+  (its first component). Migration: build the options with `StreamableHttpAcpAgentTransportOptions.builder()`
+  and the settings with `AcpAgentSettings.builder()` rather than the canonical constructors; a
+  direct `new AcpAgentSettings.Listener(port, streams)` becomes `new Listener(null, port, streams)`.
 
 - **Quarkus: new `quarkus.acp.handler-executor=managed|virtual`; the client bean's network
   transports run on it.** The default, `managed`, keeps the agent's handler methods on the
