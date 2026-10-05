@@ -25,8 +25,8 @@ import org.slf4j.LoggerFactory;
  *
  * <pre>{@code
  * AcpAgent.sync(transport)
- *     .setSessionConfigOptionHandler((request, agent) -> {
- *         agent.sendSessionUpdate(request.sessionId(),
+ *     .setSessionConfigOptionHandler((request, self) -> {
+ *         self.sendSessionUpdate(request.sessionId(),
  *             new AcpSchema.ConfigOptionUpdate(options));
  *         return new AcpSchema.SetSessionConfigOptionResponse(options);
  *     })

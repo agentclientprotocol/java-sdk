@@ -127,11 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two-argument lambda picks it. The agent is the one `build()` returned, so a `session/load`
   replay or a `ConfigOptionUpdate` after `session/set_config_option` no longer needs an
   `AtomicReference` holding the built agent:
-  `.setSessionConfigOptionHandler((request, agent) -> { agent.sendSessionUpdate(request.sessionId(), update); return response; })`.
+  `.setSessionConfigOptionHandler((request, self) -> { self.sendSessionUpdate(request.sessionId(), update); return response; })`.
   One-argument handlers are unchanged. The two interfaces are top-level types in
   `com.agentclientprotocol.sdk.agent`. Migration: none; a handler that read the built agent from
   an `AtomicReference` can take it as its second parameter instead:
-  `.loadSessionHandler(request -> agentRef.get()...)` → `.loadSessionHandler((request, agent) -> agent...)`.
+  `.loadSessionHandler(request -> agentRef.get()...)` → `.loadSessionHandler((request, self) -> self...)`.
+  Name the agent parameter `self` (or anything but the variable the built agent is assigned to):
+  `AcpSyncAgent agent = AcpAgent.sync(t).newSessionHandler((request, agent) -> ...)` does not
+  compile, since a lambda parameter cannot shadow a local variable.
 
 - **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
   `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;

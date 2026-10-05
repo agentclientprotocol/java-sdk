@@ -14,14 +14,19 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
  * overload that takes one; a two-argument lambda picks it.
  *
  * <pre>{@code
- * AcpAgent.sync(transport)
- *     .loadSessionHandler((request, agent) -> {
+ * AcpSyncAgent agent = AcpAgent.sync(transport)
+ *     .loadSessionHandler((request, self) -> {
  *         for (AcpSchema.SessionUpdate update : history.get(request.sessionId())) {
- *             agent.sendSessionUpdate(request.sessionId(), update);   // the replay
+ *             self.sendSessionUpdate(request.sessionId(), update);   // the replay
  *         }
  *         return new AcpSchema.LoadSessionResponse(null, null);
  *     })
+ *     .build();
  * }</pre>
+ *
+ * <p>The second parameter is the agent being built, the same instance {@code build()} returns; a
+ * lambda parameter must not reuse the name of a local variable in scope, so call it {@code self}
+ * (or anything but the name the built agent is assigned to), as above.
  *
  * <p>Implementations run on the builder's handler executor and may block.
  * @param <Q> the request type
