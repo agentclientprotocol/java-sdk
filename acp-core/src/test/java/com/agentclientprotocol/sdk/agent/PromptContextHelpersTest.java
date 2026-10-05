@@ -12,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.agentclientprotocol.sdk.CapturedLogs;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
@@ -105,6 +106,66 @@ class PromptContextHelpersTest {
 		turn.dispose();
 
 		assertThat(released.await(5, TimeUnit.SECONDS)).as("terminal/release after the cancel").isTrue();
+
+		client.closeGracefully().block(TIMEOUT);
+		agent.closeGracefully().block(TIMEOUT);
+	}
+
+	/**
+	 * A release that the client answers with an error is logged at WARN by its code and the
+	 * SDK's description of the code: the client's message and data are its own text and stay
+	 * at DEBUG.
+	 */
+	@Test
+	void aFailedReleaseOfACancelledCommandIsLoggedWithoutTheClientsMessageOrData() throws Exception {
+		CountDownLatch created = new CountDownLatch(1);
+
+		AcpAsyncAgent agent = AcpAgent.async(this.transportPair.agentTransport())
+			.requestTimeout(TIMEOUT)
+			.initializeHandler(req -> Mono.just(InitializeResponse.ok()))
+			.newSessionHandler(req -> Mono.just(new NewSessionResponse("s1", null, null)))
+			.promptHandler((request, context) -> context.execute("sleep", "600").thenReturn(PromptResponse.endTurn()))
+			.build();
+
+		AcpAsyncClient client = AcpClient.async(this.transportPair.clientTransport())
+			.requestTimeout(TIMEOUT)
+			.clientCapabilities(new ClientCapabilities(null, true))
+			.createTerminalHandler(req -> {
+				created.countDown();
+				return Mono.just(new CreateTerminalResponse("term-1"));
+			})
+			.waitForTerminalExitHandler(req -> Mono.never())
+			.terminalOutputHandler(req -> Mono.never())
+			.releaseTerminalHandler(req -> Mono.error(new AcpProtocolException(AcpErrorCodes.RESOURCE_NOT_FOUND,
+					"MESSAGE-SECRET", Map.of("details", "DATA-SECRET"))))
+			.killTerminalHandler(req -> Mono.just(new AcpSchema.KillTerminalCommandResponse()))
+			.build();
+
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			agent.start().block(TIMEOUT);
+			connect(client);
+
+			Disposable turn = client.prompt(prompt()).subscribe(r -> {
+			}, e -> {
+			});
+			assertThat(created.await(5, TimeUnit.SECONDS)).as("terminal/create").isTrue();
+			Thread.sleep(200);
+			turn.dispose();
+
+			long deadline = System.nanoTime() + TIMEOUT.toNanos();
+			while (logs.events()
+				.stream()
+				.noneMatch(e -> e.getFormattedMessage().contains("of a cancelled command"))
+					&& System.nanoTime() < deadline) {
+				Thread.sleep(20);
+			}
+			assertThat(logs.events()).filteredOn(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN)
+				.filteredOn(e -> e.getFormattedMessage().contains("Could not release terminal"))
+				.singleElement()
+				.satisfies(e -> assertThat(e.getFormattedMessage()).contains("-32002").contains("Resource not found"));
+			logs.assertNoneAtInfoOrAboveContains("MESSAGE-SECRET");
+			logs.assertNoneAtInfoOrAboveContains("DATA-SECRET");
+		}
 
 		client.closeGracefully().block(TIMEOUT);
 		agent.closeGracefully().block(TIMEOUT);

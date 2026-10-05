@@ -14,6 +14,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -141,9 +142,11 @@ final class PendingResponses {
 		logger.debug("Received response for id {}", response.id());
 		AcpSchema.JSONRPCError error = response.error();
 		if (response.id() == null && error != null) {
-			// JSON-RPC 2.0: the answer to a message whose id could not be read.
+			// JSON-RPC 2.0: the answer to a message whose id could not be read. The peer's
+			// message and data are its own text: logged at DEBUG only.
 			logger.warn("The {} reported an error for a message it could not read: {} {}", this.peer, error.code(),
-					error.message());
+					AcpErrorCodes.getDescription(error.code()));
+			logger.debug("The {}'s error: {} {}", this.peer, error.message(), error.data());
 			return;
 		}
 		if (response.id() == null) {

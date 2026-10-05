@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
@@ -263,9 +264,23 @@ class DefaultPromptContext implements PromptContext {
 						.onErrorResume(error -> release.then(Mono.error(error)))
 						// Cancelled: nobody waits for the release any more, so send it on its own
 						.doOnCancel(() -> release.subscribe(v -> {
-						}, error -> logger.warn("Could not release terminal {} of a cancelled command: {}",
-								terminalId, error.getMessage())));
+						}, error -> logReleaseFailure(terminalId, error)));
 			});
+	}
+
+	/**
+	 * A client's error answer is logged at WARN by its code and the SDK's description of it:
+	 * the client's message and data are its own text, logged at DEBUG only.
+	 */
+	private static void logReleaseFailure(String terminalId, Throwable error) {
+		if (error instanceof AcpError clientError) {
+			logger.warn("Could not release terminal {} of a cancelled command: the client answered {} {}", terminalId,
+					clientError.getCode(), AcpErrorCodes.getDescription(clientError.getCode()));
+			logger.debug("Could not release terminal {}: {}", terminalId, clientError.toString());
+		}
+		else {
+			logger.warn("Could not release terminal {} of a cancelled command: {}", terminalId, error.getMessage());
+		}
 	}
 
 }

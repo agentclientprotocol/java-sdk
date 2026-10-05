@@ -79,4 +79,24 @@ class PendingResponsesLogTest {
 		});
 	}
 
+	/**
+	 * The peer's error message and data are its own text and can carry anything: at INFO and
+	 * above the error is logged by its code and the SDK's description of the code; the
+	 * message and data stay at DEBUG.
+	 */
+	@Test
+	void aNullIdErrorIsLoggedWithoutThePeersMessageOrDataAboveDebug() {
+		PendingResponses pending = new PendingResponses(() -> null, RuntimeException::new, "agent");
+
+		pending.complete(new AcpSchema.JSONRPCResponse(AcpSchema.JSONRPC_VERSION, null, null,
+				new AcpSchema.JSONRPCError(-32600, "MESSAGE-SECRET", java.util.Map.of("details", "DATA-SECRET"))));
+
+		assertThat(this.appender.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
+			.singleElement()
+			.satisfies(event -> assertThat(event.getFormattedMessage()).contains("-32600")
+				.contains("Invalid request")
+				.doesNotContain("MESSAGE-SECRET")
+				.doesNotContain("DATA-SECRET"));
+	}
+
 }

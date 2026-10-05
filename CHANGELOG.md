@@ -56,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the connect failed; a token in the query string (`?token=...`) or a password in the URI
   reached the log. It now logs scheme, host, port and path.
 
+- **A peer's error message and data are no longer logged above DEBUG.** An error answer is the
+  peer's own text. Three log lines at WARN carried it: a peer's error report for a message it could
+  not read (`PendingResponses`), a notification handler that failed with the peer's `AcpError`, and
+  a failed `terminal/release` of a cancelled `execute`. Each now logs the error code and the SDK's
+  name for it (`-32603 Internal error`); the peer's message and data are logged at DEBUG.
+
 - **A handler's unexpected exception no longer sends its message to the peer.** A request handler
   that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
   exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now

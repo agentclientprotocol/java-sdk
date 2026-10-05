@@ -72,6 +72,13 @@ final class InboundMessages {
 					LOGGER.error("Notification {} handler failed with an error and was skipped",
 							notification.method(), failure.getCause());
 				}
+				else if (error instanceof AcpError peerError) {
+					// The peer's answer to a call the handler made: its message and data are the
+					// peer's text, logged at DEBUG only.
+					logger.warn("Notification {} failed and was skipped: the peer answered {} {}",
+							notification.method(), peerError.getCode(), AcpErrorCodes.getDescription(peerError.getCode()));
+					logger.debug("Notification {} failed: {}", notification.method(), peerError.toString());
+				}
 				else {
 					logger.warn("Notification {} failed and was skipped: {}", notification.method(), error.toString());
 				}
