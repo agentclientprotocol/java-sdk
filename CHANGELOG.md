@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Every WebSocket host now closes idle connections (after `webSocketIdleTimeout`, 30 minutes by
+  default, close code 1001) and connections that do not send `initialize` within
+  `initializeTimeout` (30 s by default, close code 1008). The idle timeout previously applied only
+  on the servlet and Jetty hosts; WebFlux and Quarkus had none, and no host closed a WebSocket that
+  never initialized.
+
 - **Quarkus: HTTP security policies now apply to the WebSocket handshake.** The extension's
   WebSocket route ran ahead of Quarkus's authentication and permission checks (order
   `Integer.MIN_VALUE`), so an unauthenticated client was upgraded on a path that
@@ -80,6 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   0.18.0 shipped with the affected versions; applications can override the versions now.
 
 ### Added
+
+- `StreamableHttpAcpAgentTransportOptions.Builder.webSocketIdleTimeout(Duration)` (default 30
+  minutes) and `initializeTimeout(Duration)` (default 30 seconds), with the record components of
+  the same names. The endpoint closes a WebSocket connection idle for `webSocketIdleTimeout` with
+  1001 and one that has not sent `initialize` within `initializeTimeout` with 1008, on every host;
+  `initializeTimeout` also bounds the agent's answer to a POST `initialize` (500 after it), which
+  was a fixed 30 seconds. `AcpWsHandshake.Accepted.idleTimeout()` returns the configured value, so
+  the servlet's Jakarta WebSocket session idle timeout follows it.
 
 - **One framework-neutral ACP endpoint and a host contract: `acp-http-core`.** Every protocol rule
   of the Streamable HTTP and WebSocket transports now lives in one place,

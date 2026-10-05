@@ -33,7 +33,8 @@ public interface AcpWsOutbound {
 
 	/**
 	 * Closes the socket with a close frame. The endpoint chooses the code: 1000 normal, 1001
-	 * going away (shutdown), 1002 protocol error, 1009 message too big, 1011 server error.
+	 * going away (shutdown, idle timeout), 1002 protocol error, 1008 policy violation (no
+	 * {@code initialize} in time), 1009 message too big, 1011 server error.
 	 * <p>A graceful shutdown waits for the returned stage, bounded by the shutdown timeout,
 	 * before it reports the endpoint closed: a container may send the close frame
 	 * asynchronously, and one stopped before the frame has gone out drops the connection
