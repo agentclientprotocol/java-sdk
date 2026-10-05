@@ -81,6 +81,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   framework's graceful shutdown never waits for them.
 - **SSE responses carry `X-Accel-Buffering: no`**, so nginx and similar proxies do not buffer
   them, besides `Cache-Control: no-cache`.
+- **Spring WebFlux host: `acp-http-webflux`.** `AcpWebFluxHost` mounts the endpoint as a
+  `RouterFunction` (`routerFunction("/acp")`, or `handle(ServerWebExchange)` as a `WebHandler`):
+  Streamable HTTP, SSE and WebSocket on one path of a WebFlux application's own server, Reactor
+  Netty, Tomcat or Jetty, behind the application's `WebFilter`s. It resolves the reactive principal
+  (`ServerWebExchange.getPrincipal()`, Spring Security's authentication) before the endpoint reads
+  it; flushes each SSE frame; aggregates a request body no further than one byte past the limit;
+  on Reactor Netty raises the WebSocket frame limit above the endpoint's, so an oversized message
+  closes with 1009 rather than 1011; and closes a WebSocket with the endpoint's close code before
+  it ends the outbound stream, so clients never see 1005. WebFlux reports no completion per
+  WebSocket frame, so the host hands WebFlux a frame only on its demand: a client that stops
+  reading fills the endpoint's bounded send queue (`maxWebSocketPendingFrames`) and the socket
+  closes with 1011, instead of frames piling up in the host. The transport TCK runs it on Reactor
+  Netty and on Tomcat.
 - **A shared transport TCK in `acp-test`:** `com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck`,
   the suite every host runs (the servlet on Tomcat 11 and Jetty 12.1, the embedded listener, Spring
   MVC), with `HttpProbes` for raw HTTP and WebSocket checks. `acp-test` now depends on

@@ -461,6 +461,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | `com.agentclientprotocol.sdk.client.transport` | Client transports (`StdioAcpClientTransport`, `WebSocketAcpClientTransport`, `StreamableHttpAcpClientTransport`) |
 | `com.agentclientprotocol.sdk.agent` | Agent SDK (`AcpAgent`, `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAgentFactory`) |
 | `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; `StreamableHttpAcpServlet` from acp-http-servlet; `StreamableHttpAcpAgentTransport` from acp-streamable-http-jetty; `StreamableHttpAcpAgentTransportOptions` from acp-http-core) |
+| `com.agentclientprotocol.sdk.http.webflux` | The Spring WebFlux host from acp-http-webflux (`AcpWebFluxHost`) |
 | `com.agentclientprotocol.sdk.http.server` | The host contract from acp-http-core (`AcpHttpEndpoint`, `AcpHttpExchange`, `AcpHttpReply`, `AcpWsHandshake`), for writing a server adapter; unstable |
 | `com.agentclientprotocol.sdk.agent.support` | Annotation-based agent runtime (`AcpAgentSupport`), with its `resolver`, `handler`, `interceptor` and `invocation` extension points |
 | `com.agentclientprotocol.sdk.annotation` | Agent annotations (`@AcpAgent`, `@Prompt`, etc.) |
@@ -479,6 +480,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | `acp-json-jackson3` | JSON implementation on Jackson 3 (`Jackson3AcpJsonMapper`) |
 | `acp-http-core` | The framework-neutral ACP endpoint behind every HTTP host: routing, sessions, SSE mailboxes, the status and close-code table, the `Origin` check and shutdown, and the host contract (`com.agentclientprotocol.sdk.http.server`) |
 | `acp-http-servlet` | The endpoint as a Servlet 6 servlet, `StreamableHttpAcpServlet`, with WebSocket upgrades on the same path through Jakarta WebSocket 2.1: Spring MVC, Tomcat, Jetty, Undertow |
+| `acp-http-webflux` | The endpoint as a Spring WebFlux `RouterFunction`, `AcpWebFluxHost`: Streamable HTTP and WebSocket on one path of a WebFlux application's own server (Reactor Netty, Tomcat, Jetty) |
 | `acp-streamable-http-jetty` | The SDK's own listener, `StreamableHttpAcpAgentTransport`: embedded Jetty 12.1 running the servlet, for agents served from a plain Java program |
 | [`acp-annotations`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-annotations) | `@AcpAgent`, `@Prompt`, and other annotations |
 | [`acp-agent-support`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-agent-support) | Annotation-based agent runtime |
@@ -495,6 +497,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP and WebSocket in your own Servlet 6 container | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `StreamableHttpAcpServlet` (WebSocket where the container has Jakarta WebSocket 2.1) | acp-core / acp-http-servlet |
+| Streamable HTTP and WebSocket in a Spring WebFlux application | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `AcpWebFluxHost` (a `RouterFunction`) | acp-core / acp-http-webflux |
 
 ---
 

@@ -14,7 +14,7 @@
  * socket and an {@link AcpWsHandler}. Hosts never decide a status code, a header or a close
  * code themselves, and every host passes the shared transport TCK in {@code acp-test}.
  *
- * <p>Applications use the hosts the SDK ships (the servlet, the embedded listener, the Spring
+ * <p>Applications use the hosts the SDK ships (the servlet, the WebFlux route, the embedded listener, the Spring
  * Boot, Quarkus and Micronaut integrations); this package is for writing a host, and is
  * {@link com.agentclientprotocol.sdk.annotation.UnstableAcpApi unstable}: it may change in a
  * minor release while the set of hosts grows.

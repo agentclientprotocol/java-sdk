@@ -27,6 +27,7 @@ reactor.core.publisher.Sinks.Many#tryEmitComplete()
 reactor.core.publisher.Sinks.Many#tryEmitError(java.lang.Throwable)
 # Fluent callback registration: returns the same sink.
 reactor.core.publisher.FluxSink#onCancel(reactor.core.Disposable)
+reactor.core.publisher.FluxSink#onDispose(reactor.core.Disposable)
 reactor.core.publisher.MonoSink#onCancel(reactor.core.Disposable)
 reactor.core.publisher.MonoSink#onDispose(reactor.core.Disposable)
 reactor.core.publisher.FluxSink#onRequest(java.util.function.LongConsumer)
