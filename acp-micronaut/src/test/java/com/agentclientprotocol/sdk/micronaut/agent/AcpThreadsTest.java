@@ -34,7 +34,7 @@ class AcpThreadsTest {
 		Set<Thread> before = Thread.getAllStackTraces().keySet();
 		Set<String> created = new HashSet<>();
 		try (ApplicationContext agent = ApplicationContext.run(Map.of(TestAgents.ECHO, "true",
-				"acp.agent.transport.type", type, "acp.agent.transport.http.port", "0"))) {
+				"acp.agent.transport.type", type, "acp.agent.transport.http.listener.port", "0"))) {
 			int port = agent.getBean(AcpAgentRuntime.class).port().orElseThrow();
 			String uri = (type.equals("http") ? "http" : "ws") + "://localhost:" + port + "/acp";
 			try (ApplicationContext client = ApplicationContext.run(Map.of("acp.client.transport.type", type,

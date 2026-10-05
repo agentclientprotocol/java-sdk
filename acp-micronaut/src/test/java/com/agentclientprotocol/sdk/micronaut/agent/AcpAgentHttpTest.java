@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @MicronautTest
 @Property(name = TestAgents.ECHO, value = "true")
 @Property(name = "acp.agent.transport.type", value = "http")
-@Property(name = "acp.agent.transport.http.port", value = "0")
+@Property(name = "acp.agent.transport.http.listener.port", value = "0")
 @Property(name = "acp.agent.transport.http.path", value = "/agent")
 class AcpAgentHttpTest {
 
@@ -97,7 +97,7 @@ class AcpAgentHttpTest {
 		root.addAppender(logs);
 		try {
 			ApplicationContext agent = ApplicationContext.run(Map.of(TestAgents.ECHO, "true",
-					"acp.agent.transport.type", "websocket", "acp.agent.transport.http.port", "0",
+					"acp.agent.transport.type", "websocket", "acp.agent.transport.http.listener.port", "0",
 					"acp.agent.transport.http.shutdown-timeout", "2s",
 					"micronaut.lifecycle.graceful-shutdown.enabled", "true"));
 			int port = agent.getBean(AcpAgentRuntime.class).port().orElseThrow();

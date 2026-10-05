@@ -89,12 +89,13 @@ public final class Application {
 | `acp.agent.shutdown-on-transport-end` | `true` | close the context when the stdio input ends |
 | `acp.agent.shutdown-timeout` | `10s` | how long closing waits for a stdio agent's graceful close, then closes it at once |
 | `acp.agent.transport.type` | `stdio` | `stdio`, `http` or `websocket`, in any case (the last two mean the same listener) |
-| `acp.agent.transport.http.host` | loopback | the address the listener binds; unset binds `127.0.0.1` and `::1` only, `0.0.0.0` every interface (an explicit opt-in: the listener has no authentication) |
+| `acp.agent.transport.http.listener.host` | loopback | the address the listener binds; unset binds `127.0.0.1` and `::1` only, `0.0.0.0` every interface (an explicit opt-in: the listener has no authentication) |
 | `acp.agent.transport.http.allowed-origins` | none | browser origins accepted besides `localhost`, `127.0.0.1` and `[::1]`; any other `Origin` is answered 403, over HTTP and on the WebSocket handshake; `*` for any |
-| `acp.agent.transport.http.port` | `8080` | the listener's own port; `0` for an ephemeral one (`AcpAgentRuntime.port()`) |
+| `acp.agent.transport.http.listener.port` | `8080` | the listener's own port; `0` for an ephemeral one (`AcpAgentRuntime.port()`) |
+| `acp.agent.transport.http.listener.max-concurrent-streams-per-connection` | SDK (1024) | HTTP/2 streams one client connection may hold open |
 | `acp.agent.transport.http.path` | `/acp` | |
 | `acp.agent.transport.http.max-post-body-size` | SDK (16MB) | e.g. `4MB` |
-| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `max-concurrent-streams-per-connection`, `shutdown-timeout` | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
+| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout` | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
 
 An application bean of type `AcpAgentTransport` replaces stdio, for example the in-memory
 transport of `acp-test` in a test.
@@ -106,7 +107,7 @@ one, not inside it. It serves HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades 
 **Micronaut's security does not apply to it.** Because the listener is the SDK's own server,
 Micronaut's filters, `micronaut-security` rules, CORS, TLS and metrics never see its requests. It
 binds the loopback interface by default, so only programs on the same machine can connect, and it
-refuses browser requests from foreign origins. Setting `acp.agent.transport.http.host=0.0.0.0`
+refuses browser requests from foreign origins. Setting `acp.agent.transport.http.listener.host=0.0.0.0`
 exposes an endpoint without authentication to the network: put a proxy that authenticates in front
 of it. This is the interim arrangement for 0.80.0; serving ACP on Micronaut's own server, where its
 security applies, is planned for 0.81.0.

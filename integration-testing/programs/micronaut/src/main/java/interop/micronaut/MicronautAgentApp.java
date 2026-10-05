@@ -40,7 +40,7 @@ public final class MicronautAgentApp {
 		Map<String, Object> properties = new HashMap<>();
 		// One listener serves Streamable HTTP and WebSocket upgrades on /acp.
 		properties.put("acp.agent.transport.type", stdio ? "stdio" : "http");
-		properties.put("acp.agent.transport.http.port", port);
+		properties.put("acp.agent.transport.http.listener.port", port);
 		ApplicationContext context = Micronaut.build(new String[0]).mainClass(MicronautAgentApp.class).banner(false)
 			.properties(properties).start();
 		if (!stdio) {

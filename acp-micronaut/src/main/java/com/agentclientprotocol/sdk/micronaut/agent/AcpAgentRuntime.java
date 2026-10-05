@@ -183,7 +183,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 
 	/**
 	 * Returns the port the HTTP listener is bound to, useful with
-	 * {@code acp.agent.transport.http.port=0}.
+	 * {@code acp.agent.transport.http.listener.port=0}.
 	 * @return the port, or empty over stdio, before the start and after the close
 	 */
 	public OptionalInt port() {

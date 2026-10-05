@@ -70,7 +70,7 @@ class AgentProcessTest {
 
 	@Test
 	void httpServesUntilSigtermThenStopsGracefully() throws Exception {
-		Process agent = AgentProcess.start("--acp.agent.transport.type=http", "--acp.agent.transport.http.port=0",
+		Process agent = AgentProcess.start("--acp.agent.transport.type=http", "--acp.agent.transport.http.listener.port=0",
 				"--acp.agent.transport.http.shutdown-timeout=2s");
 		List<String> stderr = AgentProcess.collectStderr(agent);
 		int port = awaitPort(stderr);

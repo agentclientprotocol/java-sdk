@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own. It now binds `127.0.0.1`, and `::1` too where the machine has IPv6, unless told
   otherwise. Remote exposure is an explicit opt-in: `StreamableHttpAcpAgentTransportOptions.builder()
   .host("0.0.0.0")` (or one address), `spring.acp.agent.transport.http.listener.host` (Spring Boot,
-  non-web applications), `acp.agent.transport.http.host` (Micronaut) and
+  non-web applications), `acp.agent.transport.http.listener.host` (Micronaut) and
   `transport.http.listener.host` in `AcpAgentSettings`. Servers a framework runs (a Spring MVC
   servlet container, Quarkus) keep the framework's own bind settings (`server.address`,
   `quarkus.http.host`). Migration: a deployment that reached the listener from another machine or
@@ -228,7 +228,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (the context closes and the process exits 0 when the client closes the agent's input; SIGTERM
     closes the agent gracefully), or `http`/`websocket` through the SDK's Jetty listener on its own
     port, with every `StreamableHttpAcpAgentTransportOptions` limit as a property, plus
-    `cancel-grace-period` and `max-prompt-duration`.
+    `cancel-grace-period` and `max-prompt-duration`. As in Spring Boot and `acp-integration`, the
+    listener's own keys sit under `acp.agent.transport.http.listener` (`host`, `port`,
+    `max-concurrent-streams-per-connection`); the keys any host of the endpoint reads (`path`,
+    `allowed-origins`, the buffer limits, `shutdown-timeout`) stay under `acp.agent.transport.http`.
   - **Client.** `acp.client.*` builds the stdio, WebSocket or Streamable HTTP transport, an
     `AcpAsyncClient` customized by `AcpClientCustomizer` beans in order, and an `AcpSyncClient` over
     it; it closes gracefully, once, with the context.

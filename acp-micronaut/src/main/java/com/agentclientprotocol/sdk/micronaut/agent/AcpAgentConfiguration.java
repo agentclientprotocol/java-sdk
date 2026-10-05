@@ -29,13 +29,14 @@ import org.jspecify.annotations.Nullable;
  * acp.agent.shutdown-on-transport-end    true    close the context when stdio input ends
  * acp.agent.shutdown-timeout             10s     closing waits this long for a stdio agent
  * acp.agent.transport.type               stdio   stdio | http | websocket
- * acp.agent.transport.http.host          (unset) loopback only; 0.0.0.0 for every interface
- * acp.agent.transport.http.port          8080    0 for an ephemeral port
+ * acp.agent.transport.http.listener.host (unset) loopback only; 0.0.0.0 for every interface
+ * acp.agent.transport.http.listener.port 8080    0 for an ephemeral port
+ * acp.agent.transport.http.listener.max-concurrent-streams-per-connection   (unset: the SDK default)
  * acp.agent.transport.http.allowed-origins (none) browser origins accepted besides loopback
  * acp.agent.transport.http.path          /acp
  * acp.agent.transport.http.max-post-body-size, keep-alive-interval, mailbox-capacity,
  *     max-pending-sse-events, max-web-socket-pending-frames, max-provisional-sessions,
- *     max-concurrent-streams-per-connection, shutdown-timeout   (unset: the SDK defaults)
+ *     shutdown-timeout   (unset: the SDK defaults)
  * </pre>
  *
  * <p>Durations take Micronaut's forms, such as {@code 30s} or {@code 500ms}; a size is a number of
@@ -235,10 +236,10 @@ public class AcpAgentConfiguration {
 			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
 			.maxProvisionalSessions(http.getMaxProvisionalSessions())
 			.shutdownTimeout(http.getShutdownTimeout())
-			.listenerHost(http.getHost())
+			.listenerHost(http.getListener().getHost())
 			.allowedOrigins(http.getAllowedOrigins())
-			.listenerPort(http.getPort())
-			.maxConcurrentStreamsPerConnection(http.getMaxConcurrentStreamsPerConnection())
+			.listenerPort(http.getListener().getPort())
+			.maxConcurrentStreamsPerConnection(http.getListener().getMaxConcurrentStreamsPerConnection())
 			.build();
 	}
 
@@ -311,10 +312,6 @@ public class AcpAgentConfiguration {
 		@ConfigurationProperties("http")
 		public static class Http {
 
-			private @Nullable String host;
-
-			private int port = 8080;
-
 			private List<String> allowedOrigins = new ArrayList<>();
 
 			private String path = AcpAgentSettings.DEFAULT_PATH;
@@ -331,31 +328,9 @@ public class AcpAgentConfiguration {
 
 			private @Nullable Integer maxProvisionalSessions;
 
-			private @Nullable Integer maxConcurrentStreamsPerConnection;
-
 			private @Nullable Duration shutdownTimeout;
 
-			/**
-			 * Returns the address the listener binds ({@code acp.agent.transport.http.host}).
-			 * Default: unset, which binds the loopback interface only ({@code 127.0.0.1}, and
-			 * {@code ::1} where the machine has IPv6), so only programs on the same machine can
-			 * connect. {@code 0.0.0.0} exposes the agent on every interface. The listener is the
-			 * SDK's own server, not Micronaut's: Micronaut's security filters do not apply to it
-			 * and it has no authentication of its own, so expose it only behind a proxy or
-			 * firewall that controls who connects. Maps to {@link AcpAgentSettings.Listener#host()}.
-			 * @return the host, or {@code null} for loopback only
-			 */
-			public @Nullable String getHost() {
-				return host;
-			}
-
-			/**
-			 * Sets the address the listener binds; see {@link #getHost()}.
-			 * @param host a host name or address, or {@code null} for loopback only
-			 */
-			public void setHost(@Nullable String host) {
-				this.host = host;
-			}
+			private Listener listener = new Listener();
 
 			/**
 			 * Returns the browser origins the listener accepts besides the loopback ones
@@ -378,24 +353,6 @@ public class AcpAgentConfiguration {
 			 */
 			public void setAllowedOrigins(List<String> allowedOrigins) {
 				this.allowedOrigins = allowedOrigins;
-			}
-
-			/**
-			 * Returns the listener's port ({@code acp.agent.transport.http.port}). Default 8080;
-			 * {@code 0} picks a free port, which {@link AcpAgentRuntime#port()} then returns. Maps
-			 * to {@link AcpAgentSettings.Listener#port()}.
-			 * @return the port
-			 */
-			public int getPort() {
-				return port;
-			}
-
-			/**
-			 * Sets the listener's port; default 8080, 0 for an ephemeral port.
-			 * @param port the listener's port; 0 for an ephemeral port
-			 */
-			public void setPort(int port) {
-				this.port = port;
 			}
 
 			/**
@@ -540,27 +497,6 @@ public class AcpAgentConfiguration {
 			}
 
 			/**
-			 * Returns how many HTTP/2 streams one client connection may hold open at once, each
-			 * open SSE stream holding one
-			 * ({@code acp.agent.transport.http.max-concurrent-streams-per-connection}). Default:
-			 * unset, which keeps the SDK's default of 1024. Maps to the transport option
-			 * {@code maxConcurrentStreamsPerConnection}.
-			 * @return the limit, or {@code null} for the SDK's default
-			 */
-			public @Nullable Integer getMaxConcurrentStreamsPerConnection() {
-				return maxConcurrentStreamsPerConnection;
-			}
-
-			/**
-			 * Sets the HTTP/2 streams one client connection may hold open; unset keeps the SDK
-			 * default, 1024.
-			 * @param maxConcurrentStreamsPerConnection the stream count; positive
-			 */
-			public void setMaxConcurrentStreamsPerConnection(@Nullable Integer maxConcurrentStreamsPerConnection) {
-				this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
-			}
-
-			/**
 			 * Returns how long closing the listener waits for its connections' agents to close
 			 * before it closes the rest at once
 			 * ({@code acp.agent.transport.http.shutdown-timeout}). Default: unset, which keeps the
@@ -581,6 +517,104 @@ public class AcpAgentConfiguration {
 			 */
 			public void setShutdownTimeout(@Nullable Duration shutdownTimeout) {
 				this.shutdownTimeout = shutdownTimeout;
+			}
+
+			/**
+			 * Returns the SDK listener's own properties, {@code acp.agent.transport.http.listener.*}:
+			 * the address and port it binds and its HTTP/2 stream limit. The other
+			 * {@code acp.agent.transport.http.*} properties apply to whichever server serves the
+			 * endpoint.
+			 * @return the listener properties
+			 */
+			public Listener getListener() {
+				return listener;
+			}
+
+			/**
+			 * Replaces the listener's own properties.
+			 * @param listener the listener properties
+			 */
+			public void setListener(Listener listener) {
+				this.listener = listener;
+			}
+
+			/**
+			 * The {@code acp.agent.transport.http.listener.*} properties: the SDK's own Jetty
+			 * listener's address, port and HTTP/2 stream limit, the keys Spring Boot and
+			 * {@code acp-integration} also keep under {@code listener}.
+			 */
+			@ConfigurationProperties("listener")
+			public static class Listener {
+
+				private @Nullable String host;
+
+				private int port = 8080;
+
+				private @Nullable Integer maxConcurrentStreamsPerConnection;
+
+				/**
+				 * Returns the address the listener binds
+				 * ({@code acp.agent.transport.http.listener.host}). Default: unset, which binds the
+				 * loopback interface only ({@code 127.0.0.1}, and {@code ::1} where the machine has
+				 * IPv6), so only programs on the same machine can connect. {@code 0.0.0.0} exposes the
+				 * agent on every interface. The listener is the SDK's own server, not Micronaut's:
+				 * Micronaut's security filters do not apply to it and it has no authentication of its
+				 * own, so expose it only behind a proxy or firewall that controls who connects. Maps to
+				 * {@link AcpAgentSettings.Listener#host()}.
+				 * @return the host, or {@code null} for loopback only
+				 */
+				public @Nullable String getHost() {
+					return host;
+				}
+
+				/**
+				 * Sets the address the listener binds; see {@link #getHost()}.
+				 * @param host a host name or address, or {@code null} for loopback only
+				 */
+				public void setHost(@Nullable String host) {
+					this.host = host;
+				}
+
+				/**
+				 * Returns the listener's port ({@code acp.agent.transport.http.listener.port}).
+				 * Default 8080; {@code 0} picks a free port, which {@link AcpAgentRuntime#port()} then
+				 * returns. Maps to {@link AcpAgentSettings.Listener#port()}.
+				 * @return the port
+				 */
+				public int getPort() {
+					return port;
+				}
+
+				/**
+				 * Sets the listener's port; default 8080, 0 for an ephemeral port.
+				 * @param port the listener's port; 0 for an ephemeral port
+				 */
+				public void setPort(int port) {
+					this.port = port;
+				}
+
+				/**
+				 * Returns how many HTTP/2 streams one client connection may hold open at once, each
+				 * open SSE stream holding one
+				 * ({@code acp.agent.transport.http.listener.max-concurrent-streams-per-connection}).
+				 * Default: unset, which keeps the SDK's default of 1024. Maps to the transport option
+				 * {@code maxConcurrentStreamsPerConnection}.
+				 * @return the limit, or {@code null} for the SDK's default
+				 */
+				public @Nullable Integer getMaxConcurrentStreamsPerConnection() {
+					return maxConcurrentStreamsPerConnection;
+				}
+
+				/**
+				 * Sets the HTTP/2 streams one client connection may hold open; unset keeps the SDK
+				 * default, 1024.
+				 * @param maxConcurrentStreamsPerConnection the stream count; positive
+				 */
+				public void setMaxConcurrentStreamsPerConnection(
+						@Nullable Integer maxConcurrentStreamsPerConnection) {
+					this.maxConcurrentStreamsPerConnection = maxConcurrentStreamsPerConnection;
+				}
+
 			}
 
 		}

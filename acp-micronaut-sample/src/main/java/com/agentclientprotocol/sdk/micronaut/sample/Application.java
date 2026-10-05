@@ -10,7 +10,7 @@ import io.micronaut.runtime.Micronaut;
  * Starts the agent. Over stdio (the default) standard output carries the protocol, so the
  * banner is off and {@code logback.xml} logs to standard error; the process exits when its
  * client closes the agent's input. With {@code -Dacp.agent.transport.type=http} it serves
- * Streamable HTTP and WebSocket on {@code acp.agent.transport.http.port} until stopped.
+ * Streamable HTTP and WebSocket on {@code acp.agent.transport.http.listener.port} until stopped.
  */
 public final class Application {
 

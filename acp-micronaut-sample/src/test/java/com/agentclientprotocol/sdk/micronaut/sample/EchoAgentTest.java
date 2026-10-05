@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** The sample agent in-process, over WebSocket, with a configured greeting. */
 @MicronautTest
 @Property(name = "acp.agent.transport.type", value = "http")
-@Property(name = "acp.agent.transport.http.port", value = "0")
+@Property(name = "acp.agent.transport.http.listener.port", value = "0")
 @Property(name = "sample.prefix", value = "hi: ")
 class EchoAgentTest {
 

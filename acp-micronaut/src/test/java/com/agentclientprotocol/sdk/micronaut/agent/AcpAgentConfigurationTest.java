@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import io.micronaut.context.ApplicationContext;
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,8 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getShutdownTimeout()).isEqualTo(Duration.ofSeconds(10));
 			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.STDIO);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
-			assertThat(http.getPort()).isEqualTo(8080);
-			assertThat(http.getHost()).isNull();
+			assertThat(http.getListener().getPort()).isEqualTo(8080);
+			assertThat(http.getListener().getHost()).isNull();
 			assertThat(http.getAllowedOrigins()).isEmpty();
 			assertThat(http.getPath()).isEqualTo("/acp");
 			assertThat(http.getMaxPostBodySize()).isNull();
@@ -40,7 +41,7 @@ class AcpAgentConfigurationTest {
 			assertThat(http.getMaxPendingSseEvents()).isNull();
 			assertThat(http.getMaxWebSocketPendingFrames()).isNull();
 			assertThat(http.getMaxProvisionalSessions()).isNull();
-			assertThat(http.getMaxConcurrentStreamsPerConnection()).isNull();
+			assertThat(http.getListener().getMaxConcurrentStreamsPerConnection()).isNull();
 			assertThat(http.getShutdownTimeout()).isNull();
 			// unset limits keep the SDK's defaults
 			assertThat(config.toSettings().toOptions(true)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
@@ -53,7 +54,7 @@ class AcpAgentConfigurationTest {
 				Map.entry("acp.agent.request-timeout", "7s"), Map.entry("acp.agent.cancel-grace-period", "3s"),
 				Map.entry("acp.agent.max-prompt-duration", "2m"),
 				Map.entry("acp.agent.shutdown-on-transport-end", "false"), Map.entry("acp.agent.shutdown-timeout", "6s"),
-				Map.entry("acp.agent.transport.type", "http"), Map.entry("acp.agent.transport.http.port", "9123"),
+				Map.entry("acp.agent.transport.type", "http"), Map.entry("acp.agent.transport.http.listener.port", "9123"),
 				Map.entry("acp.agent.transport.http.path", "/agents/acp"),
 				Map.entry("acp.agent.transport.http.max-post-body-size", "2MB"),
 				Map.entry("acp.agent.transport.http.keep-alive-interval", "20s"),
@@ -61,9 +62,9 @@ class AcpAgentConfigurationTest {
 				Map.entry("acp.agent.transport.http.max-pending-sse-events", "12"),
 				Map.entry("acp.agent.transport.http.max-web-socket-pending-frames", "13"),
 				Map.entry("acp.agent.transport.http.max-provisional-sessions", "14"),
-				Map.entry("acp.agent.transport.http.max-concurrent-streams-per-connection", "15"),
+				Map.entry("acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "15"),
 				Map.entry("acp.agent.transport.http.shutdown-timeout", "4s"),
-				Map.entry("acp.agent.transport.http.host", "0.0.0.0"),
+				Map.entry("acp.agent.transport.http.listener.host", "0.0.0.0"),
 				Map.entry("acp.agent.transport.http.allowed-origins", "https://a.example,https://b.example"));
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
 			AcpAgentConfiguration config = context.getBean(AcpAgentConfiguration.class);
@@ -75,7 +76,7 @@ class AcpAgentConfigurationTest {
 			assertThat(config.getShutdownTimeout()).isEqualTo(Duration.ofSeconds(6));
 			assertThat(config.getTransport().getType()).isEqualTo(AcpTransportType.HTTP);
 			AcpAgentConfiguration.Transport.Http http = config.getTransport().getHttp();
-			assertThat(http.getPort()).isEqualTo(9123);
+			assertThat(http.getListener().getPort()).isEqualTo(9123);
 			assertThat(http.getPath()).isEqualTo("/agents/acp");
 
 			StreamableHttpAcpAgentTransportOptions options = config.toSettings().toOptions(true);
@@ -89,6 +90,26 @@ class AcpAgentConfigurationTest {
 			assertThat(options.shutdownTimeout()).isEqualTo(Duration.ofSeconds(4));
 			assertThat(options.host()).isEqualTo("0.0.0.0");
 			assertThat(options.allowedOrigins()).containsExactlyInAnyOrder("https://a.example", "https://b.example");
+		}
+	}
+
+	/**
+	 * The listener's own keys sit under {@code acp.agent.transport.http.listener}, as in Spring Boot
+	 * and {@code acp-integration}; the keys every host of the endpoint reads stay one level up.
+	 */
+	@Test
+	void listenerKeysSitUnderListener() {
+		Map<String, Object> properties = Map.of("acp.agent.enabled", "false",
+				"acp.agent.transport.http.listener.host", "0.0.0.0", "acp.agent.transport.http.listener.port", "9124",
+				"acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "16");
+		try (ApplicationContext context = ApplicationContext.run(properties)) {
+			AcpAgentSettings.Listener listener = context.getBean(AcpAgentConfiguration.class)
+				.toSettings()
+				.http()
+				.listener();
+			assertThat(listener.host()).isEqualTo("0.0.0.0");
+			assertThat(listener.port()).isEqualTo(9124);
+			assertThat(listener.maxConcurrentStreamsPerConnection()).isEqualTo(16);
 		}
 	}
 
