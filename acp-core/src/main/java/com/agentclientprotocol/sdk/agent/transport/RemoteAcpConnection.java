@@ -63,8 +63,19 @@ public final class RemoteAcpConnection {
 	/** Set by {@link #close()}, which may follow a graceful close that has not finished. */
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 
+	/**
+	 * Orders {@link #start} against a close: either the start sees the close and creates no
+	 * agent, or the close sees the agent and closes it. Without it a close that ran between a
+	 * listener's shutdown check and the start closed only the transport, and the agent created
+	 * after it was never closed. A lock, not a monitor: callers may be virtual threads.
+	 */
+	private final ReentrantLock lifecycleLock = new ReentrantLock();
+
 	/** The connection's agent runtime; null until {@link #start} creates it. */
 	private volatile @Nullable AcpAsyncAgent agent;
+
+	/** Signals when the agent's start has ended, so a graceful close closes a started agent. */
+	private final Sinks.Empty<Void> agentStartEnded = Sinks.empty();
 
 	/**
 	 * Creates a connection whose transport errors are logged at ERROR.
@@ -117,7 +128,8 @@ public final class RemoteAcpConnection {
 	 * failure, such as a factory that throws, is also reported to the exception handler.
 	 * @param agentFactory creates the agent for this connection
 	 * @return a Mono that completes once the agent has started; it errors with an
-	 * {@link IllegalStateException} if the connection was started before
+	 * {@link IllegalStateException} if the connection was started before, and with an
+	 * {@link AcpConnectionException}, creating no agent, if the connection is already closing
 	 * @throws IllegalArgumentException if {@code agentFactory} is null
 	 */
 	public Mono<Void> start(AcpAgentFactory agentFactory) {
@@ -126,12 +138,30 @@ public final class RemoteAcpConnection {
 		// the second time and one that is never subscribed does not consume the start.
 		return Mono.defer(() -> {
 			if (!started.compareAndSet(false, true)) {
-				return Mono.error(new IllegalStateException("Already started"));
+				return Mono.<Void>error(new IllegalStateException("Already started")).doOnError(this::signalException);
 			}
-			AcpAsyncAgent created = agentFactory.create(transport);
-			this.agent = created;
-			return created.start();
-		}).doOnError(this::signalException);
+			AcpAsyncAgent created;
+			lifecycleLock.lock();
+			try {
+				if (closing.get()) {
+					// Closed before its agent existed, as when a listener shuts down while the
+					// connection opens: an agent created now would never be closed. Not
+					// reported: the close was the owner's own.
+					return Mono.error(new AcpConnectionException("Remote ACP connection is closing"));
+				}
+				created = agentFactory.create(transport);
+				this.agent = created;
+			}
+			catch (RuntimeException e) {
+				return Mono.<Void>error(e).doOnError(this::signalException);
+			}
+			finally {
+				lifecycleLock.unlock();
+			}
+			return created.start()
+				.doOnError(this::signalException)
+				.doFinally(signal -> agentStartEnded.tryEmitEmpty());
+		});
 	}
 
 	/**
@@ -165,12 +195,23 @@ public final class RemoteAcpConnection {
 	 */
 	public Mono<Void> closeGracefully() {
 		return Mono.defer(() -> {
-			if (!closing.compareAndSet(false, true)) {
-				return Mono.empty();
+			AcpAsyncAgent currentAgent;
+			lifecycleLock.lock();
+			try {
+				if (!closing.compareAndSet(false, true)) {
+					return Mono.empty();
+				}
+				currentAgent = this.agent;
 			}
-			AcpAsyncAgent currentAgent = this.agent;
+			finally {
+				lifecycleLock.unlock();
+			}
 			if (currentAgent != null) {
-				return currentAgent.closeGracefully()
+				// Closed once its start has ended: an agent closed while it starts, such as the
+				// default one, has nothing to close yet and would then start a session that
+				// nothing closes.
+				return agentStartEnded.asMono()
+					.then(Mono.defer(currentAgent::closeGracefully))
 					.onErrorResume(error -> {
 						signalException(error);
 						return Mono.empty();
@@ -187,11 +228,18 @@ public final class RemoteAcpConnection {
 	 * closed at once). Only the first call has an effect.
 	 */
 	public void close() {
-		closing.set(true);
-		if (!closed.compareAndSet(false, true)) {
-			return;
+		AcpAsyncAgent currentAgent;
+		lifecycleLock.lock();
+		try {
+			closing.set(true);
+			if (!closed.compareAndSet(false, true)) {
+				return;
+			}
+			currentAgent = this.agent;
 		}
-		AcpAsyncAgent currentAgent = this.agent;
+		finally {
+			lifecycleLock.unlock();
+		}
 		if (currentAgent != null) {
 			currentAgent.close();
 		}

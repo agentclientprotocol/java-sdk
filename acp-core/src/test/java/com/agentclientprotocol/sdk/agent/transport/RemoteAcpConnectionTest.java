@@ -7,9 +7,11 @@ package com.agentclientprotocol.sdk.agent.transport;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.PinnedVirtualThreads;
@@ -27,6 +29,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCResponse;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -208,6 +211,61 @@ class RemoteAcpConnectionTest {
 		assertThatThrownBy(() -> connection
 			.acceptInbound(new JSONRPCRequest(AcpSchema.METHOD_INITIALIZE, 1, Map.of("protocolVersion", 1))))
 			.isInstanceOf(AcpConnectionException.class);
+	}
+
+	/**
+	 * A listener that shuts down while a connection is being opened closes the connection
+	 * before its agent exists; the start that follows must not create an agent that nothing
+	 * will close.
+	 */
+	@Test
+	void startAfterAGracefulCloseCreatesNoAgent() {
+		AtomicInteger created = new AtomicInteger();
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add, error -> {
+		});
+		connection.closeGracefully().block(TIMEOUT);
+
+		assertThatThrownBy(() -> connection.start(transport -> {
+			created.incrementAndGet();
+			return mock(AcpAsyncAgent.class);
+		}).block(TIMEOUT)).isInstanceOf(AcpConnectionException.class);
+		assertThat(created).hasValue(0);
+	}
+
+	@Test
+	void startAfterACloseCreatesNoAgent() {
+		AtomicInteger created = new AtomicInteger();
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add, error -> {
+		});
+		connection.close();
+
+		assertThatThrownBy(() -> connection.start(transport -> {
+			created.incrementAndGet();
+			return mock(AcpAsyncAgent.class);
+		}).block(TIMEOUT)).isInstanceOf(AcpConnectionException.class);
+		assertThat(created).hasValue(0);
+	}
+
+	/**
+	 * A graceful close that arrives while the agent is starting closes it once it has started:
+	 * closed before, an agent such as the default one has nothing to close yet and its start
+	 * would then open a session that nothing closes.
+	 */
+	@Test
+	void aGracefulCloseDuringTheAgentStartClosesTheAgentAfterItStarted() {
+		List<String> events = new CopyOnWriteArrayList<>();
+		Sinks.Empty<Void> startGate = Sinks.empty();
+		AcpAsyncAgent agent = mock(AcpAsyncAgent.class);
+		when(agent.start()).thenReturn(startGate.asMono().doOnSuccess(v -> events.add("started")));
+		when(agent.closeGracefully()).thenReturn(Mono.fromRunnable(() -> events.add("closed")));
+		RemoteAcpConnection connection = new RemoteAcpConnection("c1", jsonMapper, outbound::add);
+		connection.start(transport -> agent).subscribe();
+
+		CompletableFuture<Void> closed = connection.closeGracefully().toFuture();
+		startGate.tryEmitEmpty();
+
+		closed.join();
+		assertThat(events).containsExactly("started", "closed");
 	}
 
 	@Test

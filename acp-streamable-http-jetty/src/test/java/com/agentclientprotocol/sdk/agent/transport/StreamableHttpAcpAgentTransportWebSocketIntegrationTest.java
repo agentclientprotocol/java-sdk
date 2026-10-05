@@ -363,7 +363,12 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 	void listenerShutdownWaitsForWebSocketAgentShutdown() throws Exception {
 		Sinks.One<Void> allowAgentShutdown = Sinks.one();
 		CountDownLatch agentShutdownStarted = new CountDownLatch(1);
-		AcpAgentFactory agentFactory = transport -> new BlockingCloseAgent(allowAgentShutdown, agentShutdownStarted);
+		CountDownLatch agentCreated = new CountDownLatch(1);
+		AcpAgentFactory agentFactory = transport -> {
+			BlockingCloseAgent agent = new BlockingCloseAgent(allowAgentShutdown, agentShutdownStarted);
+			agentCreated.countDown();
+			return agent;
+		};
 
 		try (FixtureServer server = FixtureServer.start(agentFactory)) {
 			MessageRecordingListener listener = new MessageRecordingListener();
@@ -374,11 +379,8 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 			assertThat(listener.openLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
 			// The client sees the upgrade answered before the server has opened the socket and
-			// started its agent; a shutdown in between refuses the connection instead.
-			long deadline = System.nanoTime() + TIMEOUT.toNanos();
-			while (server.transport().activeConnectionCount() == 0 && System.nanoTime() < deadline) {
-				Thread.onSpinWait();
-			}
+			// created its agent; a shutdown in between closes the connection with no agent.
+			assertThat(agentCreated.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
 			assertThat(server.transport().activeConnectionCount()).isEqualTo(1);
 
 			CompletableFuture<Void> shutdown = server.transport().closeGracefully().toFuture();

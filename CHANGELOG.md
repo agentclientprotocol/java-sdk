@@ -1409,6 +1409,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A WebSocket that opens while the endpoint shuts down no longer leaves its agent running.** A
+  graceful shutdown (`closeGracefully()` of the SDK listener or of a host's endpoint) that came
+  between a WebSocket upgrade's shutdown check and the start of its agent closed the connection
+  while it had no agent yet; the agent created a moment later was started and never closed, and
+  the shutdown did not wait for it. `RemoteAcpConnection.start` now creates no agent once the
+  connection is closing (it fails with `AcpConnectionException`, not reported to the exception
+  handler), and a graceful close that arrives while the agent starts closes it once it has started.
+
 - **acp-test: `InMemoryTransportPair` no longer drops a message when two threads send at once under
   load.** A send that found another thread still emitting on the same direction retried for 100 ms
   and then failed with `FAIL_NON_SERIALIZED`, and the message was lost; since delivery runs on the
