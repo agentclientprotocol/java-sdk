@@ -275,8 +275,7 @@ public abstract class AcpHttpTransportTck {
 	void theStatusTable() throws Exception {
 		URI uri = endpoint();
 		assertThat(post(uri, "text/plain", HttpProbes.INITIALIZE, Map.of()).statusCode()).isEqualTo(415);
-		assertThat(post(uri, "application/json", "x".repeat((int) MAX_MESSAGE_BYTES + 1), Map.of()).statusCode())
-			.isEqualTo(413);
+		assertThat(oversizedPostStatus(uri)).isEqualTo(413);
 		assertThat(post(uri, "application/json", "[" + HttpProbes.INITIALIZE + "]", Map.of()).statusCode())
 			.isEqualTo(501);
 		assertThat(post(uri, "application/json", "not json", Map.of()).statusCode()).isEqualTo(400);
@@ -484,6 +483,32 @@ public abstract class AcpHttpTransportTck {
 			.POST(HttpRequest.BodyPublishers.ofString(body));
 		headers.forEach(request::header);
 		return send(request);
+	}
+
+	/**
+	 * The status of a POST over the size limit, sent as its headers alone. The endpoint refuses
+	 * such a body by its Content-Length without reading it, and some servers (Tomcat as a WebFlux
+	 * server, Jetty) then close the connection while the body is still arriving. The reset that
+	 * follows can cost a client still sending the 413, which the JDK client reports as an I/O
+	 * error ("header parser received no bytes"). With no body sent, nothing is left unread and
+	 * the status always arrives.
+	 */
+	private static int oversizedPostStatus(URI uri) throws IOException {
+		try (Socket socket = new Socket()) {
+			socket.connect(new InetSocketAddress(uri.getHost(), uri.getPort()), (int) TIMEOUT.toMillis());
+			socket.setSoTimeout((int) TIMEOUT.toMillis());
+			String request = "POST " + uri.getRawPath() + " HTTP/1.1\r\n" + "Host: " + uri.getHost() + ":" + uri.getPort()
+					+ "\r\n" + "Content-Type: application/json\r\n" + "Accept: application/json, text/event-stream\r\n"
+					+ "Content-Length: " + (MAX_MESSAGE_BYTES + 1) + "\r\n\r\n";
+			socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+			socket.getOutputStream().flush();
+			String status = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII))
+				.readLine();
+			if (status == null || !status.startsWith("HTTP/1.1 ") || status.length() < 12) {
+				throw new IOException("No status line for an oversized POST: " + status);
+			}
+			return Integer.parseInt(status.substring(9, 12));
+		}
 	}
 
 	private static HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
