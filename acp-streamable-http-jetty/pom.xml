@@ -18,11 +18,13 @@
 
     <properties>
         <!-- Coverage floors: the launcher alone (the servlet host it runs is measured in
-             acp-http-servlet). Measured line 85.8%, branch 86.7% on JDK 21, and line 76%, branch
-             70% on JDK 17, where the virtual-thread pool paths cannot run; the JDK 17 figures less
-             2 points (parent pom, JaCoCo) -->
+             acp-http-servlet). Measured line 76.4%, branch 70.0% on JDK 17, where the
+             virtual-thread pool paths cannot run, and line 85.8%, branch 86.7% on JDK 21; each
+             JDK's figures less 2 points (parent pom, JaCoCo) -->
         <jacoco.minimum.line>0.74</jacoco.minimum.line>
         <jacoco.minimum.branch>0.68</jacoco.minimum.branch>
+        <jacoco.jdk21.minimum.line>0.83</jacoco.jdk21.minimum.line>
+        <jacoco.jdk21.minimum.branch>0.84</jacoco.jdk21.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>

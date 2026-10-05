@@ -119,6 +119,13 @@
         <!-- Coverage floors; each module overrides them with its own (see the JaCoCo plugin) -->
         <jacoco.minimum.line>1.00</jacoco.minimum.line>
         <jacoco.minimum.branch>1.00</jacoco.minimum.branch>
+        <!-- A module whose JDK 21 build runs code JDK 17 cannot (virtual threads) declares
+             higher floors for it; otherwise JDK 21 checks the same floors. -->
+        <jacoco.jdk21.minimum.line>${jacoco.minimum.line}</jacoco.jdk21.minimum.line>
+        <jacoco.jdk21.minimum.branch>${jacoco.minimum.branch}</jacoco.jdk21.minimum.branch>
+        <!-- The floors the gate checks on this JDK (the coverage-jdk21 profile switches them) -->
+        <jacoco.gate.line>${jacoco.minimum.line}</jacoco.gate.line>
+        <jacoco.gate.branch>${jacoco.minimum.branch}</jacoco.gate.branch>
         <owasp.version>13.0.0</owasp.version>
         <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
@@ -531,7 +538,12 @@
                  (integration-testing/) is outside the Maven build and is not counted.
 
                  The gate (check, in verify) fails when a module's LINE or BRANCH covered ratio
-                 falls below its floor. Every module declares jacoco.minimum.line and
+                 falls below its floor. CI builds on JDK 17 and on JDK 21, and a module may cover
+                 more on JDK 21, where its virtual-thread code runs: such a module also declares
+                 jacoco.jdk21.minimum.line and jacoco.jdk21.minimum.branch, which the JDK 21
+                 build checks instead (the coverage-jdk21 profile); without them JDK 21 checks
+                 the same floors. Measure a floor on both JDKs: the JDK 17 one from the JDK 17
+                 build, the JDK 21 one from the JDK 21 build, and a shared floor from the lower. Every module declares jacoco.minimum.line and
                  jacoco.minimum.branch; the default below is full coverage, so a new module
                  fails until it declares measured floors. A floor is the coverage measured from a clean verify less a margin of
                  2 points, rounded down to a whole percent: enough for the run-to-run variation
@@ -586,12 +598,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>${jacoco.minimum.line}</minimum>
+                                            <minimum>${jacoco.gate.line}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>${jacoco.minimum.branch}</minimum>
+                                            <minimum>${jacoco.gate.branch}</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
@@ -622,6 +634,17 @@
     </build>
 
     <profiles>
+        <!-- The coverage gate's JDK 21 floors (see the JaCoCo plugin). -->
+        <profile>
+            <id>coverage-jdk21</id>
+            <activation>
+                <jdk>[21,)</jdk>
+            </activation>
+            <properties>
+                <jacoco.gate.line>${jacoco.jdk21.minimum.line}</jacoco.gate.line>
+                <jacoco.gate.branch>${jacoco.jdk21.minimum.branch}</jacoco.gate.branch>
+            </properties>
+        </profile>
         <!-- Error Prone: Error Prone's own bug checks and NullAway, at ERROR, on main sources.
              Error Prone 2.50 runs only on JDK 21+, while the SDK targets Java 17 and its
              release build runs on JDK 17, so the profile activates by JDK: every build on

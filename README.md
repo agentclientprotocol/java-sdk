@@ -512,7 +512,9 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 `./mvnw verify` writes a JaCoCo coverage report for each module to
 `<module>/target/site/jacoco/index.html`, and fails if a module's line or branch coverage drops
 below the floor declared in its `pom.xml` (measured coverage less 2 points). Each module counts
-only its own classes, covered by its own tests. The classes that choose between virtual threads
+only its own classes, covered by its own tests. A module whose JDK 21 build covers more (its
+virtual-thread code runs only there) also declares JDK 21 floors, which a JDK 21 build checks
+instead. The classes that choose between virtual threads
 (JDK 21 and later) and platform threads (JDK 17) must have every branch covered on whichever JDK
 builds, so CI's JDK 17 and JDK 21 builds each prove both choices. When running a subset of tests
 under `verify` (`-Dtest=...`), add `-Djacoco.skip` to skip the gate.
