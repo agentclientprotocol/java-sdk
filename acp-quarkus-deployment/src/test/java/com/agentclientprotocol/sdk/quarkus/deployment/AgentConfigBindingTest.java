@@ -46,6 +46,8 @@ class AgentConfigBindingTest {
 		.overrideConfigKey("quarkus.acp.agent.transport.http.max-web-socket-pending-frames", "13")
 		.overrideConfigKey("quarkus.acp.agent.transport.http.max-provisional-sessions", "14")
 		.overrideConfigKey("quarkus.acp.agent.transport.http.shutdown-timeout", "4s")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.web-socket-idle-timeout", "45m")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.initialize-timeout", "9s")
 		.overrideConfigKey("quarkus.http.limits.max-concurrent-streams", "77");
 
 	@Inject
@@ -80,6 +82,8 @@ class AgentConfigBindingTest {
 		assertThat(options.maxWebSocketPendingFrames()).isEqualTo(13);
 		assertThat(options.maxProvisionalSessions()).isEqualTo(14);
 		assertThat(options.shutdownTimeout()).isEqualTo(Duration.ofSeconds(4));
+		assertThat(options.webSocketIdleTimeout()).isEqualTo(Duration.ofMinutes(45));
+		assertThat(options.initializeTimeout()).isEqualTo(Duration.ofSeconds(9));
 	}
 
 	@Test

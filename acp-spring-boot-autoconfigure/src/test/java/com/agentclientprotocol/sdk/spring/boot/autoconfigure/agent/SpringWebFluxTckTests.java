@@ -13,9 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
-import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
-import com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint;
-import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck;
 import com.agentclientprotocol.sdk.test.http.HttpProbes;
 import org.junit.jupiter.api.Test;
@@ -46,21 +43,16 @@ class SpringWebFluxTckTests extends AcpHttpTransportTck {
 	protected Host startHost(HostConfig config) {
 		var options = config.options();
 		ConfigurableApplicationContext context = new SpringApplicationBuilder(TckApplication.class)
-			.initializers(ctx -> {
-				GenericApplicationContext app = (GenericApplicationContext) ctx;
-				app.registerBean("tckAgentFactory", AcpAgentFactory.class, config::agents);
-				if (setsWebSocketTimeouts(options)) {
-					// The starter maps no property to the WebSocket timeouts: the endpoint the
-					// autoconfiguration backs off for, with the case's options.
-					app.registerBean("acpHttpEndpoint", AcpHttpEndpoint.class,
-							() -> AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), config.agents(), options));
-				}
-			})
+			.initializers(ctx -> ((GenericApplicationContext) ctx).registerBean("tckAgentFactory", AcpAgentFactory.class,
+					config::agents))
 			.run("--spring.main.web-application-type=reactive", "--server.port=0", "--server.address=127.0.0.1",
 					"--spring.acp.agent.transport.type=http",
 					"--spring.acp.agent.transport.http.keep-alive-interval=" + options.keepAliveInterval().toMillis() + "ms",
 					"--spring.acp.agent.transport.http.max-post-body-size=" + options.maxPostBodyBytes() + "B",
 					"--spring.acp.agent.transport.http.shutdown-timeout=" + options.shutdownTimeout().toMillis() + "ms",
+					"--spring.acp.agent.transport.http.web-socket-idle-timeout="
+							+ options.webSocketIdleTimeout().toMillis() + "ms",
+					"--spring.acp.agent.transport.http.initialize-timeout=" + options.initializeTimeout().toMillis() + "ms",
 					"--spring.acp.agent.transport.http.allowed-origins=" + String.join(",", options.allowedOrigins()),
 					// Compression on, including SSE: the autoconfiguration takes text/event-stream out.
 					"--server.compression.enabled=true", "--server.compression.min-response-size=1B",
@@ -127,12 +119,6 @@ class SpringWebFluxTckTests extends AcpHttpTransportTck {
 		finally {
 			host.stop();
 		}
-	}
-
-	private static boolean setsWebSocketTimeouts(StreamableHttpAcpAgentTransportOptions options) {
-		StreamableHttpAcpAgentTransportOptions defaults = StreamableHttpAcpAgentTransportOptions.defaults();
-		return !options.webSocketIdleTimeout().equals(defaults.webSocketIdleTimeout())
-				|| !options.initializeTimeout().equals(defaults.initializeTimeout());
 	}
 
 	@SpringBootConfiguration

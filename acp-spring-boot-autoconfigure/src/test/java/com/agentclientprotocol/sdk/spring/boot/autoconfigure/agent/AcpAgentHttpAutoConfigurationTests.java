@@ -288,6 +288,8 @@ class AcpAgentHttpAutoConfigurationTests {
 		http.setMaxProvisionalSessions(13);
 		http.getListener().setMaxConcurrentStreamsPerConnection(14);
 		http.setShutdownTimeout(Duration.ofSeconds(2));
+		http.setWebSocketIdleTimeout(Duration.ofMinutes(7));
+		http.setInitializeTimeout(Duration.ofSeconds(8));
 		assertThat(properties.toSettings().toOptions(true))
 			.isEqualTo(StreamableHttpAcpAgentTransportOptions.builder()
 				.maxPostBodyBytes(1024 * 1024)
@@ -298,6 +300,8 @@ class AcpAgentHttpAutoConfigurationTests {
 				.keepAliveInterval(Duration.ZERO)
 				.maxConcurrentStreamsPerConnection(14)
 				.shutdownTimeout(Duration.ofSeconds(2))
+				.webSocketIdleTimeout(Duration.ofMinutes(7))
+				.initializeTimeout(Duration.ofSeconds(8))
 				.build());
 	}
 

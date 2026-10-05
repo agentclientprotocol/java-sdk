@@ -95,7 +95,7 @@ public final class Application {
 | `acp.agent.transport.http.listener.max-concurrent-streams-per-connection` | SDK (1024) | HTTP/2 streams one client connection may hold open |
 | `acp.agent.transport.http.path` | `/acp` | |
 | `acp.agent.transport.http.max-post-body-size` | SDK (16MB) | e.g. `4MB` |
-| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout` | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
+| `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout`, `web-socket-idle-timeout` (30m: an idle WebSocket is closed with 1001), `initialize-timeout` (30s: a WebSocket without `initialize` is closed with 1008) | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
 
 An application bean of type `AcpAgentTransport` replaces stdio, for example the in-memory
 transport of `acp-test` in a test.
