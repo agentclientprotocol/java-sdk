@@ -17,10 +17,11 @@
     <description>The framework-neutral ACP Streamable HTTP and WebSocket endpoint: routing, sessions, SSE mailboxes, the status and close-code table, the Origin check and shutdown, behind the host contract every server adapter implements</description>
 
     <properties>
-        <!-- Coverage floors: measured line 83%, branch 67% (the TCK covers the rest from the host
-             modules), less 2 points (parent pom, JaCoCo) -->
-        <jacoco.minimum.line>0.81</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.65</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 90.09%, branch 81.72% on JDK 17 and JDK 21, less 2
+             points (parent pom, JaCoCo). Only this module's own tests count: the transport TCK
+             (acp-test) runs in the host modules, since acp-test depends on this one. -->
+        <jacoco.minimum.line>0.88</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.79</jacoco.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>
