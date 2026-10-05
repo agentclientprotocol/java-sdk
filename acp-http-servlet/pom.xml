@@ -17,10 +17,10 @@
     <description>The ACP endpoint as a Servlet 6 servlet, with WebSocket upgrades through Jakarta WebSocket 2.1, for any servlet container: Tomcat, Jetty, Undertow, Spring MVC</description>
 
     <properties>
-        <!-- Coverage floors: measured line 73.6%, branch 65.1% (Tomcat; the Jetty run is in
-             acp-streamable-http-jetty), less 2 points (parent pom, JaCoCo) -->
-        <jacoco.minimum.line>0.71</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.63</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 83.77%, branch 73.02% on JDK 17 and JDK 21 (Tomcat; the
+             Jetty run is in acp-streamable-http-jetty), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.81</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.71</jacoco.minimum.branch>
     </properties>
 
     <dependencies>
