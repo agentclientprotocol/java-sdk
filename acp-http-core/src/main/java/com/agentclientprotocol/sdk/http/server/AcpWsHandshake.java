@@ -48,10 +48,10 @@ public sealed interface AcpWsHandshake permits AcpWsHandshake.Refused, AcpWsHand
 		long maxTextMessageBytes();
 
 		/**
-		 * Returns how long the socket may stay idle. The endpoint closes an idle connection
-		 * itself (1001) on every host; a host whose container has an idle timeout of its own
-		 * may give it this value.
-		 * @return the idle timeout
+		 * Returns the idle timeout for a container that has one of its own: five seconds past
+		 * the endpoint's {@code webSocketIdleTimeout}. The endpoint closes an idle connection
+		 * itself (1001) on every host; the container's timeout only backs it up.
+		 * @return the container's idle timeout
 		 */
 		Duration idleTimeout();
 

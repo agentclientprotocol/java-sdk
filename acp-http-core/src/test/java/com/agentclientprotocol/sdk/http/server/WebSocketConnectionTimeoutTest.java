@@ -200,7 +200,8 @@ class WebSocketConnectionTimeoutTest {
 				StreamableHttpAcpAgentTransportOptions.builder().webSocketIdleTimeout(Duration.ofSeconds(7)).build());
 		AcpWsHandshake.Accepted accepted = (AcpWsHandshake.Accepted) endpoint
 			.webSocketHandshake(new HeaderExchange());
-		assertThat(accepted.idleTimeout()).isEqualTo(Duration.ofSeconds(7));
+		// The container's own idle timeout backs the endpoint's up, past it.
+		assertThat(accepted.idleTimeout()).isEqualTo(Duration.ofSeconds(12));
 	}
 
 	private void open(FakeSocket socket, Duration initializeTimeout, Duration idleTimeout, Scheduler timer,

@@ -92,8 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same names. The endpoint closes a WebSocket connection idle for `webSocketIdleTimeout` with
   1001 and one that has not sent `initialize` within `initializeTimeout` with 1008, on every host;
   `initializeTimeout` also bounds the agent's answer to a POST `initialize` (500 after it), which
-  was a fixed 30 seconds. `AcpWsHandshake.Accepted.idleTimeout()` returns the configured value, so
-  the servlet's Jakarta WebSocket session idle timeout follows it. Framework properties:
+  was a fixed 30 seconds. `AcpWsHandshake.Accepted.idleTimeout()` returns the configured value plus
+  five seconds, so the servlet's Jakarta WebSocket session idle timeout follows it as a backstop
+  that never races the endpoint's own close. Framework properties:
   `spring.acp.agent.transport.http.web-socket-idle-timeout` and `…initialize-timeout` (Spring
   Boot), `acp.agent.transport.http.web-socket-idle-timeout` and `…initialize-timeout`
   (Micronaut), `quarkus.acp.agent.transport.http.web-socket-idle-timeout` and

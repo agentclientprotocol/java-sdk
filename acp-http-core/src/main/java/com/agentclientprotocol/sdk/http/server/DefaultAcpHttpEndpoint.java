@@ -64,6 +64,13 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 
 	private static final String CONTENT_TYPE_TEXT = "text/plain";
 
+	/**
+	 * How much longer than the endpoint a container waits before it closes an idle WebSocket
+	 * itself: the endpoint's 1001 close comes first, and the container's only backs it up. Both
+	 * at once can drop the connection without a close frame (1006).
+	 */
+	private static final Duration CONTAINER_IDLE_GRACE = Duration.ofSeconds(5);
+
 	private final AcpJsonMapper jsonMapper;
 
 	private final AcpAgentFactory agentFactory;
@@ -423,7 +430,7 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 
 		@Override
 		public Duration idleTimeout() {
-			return options.webSocketIdleTimeout();
+			return options.webSocketIdleTimeout().plus(CONTAINER_IDLE_GRACE);
 		}
 
 		@Override
