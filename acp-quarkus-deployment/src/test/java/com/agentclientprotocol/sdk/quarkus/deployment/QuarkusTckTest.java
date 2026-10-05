@@ -5,7 +5,6 @@
 package com.agentclientprotocol.sdk.quarkus.deployment;
 
 import java.net.URI;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -13,7 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
-import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
 import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpAgentHost;
@@ -21,28 +19,27 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck;
 import io.quarkus.test.QuarkusUnitTest;
 import io.quarkus.test.common.http.TestHTTPResource;
-import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  * The Quarkus extension's host (the SDK endpoint on a Vert.x route of the Quarkus router) under
- * the shared transport TCK. The application runs the TCK's standard options, with a two second
- * WebSocket idle timeout and initialize timeout for the timeout cases, and its
+ * the shared transport TCK. The application is configured as the TCK's standard configuration,
+ * with a two second WebSocket idle timeout and initialize timeout for the timeout cases, and its
  * {@code @AcpAgent} behaves as the TCK's agent; the shutdown case drains the running
  * application's endpoint, as the application's own shutdown does.
- *
- * <p>The extension maps no property to the two timeouts, so the application produces its
- * options as a bean ({@link TckOptions}), which the extension's host takes in place of the
- * configured limits.
  */
 class QuarkusTckTest extends AcpHttpTransportTck {
 
 	@RegisterExtension
-	static final QuarkusUnitTest app = new QuarkusUnitTest()
-		.withApplicationRoot(jar -> jar.addClasses(TckAgent.class, TckOptions.class))
-		.overrideConfigKey("quarkus.acp.agent.transport.type", "http");
+	static final QuarkusUnitTest app = new QuarkusUnitTest().withApplicationRoot(jar -> jar.addClasses(TckAgent.class))
+		.overrideConfigKey("quarkus.acp.agent.transport.type", "http")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.keep-alive-interval", "250ms")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.max-post-body-size", Long.toString(MAX_MESSAGE_BYTES))
+		.overrideConfigKey("quarkus.acp.agent.transport.http.allowed-origins", ALLOWED_ORIGIN)
+		.overrideConfigKey("quarkus.acp.agent.transport.http.shutdown-timeout", "3s")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.web-socket-idle-timeout", "2s")
+		.overrideConfigKey("quarkus.acp.agent.transport.http.initialize-timeout", "2s");
 
 	@TestHTTPResource("/acp")
 	URI endpoint;
@@ -66,19 +63,6 @@ class QuarkusTckTest extends AcpHttpTransportTck {
 			}
 
 		};
-	}
-
-	/** The TCK's standard options with short WebSocket timeouts, as a bean. */
-	public static class TckOptions {
-
-		@Produces
-		@Singleton
-		StreamableHttpAcpAgentTransportOptions options() {
-			return standardOptions().webSocketIdleTimeout(Duration.ofSeconds(2))
-				.initializeTimeout(Duration.ofSeconds(2))
-				.build();
-		}
-
 	}
 
 	/** The TCK's agent, as an annotated bean. */

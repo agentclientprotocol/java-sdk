@@ -209,6 +209,21 @@ public interface AcpRuntimeConfig {
 		Optional<Duration> shutdownTimeout();
 
 		/**
+		 * How long a WebSocket connection may pass no frame in either direction before the
+		 * endpoint closes it (1001, going away). Unset keeps the SDK default, 30 minutes.
+		 * @return the WebSocket idle timeout
+		 */
+		Optional<Duration> webSocketIdleTimeout();
+
+		/**
+		 * How long a connection has to complete {@code initialize}: a WebSocket that has not sent
+		 * it by then is closed (1008, policy violation), and a POST {@code initialize} the agent
+		 * has not answered by then is answered 500. Unset keeps the SDK default, 30 seconds.
+		 * @return the initialize timeout
+		 */
+		Optional<Duration> initializeTimeout();
+
+		/**
 		 * Browser origins accepted besides the loopback ones, such as
 		 * {@code https://app.example.com}, or {@code *} for any. A request without an
 		 * {@code Origin} header, or from {@code http(s)://localhost}, {@code 127.0.0.1} or

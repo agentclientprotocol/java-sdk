@@ -259,6 +259,8 @@ public class AcpAgentProperties {
 			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
 			.maxProvisionalSessions(http.getMaxProvisionalSessions())
 			.shutdownTimeout(http.getShutdownTimeout())
+			.webSocketIdleTimeout(http.getWebSocketIdleTimeout())
+			.initializeTimeout(http.getInitializeTimeout())
 			.allowedOrigins(http.getAllowedOrigins())
 			.listenerHost(http.getListener().getHost())
 			.listenerPort(http.getListener().getPort())
@@ -387,6 +389,19 @@ public class AcpAgentProperties {
 		 * closing the rest at once. Unset keeps the SDK default, 5 seconds.
 		 */
 		private @Nullable Duration shutdownTimeout;
+
+		/**
+		 * How long a WebSocket connection may pass no frame in either direction before the
+		 * endpoint closes it (1001). Unset keeps the SDK default, 30 minutes.
+		 */
+		private @Nullable Duration webSocketIdleTimeout;
+
+		/**
+		 * How long a connection has to complete initialize: a WebSocket that has not sent it is
+		 * closed (1008), and a POST initialize the agent has not answered is answered 500. Unset
+		 * keeps the SDK default, 30 seconds.
+		 */
+		private @Nullable Duration initializeTimeout;
 
 		/**
 		 * Browser origins accepted besides the loopback ones, such as https://app.example.com, or
@@ -582,6 +597,48 @@ public class AcpAgentProperties {
 		 */
 		public void setShutdownTimeout(@Nullable Duration shutdownTimeout) {
 			this.shutdownTimeout = shutdownTimeout;
+		}
+
+		/**
+		 * Returns how long a WebSocket connection may pass no frame in either direction before the
+		 * endpoint closes it with 1001
+		 * ({@code spring.acp.agent.transport.http.web-socket-idle-timeout}). Default: unset, which
+		 * keeps the SDK's default of 30 minutes. Maps to the transport option
+		 * {@code webSocketIdleTimeout}.
+		 * @return the timeout, or {@code null} when unset
+		 */
+		public @Nullable Duration getWebSocketIdleTimeout() {
+			return webSocketIdleTimeout;
+		}
+
+		/**
+		 * Sets {@code spring.acp.agent.transport.http.web-socket-idle-timeout}; see
+		 * {@link #getWebSocketIdleTimeout()}.
+		 * @param webSocketIdleTimeout the timeout, positive, or {@code null} for the SDK's default
+		 */
+		public void setWebSocketIdleTimeout(@Nullable Duration webSocketIdleTimeout) {
+			this.webSocketIdleTimeout = webSocketIdleTimeout;
+		}
+
+		/**
+		 * Returns how long a connection has to complete {@code initialize}: a WebSocket that has
+		 * not sent it is closed with 1008, and a POST {@code initialize} the agent has not
+		 * answered is answered 500 ({@code spring.acp.agent.transport.http.initialize-timeout}).
+		 * Default: unset, which keeps the SDK's default of 30 seconds. Maps to the transport
+		 * option {@code initializeTimeout}.
+		 * @return the timeout, or {@code null} when unset
+		 */
+		public @Nullable Duration getInitializeTimeout() {
+			return initializeTimeout;
+		}
+
+		/**
+		 * Sets {@code spring.acp.agent.transport.http.initialize-timeout}; see
+		 * {@link #getInitializeTimeout()}.
+		 * @param initializeTimeout the timeout, positive, or {@code null} for the SDK's default
+		 */
+		public void setInitializeTimeout(@Nullable Duration initializeTimeout) {
+			this.initializeTimeout = initializeTimeout;
 		}
 
 		/**

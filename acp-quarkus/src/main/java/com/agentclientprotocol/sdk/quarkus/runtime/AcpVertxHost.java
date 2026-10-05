@@ -19,8 +19,6 @@ import io.vertx.core.http.ServerWebSocket;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,22 +44,9 @@ public class AcpVertxHost {
 
 	private final String path;
 
-	/**
-	 * The host for the configured limits. A bean of type
-	 * {@link StreamableHttpAcpAgentTransportOptions}, when the application has one, replaces them:
-	 * a seam for options the extension maps no property to, such as the short WebSocket timeouts
-	 * of the SDK's transport TCK.
-	 */
-	@Inject
-	AcpVertxHost(AcpAgentAssembly assembly, AcpRuntimeConfig config, AcpBuildTimeConfig buildConfig,
-			Instance<StreamableHttpAcpAgentTransportOptions> options) {
-		this(assembly, options.isResolvable() ? options.get() : options(config.agent().transport().http()),
-				buildConfig);
-	}
-
-	AcpVertxHost(AcpAgentAssembly assembly, StreamableHttpAcpAgentTransportOptions options,
-			AcpBuildTimeConfig buildConfig) {
-		this.endpoint = AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), assembly.factory(), options);
+	AcpVertxHost(AcpAgentAssembly assembly, AcpRuntimeConfig config, AcpBuildTimeConfig buildConfig) {
+		this.endpoint = AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), assembly.factory(),
+				options(config.agent().transport().http()));
 		String configured = buildConfig.agent().transport().http().path();
 		this.path = configured.startsWith("/") ? configured : "/" + configured;
 	}

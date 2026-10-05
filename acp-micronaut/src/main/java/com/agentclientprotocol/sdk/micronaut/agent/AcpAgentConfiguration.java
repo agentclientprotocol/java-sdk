@@ -236,6 +236,8 @@ public class AcpAgentConfiguration {
 			.maxWebSocketPendingFrames(http.getMaxWebSocketPendingFrames())
 			.maxProvisionalSessions(http.getMaxProvisionalSessions())
 			.shutdownTimeout(http.getShutdownTimeout())
+			.webSocketIdleTimeout(http.getWebSocketIdleTimeout())
+			.initializeTimeout(http.getInitializeTimeout())
 			.listenerHost(http.getListener().getHost())
 			.allowedOrigins(http.getAllowedOrigins())
 			.listenerPort(http.getListener().getPort())
@@ -329,6 +331,10 @@ public class AcpAgentConfiguration {
 			private @Nullable Integer maxProvisionalSessions;
 
 			private @Nullable Duration shutdownTimeout;
+
+			private @Nullable Duration webSocketIdleTimeout;
+
+			private @Nullable Duration initializeTimeout;
 
 			private Listener listener = new Listener();
 
@@ -517,6 +523,48 @@ public class AcpAgentConfiguration {
 			 */
 			public void setShutdownTimeout(@Nullable Duration shutdownTimeout) {
 				this.shutdownTimeout = shutdownTimeout;
+			}
+
+			/**
+			 * Returns how long a WebSocket connection may pass no frame in either direction before
+			 * the endpoint closes it with 1001
+			 * ({@code acp.agent.transport.http.web-socket-idle-timeout}). Default: unset, which
+			 * keeps the SDK's default of 30 minutes. Maps to the transport option
+			 * {@code webSocketIdleTimeout}.
+			 * @return the timeout, or {@code null} for the SDK's default
+			 */
+			public @Nullable Duration getWebSocketIdleTimeout() {
+				return webSocketIdleTimeout;
+			}
+
+			/**
+			 * Sets how long a WebSocket connection may stay idle; unset keeps the SDK default, 30
+			 * minutes.
+			 * @param webSocketIdleTimeout the timeout; positive
+			 */
+			public void setWebSocketIdleTimeout(@Nullable Duration webSocketIdleTimeout) {
+				this.webSocketIdleTimeout = webSocketIdleTimeout;
+			}
+
+			/**
+			 * Returns how long a connection has to complete {@code initialize}: a WebSocket that
+			 * has not sent it is closed with 1008, and a POST {@code initialize} the agent has not
+			 * answered is answered 500 ({@code acp.agent.transport.http.initialize-timeout}).
+			 * Default: unset, which keeps the SDK's default of 30 seconds. Maps to the transport
+			 * option {@code initializeTimeout}.
+			 * @return the timeout, or {@code null} for the SDK's default
+			 */
+			public @Nullable Duration getInitializeTimeout() {
+				return initializeTimeout;
+			}
+
+			/**
+			 * Sets how long a connection has to complete {@code initialize}; unset keeps the SDK
+			 * default, 30 seconds.
+			 * @param initializeTimeout the timeout; positive
+			 */
+			public void setInitializeTimeout(@Nullable Duration initializeTimeout) {
+				this.initializeTimeout = initializeTimeout;
 			}
 
 			/**

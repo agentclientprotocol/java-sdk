@@ -64,6 +64,8 @@ class AcpAgentConfigurationTest {
 				Map.entry("acp.agent.transport.http.max-provisional-sessions", "14"),
 				Map.entry("acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "15"),
 				Map.entry("acp.agent.transport.http.shutdown-timeout", "4s"),
+				Map.entry("acp.agent.transport.http.web-socket-idle-timeout", "45m"),
+				Map.entry("acp.agent.transport.http.initialize-timeout", "9s"),
 				Map.entry("acp.agent.transport.http.listener.host", "0.0.0.0"),
 				Map.entry("acp.agent.transport.http.allowed-origins", "https://a.example,https://b.example"));
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
@@ -88,6 +90,8 @@ class AcpAgentConfigurationTest {
 			assertThat(options.maxProvisionalSessions()).isEqualTo(14);
 			assertThat(options.maxConcurrentStreamsPerConnection()).isEqualTo(15);
 			assertThat(options.shutdownTimeout()).isEqualTo(Duration.ofSeconds(4));
+			assertThat(options.webSocketIdleTimeout()).isEqualTo(Duration.ofMinutes(45));
+			assertThat(options.initializeTimeout()).isEqualTo(Duration.ofSeconds(9));
 			assertThat(options.host()).isEqualTo("0.0.0.0");
 			assertThat(options.allowedOrigins()).containsExactlyInAnyOrder("https://a.example", "https://b.example");
 		}

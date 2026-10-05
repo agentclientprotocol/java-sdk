@@ -93,7 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1001 and one that has not sent `initialize` within `initializeTimeout` with 1008, on every host;
   `initializeTimeout` also bounds the agent's answer to a POST `initialize` (500 after it), which
   was a fixed 30 seconds. `AcpWsHandshake.Accepted.idleTimeout()` returns the configured value, so
-  the servlet's Jakarta WebSocket session idle timeout follows it.
+  the servlet's Jakarta WebSocket session idle timeout follows it. Framework properties:
+  `spring.acp.agent.transport.http.web-socket-idle-timeout` and `…initialize-timeout` (Spring
+  Boot), `acp.agent.transport.http.web-socket-idle-timeout` and `…initialize-timeout`
+  (Micronaut), `quarkus.acp.agent.transport.http.web-socket-idle-timeout` and
+  `…initialize-timeout` (Quarkus), and `transport.http.web-socket-idle-timeout` and
+  `transport.http.initialize-timeout` in `AcpAgentSettings` (with `Limits.webSocketIdleTimeout`,
+  `Limits.initializeTimeout` and the builder methods of the same names).
 
 - **One framework-neutral ACP endpoint and a host contract: `acp-http-core`.** Every protocol rule
   of the Streamable HTTP and WebSocket transports now lives in one place,

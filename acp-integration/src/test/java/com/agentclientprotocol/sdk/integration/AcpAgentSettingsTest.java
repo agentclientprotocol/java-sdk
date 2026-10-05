@@ -42,7 +42,8 @@ class AcpAgentSettingsTest {
 				"acp.agent.transport.http.max-pending-sse-events", "12",
 				"acp.agent.transport.http.max-web-socket-pending-frames", "13",
 				"acp.agent.transport.http.max-provisional-sessions", "14", "acp.agent.transport.http.shutdown-timeout",
-				"1h", "acp.agent.transport.http.listener.port", "0",
+				"1h", "acp.agent.transport.http.web-socket-idle-timeout", "45m",
+				"acp.agent.transport.http.initialize-timeout", "9s", "acp.agent.transport.http.listener.port", "0",
 				"acp.agent.transport.http.listener.max-concurrent-streams-per-connection", "15",
 				"acp.agent.transport.http.listener.host", "0.0.0.0", "acp.agent.transport.http.allowed-origins",
 				"https://a.example, https://b.example"), "acp.agent.");
@@ -64,6 +65,10 @@ class AcpAgentSettingsTest {
 		assertThat(listener.maxWebSocketPendingFrames()).isEqualTo(13);
 		assertThat(listener.maxProvisionalSessions()).isEqualTo(14);
 		assertThat(listener.shutdownTimeout()).isEqualTo(Duration.ofHours(1));
+		assertThat(listener.webSocketIdleTimeout()).isEqualTo(Duration.ofMinutes(45));
+		assertThat(listener.initializeTimeout()).isEqualTo(Duration.ofSeconds(9));
+		assertThat(settings.toOptions(false).webSocketIdleTimeout()).isEqualTo(Duration.ofMinutes(45));
+		assertThat(settings.toOptions(false).initializeTimeout()).isEqualTo(Duration.ofSeconds(9));
 		assertThat(listener.maxConcurrentStreamsPerConnection()).isEqualTo(15);
 		assertThat(listener.host()).isEqualTo("0.0.0.0");
 		assertThat(listener.allowedOrigins()).containsExactlyInAnyOrder("https://a.example", "https://b.example");
