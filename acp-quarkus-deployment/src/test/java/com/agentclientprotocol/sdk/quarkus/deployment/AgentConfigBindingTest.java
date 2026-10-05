@@ -12,7 +12,7 @@ import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
-import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpEndpoint;
+import com.agentclientprotocol.sdk.quarkus.runtime.AcpVertxHost;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import io.quarkus.test.QuarkusUnitTest;
 import jakarta.inject.Inject;
@@ -55,7 +55,7 @@ class AgentConfigBindingTest {
 	AcpRuntimeConfig runtime;
 
 	@Inject
-	AcpHttpEndpoint endpoint;
+	AcpVertxHost endpoint;
 
 	@Test
 	void everyAgentSettingBinds() {
@@ -72,7 +72,7 @@ class AgentConfigBindingTest {
 
 	@Test
 	void httpLimitsBecomeTheEndpointOptions() {
-		StreamableHttpAcpAgentTransportOptions options = endpoint.options();
+		StreamableHttpAcpAgentTransportOptions options = endpoint.endpoint().options();
 		assertThat(options.maxPostBodyBytes()).isEqualTo(2L * 1024 * 1024);
 		assertThat(options.keepAliveInterval()).isEqualTo(Duration.ofSeconds(3));
 		assertThat(options.mailboxCapacity()).isEqualTo(11);

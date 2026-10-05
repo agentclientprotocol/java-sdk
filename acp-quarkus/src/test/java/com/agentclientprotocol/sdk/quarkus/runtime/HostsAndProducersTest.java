@@ -63,25 +63,22 @@ class HostsAndProducersTest {
 	}
 
 	@Test
-	void httpHostClosesServletAndWebSocketsOnShutdown() {
-		AcpHttpServlet servlet = mock(AcpHttpServlet.class);
-		AcpWebSocketRoute webSockets = mock(AcpWebSocketRoute.class);
-		AcpHttpEndpoint endpoint = mock(AcpHttpEndpoint.class);
-		when(endpoint.options()).thenReturn(StreamableHttpAcpAgentTransportOptions.defaults());
-		when(servlet.closeGracefully()).thenReturn(Mono.empty());
-		when(webSockets.closeGracefully()).thenReturn(Mono.never());
-		when(servlet.activeConnectionCount()).thenReturn(2);
-		when(webSockets.activeConnectionCount()).thenReturn(3);
-
-		AcpHttpAgentHost host = new AcpHttpAgentHost(servlet, webSockets, endpoint);
-		assertThat(host.activeConnectionCount()).isEqualTo(5);
-		// A close that never finishes is given up after the shutdown timeout.
+	void httpHostDrainsTheEndpointOnShutdown() {
+		AcpVertxHost route = mock(AcpVertxHost.class);
+		com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint endpoint = mock(
+				com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint.class);
+		when(route.endpoint()).thenReturn(endpoint);
 		when(endpoint.options()).thenReturn(StreamableHttpAcpAgentTransportOptions.builder()
 			.shutdownTimeout(Duration.ofMillis(10))
 			.build());
+		when(route.activeConnectionCount()).thenReturn(5);
+		// A close that never finishes is given up after the shutdown timeout.
+		when(route.closeGracefully()).thenReturn(Mono.never());
+
+		AcpHttpAgentHost host = new AcpHttpAgentHost(route);
+		assertThat(host.activeConnectionCount()).isEqualTo(5);
 		host.stop(null);
-		verify(servlet).closeGracefully();
-		verify(webSockets).closeGracefully();
+		verify(route).closeGracefully();
 	}
 
 	@Test

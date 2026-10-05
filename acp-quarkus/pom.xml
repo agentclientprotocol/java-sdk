@@ -57,10 +57,10 @@
             <artifactId>acp-agent-support</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- The Streamable HTTP servlet host, mounted on the Quarkus HTTP server; no Jetty. -->
+        <!-- The framework-neutral endpoint, mounted on the Quarkus router by AcpVertxHost. -->
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
-            <artifactId>acp-http-servlet</artifactId>
+            <artifactId>acp-http-core</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -68,7 +68,7 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-undertow</artifactId>
+            <artifactId>quarkus-vertx-http</artifactId>
         </dependency>
         <dependency>
             <groupId>io.smallrye.reactive</groupId>

@@ -17,13 +17,11 @@ import com.agentclientprotocol.sdk.quarkus.runtime.AcpClientProducers;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpExecutors;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpConfigBuilder;
-import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpEndpoint;
-import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpServlet;
-import com.agentclientprotocol.sdk.quarkus.runtime.AcpWebSocketRoute;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpRecorder;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioConfigBuilder;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioTransportProducer;
+import com.agentclientprotocol.sdk.quarkus.runtime.AcpVertxHost;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
@@ -37,7 +35,6 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigBuilderBuildItem;
 import io.quarkus.deployment.builditem.StaticInitConfigBuilderBuildItem;
-import io.quarkus.undertow.deployment.ServletBuildItem;
 import jakarta.inject.Singleton;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -131,31 +128,11 @@ class AcpProcessor {
 		}
 		else {
 			beans.produce(AdditionalBeanBuildItem.builder()
-				.addBeanClasses(AcpHttpEndpoint.class, AcpHttpServlet.class, AcpWebSocketRoute.class,
-						AcpHttpAgentHost.class)
+				.addBeanClasses(AcpVertxHost.class, AcpHttpAgentHost.class)
 				.setUnremovable()
 				.build());
 			runTimeConfig.produce(new RunTimeConfigBuilderBuildItem(AcpHttpConfigBuilder.class));
 		}
-	}
-
-	/**
-	 * The Streamable HTTP servlet on the Quarkus HTTP server, at the configured path. Its
-	 * instance is the {@code AcpHttpServlet} bean, created on the first request (the
-	 * container is deployed during static initialization, before the runtime
-	 * configuration the bean needs). WebSocket upgrades on the same path are
-	 * taken by a Vert.x route before the request reaches the servlet.
-	 */
-	@BuildStep
-	void httpServlet(Optional<AcpAgentBuildItem> agent, AcpBuildTimeConfig config,
-			BuildProducer<ServletBuildItem> servlets) {
-		if (agent.isEmpty() || config.agent().transport().type() == AcpTransportType.STDIO) {
-			return;
-		}
-		servlets.produce(ServletBuildItem.builder("acp", AcpHttpServlet.class.getName())
-			.addMapping(config.agent().transport().http().path())
-			.setAsyncSupported(true)
-			.build());
 	}
 
 }

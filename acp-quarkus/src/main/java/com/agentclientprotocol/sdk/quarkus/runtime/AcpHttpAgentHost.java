@@ -5,27 +5,21 @@
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-import com.agentclientprotocol.sdk.integration.AcpServletHost;
 
 import io.quarkus.runtime.ShutdownEvent;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Singleton;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Closes the HTTP and WebSocket connections first when the application stops: every open SSE stream
- * is an in-flight request, so a graceful HTTP shutdown would otherwise wait for clients that never
- * finish. In-flight prompts are cancelled and every stream completes within the endpoint's shutdown
- * timeout ({@code quarkus.acp.agent.transport.http.shutdown-timeout}). The extension adds it for an
- * HTTP agent. An application does not call it; a test can inject it to count the open connections.
+ * Drains the ACP endpoint first when the application stops: every open SSE stream and WebSocket is
+ * an in-flight request, so a graceful HTTP shutdown would otherwise wait for clients that never
+ * finish. SSE streams get a closing comment and complete, WebSockets close with 1001, and
+ * in-flight prompts are cancelled, within the endpoint's shutdown timeout
+ * ({@code quarkus.acp.agent.transport.http.shutdown-timeout}). The extension adds it for an HTTP
+ * agent. An application does not call it; a test can inject it to count the open connections.
  *
  * @author Mark Pollack
  */
@@ -34,31 +28,27 @@ public class AcpHttpAgentHost {
 
 	private static final Logger logger = LoggerFactory.getLogger(AcpHttpAgentHost.class);
 
-	private final AcpHttpServlet servlet;
+	private final AcpVertxHost host;
 
-	private final AcpWebSocketRoute webSockets;
-
-	private final AcpHttpEndpoint endpoint;
-
-	AcpHttpAgentHost(AcpHttpServlet servlet, AcpWebSocketRoute webSockets, AcpHttpEndpoint endpoint) {
-		this.servlet = servlet;
-		this.webSockets = webSockets;
-		this.endpoint = endpoint;
+	AcpHttpAgentHost(AcpVertxHost host) {
+		this.host = host;
 	}
 
 	void stop(@Observes @Priority(0) ShutdownEvent event) {
-		Duration timeout = endpoint.options().shutdownTimeout().plusSeconds(1);
-		// Both at once: the WebSocket connections close while the servlet's do.
-		CompletableFuture<@Nullable Void> webSocketsClosed = webSockets.closeGracefully().toFuture();
-		AcpServletHost.closeBeforeShutdown(servlet, timeout);
+		drain();
+	}
+
+	/**
+	 * Drains the endpoint now, as the application's shutdown does, waiting at most the endpoint's
+	 * shutdown timeout plus a second.
+	 */
+	public void drain() {
+		Duration timeout = host.endpoint().options().shutdownTimeout().plusSeconds(1);
 		try {
-			webSocketsClosed.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+			host.closeGracefully().block(timeout);
 		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-		catch (ExecutionException | TimeoutException e) {
-			logger.warn("ACP WebSocket connections did not close within {}: {}", timeout, e.toString());
+		catch (RuntimeException e) {
+			logger.warn("ACP connections did not close within {}: {}", timeout, e.toString());
 		}
 	}
 
@@ -67,7 +57,7 @@ public class AcpHttpAgentHost {
 	 * @return the connection count
 	 */
 	public int activeConnectionCount() {
-		return servlet.activeConnectionCount() + webSockets.activeConnectionCount();
+		return host.activeConnectionCount();
 	}
 
 }

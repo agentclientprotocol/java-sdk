@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Quarkus: HTTP security policies now apply to the WebSocket handshake.** The extension's
+  WebSocket route ran ahead of Quarkus's authentication and permission checks (order
+  `Integer.MIN_VALUE`), so an unauthenticated client was upgraded on a path that
+  `quarkus.http.auth.permission` protected (101 instead of 401). The endpoint is now one Vert.x
+  route in the router's ordinary order, behind those checks, for HTTP and WebSocket alike.
+
 - **The SDK's listener binds the loopback interface by default.** `StreamableHttpAcpAgentTransport`
   set a port and no host on its Jetty connector, so it listened on every network interface, and
   anyone who could reach the machine could start an agent: the endpoint has no authentication of
@@ -501,6 +507,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `defaultSessionUpdateConsumer` and `sessionUpdateConsumer`.)
 
 ### Changed
+
+- **Breaking: Quarkus serves ACP on a Vert.x route, without a servlet container.** The extension
+  depends on `quarkus-vertx-http` instead of `quarkus-undertow`, and mounts the SDK's
+  `AcpHttpEndpoint` on the Quarkus router through a host of its own (`AcpVertxHost`); the servlet
+  and the separate WebSocket route (`AcpHttpServlet`, `AcpWebSocketRoute`,
+  `VertxWebSocketConnection`, the runtime bean `AcpHttpEndpoint`) are gone. Migration: the path is
+  under `quarkus.http.root-path`, no longer under `quarkus.servlet.context-path`; an application
+  that relied on the extension to bring `quarkus-undertow` adds it itself.
 
 - **Breaking: the HTTP transport is split into three modules.** `acp-http-core` (the endpoint and
   `StreamableHttpAcpAgentTransportOptions`), `acp-http-servlet` (`StreamableHttpAcpServlet`) and
