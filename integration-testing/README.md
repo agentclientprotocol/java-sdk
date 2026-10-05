@@ -122,7 +122,9 @@ connection.
 prompt answered (`ok == expected`), every update delivered (`updates == 2*ok`), at most 4 SDK
 threads (`acp-*`) on the server at peak and after close, server heap after a full GC at most
 256 MB at peak and 64 MB after close. p50/p99 latency is recorded in the results and never
-asserted.
+asserted. The load scenarios measure the server, so the load generator's client readers use
+platform threads (`virtualThreads(false)`) on every JDK; the SDK client's default stays virtual
+threads on JDK 21 and later.
 
 ## Framework smoke matrix
 
