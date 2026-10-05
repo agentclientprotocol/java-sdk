@@ -72,6 +72,19 @@ class SpringBootAutoconfigureArchitectureTest {
 		.dependOnClassesThat(resideInAnyPackage("..autoconfigure.client.."))
 		.because("the agent autoconfiguration is independent of the client autoconfiguration");
 
+	/**
+	 * The Spring host mounts the SDK's servlet host and adapts nothing itself: no JSON-RPC
+	 * transport messages, connections, routing or SSE of its own, and no servlet or WebSocket
+	 * code beside the servlet host's.
+	 */
+	@ArchTest
+	static final ArchRule mountsTheHostAndHoldsNoProtocolRules = noClasses().should()
+		.dependOnClassesThat(resideInAnyPackage("jakarta.websocket..", "org.apache.tomcat..", "org.eclipse.jetty..")
+			.or(com.tngtech.archunit.core.domain.JavaClass.Predicates.belongToAnyOf(
+					com.agentclientprotocol.sdk.agent.transport.RemoteAcpConnection.class,
+					com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage.class)))
+		.because("all protocol semantics live in acp-http-core; hosts only adapt I/O through the host contract");
+
 	@ArchTest
 	static final ArchRule usesNoOtherFramework = noClasses().should()
 		.dependOnClassesThat(resideInAnyPackage("io.quarkus..", "io.micronaut.."))

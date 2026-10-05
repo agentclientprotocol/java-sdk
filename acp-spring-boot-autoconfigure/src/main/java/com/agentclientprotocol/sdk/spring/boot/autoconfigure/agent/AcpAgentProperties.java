@@ -273,8 +273,8 @@ public class AcpAgentProperties {
 	public static class AgentTransportProperties {
 
 		/**
-		 * The transport: stdio (the default), or http for Streamable HTTP. websocket means the same
-		 * as http; WebSocket upgrades are taken only outside a servlet web application.
+		 * The transport: stdio (the default), or http for Streamable HTTP and WebSocket on one path.
+		 * websocket means the same as http.
 		 */
 		private @Nullable AcpTransportType type;
 
@@ -286,12 +286,12 @@ public class AcpAgentProperties {
 		 * <ul>
 		 * <li>{@code stdio}, or unset (the default): the agent reads standard input and writes
 		 * standard output, so the application must log to standard error.</li>
-		 * <li>{@code http}: ACP Streamable HTTP, which needs {@code acp-streamable-http-jetty} on
-		 * the classpath; without it the application fails at startup naming the module. See
-		 * {@link AcpAgentHttpAutoConfiguration} for where the endpoint is served.</li>
-		 * <li>{@code websocket}: the same as {@code http}. The SDK's own listener takes WebSocket
-		 * upgrades on the endpoint's path; the servlet mounted in a servlet web application does
-		 * not.</li>
+		 * <li>{@code http}: ACP Streamable HTTP, and WebSocket on the same path, which needs
+		 * {@code acp-http-servlet} (a servlet web application) or {@code acp-streamable-http-jetty}
+		 * (the SDK's own listener) on the classpath; without either the application fails at
+		 * startup naming them. See {@link AcpAgentHttpAutoConfiguration} for where the endpoint is
+		 * served.</li>
+		 * <li>{@code websocket}: the same as {@code http}.</li>
 		 * </ul>
 		 * The value is read in any case.
 		 * @return the transport, or {@code null} when unset

@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.net.http.WebSocketHandshakeException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +53,20 @@ public final class HttpProbes {
 	 */
 	public static HttpResponse<String> initialize(URI endpoint, @Nullable String origin)
 			throws IOException, InterruptedException {
+		return initialize(endpoint, origin, Map.of());
+	}
+
+	/**
+	 * POSTs an {@code initialize} to the endpoint with extra headers, such as credentials.
+	 * @param endpoint the endpoint, such as {@code http://localhost:8080/acp}
+	 * @param origin the {@code Origin} header, or null for none
+	 * @param headers more request headers
+	 * @return the response
+	 * @throws IOException if the request fails
+	 * @throws InterruptedException if interrupted
+	 */
+	public static HttpResponse<String> initialize(URI endpoint, @Nullable String origin, Map<String, String> headers)
+			throws IOException, InterruptedException {
 		HttpRequest.Builder request = HttpRequest.newBuilder(endpoint)
 			.header("Content-Type", "application/json")
 			.header("Accept", "application/json, text/event-stream")
@@ -59,6 +74,7 @@ public final class HttpProbes {
 		if (origin != null) {
 			request.header("Origin", origin);
 		}
+		headers.forEach(request::header);
 		return send(request.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
@@ -105,11 +121,28 @@ public final class HttpProbes {
 	 */
 	public static int webSocketHandshake(URI endpoint, @Nullable String origin)
 			throws IOException, InterruptedException {
+		return webSocketHandshake(endpoint, origin, Map.of());
+	}
+
+	/**
+	 * Opens a WebSocket to the endpoint with extra handshake headers, such as credentials, and
+	 * closes it at once.
+	 * @param endpoint the endpoint, with an {@code http} or {@code ws} scheme
+	 * @param origin the {@code Origin} header, or null for none
+	 * @param headers more handshake headers
+	 * @return {@value #SWITCHING_PROTOCOLS} when the handshake succeeded, else the status the
+	 * server refused it with
+	 * @throws IOException if the connection fails for another reason
+	 * @throws InterruptedException if interrupted
+	 */
+	public static int webSocketHandshake(URI endpoint, @Nullable String origin, Map<String, String> headers)
+			throws IOException, InterruptedException {
 		URI uri = URI.create(endpoint.toString().replaceFirst("^http", "ws"));
 		WebSocket.Builder builder = CLIENT.newWebSocketBuilder().connectTimeout(TIMEOUT);
 		if (origin != null) {
 			builder.header("Origin", origin);
 		}
+		headers.forEach(builder::header);
 		try {
 			WebSocket socket = builder.buildAsync(uri, new WebSocket.Listener() {
 			}).get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.agentclientprotocol</groupId>
+        <artifactId>acp-java-sdk</artifactId>
+        <version>0.19.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>acp-http-servlet</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ACP HTTP Servlet</name>
+    <description>The ACP endpoint as a Servlet 6 servlet, with WebSocket upgrades through Jakarta WebSocket 2.1, for any servlet container: Tomcat, Jetty, Undertow, Spring MVC</description>
+
+    <properties>
+        <!-- Coverage floors: measured line 73.6%, branch 65.1% (Tomcat; the Jetty run is in
+             acp-streamable-http-jetty), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.71</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.63</jacoco.minimum.branch>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-http-core</artifactId>
+        </dependency>
+        <!-- The container provides both APIs. WebSocket is used only when the container installs
+             a Jakarta WebSocket 2.1 implementation (its ServerContainer attribute). -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>${jakarta-servlet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-api</artifactId>
+            <version>${jakarta-websocket.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-client-api</artifactId>
+            <version>${jakarta-websocket.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- The container the TCK runs the servlet on here (Jetty 12.1 runs it in
+             acp-streamable-http-jetty: the two containers ship different Jakarta WebSocket API
+             versions, 2.2 and 2.1, which cannot share a classpath). -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-websocket</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- The tests run on the container's own servlet and WebSocket APIs (Tomcat 11 ships
+                 Jakarta WebSocket 2.2, whose SendResult the 2.1 API jar lacks), not on the ones
+                 the module compiles against. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>jakarta.websocket:jakarta.websocket-api</classpathDependencyExclude>
+                        <classpathDependencyExclude>jakarta.websocket:jakarta.websocket-client-api</classpathDependencyExclude>
+                        <classpathDependencyExclude>jakarta.servlet:jakarta.servlet-api</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

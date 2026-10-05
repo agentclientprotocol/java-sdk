@@ -5,38 +5,27 @@
 package com.agentclientprotocol.sdk.agent.transport;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
-import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import com.agentclientprotocol.sdk.util.Assert;
 import com.agentclientprotocol.sdk.util.VirtualThreads;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
-import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.VirtualThreadPool;
-import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
-import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +67,8 @@ import reactor.core.publisher.Sinks;
  * address); do so only behind a proxy or firewall that controls who connects, and for TLS put
  * a proxy that terminates it in front, or mount the servlet in a container that has TLS.
  * Browser requests from an origin other than a loopback one are refused (403) unless listed
- * in {@link StreamableHttpAcpAgentTransportOptions.Builder#allowedOrigins allowedOrigins}. Close it with {@link #closeGracefully()}; it registers no JVM shutdown hook.
+ * in {@link StreamableHttpAcpAgentTransportOptions.Builder#allowedOrigins allowedOrigins}.
+ * Close it with {@link #closeGracefully()}; it registers no JVM shutdown hook.
  *
  * <p>On JDK 21 and later it serves on Jetty's {@code VirtualThreadPool}: every task on a
  * virtual thread ({@code acp-listener-*}), or on the application's executor when the options
@@ -105,16 +95,9 @@ public class StreamableHttpAcpAgentTransport {
 
 	private final String path;
 
-	private final AcpJsonMapper jsonMapper;
-
-	private final AcpAgentFactory agentFactory;
-
 	private final StreamableHttpAcpAgentTransportOptions options;
 
 	private final StreamableHttpAcpServlet servlet;
-
-	private final ConcurrentMap<String, StreamableHttpWebSocketConnection> webSocketConnections =
-			new ConcurrentHashMap<>();
 
 	private final AtomicBoolean started = new AtomicBoolean(false);
 
@@ -197,8 +180,6 @@ public class StreamableHttpAcpAgentTransport {
 				"A listener on an executor of the application's needs JDK 21 or later (Jetty's VirtualThreadPool)");
 		this.configuredPort = port;
 		this.path = path;
-		this.jsonMapper = jsonMapper;
-		this.agentFactory = agentFactory;
 		this.options = options;
 		this.servlet = new StreamableHttpAcpServlet(jsonMapper, agentFactory, options);
 	}
@@ -228,7 +209,7 @@ public class StreamableHttpAcpAgentTransport {
 				throw e;
 			}
 			connectors.forEach(jettyServer::addConnector);
-			jettyServer.setHandler(createContext(jettyServer));
+			jettyServer.setHandler(createContext());
 
 			try {
 				jettyServer.start();
@@ -319,46 +300,19 @@ public class StreamableHttpAcpAgentTransport {
 		return jettyConnector;
 	}
 
-	/** The servlet at the endpoint path, with WebSocket upgrades accepted on the same path. */
-	private ServletContextHandler createContext(Server jettyServer) {
+	/**
+	 * The servlet at the endpoint path, on a context with Jetty's Jakarta WebSocket
+	 * implementation, which the servlet upgrades requests with: one host, the same one an
+	 * application's own container runs.
+	 */
+	private ServletContextHandler createContext() {
 		ServletContextHandler context = new ServletContextHandler();
 		context.setContextPath("/");
 		ServletHolder holder = new ServletHolder(servlet);
 		holder.setAsyncSupported(true);
 		context.addServlet(holder, path);
-
-		WebSocketUpgradeHandler webSocketHandler = WebSocketUpgradeHandler.from(jettyServer, context, container -> {
-			container.setIdleTimeout(Duration.ofMinutes(30));
-			// Jetty's default is 64 KB; a prompt or file content is often larger. One inbound
-			// limit for both profiles: the POST body cap also bounds a WebSocket text message.
-			container.setMaxTextMessageSize(options.maxPostBodyBytes());
-			container.addMapping(path, (request, response, callback) -> {
-				if (!options.isOriginAllowed(request.getHeaders().get(StreamableHttpRouting.HEADER_ORIGIN))) {
-					Response.writeError(request, response, callback, HttpStatus.FORBIDDEN_403, "Origin not allowed");
-					return null;
-				}
-				return acceptWebSocket(response, callback);
-			});
-		});
-		context.insertHandler(webSocketHandler);
+		JakartaWebSocketServletContainerInitializer.configure(context, null);
 		return context;
-	}
-
-	/** Starts a connection for an accepted WebSocket upgrade; null (refused) when it fails to start. */
-	private StreamableHttpWebSocketConnection.@Nullable AcpWebSocketEndpoint acceptWebSocket(
-			ServerUpgradeResponse response, Callback callback) {
-		StreamableHttpWebSocketConnection connection = createWebSocketConnection();
-		try {
-			connection.start();
-			webSocketConnections.put(connection.id(), connection);
-			response.getHeaders().put(StreamableHttpRouting.HEADER_CONNECTION_ID, connection.id());
-			return new StreamableHttpWebSocketConnection.AcpWebSocketEndpoint(connection, jsonMapper);
-		}
-		catch (Exception e) {
-			connection.close();
-			callback.failed(e);
-			return null;
-		}
 	}
 
 	/**
@@ -399,26 +353,10 @@ public class StreamableHttpAcpAgentTransport {
 			if (!closing.compareAndSet(false, true)) {
 				return Mono.empty();
 			}
-			List<StreamableHttpWebSocketConnection> closingWebSockets = List.copyOf(webSocketConnections.values());
-			webSocketConnections.clear();
-			List<Mono<Void>> webSocketClosures = new ArrayList<>();
-			closingWebSockets.forEach(connection -> webSocketClosures.add(connection.closeGracefully()));
-			Duration timeout = options.shutdownTimeout();
-			Mono<Void> webSockets = Mono.whenDelayError(webSocketClosures)
-				.timeout(timeout, AcpSchedulers.timeouts())
-				.onErrorResume(TimeoutException.class, timedOut -> {
-					logger.warn("Streamable ACP WebSocket connections did not close within {}; closing them now",
-							timeout);
-					closingWebSockets.forEach(StreamableHttpWebSocketConnection::closeNow);
-					return Mono.empty();
-				});
-
-			// The servlet's close is bounded by the same shutdown timeout.
-			return Mono.whenDelayError(servlet.closeGracefully(), webSockets)
+			// The servlet's close is bounded by the shutdown timeout.
+			return servlet.closeGracefully()
 				.then(Mono.<Void>fromRunnable(this::stopServer))
-				.doOnSuccess(ignored -> {
-					terminationSink.tryEmitValue(null);
-				});
+				.doOnSuccess(ignored -> terminationSink.tryEmitValue(null));
 		});
 	}
 
@@ -446,13 +384,7 @@ public class StreamableHttpAcpAgentTransport {
 	}
 
 	int activeConnectionCount() {
-		return servlet.activeConnectionCount() + webSocketConnections.size();
-	}
-
-	private StreamableHttpWebSocketConnection createWebSocketConnection() {
-		String connectionId = UUID.randomUUID().toString();
-		return new StreamableHttpWebSocketConnection(connectionId, jsonMapper, agentFactory, options,
-				connection -> webSocketConnections.remove(connection.id(), connection), servlet::reportException);
+		return servlet.activeConnectionCount();
 	}
 
 }

@@ -10,6 +10,7 @@ import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransport;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
+import com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.util.VirtualThreads;
 
@@ -113,15 +114,28 @@ public final class AcpListeners {
 	 * with the settings' limits (not the listener's port or stream limit) and the default JSON
 	 * mapper. The framework registers it at {@link AcpAgentSettings.Http#path()} with async
 	 * support on, and calls {@link AcpServletHost#closeBeforeShutdown} before the container shuts
-	 * down. The servlet serves no WebSocket: a framework that wants WebSocket here routes the
-	 * upgrades itself (Quarkus does, through Vert.x), and otherwise a {@code websocket} transport
-	 * setting gets HTTP only.
+	 * down. The servlet upgrades WebSocket requests itself where the container has Jakarta
+	 * WebSocket 2.1 (Tomcat, Jetty, Undertow); a container without it answers them 501.
 	 * @param settings the agent settings
 	 * @param factory the factory creating one agent per connection
 	 * @return the servlet
 	 */
 	public static StreamableHttpAcpServlet servlet(AcpAgentSettings settings, AcpAgentFactory factory) {
-		return new StreamableHttpAcpServlet(AcpJsonMapper.createDefault(), factory, settings.toOptions(false));
+		return new StreamableHttpAcpServlet(endpoint(settings, factory));
+	}
+
+	/**
+	 * Returns the framework-neutral ACP endpoint with the settings' limits and allowed origins (not
+	 * the listener's port, host or stream limit) and the default JSON mapper, for a framework that
+	 * mounts it itself: in a {@link StreamableHttpAcpServlet} of its own, or on a router of its own
+	 * through the host contract. The framework calls {@link AcpHttpEndpoint#closeGracefully()} before
+	 * its server's graceful shutdown.
+	 * @param settings the agent settings
+	 * @param factory the factory creating one agent per connection
+	 * @return the endpoint, not started
+	 */
+	public static AcpHttpEndpoint endpoint(AcpAgentSettings settings, AcpAgentFactory factory) {
+		return AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), factory, settings.toOptions(false));
 	}
 
 }

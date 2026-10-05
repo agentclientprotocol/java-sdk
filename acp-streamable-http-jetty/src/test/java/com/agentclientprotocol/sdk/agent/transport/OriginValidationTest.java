@@ -6,9 +6,11 @@ package com.agentclientprotocol.sdk.agent.transport;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.http.HttpProbes;
 import org.junit.jupiter.api.AfterAll;
@@ -69,6 +71,25 @@ class OriginValidationTest {
 	void noOriginIsServed() throws Exception {
 		assertThat(HttpProbes.initialize(endpoint, null).statusCode()).isEqualTo(200);
 		assertThat(HttpProbes.webSocketHandshake(endpoint, null)).isEqualTo(HttpProbes.SWITCHING_PROTOCOLS);
+	}
+
+	@Test
+	void theListenerServesAListedOriginOverHttpAndWebSocket() throws Exception {
+		StreamableHttpAcpAgentTransport listener = new StreamableHttpAcpAgentTransport(0, "/acp",
+				AcpJsonMapper.createDefault(), ListenerBindTest.AGENTS,
+				StreamableHttpAcpAgentTransportOptions.builder().allowedOrigins(List.of("https://app.example.com")).build());
+		listener.start().block(Duration.ofSeconds(10));
+		try {
+			URI endpoint = URI.create("http://127.0.0.1:" + listener.getPort() + "/acp");
+			assertThat(HttpProbes.initialize(endpoint, "https://app.example.com").statusCode()).isEqualTo(200);
+			assertThat(HttpProbes.webSocketHandshake(endpoint, "https://app.example.com"))
+				.isEqualTo(HttpProbes.SWITCHING_PROTOCOLS);
+			assertThat(HttpProbes.initialize(endpoint, "https://other.example.com").statusCode()).isEqualTo(403);
+			assertThat(HttpProbes.webSocketHandshake(endpoint, "https://other.example.com")).isEqualTo(403);
+		}
+		finally {
+			listener.closeGracefully().block(Duration.ofSeconds(10));
+		}
 	}
 
 }
