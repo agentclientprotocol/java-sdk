@@ -7,7 +7,6 @@ package com.agentclientprotocol.sdk.agent;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -47,6 +46,23 @@ final class AgentHandlers {
 	}
 
 	/**
+	 * Handles one inbound notification, already read into its type.
+	 * @param <T> the notification type
+	 */
+	@FunctionalInterface
+	interface NotificationHandler<T> {
+
+		/**
+		 * Handles the notification.
+		 * @param notification the notification
+		 * @param agent the agent that received it, for handlers that act back on the client
+		 * @return a {@code Mono} that completes when the notification is handled
+		 */
+		Mono<Void> handle(T notification, AcpAsyncAgent agent);
+
+	}
+
+	/**
 	 * One request method: its name, the type its params are read as, and its handler.
 	 * @param <T> the request type
 	 */
@@ -57,7 +73,7 @@ final class AgentHandlers {
 	 * One notification method: its name, the type its params are read as, and its handler.
 	 * @param <T> the notification type
 	 */
-	record Notification<T>(String method, TypeRef<T> notificationType, Function<T, Mono<Void>> handler) {
+	record Notification<T>(String method, TypeRef<T> notificationType, NotificationHandler<T> handler) {
 	}
 
 	private final Map<String, Request<?>> requests = new LinkedHashMap<>();
@@ -70,7 +86,7 @@ final class AgentHandlers {
 		}
 	}
 
-	<T> void notification(String method, TypeRef<T> notificationType, Function<T, Mono<Void>> handler) {
+	<T> void notification(String method, TypeRef<T> notificationType, NotificationHandler<T> handler) {
 		if (notifications.putIfAbsent(method, new Notification<>(method, notificationType, handler)) != null) {
 			throw alreadyRegistered(method, "extNotificationHandler");
 		}

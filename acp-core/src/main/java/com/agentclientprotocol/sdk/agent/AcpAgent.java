@@ -1499,7 +1499,7 @@ public interface AcpAgent {
 		public AsyncAgentBuilder cancelHandler(CancelHandler handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			handlers.notification(AcpSchema.METHOD_SESSION_CANCEL, new TypeRef<AcpSchema.CancelNotification>() {
-			}, handler::handle);
+			}, (notification, agent) -> handler.handle(notification));
 			return this;
 		}
 
@@ -1557,8 +1557,7 @@ public interface AcpAgent {
 			ExtensionMethods.requireExtension(method);
 			Assert.notNull(paramsType, "Params type must not be null");
 			Assert.notNull(handler, "Handler must not be null");
-			handlers.notification(method, paramsType, handler::handle);
-			return this;
+			return notification(method, paramsType, (params, agent) -> handler.handle(params));
 		}
 
 		/**
@@ -1578,6 +1577,13 @@ public interface AcpAgent {
 		<T> AsyncAgentBuilder request(String method, TypeRef<T> requestType,
 				AgentHandlers.RequestHandler<T> handler) {
 			handlers.request(method, requestType, handler);
+			return this;
+		}
+
+		@Override
+		<T> AsyncAgentBuilder notification(String method, TypeRef<T> notificationType,
+				AgentHandlers.NotificationHandler<T> handler) {
+			handlers.notification(method, notificationType, handler);
 			return this;
 		}
 
@@ -2032,7 +2038,7 @@ public interface AcpAgent {
 				SyncExtNotificationHandler<T> handler) {
 			Assert.notNull(handler, "Handler must not be null");
 			asyncBuilder.extNotificationHandler(method, paramsType,
-					params -> Mono.<Void>fromRunnable(HandlerFailures.guard(() -> handler.handle(params))).subscribeOn(this.handlerScheduler));
+					params -> runOnSyncHandlerThread(() -> handler.handle(params)));
 			return this;
 		}
 
@@ -2077,6 +2083,11 @@ public interface AcpAgent {
 		@Override
 		<T> Mono<T> onSyncHandlerThread(Callable<T> handler) {
 			return Mono.fromCallable(HandlerFailures.guard(handler)).subscribeOn(this.handlerScheduler);
+		}
+
+		@Override
+		Mono<Void> runOnSyncHandlerThread(Runnable handler) {
+			return Mono.<Void>fromRunnable(HandlerFailures.guard(handler)).subscribeOn(this.handlerScheduler);
 		}
 
 	}

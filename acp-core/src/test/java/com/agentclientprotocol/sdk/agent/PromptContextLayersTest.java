@@ -31,7 +31,7 @@ class PromptContextLayersTest {
 
 	private static final Set<String> PROTOCOL_CALLS = Set.of("readTextFile", "writeTextFile", "requestPermission",
 			"createTerminal", "getTerminalOutput", "releaseTerminal", "waitForTerminalExit", "killTerminal",
-			"createElicitation", "completeElicitation");
+			"createElicitation", "completeElicitation", "sendExtRequest", "sendExtNotification");
 
 	private static Set<String> methods(Class<?> type) {
 		return Arrays.stream(type.getMethods()).map(Method::getName).collect(Collectors.toSet());

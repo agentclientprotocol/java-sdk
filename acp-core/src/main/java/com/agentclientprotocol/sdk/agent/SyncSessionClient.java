@@ -4,7 +4,9 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The protocol layer of a prompt turn, with blocking calls: the raw ACP requests an agent sends
@@ -12,7 +14,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
  * and returning once the client has answered. Get it from {@link SyncPromptContext#client()}; the
  * context itself holds the convenience calls built on these ({@link SyncPromptContext#readFile},
  * {@link SyncPromptContext#askPermission}, {@link SyncPromptContext#execute} and the rest), which
- * fill in the session ID for you.
+ * fill in the session ID for you. It also sends the client custom extension methods
+ * ({@link #sendExtRequest}, {@link #sendExtNotification}).
  *
  * <pre>{@code
  * String head = context.client()
@@ -132,5 +135,42 @@ public interface SyncSessionClient {
 	 * @param notification the ID of the elicitation that finished
 	 */
 	void completeElicitation(AcpSchema.CompleteElicitationNotification notification);
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name) to the client and blocks
+	 * for its result, read as the given type, as
+	 * {@link AcpSyncAgent#sendExtRequest(String, Object, TypeRef)} does. A client that does not
+	 * handle the method answers "Method not found" ({@code -32601}), thrown as
+	 * {@link com.agentclientprotocol.sdk.spec.AcpError}.
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return the result, or {@code null} when the client answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see SessionClient#sendExtRequest(String, Object, TypeRef)
+	 */
+	<T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType);
+
+	/**
+	 * Sends a custom extension request to the client and blocks for its result, as the raw JSON
+	 * value: a {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return the result, or {@code null} when the client answers {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see SessionClient#sendExtRequest(String, Object)
+	 */
+	@Nullable Object sendExtRequest(String method, Object params);
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the client and
+	 * returns once it has been handed to the transport. A client without a handler for it ignores
+	 * it.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	void sendExtNotification(String method, Object params);
 
 }

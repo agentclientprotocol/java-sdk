@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.agent;
 
 import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.json.TypeRef;
@@ -15,8 +16,8 @@ import reactor.core.publisher.Mono;
 
 /**
  * The setters of {@link AcpAgent.SyncAgentBuilder} that take a {@link SyncAgentAwareHandler}: one
- * overload of each typed request setter but {@code promptHandler}, registering a blocking handler
- * that also receives the agent {@code build()} returned. Kept apart from the builder only to keep
+ * overload of each typed request setter but {@code promptHandler}, and of each extension handler
+ * setter, registering a blocking handler that also receives the agent {@code build()} returned. Kept apart from the builder only to keep
  * that class small; it is part of the builder's API.
  */
 abstract class SyncAgentAwareSetters<B> {
@@ -33,6 +34,9 @@ abstract class SyncAgentAwareSetters<B> {
 
 	/** Runs a handler on the builder's handler executor. */
 	abstract <T> Mono<T> onSyncHandlerThread(Callable<T> handler);
+
+	/** Runs a handler that returns nothing on the builder's handler executor. */
+	abstract Mono<Void> runOnSyncHandlerThread(Runnable handler);
 
 	/** Records the agent {@code build()} returns, for the agent-aware handlers. */
 	AcpSyncAgent remember(AcpSyncAgent agent) {
@@ -294,6 +298,82 @@ abstract class SyncAgentAwareSetters<B> {
 		asyncBuilder().disableProviderHandler((AcpSchema.DisableProviderRequest request, AcpAsyncAgent agent) -> onSyncHandlerThread(
 				() -> handler.handle(request, syncView(agent))));
 		return self();
+	}
+
+	/**
+	 * Registers the handler for a custom extension request ({@code _}-prefixed method name, ACP v1
+	 * Extensibility) from the client, its params read as the given type, as
+	 * {@link AcpAgent.SyncAgentBuilder#extRequestHandler(String, TypeRef, AcpAgent.SyncExtRequestHandler)}
+	 * does, for a handler that also needs the agent it serves, for example to call the client back
+	 * ({@link AcpSyncAgent#sendExtRequest(String, Object, TypeRef)}) or send session updates. Name
+	 * the agent parameter {@code self}, not the name the built agent is assigned to.
+	 * @param <T> the params type
+	 * @param <R> the result type, any type the JSON mapper can write; returning {@code null}
+	 * answers the request with an internal error ({@code -32603})
+	 * @param method the method name, which must start with {@code _} (for example
+	 * {@code _example.com/workspace/buffers})
+	 * @param paramsType the type the params are read as; must not be null
+	 * @param handler the handler; it receives the params and the agent; must not be null
+	 * @return this builder
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public <T, R> B extRequestHandler(String method, TypeRef<T> paramsType, SyncAgentAwareHandler<T, R> handler) {
+		Assert.notNull(handler, "Handler must not be null");
+		asyncBuilder().extRequestHandler(method, paramsType, (T params, AcpAsyncAgent agent) -> onSyncHandlerThread(
+				() -> handler.handle(params, syncView(agent))));
+		return self();
+	}
+
+	/**
+	 * Registers the handler for a custom extension request ({@code _}-prefixed method name) from
+	 * the client, its params delivered as the raw JSON value (a {@code Map}, {@code List},
+	 * {@code String}, {@code Number} or {@code Boolean}), for a handler that also needs the agent
+	 * it serves.
+	 * @param <R> the result type, any type the JSON mapper can write
+	 * @param method the method name, which must start with {@code _}
+	 * @param handler the handler; it receives the params and the agent; must not be null
+	 * @return this builder
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see #extRequestHandler(String, TypeRef, SyncAgentAwareHandler)
+	 */
+	public <R> B extRequestHandler(String method, SyncAgentAwareHandler<Object, R> handler) {
+		return extRequestHandler(method, AgentHandlers.RAW_PARAMS, handler);
+	}
+
+	/**
+	 * Registers the handler for a custom extension notification ({@code _}-prefixed method name)
+	 * from the client, its params read as the given type, as
+	 * {@link AcpAgent.SyncAgentBuilder#extNotificationHandler(String, TypeRef, AcpAgent.SyncExtNotificationHandler)}
+	 * does, for a handler that also needs the agent it serves, for example to answer with a
+	 * notification of its own ({@link AcpSyncAgent#sendExtNotification(String, Object)}). It runs
+	 * on the builder's handler executor and may block; a handler that throws is only logged.
+	 * Name the agent parameter {@code self}, not the name the built agent is assigned to.
+	 * @param <T> the params type
+	 * @param method the method name, which must start with {@code _}
+	 * @param paramsType the type the params are read as; must not be null
+	 * @param handler the handler; it receives the params and the agent; must not be null
+	 * @return this builder
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	public <T> B extNotificationHandler(String method, TypeRef<T> paramsType, BiConsumer<T, AcpSyncAgent> handler) {
+		Assert.notNull(handler, "Handler must not be null");
+		asyncBuilder().extNotificationHandler(method, paramsType, (T params, AcpAsyncAgent agent) -> runOnSyncHandlerThread(
+				() -> handler.accept(params, syncView(agent))));
+		return self();
+	}
+
+	/**
+	 * Registers the handler for a custom extension notification ({@code _}-prefixed method name)
+	 * from the client, its params delivered as the raw JSON value, for a handler that also needs
+	 * the agent it serves.
+	 * @param method the method name, which must start with {@code _}
+	 * @param handler the handler; it receives the params and the agent; must not be null
+	 * @return this builder
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see #extNotificationHandler(String, TypeRef, BiConsumer)
+	 */
+	public B extNotificationHandler(String method, BiConsumer<Object, AcpSyncAgent> handler) {
+		return extNotificationHandler(method, AgentHandlers.RAW_PARAMS, handler);
 	}
 
 }

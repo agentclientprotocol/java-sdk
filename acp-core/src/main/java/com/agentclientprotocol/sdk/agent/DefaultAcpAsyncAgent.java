@@ -161,7 +161,7 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	private <T> AcpAgentSession.NotificationHandler sessionHandler(AgentHandlers.Notification<T> registration) {
 		return params -> registration.handler()
-			.apply(transport.unmarshalParams(params, registration.notificationType()));
+			.handle(transport.unmarshalParams(params, registration.notificationType()), this);
 	}
 
 	/**

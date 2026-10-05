@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import reactor.core.publisher.Mono;
 
@@ -15,7 +16,8 @@ import reactor.core.publisher.Mono;
  * {@link PromptContext#askPermission}, {@link PromptContext#execute} and the rest), which fill in
  * the session ID for you. Use this one for what the convenience calls do not cover: a line range,
  * a permission request for a tool call the agent announced itself, a terminal the handler manages
- * step by step, or an elicitation.
+ * step by step, an elicitation, or a custom extension method of the client's ({@link #sendExtRequest},
+ * {@link #sendExtNotification}).
  *
  * <pre>{@code
  * context.client()
@@ -139,5 +141,45 @@ public interface SessionClient {
 	 * @return a {@code Mono} that completes when the notification has been handed to the transport
 	 */
 	Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification);
+
+	/**
+	 * Sends a custom extension request to the client and returns its result as the raw JSON value:
+	 * a {@code Map}, {@code List}, {@code String}, {@code Number} or {@code Boolean}.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a {@code Mono} emitting the result, or completing empty when the client answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 * @see #sendExtRequest(String, Object, TypeRef)
+	 */
+	Mono<Object> sendExtRequest(String method, Object params);
+
+	/**
+	 * Sends a custom extension request ({@code _}-prefixed method name, ACP v1 Extensibility) to
+	 * the client and reads its result as the given type, as
+	 * {@link AcpAsyncAgent#sendExtRequest(String, Object, TypeRef)} does. A client that does not
+	 * handle the method answers "Method not found" ({@code -32601}), which fails the {@code Mono}
+	 * with {@link com.agentclientprotocol.sdk.spec.AcpError}. The SDK checks no capability for
+	 * extension methods: advertise and check them in the {@code _meta} of the capability objects.
+	 * @param <T> the result type
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @param resultType the type the result is read as
+	 * @return a {@code Mono} emitting the result, or completing empty when the client answers
+	 * {@code "result": null}
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	<T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType);
+
+	/**
+	 * Sends a custom extension notification ({@code _}-prefixed method name) to the client, as
+	 * {@link AcpAsyncAgent#sendExtNotification(String, Object)} does. A client without a handler
+	 * for it ignores it.
+	 * @param method the method name, which must start with {@code _}
+	 * @param params the params, any value the JSON mapper can write
+	 * @return a {@code Mono} that completes when the notification has been handed to the transport
+	 * @throws IllegalArgumentException if the method name does not start with {@code _}
+	 */
+	Mono<Void> sendExtNotification(String method, Object params);
 
 }
