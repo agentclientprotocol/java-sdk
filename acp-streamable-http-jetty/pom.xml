@@ -54,6 +54,21 @@
             <groupId>org.eclipse.jetty.ee10.websocket</groupId>
             <artifactId>jetty-ee10-websocket-jakarta-server</artifactId>
         </dependency>
+        <!-- The Jakarta WebSocket 2.2 API, in place of the 2.1 one Jetty's jars bring: Jetty 12.1
+             runs on it, and Tomcat 11 needs it. With 2.1 nearest, an application that also runs
+             Tomcat 11 (a Spring Boot web application with this module added) failed every
+             WebSocket send with NoSuchMethodError on SendResult(Session). Declared here, it is
+             nearer than Jetty's, so it wins without a BOM. -->
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-api</artifactId>
+            <version>${jakarta-websocket-runtime.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-client-api</artifactId>
+            <version>${jakarta-websocket-runtime.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

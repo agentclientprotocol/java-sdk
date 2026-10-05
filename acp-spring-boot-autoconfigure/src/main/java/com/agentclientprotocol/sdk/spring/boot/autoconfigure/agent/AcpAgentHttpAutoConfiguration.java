@@ -88,7 +88,9 @@ public class AcpAgentHttpAutoConfiguration {
 
 		@Bean
 		@ConditionalOnMissingBean
-		AcpHttpEndpoint acpHttpEndpoint(AcpAgentFactory agentFactory, AcpAgentProperties properties) {
+		AcpHttpEndpoint acpHttpEndpoint(AcpAgentFactory agentFactory, AcpAgentProperties properties,
+				ApplicationContext context) {
+			WebSocketApiCheck.requireCompatible(context.getClassLoader());
 			return AcpListeners.endpoint(properties.toSettings(), agentFactory);
 		}
 

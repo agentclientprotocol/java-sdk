@@ -88,6 +88,9 @@
              run on, the version Spring Boot 4.1 manages. -->
         <jakarta-servlet.version>6.0.0</jakarta-servlet.version>
         <jakarta-websocket.version>2.1.1</jakarta-websocket.version>
+        <!-- The Jakarta WebSocket API the SDK's listener ships with: 2.2, which Jetty 12.1 runs on
+             and Tomcat 11 implements (acp-streamable-http-jetty). -->
+        <jakarta-websocket-runtime.version>2.2.0</jakarta-websocket-runtime.version>
         <tomcat.version>11.0.22</tomcat.version>
         <!-- Micronaut 4 (Java 17) for acp-micronaut and its sample only: its platform BOM is
              imported in those modules' own dependencyManagement, never here. The core version

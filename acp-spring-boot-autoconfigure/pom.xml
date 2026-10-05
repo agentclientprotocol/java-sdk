@@ -192,6 +192,36 @@
 
     <build>
         <plugins>
+            <!-- The Jakarta WebSocket 2.1 API jars, for the test that puts them ahead of Tomcat 11's
+                 2.2 classes (AcpAgentHttpWebSocketApiTests); never on the module's classpath. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>websocket-api-2.1</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/websocket-api-2.1</outputDirectory>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>jakarta.websocket</groupId>
+                                    <artifactId>jakarta.websocket-api</artifactId>
+                                    <version>2.1.1</version>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>jakarta.websocket</groupId>
+                                    <artifactId>jakarta.websocket-client-api</artifactId>
+                                    <version>2.1.1</version>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Spring Boot's processors write META-INF/spring-configuration-metadata.json and
                  spring-autoconfigure-metadata.properties. Named on the processor path, not found
                  on the classpath: in the errorprone profile (JDK 21+) the parent's processor path
