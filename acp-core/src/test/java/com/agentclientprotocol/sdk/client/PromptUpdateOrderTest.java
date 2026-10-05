@@ -126,7 +126,7 @@ class PromptUpdateOrderTest {
 	}
 
 	/**
-	 * A update handler that calls the agent and waits for the answer, while the agent's later
+	 * An update handler that calls the agent and waits for the answer, while the agent's later
 	 * updates arrive first: that answer is not held behind the update handler that waits for it.
 	 */
 	@Test
@@ -211,7 +211,7 @@ class PromptUpdateOrderTest {
 	}
 
 	/**
-	 * A update handler that waits for a prompt of its own, during which the agent asks the client
+	 * An update handler that waits for a prompt of its own, during which the agent asks the client
 	 * something: the agent's request is not held behind the update handler that waits for it.
 	 */
 	@Test

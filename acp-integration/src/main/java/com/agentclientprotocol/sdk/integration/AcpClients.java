@@ -81,8 +81,8 @@ public final class AcpClients {
 			List<? extends AcpClientCustomizer> customizers, String prefix) {
 		AcpClient.AsyncSpec spec = AcpClient.async(transport)
 			.clientCapabilities(settings.capabilities().toClientCapabilities())
-			// Session updates always have a update handler, so the SDK does not warn about an unhandled
-			// one. This one only logs; a update handler a customizer adds replaces it.
+			// Session updates always have an update handler, so the SDK does not warn about an unhandled
+			// one. This one only logs; an update handler a customizer adds replaces it.
 			.defaultSessionUpdateHandler(AcpClients::logSessionUpdate);
 		Duration requestTimeout = settings.requestTimeout();
 		if (requestTimeout != null) {
