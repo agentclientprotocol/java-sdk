@@ -65,4 +65,21 @@ class AcpSchedulersTest {
 		assertThat(thread.isDaemon()).isTrue();
 	}
 
+	/**
+	 * Both kinds of delivery threads, whichever JDK runs the test: a virtual thread per delivery
+	 * (a daemon platform thread where the JDK has none), and the cached pool of daemon platform
+	 * threads JDK 17 gets.
+	 */
+	@Test
+	void eitherKindOfDeliveryThreadIsANamedDaemon() throws Exception {
+		for (boolean virtualThreads : new boolean[] { true, false }) {
+			CompletableFuture<Thread> delivered = new CompletableFuture<>();
+			AcpSchedulers.deliveryScheduler(virtualThreads).schedule(() -> delivered.complete(Thread.currentThread()));
+			Thread thread = delivered.get(5, TimeUnit.SECONDS);
+			assertThat(thread.getName()).isEqualTo("acp-timeout-delivery");
+			assertThat(thread.isDaemon()).isTrue();
+			assertThat(VirtualThreads.isVirtual(thread)).isEqualTo(virtualThreads && VirtualThreads.isSupported());
+		}
+	}
+
 }

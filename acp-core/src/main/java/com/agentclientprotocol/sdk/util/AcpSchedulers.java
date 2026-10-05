@@ -42,19 +42,7 @@ public final class AcpSchedulers {
 		 * handler cannot delay every other session's timeouts: a virtual thread per delivery
 		 * where the JDK has them, else a cached pool of daemon threads.
 		 */
-		static final Scheduler DELIVERY = deliveryScheduler();
-
-		private static Scheduler deliveryScheduler() {
-			if (VirtualThreads.isSupported()) {
-				ThreadFactory virtual = VirtualThreads.factoryOrDaemon("acp-timeout-delivery");
-				return Schedulers.fromExecutor(task -> virtual.newThread(task).start());
-			}
-			return Schedulers.fromExecutorService(Executors.newCachedThreadPool(r -> {
-				Thread t = new Thread(r, "acp-timeout-delivery");
-				t.setDaemon(true);
-				return t;
-			}), "acp-timeout-delivery");
-		}
+		static final Scheduler DELIVERY = deliveryScheduler(VirtualThreads.isSupported());
 
 		private static ScheduledThreadPoolExecutor timerExecutor() {
 			ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, r -> {
@@ -71,6 +59,22 @@ public final class AcpSchedulers {
 	}
 
 	private AcpSchedulers() {
+	}
+
+	/**
+	 * The delivery threads: a virtual thread per delivery, else a cached pool of daemon threads.
+	 * Whether the JDK has virtual threads is given, so tests make the choice on any JDK.
+	 */
+	static Scheduler deliveryScheduler(boolean virtualThreads) {
+		if (virtualThreads) {
+			ThreadFactory virtual = VirtualThreads.factoryOrDaemon("acp-timeout-delivery");
+			return Schedulers.fromExecutor(task -> virtual.newThread(task).start());
+		}
+		return Schedulers.fromExecutorService(Executors.newCachedThreadPool(r -> {
+			Thread t = new Thread(r, "acp-timeout-delivery");
+			t.setDaemon(true);
+			return t;
+		}), "acp-timeout-delivery");
 	}
 
 	/**
