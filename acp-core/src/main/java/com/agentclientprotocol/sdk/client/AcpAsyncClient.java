@@ -539,9 +539,9 @@ public class AcpAsyncClient {
 	 * <p>The answer is delivered only once the session update handlers have finished with every
 	 * notification the agent sent before it, so what they collected for the turn is complete when
 	 * the stop reason arrives. A slow update handler delays the answer, and the wait counts against the
-	 * prompt timeout, if one is set. The one exception: a update handler that was already running when
+	 * prompt timeout, if one is set. The one exception: an update handler that was already running when
 	 * the prompt was sent, and is still running when its answer arrives, is not waited for, since
-	 * it may be the one waiting for the prompt. A update handler must therefore not wait for this prompt
+	 * it may be the one waiting for the prompt. An update handler must therefore not wait for this prompt
 	 * to complete.
 	 *
 	 * <p>A prompt is not bound by the builder's {@code requestTimeout}: by default it waits for the
