@@ -91,11 +91,21 @@ quarkus.acp.agent.transport.type=http
 quarkus.acp.agent.transport.http.path=/acp
 ```
 
-The agent is served at `/acp` on the Quarkus HTTP server (`quarkus.http.port`): Streamable HTTP
-through the SDK's servlet on `quarkus-undertow`, and WebSocket upgrades on the same path through a
-Vert.x route. There is no second server. Each connection runs its own agent runtime over the one
-bean, so the bean's handlers must be thread-safe. On shutdown every connection is closed first,
-within `quarkus.acp.agent.transport.http.shutdown-timeout`.
+The agent is served at `/acp` on the Quarkus HTTP server (`quarkus.http.port`, under
+`quarkus.http.root-path`): Streamable HTTP, SSE and WebSocket upgrades on one Vert.x route of the
+Quarkus router, with no servlet container and no second server. The route sits behind Quarkus's
+authentication and permission checks, so HTTP security policies apply to `/acp`, the WebSocket
+handshake included:
+
+```properties
+quarkus.http.auth.permission.acp.paths=/acp
+quarkus.http.auth.permission.acp.policy=authenticated
+```
+
+Each connection runs its own agent runtime over the one bean, so the bean's handlers must be
+thread-safe. On shutdown the endpoint drains first, within
+`quarkus.acp.agent.transport.http.shutdown-timeout`: SSE streams get a closing comment and
+complete, WebSockets close with 1001.
 
 An HTTP build raises these Quarkus defaults to what the SDK's own listener admits (your own settings
 win): `quarkus.http.limits.max-body-size=16M`,
