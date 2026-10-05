@@ -5,10 +5,15 @@
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
 import java.net.URI;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.TimeUnit;
 
 import com.agentclientprotocol.sdk.quarkus.AcpBuildTimeConfig;
+import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck;
+import io.quarkus.runtime.configuration.MemorySize;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
@@ -31,9 +36,15 @@ class VertxHostTckTest extends AcpHttpTransportTck {
 		var options = config.options();
 		AcpAgentAssembly assembly = mock(AcpAgentAssembly.class);
 		when(assembly.factory()).thenReturn(config.agents());
+		AcpRuntimeConfig runtime = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
+		when(runtime.agent().transport().http()).thenReturn(new AcpHttpEndpointTest.AgentHttp(
+				Optional.of(new MemorySize(java.math.BigInteger.valueOf(options.maxPostBodyBytes()))),
+				Optional.of(options.keepAliveInterval()), OptionalInt.empty(), OptionalInt.empty(), OptionalInt.empty(),
+				OptionalInt.empty(), Optional.of(options.shutdownTimeout()), Optional.of(options.webSocketIdleTimeout()),
+				Optional.of(options.initializeTimeout()), Optional.of(List.copyOf(options.allowedOrigins()))));
 		AcpBuildTimeConfig buildTime = mock(AcpBuildTimeConfig.class, Answers.RETURNS_DEEP_STUBS);
 		when(buildTime.agent().transport().http().path()).thenReturn("acp");
-		AcpVertxHost host = new AcpVertxHost(assembly, options, buildTime);
+		AcpVertxHost host = new AcpVertxHost(assembly, runtime, buildTime);
 		AcpHttpAgentHost agentHost = new AcpHttpAgentHost(host);
 		Router router = Router.router(vertx);
 		host.register(router);

@@ -39,7 +39,7 @@ plain key/value configuration with `from(SettingsSource, prefix)`:
 | `shutdown-on-transport-end` | `true`: stop the application when stdio input ends |
 | `transport.type` | `stdio`; `http` (or `websocket`, the same) for Streamable HTTP and WebSocket. The SDK's listener takes WebSocket upgrades on the endpoint's path; the servlet in a framework's Servlet container does not, so there `websocket` serves HTTP/SSE only, unless the framework routes the upgrades itself (Quarkus does) |
 | `transport.http.path` | `/acp` |
-| `transport.http.max-post-body-size`, `keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout` | SDK defaults |
+| `transport.http.max-post-body-size`, `keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout`, `web-socket-idle-timeout`, `initialize-timeout` | SDK defaults |
 | `transport.http.listener.port` | `8080`, the SDK listener only; `0` for an ephemeral port |
 | `transport.http.listener.max-concurrent-streams-per-connection` | SDK default |
 

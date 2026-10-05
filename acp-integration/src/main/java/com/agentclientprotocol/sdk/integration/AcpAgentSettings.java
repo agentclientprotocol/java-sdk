@@ -35,7 +35,7 @@ import org.jspecify.annotations.Nullable;
  * transport.http.allowed-origins                        none (loopback origins only)
  * transport.http.max-post-body-size, keep-alive-interval, mailbox-capacity,
  *     max-pending-sse-events, max-web-socket-pending-frames, max-provisional-sessions,
- *     shutdown-timeout                                  SDK defaults
+ *     shutdown-timeout, web-socket-idle-timeout, initialize-timeout   SDK defaults
  * transport.http.listener.host                          loopback (127.0.0.1 and ::1)
  * transport.http.listener.port                          8080 (0: ephemeral)
  * transport.http.listener.max-concurrent-streams-per-connection   SDK default
@@ -118,11 +118,15 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	 * @param maxProvisionalSessions the session streams a connection may open before the session is
 	 * known
 	 * @param shutdownTimeout how long closing waits for the connections to close gracefully
+	 * @param webSocketIdleTimeout how long a WebSocket connection may pass no frame before the
+	 * endpoint closes it
+	 * @param initializeTimeout how long a connection has to complete {@code initialize}
 	 */
 	public record Limits(@Nullable Long maxPostBodyBytes, @Nullable Duration keepAliveInterval,
 			@Nullable Integer mailboxCapacity, @Nullable Integer maxPendingSseEvents,
 			@Nullable Integer maxWebSocketPendingFrames, @Nullable Integer maxProvisionalSessions,
-			@Nullable Duration shutdownTimeout) {
+			@Nullable Duration shutdownTimeout, @Nullable Duration webSocketIdleTimeout,
+			@Nullable Duration initializeTimeout) {
 	}
 
 	/**
@@ -173,6 +177,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		ifSet(limits.maxWebSocketPendingFrames(), options::maxWebSocketPendingFrames);
 		ifSet(limits.maxProvisionalSessions(), options::maxProvisionalSessions);
 		ifSet(limits.shutdownTimeout(), options::shutdownTimeout);
+		ifSet(limits.webSocketIdleTimeout(), options::webSocketIdleTimeout);
+		ifSet(limits.initializeTimeout(), options::initializeTimeout);
 		options.allowedOrigins(http.allowedOrigins());
 		if (listener) {
 			ifSet(http.listener().maxConcurrentStreamsPerConnection(), options::maxConcurrentStreamsPerConnection);
@@ -226,6 +232,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 			.maxWebSocketPendingFrames(read.integer("transport.http.max-web-socket-pending-frames"))
 			.maxProvisionalSessions(read.integer("transport.http.max-provisional-sessions"))
 			.shutdownTimeout(read.duration("transport.http.shutdown-timeout"))
+			.webSocketIdleTimeout(read.duration("transport.http.web-socket-idle-timeout"))
+			.initializeTimeout(read.duration("transport.http.initialize-timeout"))
 			.maxConcurrentStreamsPerConnection(
 					read.integer("transport.http.listener.max-concurrent-streams-per-connection"));
 		AcpTransportType type = read.transportType("transport.type");
@@ -279,6 +287,10 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		private @Nullable Integer maxProvisionalSessions;
 
 		private @Nullable Duration shutdownTimeout;
+
+		private @Nullable Duration webSocketIdleTimeout;
+
+		private @Nullable Duration initializeTimeout;
 
 		private int listenerPort = DEFAULT_LISTENER_PORT;
 
@@ -450,6 +462,29 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
+		 * Sets how long a WebSocket connection may pass no frame in either direction before the
+		 * endpoint closes it (1001), on every host.
+		 * @param webSocketIdleTimeout the timeout, or null for the SDK default (30 minutes)
+		 * @return this builder
+		 */
+		public Builder webSocketIdleTimeout(@Nullable Duration webSocketIdleTimeout) {
+			this.webSocketIdleTimeout = webSocketIdleTimeout;
+			return this;
+		}
+
+		/**
+		 * Sets how long a connection has to complete {@code initialize}: a WebSocket that has not
+		 * sent it by then is closed (1008), and a POST {@code initialize} the agent has not
+		 * answered by then is answered 500.
+		 * @param initializeTimeout the timeout, or null for the SDK default (30 seconds)
+		 * @return this builder
+		 */
+		public Builder initializeTimeout(@Nullable Duration initializeTimeout) {
+			this.initializeTimeout = initializeTimeout;
+			return this;
+		}
+
+		/**
 		 * Sets the SDK listener's port; a framework's own server ignores it. Default
 		 * {@value AcpAgentSettings#DEFAULT_LISTENER_PORT}.
 		 * @param listenerPort the port; 0 for an ephemeral one
@@ -499,7 +534,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		 */
 		public AcpAgentSettings build() {
 			Limits limits = new Limits(maxPostBodyBytes, keepAliveInterval, mailboxCapacity, maxPendingSseEvents,
-					maxWebSocketPendingFrames, maxProvisionalSessions, shutdownTimeout);
+					maxWebSocketPendingFrames, maxProvisionalSessions, shutdownTimeout, webSocketIdleTimeout,
+					initializeTimeout);
 			return new AcpAgentSettings(enabled, requestTimeout, cancelGracePeriod, maxPromptDuration,
 					shutdownOnTransportEnd, transport,
 					new Http(path, limits, new Listener(listenerHost, listenerPort, maxConcurrentStreamsPerConnection),

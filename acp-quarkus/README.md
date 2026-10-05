@@ -169,6 +169,8 @@ Run time:
 | `quarkus.acp.agent.transport.http.max-web-socket-pending-frames` | 1024 | |
 | `quarkus.acp.agent.transport.http.max-provisional-sessions` | 64 | |
 | `quarkus.acp.agent.transport.http.shutdown-timeout` | 5s | |
+| `quarkus.acp.agent.transport.http.web-socket-idle-timeout` | 30m | a WebSocket connection that passes no frame for this long is closed (1001) |
+| `quarkus.acp.agent.transport.http.initialize-timeout` | 30s | a WebSocket that has not sent `initialize` by then is closed (1008); a POST `initialize` not answered by then is answered 500 |
 | `quarkus.acp.agent.transport.http.allowed-origins` | none | browser origins accepted besides `localhost`, `127.0.0.1` and `[::1]`; any other `Origin` is answered 403 (HTTP and WebSocket handshake); `*` for any. The bind address is Quarkus's own, `quarkus.http.host` |
 | `quarkus.acp.client.request-timeout` | SDK default | |
 | `quarkus.acp.client.transport.type` | inferred | `stdio`, `websocket` or `http`; unset: the one of `stdio.command`, `websocket.uri` and `http.uri` that is set; with several set, it is required |
