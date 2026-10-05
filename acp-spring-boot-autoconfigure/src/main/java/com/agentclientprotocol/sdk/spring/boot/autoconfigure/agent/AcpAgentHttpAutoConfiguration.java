@@ -17,12 +17,17 @@ import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpListenerHost;
 import com.agentclientprotocol.sdk.integration.AcpListeners;
 import com.agentclientprotocol.sdk.integration.AcpServletHost;
+import com.agentclientprotocol.sdk.http.webflux.AcpWebFluxHost;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -38,52 +43,63 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.server.RouterFunction;
+import org.springframework.web.reactive.function.server.ServerResponse;
 
 /**
- * Serves the application's {@code @AcpAgent} bean over ACP Streamable HTTP when
- * {@code spring.acp.agent.transport.type} is {@code http} (or {@code websocket}, the same) and the
- * SDK's servlet host ({@code acp-http-servlet}) is on the classpath. The starter does not bring it,
- * so add it yourself: {@code acp-http-servlet} for a servlet web application, or
- * {@code acp-streamable-http-jetty} (which includes it) for the SDK's own listener. Each client connection gets its own agent from the {@link AcpAgentFactory} that
- * {@link AcpAgentAutoConfiguration} creates, and every one of them calls the same bean.
+ * Serves the application's {@code @AcpAgent} bean over ACP Streamable HTTP and WebSocket when
+ * {@code spring.acp.agent.transport.type} is {@code http} (or {@code websocket}, the same) and an
+ * SDK host for the kind of application is on the classpath. The starter brings none, so add the
+ * one that fits: {@code acp-http-servlet} for a servlet (Spring MVC) web application,
+ * {@code acp-http-webflux} for a reactive (WebFlux) one, or {@code acp-streamable-http-jetty}
+ * for the SDK's own listener in a non-web application. Each client connection gets its own agent
+ * from the {@link AcpAgentFactory} that {@link AcpAgentAutoConfiguration} creates, and every one
+ * of them calls the same bean.
  *
  * <p>Where the endpoint is served depends on the kind of application:
  * <ul>
  * <li>A servlet web application mounts the {@link StreamableHttpAcpServlet} on its own server
  * ({@code server.port}) at {@code spring.acp.agent.transport.http.path}: Streamable HTTP, SSE and
  * WebSocket upgrades on that one path, through the application's filter chain, so Spring
- * Security, observations and access logs apply to ACP as to any other endpoint. The endpoint
- * itself is an {@link AcpHttpEndpoint} bean, which an application may wrap or replace; a bean
- * named {@code acpServletRegistration} of the application's own replaces the registration. Before
- * the server's graceful shutdown, in an earlier {@code SmartLifecycle} phase, the endpoint drains:
- * SSE streams get a closing comment and complete, WebSockets close with 1001, so the shutdown
- * never waits for them. With {@code server.compression} on, {@code text/event-stream} is taken out
- * of the compressed types, since a compressed SSE stream is held back until the buffer fills.</li>
+ * Security, observations and access logs apply to ACP as to any other endpoint. A bean named
+ * {@code acpServletRegistration} of the application's own replaces the registration.</li>
+ * <li>A reactive web application routes the path to the endpoint with a {@code RouterFunction}
+ * bean named {@code acpRouterFunction} ({@link AcpWebFluxHost}) on its own server
+ * ({@code server.port}, Reactor Netty by default), so the application's {@code WebFilter}s, its
+ * {@code SecurityWebFilterChain} included, apply to it over HTTP and on the WebSocket handshake.
+ * A bean of that name of the application's own replaces the route. Without
+ * {@code acp-http-webflux} on the classpath the startup fails, naming it.</li>
  * <li>A non-web application gets the SDK's {@link StreamableHttpAcpAgentTransport}, listening on
  * {@code spring.acp.agent.transport.http.listener.port} (default 8080) with HTTP/1.1, cleartext
  * HTTP/2 and WebSocket upgrades on the same path. It starts with the context and stops with it,
  * waiting at most 30 seconds. A {@code StreamableHttpAcpAgentTransport} bean of the application's
  * own replaces it.</li>
- * <li>A reactive (WebFlux) web application fails the startup: the endpoint needs a servlet web
- * application or the standalone listener.</li>
  * </ul>
- * The endpoint's limits come from {@code spring.acp.agent.transport.http.*}
- * ({@link AcpAgentProperties.AgentHttpProperties}). Nothing here applies when
- * {@code spring.acp.agent.enabled=false}.
+ * In a web application the endpoint itself is an {@link AcpHttpEndpoint} bean, which an
+ * application may wrap or replace. Before the server's graceful shutdown, in an earlier
+ * {@code SmartLifecycle} phase, it drains: SSE streams get a closing comment and complete,
+ * WebSockets close with 1001, so the shutdown never waits for them. With
+ * {@code server.compression} on, {@code text/event-stream} is taken out of the compressed types,
+ * since a compressed SSE stream is held back until the buffer fills. The endpoint's limits come
+ * from {@code spring.acp.agent.transport.http.*} ({@link AcpAgentProperties.AgentHttpProperties}).
+ * Nothing here applies when {@code spring.acp.agent.enabled=false}.
  */
 @AutoConfiguration(after = AcpAgentAutoConfiguration.class)
-@ConditionalOnClass(StreamableHttpAcpServlet.class)
+@ConditionalOnClass(AcpHttpEndpoint.class)
 @ConditionalOnProperty(prefix = "spring.acp.agent", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Conditional(OnHttpAgentTransportCondition.class)
 @ConditionalOnBean(AcpAgentFactory.class)
 @EnableConfigurationProperties(AcpAgentProperties.class)
 public class AcpAgentHttpAutoConfiguration {
 
+	private static final Logger logger = LoggerFactory.getLogger(AcpAgentHttpAutoConfiguration.class);
+
 	/** How long closing the endpoint may take, beyond its own shutdown timeout. */
 	private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
 
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+	@ConditionalOnClass(StreamableHttpAcpServlet.class)
 	static class ServletConfiguration {
 
 		@Bean
@@ -157,17 +173,50 @@ public class AcpAgentHttpAutoConfiguration {
 
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+	@ConditionalOnClass(AcpWebFluxHost.class)
 	static class ReactiveConfiguration {
 
-		ReactiveConfiguration() {
-			throw new IllegalStateException("The ACP HTTP transport needs a servlet web application or the "
-					+ "standalone listener (acp-streamable-http-jetty); WebFlux is not supported");
+		@Bean
+		@ConditionalOnMissingBean
+		AcpHttpEndpoint acpHttpEndpoint(AcpAgentFactory agentFactory, AcpAgentProperties properties) {
+			return AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), agentFactory,
+					properties.toSettings().toOptions(false));
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(name = "acpRouterFunction")
+		RouterFunction<ServerResponse> acpRouterFunction(AcpHttpEndpoint acpHttpEndpoint, AcpAgentProperties properties) {
+			return new AcpWebFluxHost(acpHttpEndpoint).routerFunction(properties.toSettings().http().path());
+		}
+
+		@Bean
+		@ConditionalOnClass(name = "org.springframework.boot.web.server.AbstractConfigurableWebServerFactory")
+		static SseCompressionExclusion acpSseCompressionExclusion() {
+			return new SseCompressionExclusion();
+		}
+
+		@Bean
+		AcpEndpointLifecycle acpEndpointLifecycle(AcpHttpEndpoint acpHttpEndpoint) {
+			return new AcpEndpointLifecycle(acpHttpEndpoint);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+	@ConditionalOnMissingClass("com.agentclientprotocol.sdk.http.webflux.AcpWebFluxHost")
+	static class MissingWebFluxHostConfiguration {
+
+		MissingWebFluxHostConfiguration() {
+			throw new IllegalStateException("The ACP HTTP transport in a reactive (WebFlux) web application needs "
+					+ "acp-http-webflux on the classpath");
 		}
 
 	}
 
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnNotWebApplication
+	@ConditionalOnClass(StreamableHttpAcpAgentTransport.class)
 	static class ListenerConfiguration {
 
 		@Bean
@@ -212,6 +261,52 @@ public class AcpAgentHttpAutoConfiguration {
 		public void stop() {
 			if (registration.getServlet() instanceof StreamableHttpAcpServlet servlet) {
 				AcpServletHost.closeBeforeShutdown(servlet, STOP_TIMEOUT);
+			}
+			running = false;
+		}
+
+		@Override
+		public boolean isRunning() {
+			return running;
+		}
+
+		@Override
+		public int getPhase() {
+			// Stops before graceful shutdown (DEFAULT_PHASE - 1024) and the web server
+			// stop (DEFAULT_PHASE - 2048).
+			return SmartLifecycle.DEFAULT_PHASE;
+		}
+
+	}
+
+	/**
+	 * Starts the endpoint with the context, and closes its connections before the web server
+	 * shuts down: each holds an open SSE response or WebSocket, which the server's graceful
+	 * shutdown would wait for, up to {@code spring.lifecycle.timeout-per-shutdown-phase}.
+	 */
+	static class AcpEndpointLifecycle implements SmartLifecycle {
+
+		private final AcpHttpEndpoint endpoint;
+
+		private volatile boolean running = false;
+
+		AcpEndpointLifecycle(AcpHttpEndpoint endpoint) {
+			this.endpoint = endpoint;
+		}
+
+		@Override
+		public void start() {
+			endpoint.start();
+			running = true;
+		}
+
+		@Override
+		public void stop() {
+			try {
+				endpoint.closeGracefully().block(STOP_TIMEOUT);
+			}
+			catch (RuntimeException ex) {
+				logger.warn("ACP HTTP connections did not close within {}: {}", STOP_TIMEOUT, ex.getMessage());
 			}
 			running = false;
 		}

@@ -94,6 +94,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reading fills the endpoint's bounded send queue (`maxWebSocketPendingFrames`) and the socket
   closes with 1011, instead of frames piling up in the host. The transport TCK runs it on Reactor
   Netty and on Tomcat.
+- **Spring Boot: ACP in a reactive (WebFlux) web application, on `server.port`.** With
+  `spring.acp.agent.transport.type=http` (or `websocket`) and `acp-http-webflux` on the classpath, a
+  reactive application routes `spring.acp.agent.transport.http.path` to the endpoint with a
+  `RouterFunction` bean named `acpRouterFunction` (an application's own bean of that name replaces
+  it), on its own server, behind its `SecurityWebFilterChain`: security rules on `/acp` apply to HTTP
+  and to the WebSocket handshake, and the principal reaches the endpoint. The same
+  `spring.acp.agent.transport.*` properties apply; no new keys. The endpoint is an `AcpHttpEndpoint`
+  bean, drained by a `SmartLifecycle` before the server's graceful shutdown, and with
+  `server.compression.enabled`, `text/event-stream` is taken out of the compressed types, as in a
+  servlet application. The application's `http.server.requests` observations cover `/acp`.
 - **A shared transport TCK in `acp-test`:** `com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck`,
   the suite every host runs (the servlet on Tomcat 11 and Jetty 12.1, the embedded listener, Spring
   MVC), with `HttpProbes` for raw HTTP and WebSocket checks. `acp-test` now depends on
@@ -537,6 +547,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `defaultSessionUpdateConsumer` and `sessionUpdateConsumer`.)
 
 ### Changed
+
+- **Spring Boot: a reactive (WebFlux) web application no longer fails the startup** with "The ACP
+  HTTP transport needs a servlet web application or the standalone listener
+  (acp-streamable-http-jetty); WebFlux is not supported". It serves the endpoint with
+  `acp-http-webflux` (see Added). Without that module the startup still fails, now naming it: "The
+  ACP HTTP transport in a reactive (WebFlux) web application needs acp-http-webflux on the
+  classpath". The error for `type=http` with no HTTP module at all names `acp-http-webflux` too.
+  Migration: a reactive application that serves ACP adds `com.agentclientprotocol:acp-http-webflux`.
 
 - **Breaking: Quarkus serves ACP on a Vert.x route, without a servlet container.** The extension
   depends on `quarkus-vertx-http` instead of `quarkus-undertow`, and mounts the SDK's
@@ -1401,9 +1419,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advice was to set `spring.acp.agent.enabled=false`. Same cause and fix as the entry above.
 
 - **Spring Boot: `spring.acp.agent.transport.type=http` in a reactive (WebFlux) web application
-  fails the startup.** It served no endpoint and gave no error. The startup now fails with "The
-  ACP HTTP transport needs a servlet web application or the standalone listener
-  (acp-streamable-http-jetty); WebFlux is not supported".
+  served no endpoint and gave no error.** It now serves the endpoint with `acp-http-webflux`, and
+  fails the startup naming that module when it is missing (see Added and Changed; the interim
+  "WebFlux is not supported" failure is gone).
 
 - **A prompt answers `cancelled` once `session/cancel` was received, whatever its handler
   returns.** ACP requires an agent to answer a cancelled prompt with stop reason `cancelled`. A

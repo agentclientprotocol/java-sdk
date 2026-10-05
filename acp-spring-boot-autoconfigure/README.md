@@ -152,7 +152,7 @@ class Ask implements CommandLineRunner {
 | Value | Where the agent is served |
 |---|---|
 | `stdio`, or unset | Standard input and output. A web application serves the agent on stdio too, unless you set `http`. |
-| `http` | ACP Streamable HTTP, with WebSocket upgrades on the same path. It needs `acp-http-servlet` in a servlet web application, or `acp-streamable-http-jetty` for the SDK's own listener; without either the startup fails, naming them. See the next table for where it is served. |
+| `http` | ACP Streamable HTTP, with WebSocket upgrades on the same path. It needs `acp-http-servlet` in a servlet web application, `acp-http-webflux` in a reactive (WebFlux) one, or `acp-streamable-http-jetty` for the SDK's own listener; without any of them the startup fails, naming them. See the next table for where it is served. |
 | `websocket` | The same as `http`. |
 
 The value is read in any case. With `http` or `websocket`, the kind of application decides where
@@ -162,11 +162,11 @@ the endpoint runs:
 |---|---|
 | Servlet web application (Spring MVC) | `StreamableHttpAcpServlet` (`acp-http-servlet`), mounted on the application's own server at `spring.acp.agent.transport.http.path` (`server.port`, `server.address`, its TLS): Streamable HTTP, SSE and WebSocket upgrades on that one path, with no second server. Requests go through the application's filter chain, so Spring Security, observations and access logs apply to `/acp`, the WebSocket handshake included, and the authenticated principal reaches the endpoint. The endpoint is an `AcpHttpEndpoint` bean the application may wrap or replace. The `listener.*` properties are ignored. |
 | Not a web application | The SDK's Jetty listener (`StreamableHttpAcpAgentTransport`) on `spring.acp.agent.transport.http.listener.port`: HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades on one path. It starts with the context and stops with it, waiting at most 30 seconds. |
-| Reactive web application (WebFlux) | Not supported. The startup fails: "The ACP HTTP transport needs a servlet web application or the standalone listener (acp-streamable-http-jetty); WebFlux is not supported". |
+| Reactive web application (WebFlux) | `AcpWebFluxHost` (`acp-http-webflux`): a `RouterFunction` bean named `acpRouterFunction` that routes `spring.acp.agent.transport.http.path` on the application's own server (`server.port`, `server.address`, its TLS; Reactor Netty by default) to the endpoint: Streamable HTTP, SSE and WebSocket upgrades on that one path, with no second server. Requests go through the application's `WebFilter`s, so a `SecurityWebFilterChain`, observations and access logs apply to `/acp`, the WebSocket handshake included, and the authenticated principal reaches the endpoint. The endpoint is an `AcpHttpEndpoint` bean the application may wrap or replace; a `RouterFunction` bean named `acpRouterFunction` of its own replaces the route. Without `acp-http-webflux` on the classpath the startup fails, naming it. The `listener.*` properties are ignored. |
 
-**One HTTP module per application type.** A servlet web application adds `acp-http-servlet`; an
-application without a web server adds `acp-streamable-http-jetty` (the SDK's own listener). The
-starter brings neither. A servlet web application on Tomcat 11 whose classpath puts a Jakarta
+**One HTTP module per application type.** A servlet web application adds `acp-http-servlet`; a
+reactive (WebFlux) web application adds `acp-http-webflux`; an application without a web server
+adds `acp-streamable-http-jetty` (the SDK's own listener). The starter brings none of them. A servlet web application on Tomcat 11 whose classpath puts a Jakarta
 WebSocket API older than 2.2 ahead of Tomcat's fails at startup naming the fix, since Tomcat would
 otherwise fail every WebSocket send.
 
@@ -184,14 +184,50 @@ SecurityFilterChain acpSecurity(HttpSecurity http) throws Exception {
 }
 ```
 
-**Servlet shutdown.** Each client connection holds an open SSE response or WebSocket, which Spring
+In a reactive application the same goes into a `SecurityWebFilterChain`; the principal Spring
+Security authenticated reaches the endpoint (`AcpHttpExchange.principal()`) there too:
+
+```java
+@Bean
+SecurityWebFilterChain acpSecurity(ServerHttpSecurity http) {
+    return http.authorizeExchange(exchanges -> exchanges.pathMatchers("/acp").authenticated()
+            .anyExchange().permitAll())
+        .httpBasic(Customizer.withDefaults())
+        .csrf(csrf -> csrf.requireCsrfProtectionMatcher(
+                new NegatedServerWebExchangeMatcher(ServerWebExchangeMatchers.pathMatchers("/acp"))))
+        .build();
+}
+```
+
+**Shutdown.** Each client connection holds an open SSE response or WebSocket, which Spring
 Boot's graceful shutdown counts as an active request and would wait for, up to
 `spring.lifecycle.timeout-per-shutdown-phase` (30 seconds by default). A `SmartLifecycle` in the
 default phase therefore drains the endpoint first: SSE streams get a closing comment and complete,
 WebSockets close with 1001 (going away). It stops before graceful shutdown and the web server do.
 
 **Compression.** With `server.compression.enabled`, `text/event-stream` is taken out of the
-compressed MIME types: a compressed SSE stream is held back until the compressor's buffer fills.
+compressed MIME types, on a servlet and a reactive server alike: a compressed SSE stream is held
+back until the compressor's buffer fills.
+
+**A reactive application.** Add `acp-http-webflux` beside the starter and
+`spring-boot-starter-webflux`; the properties are the same `spring.acp.agent.transport.*` keys:
+
+```xml
+<dependency>
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-http-webflux</artifactId>
+    <version>${acp.version}</version>
+</dependency>
+```
+
+On Reactor Netty the route raises Netty's WebSocket frame limit above
+`spring.acp.agent.transport.http.max-post-body-size`, so an oversized message is closed with 1009
+by the endpoint. On Tomcat or Jetty as a WebFlux server, the container's own WebSocket message
+limit applies first (Tomcat 8 KB, Jetty 64 KB), so larger messages close with 1009 there; use
+Reactor Netty, or a servlet application, for large WebSocket messages. WebFlux reports no
+completion per WebSocket frame, so the route sends a frame only when the server asks for one:
+a client that stops reading fills the endpoint's bounded send queue, and the socket closes with
+1011, as on every host.
 
 ### Client: `spring.acp.client.transport.*`
 
@@ -302,12 +338,6 @@ their pools of platform threads. On JDK 21 to 23 a virtual thread that blocks in
 
 ## Limitations
 
-- **WebFlux is not supported.** With `spring.acp.agent.transport.type=http` or `websocket`, a
-  reactive web application fails at startup. Use a servlet web application, or no web application
-  with the SDK's listener.
-- **No WebSocket in a servlet web application.** There `type=websocket` serves HTTP/SSE only, like
-  `http`. A WebSocket client needs the SDK's listener, in an application that is not a web
-  application.
 - **One agent per application.** A second `@AcpAgent` bean fails the startup.
 
 ## Migrating from `org.springaicommunity:acp-spring-boot-starter` 0.12.0

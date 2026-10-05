@@ -127,6 +127,17 @@
             <version>${project.version}</version>
             <optional>true</optional>
         </dependency>
+        <!-- Agent over Streamable HTTP and WebSocket in a reactive (WebFlux) web application -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-http-webflux</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -176,10 +187,11 @@
             <artifactId>spring-boot-starter-security</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- A reactive web application: Boot detects one by spring-webflux on the classpath -->
+        <!-- A reactive web application on Reactor Netty (spring.main.web-application-type=reactive
+             where Spring MVC is on the classpath too) -->
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-webflux</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

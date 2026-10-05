@@ -20,6 +20,8 @@ import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
 import com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport;
+import com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint;
+import com.agentclientprotocol.sdk.http.webflux.AcpWebFluxHost;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
@@ -34,12 +36,17 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.unit.DataSize;
+import org.springframework.web.reactive.function.server.RequestPredicates;
+import org.springframework.web.reactive.function.server.RouterFunction;
+import org.springframework.web.reactive.function.server.RouterFunctions;
+import org.springframework.web.reactive.function.server.ServerResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -199,16 +206,56 @@ class AcpAgentHttpAutoConfigurationTests {
 	}
 
 	@Test
-	void reactiveWebApplicationFailsTheStartup() {
+	void reactiveWebApplicationRoutesThePathToTheEndpoint() {
 		new ReactiveWebApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
 			.withUserConfiguration(EchoAgentConfiguration.class)
-			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.listener.port=0")
+			.withPropertyValues("spring.acp.agent.transport.type=http", "spring.acp.agent.transport.http.path=/agent")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(AcpHttpEndpoint.class);
+				assertThat(context).hasBean("acpRouterFunction");
+				assertThat(context).hasSingleBean(AcpAgentHttpAutoConfiguration.AcpEndpointLifecycle.class);
+				assertThat(context).doesNotHaveBean(StreamableHttpAcpAgentTransport.class);
+				assertThat(context).doesNotHaveBean(ServletRegistrationBean.class);
+			});
+	}
+
+	@Test
+	void reactiveWebApplicationNeedsOnlyTheWebFluxHost() {
+		new ReactiveWebApplicationContextRunner()
+			.withConfiguration(AutoConfigurations.of(AcpAgentTransportAutoConfiguration.class,
+					AcpAgentAutoConfiguration.class, AcpAgentHttpAutoConfiguration.class))
+			.withClassLoader(new FilteredClassLoader(StreamableHttpAcpServlet.class, StreamableHttpAcpAgentTransport.class))
+			.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=websocket")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasBean("acpRouterFunction");
+			});
+	}
+
+	@Test
+	void reactiveWebApplicationWithoutTheWebFluxHostFailsTheStartup() {
+		new ReactiveWebApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+			.withClassLoader(new FilteredClassLoader(AcpWebFluxHost.class))
+			.withUserConfiguration(EchoAgentConfiguration.class)
+			.withPropertyValues("spring.acp.agent.transport.type=http")
 			.run(context -> {
 				assertThat(context).hasFailed();
 				assertThat(context.getStartupFailure()).rootCause()
-					.hasMessageContaining("The ACP HTTP transport needs a servlet web application or the "
-							+ "standalone listener (acp-streamable-http-jetty); WebFlux is not supported");
+					.hasMessageContaining("The ACP HTTP transport in a reactive (WebFlux) web application needs "
+							+ "acp-http-webflux on the classpath");
 			});
+	}
+
+	@Test
+	void userDefinedRouterFunctionOverridesAutoConfigured() {
+		new ReactiveWebApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+			.withUserConfiguration(EchoAgentConfiguration.class)
+			.withBean("acpRouterFunction", RouterFunction.class,
+					() -> RouterFunctions.route(RequestPredicates.path("/mine"), request -> ServerResponse.ok().build()))
+			.withPropertyValues("spring.acp.agent.transport.type=http")
+			.run(context -> assertThat(context.getBean("acpRouterFunction").toString()).contains("/mine"));
 	}
 
 	@Test

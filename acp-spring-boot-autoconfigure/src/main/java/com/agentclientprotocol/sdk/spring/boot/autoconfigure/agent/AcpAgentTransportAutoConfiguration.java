@@ -31,8 +31,9 @@ import org.springframework.context.annotation.Configuration;
  * logging do by default, so turn the banner off and send logging to standard error. The transport
  * bean has no destroy method; the agent's lifecycle closes it when it stops the agent.
  *
- * <p>With {@code type} {@code http} or {@code websocket} but neither {@code acp-http-servlet} nor
- * {@code acp-streamable-http-jetty} on the classpath, the startup fails with an error naming them. Nothing here applies when
+ * <p>With {@code type} {@code http} or {@code websocket} but none of {@code acp-http-servlet},
+ * {@code acp-http-webflux} and {@code acp-streamable-http-jetty} on the classpath, the startup
+ * fails with an error naming them. Nothing here applies when
  * {@code spring.acp.agent.enabled=false}.
  */
 @AutoConfiguration
@@ -63,14 +64,16 @@ public class AcpAgentTransportAutoConfiguration {
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnBean(annotation = com.agentclientprotocol.sdk.annotation.AcpAgent.class)
 	@Conditional(OnHttpAgentTransportCondition.class)
-	@ConditionalOnMissingClass("com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet")
+	@ConditionalOnMissingClass({ "com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet",
+			"com.agentclientprotocol.sdk.http.webflux.AcpWebFluxHost" })
 	static class MissingHttpTransportConfiguration {
 
 		@Bean
 		Object acpAgentHttpTransportMissing(AcpAgentProperties properties) {
 			throw new IllegalStateException("spring.acp.agent.transport.type="
 					+ properties.toSettings().transport().value() + " needs "
-					+ "com.agentclientprotocol:acp-http-servlet (served on the application's server) or "
+					+ "com.agentclientprotocol:acp-http-servlet (a servlet web application), "
+					+ "com.agentclientprotocol:acp-http-webflux (a reactive web application) or "
 					+ "com.agentclientprotocol:acp-streamable-http-jetty (the SDK's own listener) on the classpath");
 		}
 

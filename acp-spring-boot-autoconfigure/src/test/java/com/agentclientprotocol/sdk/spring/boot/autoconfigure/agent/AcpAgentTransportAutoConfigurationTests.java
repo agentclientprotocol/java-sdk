@@ -2,6 +2,7 @@ package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpServlet;
+import com.agentclientprotocol.sdk.http.webflux.AcpWebFluxHost;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 
 import org.junit.jupiter.api.Test;
@@ -22,11 +23,14 @@ class AcpAgentTransportAutoConfigurationTests {
 
 	@Test
 	void httpTypeWithoutHttpModuleFailsWithAClearMessage() {
-		this.runner.withClassLoader(new FilteredClassLoader(StreamableHttpAcpServlet.class))
+		this.runner.withClassLoader(new FilteredClassLoader(StreamableHttpAcpServlet.class, AcpWebFluxHost.class))
 			.withPropertyValues("spring.acp.agent.transport.type=http")
 			.run(context -> {
 				assertThat(context).hasFailed();
-				assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("acp-http-servlet").hasMessageContaining("acp-streamable-http-jetty");
+				assertThat(context.getStartupFailure()).rootCause()
+					.hasMessageContaining("acp-http-servlet")
+					.hasMessageContaining("acp-http-webflux")
+					.hasMessageContaining("acp-streamable-http-jetty");
 			});
 	}
 
