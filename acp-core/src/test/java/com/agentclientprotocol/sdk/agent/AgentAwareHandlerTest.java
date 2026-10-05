@@ -6,11 +6,13 @@ package com.agentclientprotocol.sdk.agent;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
+import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
 import org.junit.jupiter.api.AfterEach;
@@ -96,6 +98,60 @@ class AgentAwareHandlerTest {
 
 			assertThat(received.get()).isSameAs(agent);
 			assertThat(updates).containsExactly("s2:first", "s2:second");
+		}
+		finally {
+			agent.close();
+		}
+	}
+
+	/**
+	 * The example on {@link AgentAwareHandler}, as written there: the built agent is assigned to
+	 * {@code agent}, so the handler's agent parameter is {@code self}. Named {@code agent} it would
+	 * not compile ("variable agent is already defined").
+	 */
+	@Test
+	void asyncJavadocExampleAssignsTheAgentAndNamesTheParameterSelf() {
+		List<AcpSchema.SessionConfigOption> options = List.of();
+		AcpAgentTransport transport = pair.agentTransport();
+		AcpAsyncAgent agent = AcpAgent.async(transport)
+			.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
+			.setSessionConfigOptionHandler((request, self) -> self
+				.sendSessionUpdate(request.sessionId(), new AcpSchema.ConfigOptionUpdate(options))
+				.thenReturn(new AcpSchema.SetSessionConfigOptionResponse(options)))
+			.build();
+		agent.start().block(TIMEOUT);
+		try (AcpSyncClient client = client()) {
+			assertThat(client.setSessionConfigOption(AcpSchema.SetSessionConfigOptionRequest.select("s4", "model", "fast"))
+				.configOptions()).isEmpty();
+		}
+		finally {
+			agent.close();
+		}
+	}
+
+	/**
+	 * The example on {@link SyncAgentAwareHandler}, as written there: the built agent is assigned
+	 * to {@code agent}, so the handler's agent parameter is {@code self}.
+	 */
+	@Test
+	void syncJavadocExampleAssignsTheAgentAndNamesTheParameterSelf() {
+		Map<String, List<AcpSchema.SessionUpdate>> history = Map.of("s5",
+				List.of(new AcpSchema.AgentMessageChunk(new AcpSchema.TextContent("replayed"))));
+		AcpAgentTransport transport = pair.agentTransport();
+		AcpSyncAgent agent = AcpAgent.sync(transport)
+			.promptHandler((request, context) -> AcpSchema.PromptResponse.endTurn())
+			.loadSessionHandler((request, self) -> {
+				for (AcpSchema.SessionUpdate update : history.get(request.sessionId())) {
+					self.sendSessionUpdate(request.sessionId(), update);   // the replay
+				}
+				return new AcpSchema.LoadSessionResponse(null, null);
+			})
+			.build();
+		agent.start();
+		try (AcpSyncClient client = client()) {
+			client.loadSession(new AcpSchema.LoadSessionRequest("s5", "/w", List.of()));
+
+			assertThat(updates).containsExactly("s5:replayed");
 		}
 		finally {
 			agent.close();

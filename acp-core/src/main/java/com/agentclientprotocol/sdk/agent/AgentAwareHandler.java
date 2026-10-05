@@ -17,11 +17,16 @@ import reactor.core.publisher.Mono;
  * interface; a two-argument lambda picks it.
  *
  * <pre>{@code
- * AcpAgent.async(transport)
- *     .setSessionConfigOptionHandler((request, agent) -> agent
+ * AcpAsyncAgent agent = AcpAgent.async(transport)
+ *     .setSessionConfigOptionHandler((request, self) -> self
  *         .sendSessionUpdate(request.sessionId(), new AcpSchema.ConfigOptionUpdate(options))
  *         .thenReturn(new AcpSchema.SetSessionConfigOptionResponse(options)))
+ *     .build();
  * }</pre>
+ *
+ * <p>The second parameter is the agent being built, the same instance {@code build()} returns; a
+ * lambda parameter must not reuse the name of a local variable in scope, so call it {@code self}
+ * (or anything but the name the built agent is assigned to), as above.
  *
  * <p>Implementations follow the rules on {@link AcpAgent.PromptHandler}: they run on the transport's
  * thread and must not block, return a {@code Mono} and never {@code null}, and fail with an
