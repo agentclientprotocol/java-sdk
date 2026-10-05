@@ -205,51 +205,64 @@ final class WebSocketConnection implements AcpWsHandler {
 	 * Hands the host one frame at a time, the next only once the previous send completed: agent
 	 * messages come from concurrent handlers, and a container may allow one outstanding write
 	 * (Tomcat fails a second one). A send the host completes at once continues in this loop
-	 * rather than recursing. The callback handles the send's failure itself, so the stage
+	 * rather than recursing.
+	 */
+	private void drain() {
+		String payload = nextPayload();
+		while (payload != null && sendCompletedAtOnce(payload)) {
+			payload = nextPayload();
+		}
+	}
+
+	/** The next frame to send, or null (and no send in progress) when there is none. */
+	private @Nullable String nextPayload() {
+		sendLock.lock();
+		try {
+			if (closed.get()) {
+				queue.clear();
+				sendInProgress = false;
+				return null;
+			}
+			String payload = queue.pollFirst();
+			if (payload == null) {
+				sendInProgress = false;
+			}
+			return payload;
+		}
+		finally {
+			sendLock.unlock();
+		}
+	}
+
+	/**
+	 * Hands the host one frame. The callback handles the send's failure itself, so the stage
 	 * {@code whenComplete} returns is not needed.
+	 * @return true when the send completed at once, so the caller continues with the next frame;
+	 * false when the completion continues the drain, or the send failed
 	 */
 	@SuppressWarnings("FutureReturnValueIgnored")
-	private void drain() {
-		while (true) {
-			String payload;
-			sendLock.lock();
-			try {
-				if (closed.get()) {
-					queue.clear();
-					sendInProgress = false;
-					return;
-				}
-				payload = queue.pollFirst();
-				if (payload == null) {
-					sendInProgress = false;
-					return;
-				}
-			}
-			finally {
-				sendLock.unlock();
-			}
-			logger.debug("ACP WebSocket connection {} sends {} characters", id, payload.length());
-			CompletableFuture<Void> sent;
-			try {
-				sent = outbound.sendText(payload).toCompletableFuture();
-			}
-			catch (RuntimeException e) {
-				sendFailed(e);
-				return;
-			}
-			if (sent.isDone() && !sent.isCompletedExceptionally()) {
-				continue;
-			}
-			sent.whenComplete((ignored, error) -> {
-				if (error != null) {
-					sendFailed(error);
-				}
-				else {
-					drain();
-				}
-			});
-			return;
+	private boolean sendCompletedAtOnce(String payload) {
+		logger.debug("ACP WebSocket connection {} sends {} characters", id, payload.length());
+		CompletableFuture<Void> sent;
+		try {
+			sent = outbound.sendText(payload).toCompletableFuture();
 		}
+		catch (RuntimeException e) {
+			sendFailed(e);
+			return false;
+		}
+		if (sent.isDone() && !sent.isCompletedExceptionally()) {
+			return true;
+		}
+		sent.whenComplete((ignored, error) -> {
+			if (error != null) {
+				sendFailed(error);
+			}
+			else {
+				drain();
+			}
+		});
+		return false;
 	}
 
 	private void sendFailed(Throwable error) {
