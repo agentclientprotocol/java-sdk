@@ -159,6 +159,17 @@
             <artifactId>spring-boot-starter-web</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- The application's HTTP observations cover /acp (AcpAgentHttpObservationTests) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-micrometer-observation</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-observation-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Framework security applies to /acp (AcpAgentHttpSecurityTests) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
