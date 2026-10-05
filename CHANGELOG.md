@@ -523,8 +523,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   types are unchanged. Migration: an application mounting the servlet in its own container, a
   Spring MVC application included, depends on `acp-http-servlet` instead of
   `acp-streamable-http-jetty`, and no longer gets Jetty; an application using the SDK's listener
-  keeps `acp-streamable-http-jetty`. Do not add `acp-streamable-http-jetty` to a Spring Boot
-  application on Tomcat: its Jakarta WebSocket 2.1 API jar would shadow Tomcat 11's 2.2 one.
+  keeps `acp-streamable-http-jetty`, which now brings the Jakarta WebSocket 2.2 API (Jetty 12.1
+  runs on it) rather than Jetty's 2.1, so it can no longer shadow Tomcat 11's. A Spring Boot servlet
+  web application on Tomcat whose classpath still puts an older Jakarta WebSocket API ahead of
+  Tomcat's fails at startup with a message naming the fix (`acp-http-servlet`, or managing
+  `jakarta.websocket-api` to 2.2.0), where before Tomcat failed every WebSocket send with
+  `NoSuchMethodError` and clients hung.
 - **Breaking: `StreamableHttpAcpServlet` is a host of `AcpHttpEndpoint`.** It gained the
   constructor `StreamableHttpAcpServlet(AcpHttpEndpoint)` and `endpoint()`; the package-private
   routing, connection and SSE classes moved to `acp-http-core`. A subclass overriding `doGet`,

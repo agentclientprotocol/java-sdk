@@ -373,6 +373,13 @@ class StreamableHttpAcpAgentTransportWebSocketIntegrationTest {
 				.buildAsync(server.endpoint(), listener)
 				.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 			assertThat(listener.openLatch.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+			// The client sees the upgrade answered before the server has opened the socket and
+			// started its agent; a shutdown in between refuses the connection instead.
+			long deadline = System.nanoTime() + TIMEOUT.toNanos();
+			while (server.transport().activeConnectionCount() == 0 && System.nanoTime() < deadline) {
+				Thread.onSpinWait();
+			}
+			assertThat(server.transport().activeConnectionCount()).isEqualTo(1);
 
 			CompletableFuture<Void> shutdown = server.transport().closeGracefully().toFuture();
 			assertThat(agentShutdownStarted.await(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)).isTrue();

@@ -164,6 +164,12 @@ the endpoint runs:
 | Not a web application | The SDK's Jetty listener (`StreamableHttpAcpAgentTransport`) on `spring.acp.agent.transport.http.listener.port`: HTTP/1.1, cleartext HTTP/2 and WebSocket upgrades on one path. It starts with the context and stops with it, waiting at most 30 seconds. |
 | Reactive web application (WebFlux) | Not supported. The startup fails: "The ACP HTTP transport needs a servlet web application or the standalone listener (acp-streamable-http-jetty); WebFlux is not supported". |
 
+**One HTTP module per application type.** A servlet web application adds `acp-http-servlet`; an
+application without a web server adds `acp-streamable-http-jetty` (the SDK's own listener). The
+starter brings neither. A servlet web application on Tomcat 11 whose classpath puts a Jakarta
+WebSocket API older than 2.2 ahead of Tomcat's fails at startup naming the fix, since Tomcat would
+otherwise fail every WebSocket send.
+
 **Securing `/acp`.** The endpoint has no authentication of its own; protect its path in your
 `SecurityFilterChain` as any other. ACP clients are not browsers, so exempt the path from CSRF; the
 endpoint itself refuses browser requests from foreign origins:

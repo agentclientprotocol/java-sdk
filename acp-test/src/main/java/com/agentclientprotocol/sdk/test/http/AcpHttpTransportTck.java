@@ -102,6 +102,16 @@ public abstract class AcpHttpTransportTck {
 
 	private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
 
+	/**
+	 * The status table's client. HTTP/1.1: over HTTP/2 a server that refuses a request before
+	 * reading its body (415, 413) may reset the stream, and the client then reports the reset
+	 * rather than the status, whichever arrives first. The statuses are the same on both.
+	 */
+	private static final HttpClient HTTP_1_1 = HttpClient.newBuilder()
+		.version(HttpClient.Version.HTTP_1_1)
+		.connectTimeout(TIMEOUT)
+		.build();
+
 	/** The threads the agent sends concurrent updates from. */
 	private static final Scheduler SENDERS = Schedulers.newParallel("tck-senders", 4, true);
 
@@ -477,7 +487,7 @@ public abstract class AcpHttpTransportTck {
 	}
 
 	private static HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
-		return HTTP.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString())
+		return HTTP_1_1.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString())
 			.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 	}
 
