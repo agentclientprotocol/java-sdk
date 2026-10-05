@@ -81,4 +81,27 @@
     </dependencies>
 
 
+    <build>
+        <plugins>
+            <!-- The transport TCK runs in every host module (acp-http-servlet,
+                 acp-streamable-http-jetty, the framework integrations), not here: its coverage
+                 is theirs, so this module's gate leaves it out. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>coverage-gate</id>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/agentclientprotocol/sdk/test/http/AcpHttpTransportTck*</exclude>
+                                <exclude>com/agentclientprotocol/sdk/test/http/Networks*</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

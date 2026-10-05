@@ -17,9 +17,10 @@
     <description>The SDK's own ACP listener: an embedded Jetty 12.1 server running the acp-http-servlet host, with Jetty's Jakarta WebSocket implementation, for agents served from a plain Java program</description>
 
     <properties>
-        <!-- Coverage floors: measured line 88.13%, branch 78.07-78.44%, less 2 points (parent pom, JaCoCo) -->
-        <jacoco.minimum.line>0.86</jacoco.minimum.line>
-        <jacoco.minimum.branch>0.76</jacoco.minimum.branch>
+        <!-- Coverage floors: measured line 85.8%, branch 86.7% (the launcher alone; the servlet
+             host it runs is measured in acp-http-servlet), less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.83</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.84</jacoco.minimum.branch>
         <!-- JaCoCo's prepare-agent sets argLine; empty when JaCoCo is skipped. -->
         <argLine/>
     </properties>

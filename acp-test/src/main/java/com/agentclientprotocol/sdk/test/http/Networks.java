@@ -9,10 +9,11 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
-import org.jspecify.annotations.Nullable;
 
 /**
  * This machine's network addresses, for tests that check what a listener is reachable on.
@@ -30,24 +31,17 @@ public final class Networks {
 	 * @throws SocketException if the interfaces cannot be listed
 	 */
 	public static Optional<InetAddress> nonLoopbackAddress() throws SocketException {
-		@Nullable InetAddress ipv6 = null;
+		List<InetAddress> addresses = new ArrayList<>();
 		for (NetworkInterface nic : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-			if (!nic.isUp() || nic.isLoopback()) {
-				continue;
-			}
-			for (InetAddress address : Collections.list(nic.getInetAddresses())) {
-				if (address.isLoopbackAddress() || address.isLinkLocalAddress()) {
-					continue;
-				}
-				if (address instanceof Inet4Address) {
-					return Optional.of(address);
-				}
-				if (address instanceof Inet6Address && ipv6 == null) {
-					ipv6 = address;
-				}
+			if (nic.isUp() && !nic.isLoopback()) {
+				addresses.addAll(Collections.list(nic.getInetAddresses()));
 			}
 		}
-		return Optional.ofNullable(ipv6);
+		List<InetAddress> routable = addresses.stream()
+			.filter(address -> !address.isLoopbackAddress() && !address.isLinkLocalAddress())
+			.toList();
+		Optional<InetAddress> ipv4 = routable.stream().filter(Inet4Address.class::isInstance).findFirst();
+		return ipv4.isPresent() ? ipv4 : routable.stream().filter(Inet6Address.class::isInstance).findFirst();
 	}
 
 }

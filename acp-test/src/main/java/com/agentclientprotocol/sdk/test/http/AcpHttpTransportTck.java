@@ -425,7 +425,7 @@ public abstract class AcpHttpTransportTck {
 
 	private static void assertPromptRoundTrip(AcpClientTransport transport, int updates) {
 		List<String> received = new CopyOnWriteArrayList<>();
-		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateConsumer(notification -> {
+		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).sessionUpdateHandler(notification -> {
 			if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
 					&& chunk.content() instanceof AcpSchema.TextContent text) {
 				received.add(text.text());
