@@ -136,7 +136,11 @@ class Ask implements CommandLineRunner {
   type in the Micronaut and Quarkus integrations) are applied to the client's builder in bean order.
   Register the session-update handler, the permission handler, and the file system, terminal and
   elicitation handlers there. Without a session-update handler of your own, session updates are
-  logged at DEBUG.
+  logged at DEBUG, content included.
+- **Logging.** DEBUG and TRACE on `com.agentclientprotocol.sdk` log message payloads in full; do not
+  enable them where logs are shipped. A stdio agent's standard error is logged at INFO, unfiltered,
+  on `com.agentclientprotocol.sdk.client.transport.agent-stderr`, and can carry sensitive data:
+  set `logging.level.com.agentclientprotocol.sdk.client.transport.agent-stderr=WARN` to silence it.
 - **Capabilities.** The client advertises none by default. Turn one on with its
   `spring.acp.client.capabilities.*` property and register its handler in a customizer. A
   capability turned on without its handler fails the startup, naming the property.

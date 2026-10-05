@@ -136,6 +136,13 @@ type in every framework integration. The client beans are created when first inj
 your own of the same type replaces each. Client callbacks run on SDK threads, not on a Vert.x
 context: from a `Uni` built over a client call, hop back with `emitOn` when you need the context.
 
+Without a session-update handler of your own, session updates are logged at DEBUG, content
+included. DEBUG and TRACE on `com.agentclientprotocol.sdk` log message payloads in full; do not
+enable them where logs are shipped. A stdio agent's standard error is logged at INFO, unfiltered,
+on `com.agentclientprotocol.sdk.client.transport.agent-stderr`, and can carry sensitive data:
+`quarkus.log.category."com.agentclientprotocol.sdk.client.transport.agent-stderr".level=WARN`
+silences it.
+
 ## Configuration
 
 Build time (fixed when the application is built):

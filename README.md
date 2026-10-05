@@ -499,6 +499,20 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | Streamable HTTP and WebSocket in your own Servlet 6 container | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `StreamableHttpAcpServlet` (WebSocket where the container has Jakarta WebSocket 2.1) | acp-core / acp-http-servlet |
 | Streamable HTTP and WebSocket in a Spring WebFlux application | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `AcpWebFluxHost` (a `RouterFunction`) | acp-core / acp-http-webflux |
 
+#### Logging and sensitive data
+
+Two of the SDK's loggers can carry message content or other sensitive data:
+
+- **The agent's standard error.** `StdioAcpClientTransport` logs every line the agent process
+  writes to standard error at INFO on the logger `com.agentclientprotocol.sdk.client.transport.agent-stderr`,
+  unfiltered. An agent's diagnostics can carry sensitive data (paths, prompts, account details).
+  Silence it by setting that logger's level to `WARN` or `OFF`, or route the lines yourself with
+  `setStdErrorHandler`.
+- **DEBUG and TRACE.** At DEBUG and TRACE, loggers under `com.agentclientprotocol.sdk` log message
+  payloads in full: the stdio client's sent and received lines, the sessions' messages, and the
+  session updates the framework integrations log by default. Do not enable them where logs are
+  shipped or retained.
+
 ---
 
 ## Building

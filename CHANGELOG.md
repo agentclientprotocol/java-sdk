@@ -62,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a failed `terminal/release` of a cancelled `execute`. Each now logs the error code and the SDK's
   name for it (`-32603 Internal error`); the peer's message and data are logged at DEBUG.
 
+- **Documented: what the SDK's logs can carry.** A stdio agent's standard error is logged at INFO,
+  unfiltered, on `com.agentclientprotocol.sdk.client.transport.agent-stderr`; silence it with that
+  logger's level or `setStdErrorHandler`. DEBUG and TRACE on `com.agentclientprotocol.sdk` log
+  message payloads, session updates included, and should not be enabled where logs are shipped.
+
 - **A handler's unexpected exception no longer sends its message to the peer.** A request handler
   that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
   exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now

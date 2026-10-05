@@ -132,6 +132,12 @@ class Updates implements AcpClientCustomizer {
 }
 ```
 
+Without a session-update handler of your own, session updates are logged at DEBUG, content
+included. DEBUG and TRACE on `com.agentclientprotocol.sdk` log message payloads in full; do not
+enable them where logs are shipped. A stdio agent's standard error is logged at INFO, unfiltered,
+on `com.agentclientprotocol.sdk.client.transport.agent-stderr`, and can carry sensitive data: set
+that logger to `WARN` in `logback.xml` to silence it.
+
 | Property | Default | |
 |---|---|---|
 | `acp.client.request-timeout` | `60s` | |

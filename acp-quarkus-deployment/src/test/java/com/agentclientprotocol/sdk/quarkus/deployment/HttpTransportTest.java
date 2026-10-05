@@ -83,6 +83,17 @@ class HttpTransportTest {
 		roundTrip(new WebSocketAcpClientTransport(webSocketUri(), AcpJsonMapper.createDefault()), true, big);
 	}
 
+	/**
+	 * The extension raises the Quarkus limits to the SDK's 16 MiB: a 12 MB prompt, above
+	 * Quarkus's 10 MB default body size, is accepted as a POST body and as a WebSocket message.
+	 */
+	@Test
+	void twelveMegabytePromptOverBothTransports() {
+		String big = "x".repeat(12 * 1024 * 1024);
+		roundTrip(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault()), true, big);
+		roundTrip(new WebSocketAcpClientTransport(webSocketUri(), AcpJsonMapper.createDefault()), true, big);
+	}
+
 	@Test
 	void connectionsLeftOpenAreCountedAndClosedAtShutdown() {
 		roundTrip(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault()), false);

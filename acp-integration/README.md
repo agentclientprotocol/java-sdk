@@ -110,7 +110,8 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
 ## The client
 
 `AcpClients.async(transport, settings, customizers)` builds the one async client: capabilities,
-request and prompt timeouts, a session-update handler that logs at DEBUG, then the
+request and prompt timeouts, a session-update handler that logs each update at DEBUG, its content
+included, then the
 `AcpClientCustomizer`s in order. Building the client connects the transport (for stdio, it starts
 the agent process); a stdio command that cannot be started, or a transport already connected,
 fails the build. The ACP handshake waits for the application's `initialize()`.
@@ -118,6 +119,12 @@ fails the build. The ACP handshake waits for the application's `initialize()`.
 (one session on one connection). `AcpClientHost` closes it once, gracefully, then at once after
 its timeout (`settings.closeTimeout()`); the framework must not close the client or its transport
 again through an inferred destroy method.
+
+Logging: DEBUG and TRACE on `com.agentclientprotocol.sdk` log message payloads in full, session
+updates included; do not enable them where logs are shipped. A stdio agent's standard error is
+logged at INFO, unfiltered, on `com.agentclientprotocol.sdk.client.transport.agent-stderr`, and can
+carry sensitive data: set that logger to `WARN` or `OFF`, or register a handler of your own with
+`StdioAcpClientTransport.setStdErrorHandler`.
 
 ## Not here
 
