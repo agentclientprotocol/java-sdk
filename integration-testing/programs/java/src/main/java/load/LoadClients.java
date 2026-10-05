@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport;
+import com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransportOptions;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import reactor.core.publisher.Mono;
@@ -47,12 +48,21 @@ public class LoadClients {
 		CountDownLatch done = new CountDownLatch(clients);
 		// One platform thread per client (the SDK baseline is Java 17, so no virtual threads).
 		ExecutorService drivers = Executors.newCachedThreadPool(daemon("driver"));
+		// The load scenarios measure the server, so the generator's client readers (the transport's
+		// SSE readers) use platform threads on every JDK, like the rest of the generator. The SDK
+		// client's default, a virtual thread per reader on JDK 21 and later, would put hundreds of
+		// clients' readers on a few carrier threads in this one JVM and add the generator's own
+		// scheduling to the latency it reports.
+		StreamableHttpAcpClientTransportOptions options = StreamableHttpAcpClientTransportOptions.builder()
+			.virtualThreads(false)
+			.build();
 		long t0 = System.nanoTime();
 		for (int c = 0; c < clients; c++) {
 			AcpAsyncClient client = AcpClient
 				.async(new StreamableHttpAcpClientTransport(endpoint, AcpJsonMapper.createDefault(),
 						sharedConnection ? shared
-								: HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).executor(httpExecutor).build()))
+								: HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).executor(httpExecutor).build(),
+						options))
 				.requestTimeout(Duration.ofSeconds(60))
 				.sessionUpdateHandler(n -> {
 					updates.incrementAndGet();
