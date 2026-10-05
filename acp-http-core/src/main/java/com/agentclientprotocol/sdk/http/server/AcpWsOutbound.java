@@ -34,9 +34,15 @@ public interface AcpWsOutbound {
 	/**
 	 * Closes the socket with a close frame. The endpoint chooses the code: 1000 normal, 1001
 	 * going away (shutdown), 1002 protocol error, 1009 message too big, 1011 server error.
+	 * <p>A graceful shutdown waits for the returned stage, bounded by the shutdown timeout,
+	 * before it reports the endpoint closed: a container may send the close frame
+	 * asynchronously, and one stopped before the frame has gone out drops the connection
+	 * without it (the client sees 1006).
 	 * @param code the close code
 	 * @param reason the close reason, short
+	 * @return a stage that completes once the close frame has been sent, or the socket has
+	 * closed; it may complete exceptionally when the close failed
 	 */
-	void close(int code, String reason);
+	CompletionStage<Void> close(int code, String reason);
 
 }

@@ -341,7 +341,8 @@ public class StreamableHttpAcpAgentTransport {
 	/**
 	 * Closes every connection, HTTP and WebSocket alike, as
 	 * {@link StreamableHttpAcpServlet#closeGracefully()} does, then stops Jetty and completes
-	 * {@link #awaitTermination()}. Nothing waits for a client, and a connection whose agent
+	 * {@link #awaitTermination()}. It waits for each WebSocket's going-away close (1001) to
+	 * reach the client, and for nothing else from a client; a connection whose agent or socket
 	 * has not closed within the
 	 * {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown timeout}
 	 * is closed at once. The listener registers no JVM shutdown hook; an application stops it

@@ -85,7 +85,10 @@ public interface AcpHttpEndpoint {
 	 * Closes every connection: new connections are refused (503), an {@code initialize} still in
 	 * flight is answered 503, open SSE streams get a closing comment and complete, WebSockets are
 	 * closed with 1001 (going away), and each connection's agent is closed, cancelling in-flight
-	 * prompts. Nothing waits for a client. A connection whose agent has not closed within the
+	 * prompts. It waits for each WebSocket's close to go out ({@link AcpWsOutbound#close}), so
+	 * that a host stopped next does not drop the connection before the client has its close
+	 * code, and for nothing else from a client. A connection whose agent or socket has not
+	 * closed within the
 	 * {@linkplain StreamableHttpAcpAgentTransportOptions#shutdownTimeout() shutdown timeout} is
 	 * closed at once. Only the first call has an effect.
 	 * @return a Mono that completes when every connection has closed

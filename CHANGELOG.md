@@ -573,6 +573,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`AcpWsOutbound.close` returns a `CompletionStage<Void>`** (`@UnstableAcpApi`), which completes
+  once the close frame has been sent or the socket has closed; a graceful shutdown waits for it,
+  bounded by the shutdown timeout. Migration: a host of its own returns the stage its container
+  gives (WebFlux `session.close`, Vert.x `ServerWebSocket.close`), or one that completes when the
+  container reports the socket closed (Jakarta `Endpoint.onClose`).
+
 - **Spring Boot: a reactive (WebFlux) web application no longer fails the startup** with "The ACP
   HTTP transport needs a servlet web application or the standalone listener
   (acp-streamable-http-jetty); WebFlux is not supported". It serves the endpoint with
@@ -1408,6 +1414,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON-RPC error.
 
 ### Fixed
+
+- **A WebSocket client receives the going-away close (1001) when a Jetty-hosted endpoint shuts
+  down.** On Jetty, the SDK listener (`StreamableHttpAcpAgentTransport`) and a servlet on Jetty, the
+  close frame is sent asynchronously, and the graceful shutdown completed once the agents had
+  closed; Jetty was then stopped before the frame went out, and the client saw the connection drop
+  (1006) instead. The drain now waits for each WebSocket's close to complete, within the shutdown
+  timeout: a client that never answers the close holds the shutdown no longer than that.
 
 - **A WebSocket that opens while the endpoint shuts down no longer leaves its agent running.** A
   graceful shutdown (`closeGracefully()` of the SDK listener or of a host's endpoint) that came

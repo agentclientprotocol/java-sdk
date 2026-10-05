@@ -137,14 +137,19 @@ final class WebFluxWsOutbound implements AcpWsOutbound {
 	 * first, WebFlux would end the session without a close code (1005).
 	 */
 	@Override
-	public void close(int code, String reason) {
+	public CompletionStage<Void> close(int code, String reason) {
 		if (!markClosed()) {
-			return;
+			return CompletableFuture.completedFuture(null);
 		}
+		CompletableFuture<Void> sent = new CompletableFuture<>();
 		session.close(CloseStatus.create(code, reason))
-			.doFinally(signal -> complete())
+			.doFinally(signal -> {
+				complete();
+				sent.complete(null);
+			})
 			.subscribe(ignored -> {
 			}, error -> logger.debug("Closing an ACP WebSocket failed: {}", error.toString()));
+		return sent;
 	}
 
 	/** The socket closed: no frame will be sent any more. */

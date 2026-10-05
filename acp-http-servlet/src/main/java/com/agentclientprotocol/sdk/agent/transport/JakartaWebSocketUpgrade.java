@@ -121,6 +121,8 @@ final class JakartaWebSocketUpgrade {
 
 		private volatile @Nullable AcpWsHandler handler;
 
+		private volatile @Nullable SessionOutbound outbound;
+
 		AcpEndpoint(AcpWsHandshake.Accepted accepted) {
 			this.accepted = accepted;
 		}
@@ -128,7 +130,9 @@ final class JakartaWebSocketUpgrade {
 		@Override
 		public void onOpen(Session session, EndpointConfig config) {
 			session.setMaxIdleTimeout(accepted.idleTimeout().toMillis());
-			AcpWsHandler opened = accepted.open(new SessionOutbound(session));
+			SessionOutbound sessionOutbound = new SessionOutbound(session);
+			this.outbound = sessionOutbound;
+			AcpWsHandler opened = accepted.open(sessionOutbound);
 			this.handler = opened;
 			long max = accepted.maxTextMessageBytes();
 			StringBuilder message = new StringBuilder();
@@ -151,6 +155,10 @@ final class JakartaWebSocketUpgrade {
 
 		@Override
 		public void onClose(Session session, CloseReason closeReason) {
+			SessionOutbound currentOutbound = outbound;
+			if (currentOutbound != null) {
+				currentOutbound.closed.complete(null);
+			}
 			AcpWsHandler current = handler;
 			if (current != null) {
 				current.onClose(closeReason.getCloseCode().getCode(), closeReason.getReasonPhrase());
@@ -167,12 +175,15 @@ final class JakartaWebSocketUpgrade {
 
 	}
 
-	private static void close(Session session, CloseReason.CloseCode code, String reason) {
+	/** Closes the session; returns false when the close failed. */
+	private static boolean close(Session session, CloseReason.CloseCode code, String reason) {
 		try {
 			session.close(new CloseReason(code, reason));
+			return true;
 		}
 		catch (IOException | IllegalStateException e) {
 			logger.debug("Closing an ACP WebSocket failed: {}", e.toString());
+			return false;
 		}
 	}
 
@@ -180,6 +191,13 @@ final class JakartaWebSocketUpgrade {
 	private static final class SessionOutbound implements AcpWsOutbound {
 
 		private final Session session;
+
+		/**
+		 * Completes when the container reports the socket closed. Jetty sends the close frame
+		 * asynchronously and reports the close once the client has answered it, or the
+		 * connection has ended.
+		 */
+		final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 		SessionOutbound(Session session) {
 			this.session = session;
@@ -205,8 +223,11 @@ final class JakartaWebSocketUpgrade {
 		}
 
 		@Override
-		public void close(int code, String reason) {
-			JakartaWebSocketUpgrade.close(session, CloseReason.CloseCodes.getCloseCode(code), reason);
+		public CompletionStage<Void> close(int code, String reason) {
+			if (!JakartaWebSocketUpgrade.close(session, CloseReason.CloseCodes.getCloseCode(code), reason)) {
+				closed.complete(null);
+			}
+			return closed;
 		}
 
 	}

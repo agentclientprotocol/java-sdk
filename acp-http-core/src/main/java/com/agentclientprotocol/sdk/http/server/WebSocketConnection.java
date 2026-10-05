@@ -272,7 +272,10 @@ final class WebSocketConnection implements AcpWsHandler {
 		}
 	}
 
-	/** Closes the socket with a going-away frame and the agent gracefully: the endpoint shuts down. */
+	/**
+	 * Closes the socket with a going-away frame and the agent gracefully: the endpoint shuts
+	 * down. Completes once both have closed; the endpoint bounds the wait.
+	 */
 	Mono<Void> closeForShutdown() {
 		return closeGracefully(GOING_AWAY, "server shutting down");
 	}
@@ -283,13 +286,19 @@ final class WebSocketConnection implements AcpWsHandler {
 		}
 		deregister.accept(this);
 		clearQueue();
+		Mono<Void> socketClosed;
 		try {
-			outbound.close(code, reason);
+			// Waited for: a container may send the close frame asynchronously, and one stopped
+			// before it has gone out drops the connection without it.
+			socketClosed = Mono.fromCompletionStage(outbound.close(code, reason));
 		}
 		catch (RuntimeException e) {
-			logger.debug("Closing ACP WebSocket connection {} failed: {}", id, e.toString());
+			socketClosed = Mono.error(e);
 		}
-		return remoteConnection.closeGracefully();
+		return Mono.when(socketClosed.onErrorResume(error -> {
+			logger.debug("Closing ACP WebSocket connection {} failed: {}", id, error.toString());
+			return Mono.empty();
+		}), remoteConnection.closeGracefully());
 	}
 
 	void close(int code, String reason) {

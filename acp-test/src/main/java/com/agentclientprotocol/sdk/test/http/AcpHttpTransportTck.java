@@ -348,7 +348,7 @@ public abstract class AcpHttpTransportTck {
 		assumeTrue(supportsWebSocket(), "the host serves no WebSocket");
 		try (RawWebSocket socket = RawWebSocket.open(endpoint(), null)) {
 			socket.send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"session/new\",\"params\":{\"cwd\":\"/\",\"mcpServers\":[]}}");
-			assertThat(socket.closeCode()).isEqualTo(1002);
+			assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1002);
 		}
 	}
 
@@ -359,7 +359,7 @@ public abstract class AcpHttpTransportTck {
 			socket.send(HttpProbes.INITIALIZE);
 			assertThat(socket.nextMessage()).contains("\"result\"");
 			socket.send("x".repeat((int) MAX_MESSAGE_BYTES + 1));
-			assertThat(socket.closeCode()).isEqualTo(1009);
+			assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1009);
 		}
 	}
 
@@ -430,7 +430,7 @@ public abstract class AcpHttpTransportTck {
 			assertThat(stream.remainingLines(Duration.ofSeconds(5))).contains(": shutting down");
 			stream.close();
 			if (socket != null) {
-				assertThat(socket.closeCode()).isEqualTo(1001);
+				assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1001);
 				socket.close();
 			}
 		}
@@ -620,6 +620,9 @@ public abstract class AcpHttpTransportTck {
 
 		private final CompletableFuture<Integer> closeCode = new CompletableFuture<>();
 
+		/** Why the socket failed, when it did: a 1006 then says what ended it. */
+		private volatile @Nullable Throwable error;
+
 		private final StringBuilder partial = new StringBuilder();
 
 		private @Nullable WebSocket socket;
@@ -654,6 +657,11 @@ public abstract class AcpHttpTransportTck {
 			return closeCode.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 		}
 
+		/** Why the socket failed, or null: reported with a close code of 1006. */
+		@Nullable Throwable error() {
+			return error;
+		}
+
 		@Override
 		public @Nullable CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
 			partial.append(data);
@@ -673,6 +681,7 @@ public abstract class AcpHttpTransportTck {
 
 		@Override
 		public void onError(WebSocket webSocket, Throwable error) {
+			this.error = error;
 			closeCode.complete(1006);
 		}
 

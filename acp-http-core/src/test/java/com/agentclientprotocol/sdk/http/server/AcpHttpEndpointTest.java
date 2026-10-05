@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -251,6 +252,41 @@ class AcpHttpEndpointTest {
 			.isInstanceOf(AcpWsHandshake.Refused.class);
 	}
 
+	/**
+	 * A container may send the close frame asynchronously, and one stopped before it has gone
+	 * out drops the connection without it: the drain waits for the socket's close.
+	 */
+	@Test
+	void drainingWaitsForTheSocketsClose() throws Exception {
+		FakeSocket socket = open();
+		socket.closeStage = new CompletableFuture<>();
+		socket.handler.onText(INITIALIZE);
+		awaitTrue(() -> socket.sent.size() == 1);
+
+		CompletableFuture<Void> drained = endpoint.closeGracefully().toFuture();
+		awaitTrue(() -> socket.closeCode.get() != null);
+		Thread.sleep(200);
+		assertThat(drained).isNotDone();
+
+		socket.closeStage.complete(null);
+		drained.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+		assertThat(socket.closeCode.get()).isEqualTo(1001);
+	}
+
+	@Test
+	void drainingWaitsForASocketsCloseNoLongerThanTheShutdownTimeout() {
+		FakeSocket socket = open();
+		socket.closeStage = new CompletableFuture<>();
+		socket.handler.onText(INITIALIZE);
+		awaitTrue(() -> socket.sent.size() == 1);
+
+		long started = System.nanoTime();
+		endpoint.closeGracefully().block(TIMEOUT);
+
+		// The shutdown timeout is 2 seconds.
+		assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(4));
+	}
+
 	@Test
 	void theExchangeRecognisesAnUpgrade() {
 		assertThat(new FakeExchange("GET").header("Upgrade", " WebSocket ").isWebSocketUpgrade()).isTrue();
@@ -388,6 +424,9 @@ class AcpHttpEndpointTest {
 
 		volatile boolean failSends;
 
+		/** What {@link #close} returns: the socket's close, completed at once unless a test holds it. */
+		volatile CompletableFuture<Void> closeStage = CompletableFuture.completedFuture(null);
+
 		AcpWsHandler handler;
 
 		@Override
@@ -402,8 +441,9 @@ class AcpHttpEndpointTest {
 		}
 
 		@Override
-		public void close(int code, String reason) {
+		public CompletionStage<Void> close(int code, String reason) {
 			closeCode.compareAndSet(null, code);
+			return closeStage;
 		}
 
 	}

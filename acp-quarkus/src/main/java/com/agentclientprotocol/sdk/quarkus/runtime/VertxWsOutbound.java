@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.quarkus.runtime;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import com.agentclientprotocol.sdk.http.server.AcpWsOutbound;
@@ -28,10 +29,11 @@ final class VertxWsOutbound implements AcpWsOutbound {
 	}
 
 	@Override
-	public void close(int code, String reason) {
-		if (!socket.isClosed()) {
-			socket.close((short) code, reason);
+	public CompletionStage<Void> close(int code, String reason) {
+		if (socket.isClosed()) {
+			return CompletableFuture.completedFuture(null);
 		}
+		return socket.close((short) code, reason).toCompletionStage();
 	}
 
 }
