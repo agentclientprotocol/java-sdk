@@ -20,6 +20,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.agentclientprotocol.sdk.CapturedLogs;
 import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
@@ -201,6 +202,35 @@ class StdioAcpClientTransportProcessTest {
 	}
 
 	/**
+	 * An invalid request from the agent is its payload and can carry the user's data: it is
+	 * answered -32600 (which the echo agent sends back), and no log at INFO or above, the
+	 * default exception handler's included, quotes it.
+	 */
+	@Test
+	void anInvalidRequestIsNotLoggedAboveDebug() throws InterruptedException {
+		CountDownLatch answered = new CountDownLatch(1);
+		List<JSONRPCMessage> received = new CopyOnWriteArrayList<>();
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			transport = new StdioAcpClientTransport(echoAgent());
+			transport.setStdErrorHandler(line -> {
+			});
+			transport.connect(message -> message.doOnNext(m -> {
+				received.add(m);
+				answered.countDown();
+			}).then(Mono.empty())).block(TIMEOUT);
+
+			transport.sendMessage(new JSONRPCNotification(EchoAgent.INVALID, null)).block(TIMEOUT);
+			assertThat(answered.await(30, TimeUnit.SECONDS)).isTrue();
+
+			assertThat(logs.events()).as("the refusal is logged").isNotEmpty();
+			logs.assertNoneAtInfoOrAboveContains(EchoAgent.SECRET);
+		}
+		assertThat(received).singleElement()
+			.isInstanceOfSatisfying(AcpSchema.JSONRPCResponse.class,
+					answer -> assertThat(answer.error().code()).isEqualTo(-32600));
+	}
+
+	/**
 	 * Waiting for the process is interruptible, and the interrupt is not lost: the call throws
 	 * {@link java.util.concurrent.CancellationException} and the thread stays interrupted.
 	 */
@@ -356,6 +386,16 @@ class StdioAcpClientTransportProcessTest {
 		/** Answered with a line that is not JSON instead of its echo. */
 		static final String MALFORMED = "test/malformed";
 
+		/** Answered with {@link #INVALID_LINE} instead of its echo. */
+		static final String INVALID = "test/invalid";
+
+		/** A marker for the user's data in {@link #INVALID_LINE}. */
+		static final String SECRET = "SECRET-123";
+
+		/** A request JSON-RPC 2.0 does not allow (no jsonrpc member) that carries the user's data. */
+		static final String INVALID_LINE = "{\"id\":1,\"method\":\"session/request_permission\","
+				+ "\"params\":{\"sessionId\":\"s\",\"text\":\"" + SECRET + "\"}}";
+
 		/** The line that is not JSON; it carries personal data, as an agent's output can. */
 		static final String MALFORMED_LINE = "{not json someone@example.com";
 
@@ -380,7 +420,8 @@ class StdioAcpClientTransportProcessTest {
 						.waitFor();
 					Thread.sleep(Long.MAX_VALUE);
 				}
-				String echo = line.contains("\"" + MALFORMED + "\"") ? MALFORMED_LINE : line;
+				String echo = line.contains("\"" + MALFORMED + "\"") ? MALFORMED_LINE
+						: line.contains("\"" + INVALID + "\"") ? INVALID_LINE : line;
 				System.out.write((echo + "\n").getBytes(StandardCharsets.UTF_8));
 				System.out.flush();
 			}

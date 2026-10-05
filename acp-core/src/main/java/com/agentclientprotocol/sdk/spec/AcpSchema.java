@@ -230,17 +230,19 @@ public final class AcpSchema {
 	/**
 	 * Refuses a request or notification that JSON-RPC 2.0 section 4 does not allow:
 	 * {@code jsonrpc} other than "2.0", a method that is not a string, or an id that is not a
-	 * string, number or null. Its answer is -32600 Invalid Request.
+	 * string, number or null. Its answer is -32600 Invalid Request. The exception names the
+	 * member at fault and never quotes the message: a transport logs it, and the message is the
+	 * peer's payload.
 	 */
-	private static void validateRequest(Map<String, Object> message, String jsonText) {
+	private static void validateRequest(Map<String, Object> message) {
 		if (!JSONRPC_VERSION.equals(message.get("jsonrpc"))) {
-			throw new IllegalArgumentException("Invalid Request: jsonrpc must be \"2.0\": " + jsonText);
+			throw new IllegalArgumentException("Invalid Request: jsonrpc must be \"2.0\"");
 		}
 		if (!(message.get("method") instanceof String)) {
-			throw new IllegalArgumentException("Invalid Request: method must be a string: " + jsonText);
+			throw new IllegalArgumentException("Invalid Request: method must be a string");
 		}
 		if (!isValidId(message.get("id"))) {
-			throw new IllegalArgumentException("Invalid Request: id must be a string, number or null: " + jsonText);
+			throw new IllegalArgumentException("Invalid Request: id must be a string, number or null");
 		}
 	}
 
@@ -275,12 +277,13 @@ public final class AcpSchema {
 
 		Class<? extends JSONRPCMessage> messageType = messageType(map);
 		if (messageType == null) {
-			// Not the text: a transport logs this exception, and the text is the peer's payload.
+			// Not the text, here or in validateRequest: a transport logs these exceptions, and
+			// the text is the peer's payload.
 			throw new IllegalArgumentException(
 					"Cannot deserialize JSONRPCMessage: a JSON object with no method, id, result or error");
 		}
 		if (messageType != JSONRPCResponse.class) {
-			validateRequest(map, jsonText);
+			validateRequest(map);
 		}
 		return jsonMapper.convertValue(map, messageType);
 	}

@@ -18,6 +18,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.IThrowableProxy;
+import ch.qos.logback.core.read.ListAppender;
 import com.agentclientprotocol.sdk.agent.AcpAgent;
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
@@ -26,6 +31,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Mono;
@@ -159,6 +165,41 @@ class AcpHttpEndpointTest {
 		awaitTrue(() -> socket.sent.size() == 3);
 		socket.handler.onClose(1000, "bye");
 		awaitTrue(() -> endpoint.activeConnectionCount() == 0);
+	}
+
+	/**
+	 * An invalid request on the socket is the client's payload and can carry the user's
+	 * prompt: it is answered -32600, and no log at INFO or above, the endpoint's default
+	 * exception handler's included, quotes it.
+	 */
+	@Test
+	void anInvalidRequestOnAWebSocketIsNotLoggedAboveDebug() {
+		Logger sdkLogger = (Logger) LoggerFactory.getLogger("com.agentclientprotocol.sdk");
+		ListAppender<ILoggingEvent> logs = new ListAppender<>();
+		logs.start();
+		sdkLogger.addAppender(logs);
+		try {
+			FakeSocket socket = open();
+			socket.handler.onText(INITIALIZE);
+			awaitTrue(() -> socket.sent.size() == 1);
+			socket.handler.onText("{\"id\":2,\"method\":\"session/prompt\",\"params\":{\"sessionId\":\"s\","
+					+ "\"prompt\":[{\"type\":\"text\",\"text\":\"SECRET-123\"}]}}");
+			awaitTrue(() -> socket.sent.size() == 2);
+			assertThat(socket.sent.get(1)).contains("-32600");
+		}
+		finally {
+			sdkLogger.detachAppender(logs);
+			logs.stop();
+		}
+
+		assertThat(logs.list).as("the refusal is logged").isNotEmpty();
+		assertThat(logs.list).filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.INFO))
+			.allSatisfy(event -> {
+				assertThat(event.getFormattedMessage()).doesNotContain("SECRET-123");
+				for (IThrowableProxy proxy = event.getThrowableProxy(); proxy != null; proxy = proxy.getCause()) {
+					assertThat(String.valueOf(proxy.getMessage())).doesNotContain("SECRET-123");
+				}
+			});
 	}
 
 	@Test

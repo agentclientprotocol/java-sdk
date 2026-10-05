@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.agentclientprotocol.sdk.AcpTestFixtures;
+import com.agentclientprotocol.sdk.CapturedLogs;
 import com.agentclientprotocol.sdk.error.AcpConnectionException;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -272,6 +273,56 @@ class StreamableHttpAcpClientTransportTest {
 
 			assertThat(posted.poll(5, TimeUnit.SECONDS)).isEqualTo(
 					"{\"jsonrpc\":\"2.0\",\"id\":\"agent-1\",\"error\":{\"code\":-32600,\"message\":\"Invalid Request\"}}");
+		}
+		finally {
+			transport.close();
+			connectionStreamWriter.close();
+		}
+	}
+
+	/**
+	 * An invalid request on an SSE stream is the agent's payload and can carry the user's
+	 * data: it is answered -32600, and no log at INFO or above, the default exception
+	 * handler's included, quotes it.
+	 */
+	@Test
+	void anInvalidRequestOnAStreamIsNotLoggedAboveDebug() throws Exception {
+		HttpClient httpClient = mock(HttpClient.class);
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
+		BlockingQueue<String> posted = new LinkedBlockingQueue<>();
+		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
+			HttpRequest request = invocation.getArgument(0);
+			if ("POST".equals(request.method()) && request.headers().firstValue("Acp-Connection-Id").isEmpty()) {
+				String initializeResponse = jsonMapper.writeValueAsString(AcpTestFixtures
+					.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
+				return CompletableFuture.completedFuture(response(200,
+						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
+			}
+			if ("GET".equals(request.method())) {
+				return CompletableFuture.completedFuture(
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
+			}
+			posted.add(bodyOf(request));
+			return CompletableFuture.completedFuture(response(202, Map.of(), null));
+		});
+
+		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
+				URI.create("https://localhost:8443/acp"), jsonMapper, httpClient);
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			transport.connect(message -> Mono.empty()).block();
+			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
+					AcpTestFixtures.createInitializeRequest()))
+				.block();
+
+			connectionStreamWriter.write(("data: {\"id\":\"agent-1\",\"method\":\"session/request_permission\","
+					+ "\"params\":{\"sessionId\":\"s\",\"text\":\"SECRET-123\"}}\n\n")
+				.getBytes(StandardCharsets.UTF_8));
+			connectionStreamWriter.flush();
+
+			assertThat(posted.poll(5, TimeUnit.SECONDS)).contains("-32600");
+			assertThat(logs.events()).as("the refusal is logged").isNotEmpty();
+			logs.assertNoneAtInfoOrAboveContains("SECRET-123");
 		}
 		finally {
 			transport.close();

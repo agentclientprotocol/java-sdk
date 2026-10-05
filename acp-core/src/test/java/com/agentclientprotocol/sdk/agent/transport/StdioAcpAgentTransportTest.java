@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.AcpTestFixtures;
+import com.agentclientprotocol.sdk.CapturedLogs;
 import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
@@ -300,6 +301,32 @@ class StdioAcpAgentTransportTest {
 				.code())
 			.containsExactly(-32700, -32600);
 		assertThat(written).filteredOn(line -> line.contains("\"result\":\"ok\"")).hasSize(2);
+	}
+
+	/**
+	 * An invalid request is the client's payload and can carry the user's prompt: it is
+	 * answered -32600, and no log at INFO or above, the default exception handler's included,
+	 * quotes it.
+	 */
+	@Test
+	void anInvalidRequestIsNotLoggedAboveDebug() throws Exception {
+		String invalid = "{\"id\":1,\"method\":\"session/prompt\",\"params\":{\"sessionId\":\"s\","
+				+ "\"prompt\":[{\"type\":\"text\",\"text\":\"SECRET-123\"}]}}\n";
+		PipedOutputStream agentOut = new PipedOutputStream();
+		PipedInputStream clientIn = new PipedInputStream(agentOut, 65536);
+		StdioAcpAgentTransport transport = new StdioAcpAgentTransport(jsonMapper,
+				new ByteArrayInputStream(invalid.getBytes(StandardCharsets.UTF_8)), agentOut);
+		String answer;
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			transport.start(message -> message).block(TIMEOUT);
+			BufferedReader reader = new BufferedReader(new InputStreamReader(clientIn, StandardCharsets.UTF_8));
+			answer = Mono.fromCallable(reader::readLine).subscribeOn(Schedulers.boundedElastic()).block(TIMEOUT);
+			transport.closeGracefully().block(TIMEOUT);
+
+			assertThat(logs.events()).as("the refusal is logged").isNotEmpty();
+			logs.assertNoneAtInfoOrAboveContains("SECRET-123");
+		}
+		assertThat(answer).contains("-32600");
 	}
 
 	/**

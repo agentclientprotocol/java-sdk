@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 
+import com.agentclientprotocol.sdk.CapturedLogs;
 import com.agentclientprotocol.sdk.QuietLoggers;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -214,6 +215,27 @@ class WebSocketAcpClientTransportFrameTest {
 
 		assertThat(webSocket.closeStatus).isEqualTo(WebSocket.NORMAL_CLOSURE);
 		transport.awaitTermination().block(TIMEOUT);
+	}
+
+	/**
+	 * An invalid request from the agent is its payload and can carry the user's data: it is
+	 * answered -32600, and no log at INFO or above, the default exception handler's included,
+	 * quotes it.
+	 */
+	@Test
+	void anInvalidRequestIsNotLoggedAboveDebug() {
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			transport.connect(message -> message).block(TIMEOUT);
+
+			httpClient.listener()
+				.onText(webSocket, "{\"id\":1,\"method\":\"session/request_permission\","
+						+ "\"params\":{\"sessionId\":\"s\",\"text\":\"SECRET-123\"}}", true);
+
+			awaitSentFrames(1);
+			assertThat(logs.events()).as("the refusal is logged").isNotEmpty();
+			logs.assertNoneAtInfoOrAboveContains("SECRET-123");
+		}
+		assertThat(webSocket.sent.get(0)).contains("-32600");
 	}
 
 	private void awaitSentFrames(int count) {

@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the agent directly lists that origin.
 
 
+- **An invalid JSON-RPC request no longer reaches the logs.** `AcpSchema.deserializeJsonRpcMessage`
+  refused a request or notification JSON-RPC 2.0 does not allow (no `jsonrpc` or one other than
+  `"2.0"`, a method that is not a string, an id that is not a string, number or null) with an
+  exception whose message quoted the whole message text, and every transport logs that exception
+  at WARN or ERROR: the stdio agent and client, the WebSocket and Streamable HTTP clients, and the
+  server's WebSocket on every host (the SDK listener, the servlet, WebFlux, Quarkus). A peer's
+  malformed `session/prompt` put the user's prompt in the log. The message now names the member at
+  fault only.
+
 - **A handler's unexpected exception no longer sends its message to the peer.** A request handler
   that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
   exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now
@@ -1838,9 +1847,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AcpAgentSession` already did. The same rule now holds wherever an inbound message reached a log
   at INFO or above: an error response's `data` (`OutboundMessages`), a line from the agent that is
   not a JSON-RPC message and a message the stdio client could not queue (`StdioAcpClientTransport`),
-  and a message of unknown type (both sessions). Each is logged at DEBUG instead. The exception
-  `AcpSchema.deserializeJsonRpcMessage` throws for JSON that is no JSON-RPC message, which every
-  transport logs, no longer quotes the text. A dropped outbound response is logged without its
+  and a message of unknown type (both sessions). Each is logged at DEBUG instead. The exceptions
+  `AcpSchema.deserializeJsonRpcMessage` throws for JSON that is no JSON-RPC message, and for a
+  request JSON-RPC 2.0 does not allow, which every transport logs, no longer quote the text. A dropped outbound response is logged without its
   content too (`OutboundSinks`).
 - **`closeGracefully()` could wait out the whole request timeout when a notification arrived
   as it closed.** Found by the real-agent smoke tier: Claude's ACP agent sends a

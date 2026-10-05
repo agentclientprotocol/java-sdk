@@ -162,4 +162,26 @@ class AcpJsonRpcMessageTest {
 			.hasMessageContaining("Cannot deserialize JSONRPCMessage");
 	}
 
+	/**
+	 * A request or notification JSON-RPC 2.0 does not allow is refused with an exception that
+	 * every transport logs at WARN or ERROR: its message names the field at fault and never
+	 * quotes the text, which is the peer's payload.
+	 */
+	@Test
+	void anInvalidRequestIsRefusedWithoutQuotingItsText() {
+		String params = "\"params\":{\"sessionId\":\"s\",\"prompt\":[{\"type\":\"text\",\"text\":\"SECRET-123\"}]}";
+		java.util.Map<String, String> invalid = java.util.Map.of(
+				"jsonrpc must be", "{\"id\":1,\"method\":\"session/prompt\"," + params + "}",
+				"jsonrpc must be \"2.0\"", "{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"session/prompt\"," + params + "}",
+				"method must be a string", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":42," + params + "}",
+				"id must be a string, number or null",
+				"{\"jsonrpc\":\"2.0\",\"id\":{\"x\":\"SECRET-123\"},\"method\":\"session/prompt\"," + params + "}");
+
+		invalid.forEach((fault, json) -> assertThatThrownBy(() -> AcpSchema.deserializeJsonRpcMessage(jsonMapper, json))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("Invalid Request")
+			.hasMessageContaining(fault)
+			.hasMessageNotContaining("SECRET-123"));
+	}
+
 }
