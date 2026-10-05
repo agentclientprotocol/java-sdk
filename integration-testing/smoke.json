@@ -35,16 +35,14 @@
       "dir": "programs/spring",
       "agentTransports": [
         "stdio",
-        "http"
+        "http",
+        "ws"
       ],
       "clientTransports": [
         "http"
       ],
       "readyTimeoutSec": 90,
-      "pendingAgentTransports": [
-        "ws"
-      ],
-      "comment": "http is the SDK servlet mounted on server.port in a servlet web application. TODO ws: add \"ws\" to agentTransports once the servlet + Jakarta WebSocket host serves WebSocket upgrades on server.port; pendingAgentTransports only documents it and generates nothing."
+      "comment": "http and ws are the SDK servlet (acp-http-servlet) mounted on server.port in a servlet web application: Streamable HTTP and the WebSocket upgrade on one path."
     },
     "micronaut": {
       "dir": "programs/micronaut",

@@ -157,13 +157,9 @@ the commit being released (`framework-smoke.yml`, or the local command below), n
 
 | Framework | Agent transports | Client | Program |
 |---|---|---|---|
-| Spring Boot 4.1 | stdio (`spring.main.keep-alive=true`), HTTP (the SDK servlet on `server.port` in a servlet web application) | HTTP | [programs/spring](programs/spring) |
+| Spring Boot 4.1 | stdio (`spring.main.keep-alive=true`), HTTP and WebSocket (the SDK servlet, `acp-http-servlet`, on `server.port` in a servlet web application) | HTTP | [programs/spring](programs/spring) |
 | Micronaut 4 | stdio, HTTP, WebSocket (the SDK listener) | HTTP | [programs/micronaut](programs/micronaut) |
 | Quarkus | stdio, HTTP, WebSocket (the Quarkus HTTP server); one package per build-time transport | HTTP | [programs/quarkus](programs/quarkus) |
-
-Spring has no WebSocket cell yet: the servlet takes no WebSocket upgrades on `server.port`. When it
-does, add `"ws"` to `frameworks.spring.agentTransports` in `smoke.json` (it is listed under
-`pendingAgentTransports` until then) and regenerate.
 
 The agent handlers ([programs/framework/.../SmokeAgent.java](programs/framework/src/main/java/interop/framework/SmokeAgent.java))
 and the client steps ([SmokeClient.java](programs/framework/src/main/java/interop/framework/SmokeClient.java))

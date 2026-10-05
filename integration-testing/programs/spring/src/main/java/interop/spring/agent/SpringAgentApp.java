@@ -37,8 +37,8 @@ public class SpringAgentApp {
 			usage("--transport is required");
 		}
 		boolean stdio = "stdio".equals(transport);
-		if (!stdio && !"http".equals(transport)) {
-			usage("unsupported transport " + transport + " (the Spring agent serves stdio and http)");
+		if (!stdio && !"http".equals(transport) && !"ws".equals(transport)) {
+			usage("unsupported transport " + transport + " (the Spring agent serves stdio, http and ws)");
 		}
 		Map<String, Object> properties = new HashMap<>();
 		properties.put("spring.main.banner-mode", "off");
@@ -51,7 +51,8 @@ public class SpringAgentApp {
 			properties.put("spring.main.web-application-type", "servlet");
 			properties.put("server.address", "127.0.0.1");
 			properties.put("server.port", port);
-			properties.put("spring.acp.agent.transport.type", "http");
+			// http and ws are one endpoint: the servlet takes the WebSocket upgrade on its path.
+			properties.put("spring.acp.agent.transport.type", "ws".equals(transport) ? "websocket" : "http");
 			properties.put("spring.acp.agent.transport.http.path", "/acp");
 		}
 		SpringApplication application = new SpringApplication(SpringAgentApp.class);
@@ -73,7 +74,7 @@ public class SpringAgentApp {
 
 	private static void usage(String problem) {
 		System.err.println(problem);
-		System.err.println("usage: agent.sh --transport stdio | --transport http --port <port>");
+		System.err.println("usage: agent.sh --transport stdio | --transport http|ws --port <port>");
 		System.exit(2);
 	}
 
