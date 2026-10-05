@@ -21,7 +21,7 @@ class AcpHttpEndpointTest {
 	void unsetLimitsKeepTheSdkDefaults() {
 		AgentHttp none = new AgentHttp(Optional.empty(), Optional.empty(), OptionalInt.empty(), OptionalInt.empty(),
 				OptionalInt.empty(), OptionalInt.empty(), Optional.empty(), Optional.empty());
-		assertThat(AcpHttpEndpoint.options(none)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
+		assertThat(AcpVertxHost.options(none)).isEqualTo(StreamableHttpAcpAgentTransportOptions.defaults());
 	}
 
 	@Test
@@ -29,7 +29,7 @@ class AcpHttpEndpointTest {
 		AgentHttp all = new AgentHttp(Optional.of(new MemorySize(java.math.BigInteger.valueOf(1024))),
 				Optional.of(Duration.ofSeconds(2)), OptionalInt.of(3), OptionalInt.of(4), OptionalInt.of(5),
 				OptionalInt.of(6), Optional.of(Duration.ofSeconds(7)), Optional.of(java.util.List.of("https://app.example.com")));
-		StreamableHttpAcpAgentTransportOptions options = AcpHttpEndpoint.options(all);
+		StreamableHttpAcpAgentTransportOptions options = AcpVertxHost.options(all);
 		assertThat(options.maxPostBodyBytes()).isEqualTo(1024);
 		assertThat(options.keepAliveInterval()).isEqualTo(Duration.ofSeconds(2));
 		assertThat(options.mailboxCapacity()).isEqualTo(3);

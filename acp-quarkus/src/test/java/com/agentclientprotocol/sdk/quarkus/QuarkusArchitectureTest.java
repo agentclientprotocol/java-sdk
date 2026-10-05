@@ -29,6 +29,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.belongToAnyOf;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static com.tngtech.archunit.core.domain.properties.HasModifiers.Predicates.modifier;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
@@ -44,7 +45,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * The public package is what an application touches and knows nothing of the beans
  * behind it. The beans use the SDK's public API only, like any application, and never
- * Jetty: the HTTP endpoint is the Jetty-free servlet on the Quarkus HTTP server.
+ * Jetty or a servlet container: the HTTP endpoint is the SDK's framework-neutral endpoint on a
+ * Vert.x route of the Quarkus router. The route is a host: it holds no protocol rule.
  * </p>
  */
 @AnalyzeClasses(locations = QuarkusArchitectureTest.ThisModule.class,
@@ -79,6 +81,13 @@ class QuarkusArchitectureTest {
 	static final ArchRule usesOnlyThePublicSdkApi = noClasses().should()
 		.dependOnClassesThat(SDK_INTERNALS)
 		.because("the extension is a client of the SDK's public API, like any application");
+
+	@ArchTest
+	static final ArchRule theRouteIsOnlyAHost = noClasses().should()
+		.dependOnClassesThat(resideInAnyPackage("jakarta.servlet..", "jakarta.websocket..", "io.undertow..")
+			.or(belongToAnyOf(com.agentclientprotocol.sdk.agent.transport.RemoteAcpConnection.class,
+					com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage.class)))
+		.because("all protocol semantics live in acp-http-core; the Vert.x route only adapts I/O through the host contract");
 
 	@ArchTest
 	static final ArchRule neverUsesJetty = noClasses().should()

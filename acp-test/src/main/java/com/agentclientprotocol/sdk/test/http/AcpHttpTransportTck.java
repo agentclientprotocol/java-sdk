@@ -44,8 +44,11 @@ import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.Timeout;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -80,6 +83,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * @author Mark Pollack
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @Timeout(60)
 public abstract class AcpHttpTransportTck {
 
@@ -141,7 +145,9 @@ public abstract class AcpHttpTransportTck {
 	}
 
 	/**
-	 * Starts the host under test, listening on an ephemeral port.
+	 * Starts the host under test, listening on an ephemeral port. A framework host whose test
+	 * runs one application may return that application each time, configured like
+	 * {@link #standardConfig()} with an agent that behaves like {@link #agentFactory()}.
 	 * @param config what to serve
 	 * @return the running host
 	 * @throws Exception if it cannot start
@@ -385,7 +391,12 @@ public abstract class AcpHttpTransportTck {
 
 	// Shutdown
 
+	/**
+	 * Runs last: a host that cannot start a second server (a framework test runs one
+	 * application) may hand back its running one, which this case drains.
+	 */
 	@Test
+	@Order(Integer.MAX_VALUE)
 	void shutdownClosesOpenStreamsPromptly() throws Exception {
 		Host second = startHost(standardConfig());
 		boolean stopped = false;

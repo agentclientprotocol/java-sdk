@@ -19,8 +19,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Quarkus endpoint applies the SDK's {@code Origin} rule on both of its routes: the servlet
- * (HTTP and SSE) and the Vert.x WebSocket route. A foreign origin is answered 403, a loopback or
+ * The Quarkus endpoint applies the SDK's {@code Origin} rule over HTTP and on the WebSocket
+ * handshake. A foreign origin is answered 403, a loopback or
  * listed one is served. Before, both served any origin.
  */
 class OriginValidationTest {

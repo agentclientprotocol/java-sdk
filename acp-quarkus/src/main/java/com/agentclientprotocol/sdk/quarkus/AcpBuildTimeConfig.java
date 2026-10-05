@@ -85,9 +85,9 @@ public interface AcpBuildTimeConfig {
 	interface Http {
 
 		/**
-		 * The path of the Streamable HTTP endpoint on the Quarkus HTTP server, relative to the
-		 * servlet context path ({@code quarkus.servlet.context-path}). WebSocket upgrades are
-		 * accepted on the same path. Maps to {@code AcpAgentSettings.Http.path}.
+		 * The path of the Streamable HTTP endpoint on the Quarkus HTTP server's router, under
+		 * {@code quarkus.http.root-path}. WebSocket upgrades are accepted on the same path. Maps
+		 * to {@code AcpAgentSettings.Http.path}.
 		 * @return the endpoint path
 		 */
 		@WithDefault("/acp")
