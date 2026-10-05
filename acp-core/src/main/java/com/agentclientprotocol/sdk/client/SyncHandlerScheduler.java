@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.agentclientprotocol.sdk.util.VirtualThreads;
+import org.jspecify.annotations.Nullable;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -24,7 +25,14 @@ final class SyncHandlerScheduler {
 	static final Scheduler DEFAULT = Schedulers.fromExecutorService(executor(), "acp-sync-handler");
 
 	private static ExecutorService executor() {
-		ExecutorService virtual = VirtualThreads.newPerTaskExecutor("acp-sync-handler");
+		return executor(VirtualThreads.newPerTaskExecutor("acp-sync-handler"));
+	}
+
+	/**
+	 * The virtual-thread executor when there is one, else the cached pool; tests give either on
+	 * any JDK.
+	 */
+	static ExecutorService executor(@Nullable ExecutorService virtual) {
 		if (virtual != null) {
 			return virtual;
 		}

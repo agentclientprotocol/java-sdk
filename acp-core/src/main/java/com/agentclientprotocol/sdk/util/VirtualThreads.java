@@ -40,7 +40,16 @@ public final class VirtualThreads {
 	 * @return true on JDK 21 and later
 	 */
 	public static boolean isSupported() {
-		return NAMED_FACTORY != null;
+		return isSupported(NAMED_FACTORY);
+	}
+
+	/*
+	 * Each decision below takes the handles it decides on, so tests make both choices on any
+	 * JDK: the coverage gate requires every branch of this class covered on JDK 17 and on 21.
+	 */
+
+	static boolean isSupported(@Nullable MethodHandle namedFactory) {
+		return namedFactory != null;
 	}
 
 	/**
@@ -49,11 +58,15 @@ public final class VirtualThreads {
 	 * @return true for a virtual thread; always false before JDK 21
 	 */
 	public static boolean isVirtual(Thread thread) {
-		if (IS_VIRTUAL == null) {
+		return isVirtual(IS_VIRTUAL, thread);
+	}
+
+	static boolean isVirtual(@Nullable MethodHandle isVirtual, Thread thread) {
+		if (isVirtual == null) {
 			return false;
 		}
 		try {
-			return (boolean) IS_VIRTUAL.invokeExact(thread);
+			return (boolean) isVirtual.invokeExact(thread);
 		}
 		catch (Throwable e) {
 			return false;
@@ -67,9 +80,13 @@ public final class VirtualThreads {
 	 * @return the factory
 	 */
 	public static ThreadFactory factoryOrDaemon(String name) {
-		if (NAMED_FACTORY != null) {
+		return factoryOrDaemon(NAMED_FACTORY, name);
+	}
+
+	static ThreadFactory factoryOrDaemon(@Nullable MethodHandle namedFactory, String name) {
+		if (namedFactory != null) {
 			try {
-				return (ThreadFactory) NAMED_FACTORY.invoke(name);
+				return (ThreadFactory) namedFactory.invoke(name);
 			}
 			catch (Throwable e) {
 				// Fall through to platform threads.
@@ -90,11 +107,16 @@ public final class VirtualThreads {
 	 * @return the executor, or null when the JDK has no virtual threads
 	 */
 	public static @Nullable ExecutorService newPerTaskExecutor(String name) {
-		if (PER_TASK == null || NAMED_FACTORY == null) {
+		return newPerTaskExecutor(PER_TASK, NAMED_FACTORY, name);
+	}
+
+	static @Nullable ExecutorService newPerTaskExecutor(@Nullable MethodHandle perTask,
+			@Nullable MethodHandle namedFactory, String name) {
+		if (perTask == null || namedFactory == null) {
 			return null;
 		}
 		try {
-			return (ExecutorService) PER_TASK.invoke(factoryOrDaemon(name));
+			return (ExecutorService) perTask.invoke(factoryOrDaemon(namedFactory, name));
 		}
 		catch (Throwable e) {
 			return null;

@@ -514,7 +514,16 @@
                  2 points, rounded down to a whole percent: enough for the run-to-run variation
                  of the concurrent tests (a branch or two), too little to lose a test class
                  unnoticed. Raise a floor when coverage rises; lower one only with a reason in
-                 the commit. -->
+                 the commit.
+
+                 A floor counts a whole module, so it cannot see the few lines that choose
+                 between virtual threads (JDK 21 and later) and platform threads (JDK 17): CI
+                 builds on both JDKs, and each JDK runs only its own side of every such choice.
+                 The second rule names the classes that make those choices and requires every
+                 branch of them covered on whichever JDK builds. Each takes the choice as an
+                 argument (whether the JDK has virtual threads, or the virtual-thread executor
+                 or handles), so its tests make both choices on both JDKs. A class that makes a
+                 new such choice belongs on the list. -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -560,6 +569,24 @@
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
                                             <minimum>${jacoco.minimum.branch}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.agentclientprotocol.sdk.util.VirtualThreads</include>
+                                        <include>com.agentclientprotocol.sdk.util.AcpSchedulers*</include>
+                                        <include>com.agentclientprotocol.sdk.agent.SyncHandlerScheduler</include>
+                                        <include>com.agentclientprotocol.sdk.client.SyncHandlerScheduler</include>
+                                        <include>com.agentclientprotocol.sdk.quarkus.runtime.AcpExecutors</include>
+                                        <include>com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.HandlerExecutors*</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>1.00</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
