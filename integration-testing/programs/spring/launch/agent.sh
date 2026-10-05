@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the Spring Boot smoke agent: --transport stdio | --transport http|ws --port <port>.
+# Starts the Spring Boot smoke agent: [--web servlet|reactive] --transport stdio | --transport http|ws --port <port>.
 # Launcher contract: integration-testing/README.md, "Contracts". Prints nothing itself: on stdio,
 # stdout is the protocol stream (the application logs to stderr). JAVA_OPTS, if set, is passed on.
 set -euo pipefail

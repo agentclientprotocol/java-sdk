@@ -558,6 +558,11 @@ public class GenConfigs {
 			if (!Files.exists(root.resolve(f.getValue().path("dir").asText()).resolve("launch/agent.sh"))) {
 				problems.add("smoke.json: " + f.getKey() + ".dir has no launch/agent.sh");
 			}
+			for (String key : List.of("agentArgs", "agentName")) {
+				if (f.getValue().has(key) && !f.getValue().path(key).isTextual()) {
+					problems.add("smoke.json: " + f.getKey() + "." + key + " must be a string");
+				}
+			}
 		});
 	}
 
@@ -604,6 +609,12 @@ public class GenConfigs {
 		}
 	}
 
+	/** The framework program's extra agent flags (smoke.json agentArgs), with a leading space, or none. */
+	static String agentArgs(JsonNode fw) {
+		String args = fw.path("agentArgs").asText("").trim();
+		return args.isEmpty() ? "" : " " + args;
+	}
+
 	String fwBuild(JsonNode fw) {
 		return "IT_ROOT=\"${ROOT}\" MVNW=\"${MVNW}\" ACP_VERSION=\"${ACP_VERSION}\" CACHE=\"${CACHE}\" ${ROOT}/"
 				+ fw.path("dir").asText() + "/launch/build.sh";
@@ -640,7 +651,8 @@ public class GenConfigs {
 			a.put("role", "server");
 			a.put("dir", "${ROOT}/" + agentDir);
 			a.put("build", agentBuild);
-			a.put("run", "${ROOT}/" + agentDir + "/launch/agent.sh --transport " + transport + " --port ${PORT}");
+			a.put("run", "${ROOT}/" + agentDir + "/launch/agent.sh" + (agentSide ? agentArgs(fw) : "") + " --transport "
+					+ transport + " --port ${PORT}");
 			ObjectNode aenv = a.putObject("env");
 			env.forEach(aenv::put);
 			ObjectNode ready = a.putObject("ready");
@@ -662,7 +674,8 @@ public class GenConfigs {
 		ObjectNode cenv = cl.putObject("env");
 		cenv.put("STEPS", String.join(",", ids));
 		if (stdio) {
-			cenv.put("AGENT_CMD", "${ROOT}/" + agentDir + "/launch/agent.sh --transport stdio");
+			cenv.put("AGENT_CMD", "${ROOT}/" + agentDir + "/launch/agent.sh" + (agentSide ? agentArgs(fw) : "")
+					+ " --transport stdio");
 		}
 		env.forEach(cenv::put);
 		cl.put("timeoutSec", clientTimeout);
@@ -683,7 +696,7 @@ public class GenConfigs {
 			putLines(as, "forbiddenOutput", forbidden);
 			Map<String, Set<String>> patterns = new LinkedHashMap<>();
 			patterns.put("client", new LinkedHashSet<>(List.of("STEP init\\.initialize PASS .*\"name\":\"interop-"
-					+ framework + "-agent\"")));
+					+ fw.path("agentName").asText(framework) + "-agent\"")));
 			putLines(as, "requiredPatterns", patterns);
 		}
 		ArrayNode checks = as.putArray("checks");
@@ -712,7 +725,8 @@ public class GenConfigs {
 		a.put("role", "server");
 		a.put("dir", "${ROOT}/" + fw.path("dir").asText());
 		a.put("build", fwBuild(fw));
-		a.put("run", "${ROOT}/" + fw.path("dir").asText() + "/launch/agent.sh --transport http --port ${PORT}");
+		a.put("run", "${ROOT}/" + fw.path("dir").asText() + "/launch/agent.sh" + agentArgs(fw)
+				+ " --transport http --port ${PORT}");
 		a.putObject("env").put("JAVA_OPTS", load.path("serverJavaOpts").asText("-Xmx512m"));
 		ObjectNode ready = a.putObject("ready");
 		ready.put("line", "READY");

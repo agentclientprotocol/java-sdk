@@ -2,7 +2,8 @@
 <!--
   The Spring Boot programs of the framework smoke cells (integration-testing/smoke.json): an
   @AcpAgent bean served by acp-spring-boot-starter (interop.spring.agent: stdio, or Streamable HTTP
-  on the servlet the starter mounts on server.port), and an ACP client bean
+  and WebSocket on server.port, through the servlet in a servlet web application or the WebFlux
+  host in a reactive one), and an ACP client bean
   the starter builds from spring.acp.client.* (interop.spring.client). The agent's handlers and the
   client's steps are the shared sources of programs/framework. Not a module of the SDK reactor:
   launch/build.sh builds it against the SDK installed from this checkout (-Dacp.version) and the
@@ -52,6 +53,17 @@
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-http-servlet</artifactId>
+            <version>${acp.version}</version>
+        </dependency>
+        <!-- With the reactive web flag, a WebFlux application: the SDK's WebFlux host routed on the
+             application's own Reactor Netty server (server.port), Streamable HTTP and WebSocket -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-http-webflux</artifactId>
             <version>${acp.version}</version>
         </dependency>
     </dependencies>
