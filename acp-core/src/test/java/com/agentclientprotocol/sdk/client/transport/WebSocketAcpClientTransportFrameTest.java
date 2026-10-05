@@ -238,6 +238,33 @@ class WebSocketAcpClientTransportFrameTest {
 		assertThat(webSocket.sent.get(0)).contains("-32600");
 	}
 
+	/**
+	 * The endpoint's query string can carry an access token, and its user information a
+	 * password: neither is logged when connecting, nor when the connect fails.
+	 */
+	@Test
+	void theEndpointIsLoggedWithoutItsQueryOrUserInformation() {
+		URI endpoint = URI.create("ws://user:PASSWORD-123@localhost:1/acp?token=SECRET-123");
+		WebSocketAcpClientTransport withToken = new WebSocketAcpClientTransport(endpoint,
+				AcpJsonMapper.createDefault(), httpClient);
+		try (CapturedLogs logs = CapturedLogs.open()) {
+			httpClient.failConnect = true;
+			withToken.setExceptionHandler(error -> {
+			});
+			assertThatThrownBy(() -> withToken.connect(message -> message).block(TIMEOUT)).isNotNull();
+			httpClient.failConnect = false;
+			withToken.connect(message -> message).block(TIMEOUT);
+
+			assertThat(logs.events()).extracting(event -> event.getFormattedMessage())
+				.anySatisfy(message -> assertThat(message).contains("Connected").contains("ws://localhost:1/acp"));
+			logs.assertNoneAtInfoOrAboveContains("SECRET-123");
+			logs.assertNoneAtInfoOrAboveContains("PASSWORD-123");
+		}
+		finally {
+			withToken.closeGracefully().block(TIMEOUT);
+		}
+	}
+
 	private void awaitSentFrames(int count) {
 		long deadline = System.nanoTime() + TIMEOUT.toNanos();
 		while (webSocket.sent.size() < count && System.nanoTime() < deadline) {

@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   malformed `session/prompt` put the user's prompt in the log. The message now names the member at
   fault only.
 
+- **The WebSocket client logs its endpoint without the query or user information.**
+  `WebSocketAcpClientTransport` logged the full endpoint URI at INFO when connecting and at ERROR
+  when the connect failed; a token in the query string (`?token=...`) or a password in the URI
+  reached the log. It now logs scheme, host, port and path.
+
 - **A handler's unexpected exception no longer sends its message to the peer.** A request handler
   that failed with an exception other than `AcpProtocolException` was answered `-32603` with the
   exception's message, which can carry paths, SQL, URLs with credentials or tokens. It is now

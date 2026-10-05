@@ -5,6 +5,7 @@
 package com.agentclientprotocol.sdk.client.transport;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
@@ -82,6 +83,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 	public static final String DEFAULT_ACP_PATH = "/acp";
 
 	private final URI serverUri;
+
+	/** The endpoint as logged: without its query, which can carry a token, or user information. */
+	private final String loggedUri;
 
 	private final AcpJsonMapper jsonMapper;
 
@@ -205,6 +209,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		Assert.notNull(httpClient, "The HttpClient can not be null");
 
 		this.serverUri = serverUri;
+		this.loggedUri = withoutQueryOrUserInfo(serverUri);
 		this.jsonMapper = jsonMapper;
 		this.httpClient = httpClient;
 		this.ownExecutor = ownExecutor;
@@ -223,6 +228,15 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 					t.setDaemon(true);
 					return t;
 				}), "ws-client-outbound");
+		}
+	}
+
+	private static String withoutQueryOrUserInfo(URI uri) {
+		try {
+			return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), null, null).toString();
+		}
+		catch (URISyntaxException e) {
+			return uri.getScheme() + "://" + uri.getHost();
 		}
 	}
 
@@ -256,7 +270,7 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 		}
 
 		return Mono.fromFuture(() -> {
-			logger.info("Connecting to WebSocket server at {}", serverUri);
+			logger.info("Connecting to WebSocket server at {}", loggedUri);
 
 			// Build WebSocket connection with listener; frames that arrive before the handshake
 			// completes wait in the inbound sink.
@@ -270,9 +284,9 @@ public class WebSocketAcpClientTransport implements AcpClientTransport {
 			handleIncomingMessages(handler);
 			startOutboundProcessing();
 			connectionReady.tryEmitValue(null);
-			logger.info("Connected to WebSocket server at {}", serverUri);
+			logger.info("Connected to WebSocket server at {}", loggedUri);
 		}).doOnError(e -> {
-			logger.error("Failed to connect to WebSocket server at {}", serverUri, e);
+			logger.error("Failed to connect to WebSocket server at {}", loggedUri, e);
 			isConnected.set(false);
 			exceptionHandler.accept(e);
 		}).doOnCancel(() -> {
