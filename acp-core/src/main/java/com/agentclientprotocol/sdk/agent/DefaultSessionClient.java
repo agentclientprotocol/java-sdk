@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import reactor.core.publisher.Mono;
 
@@ -66,6 +67,21 @@ final class DefaultSessionClient implements SessionClient {
 	@Override
 	public Mono<Void> completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
 		return agent.completeElicitation(notification);
+	}
+
+	@Override
+	public <T> Mono<T> sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		return agent.sendExtRequest(method, params, resultType);
+	}
+
+	@Override
+	public Mono<Object> sendExtRequest(String method, Object params) {
+		return agent.sendExtRequest(method, params);
+	}
+
+	@Override
+	public Mono<Void> sendExtNotification(String method, Object params) {
+		return agent.sendExtNotification(method, params);
 	}
 
 }

@@ -4,8 +4,10 @@
 
 package com.agentclientprotocol.sdk.agent;
 
+import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.SyncCalls;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The {@link SyncSessionClient} of a {@link DefaultSyncPromptContext}: each call blocks on the
@@ -67,6 +69,21 @@ final class DefaultSyncSessionClient implements SyncSessionClient {
 	@Override
 	public void completeElicitation(AcpSchema.CompleteElicitationNotification notification) {
 		SyncCalls.block(client.completeElicitation(notification));
+	}
+
+	@Override
+	public <T> @Nullable T sendExtRequest(String method, Object params, TypeRef<T> resultType) {
+		return SyncCalls.block(client.sendExtRequest(method, params, resultType));
+	}
+
+	@Override
+	public @Nullable Object sendExtRequest(String method, Object params) {
+		return SyncCalls.block(client.sendExtRequest(method, params));
+	}
+
+	@Override
+	public void sendExtNotification(String method, Object params) {
+		SyncCalls.block(client.sendExtNotification(method, params));
 	}
 
 }

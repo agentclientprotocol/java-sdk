@@ -136,6 +136,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AcpSyncAgent agent = AcpAgent.sync(t).newSessionHandler((request, agent) -> ...)` does not
   compile, since a lambda parameter cannot shadow a local variable.
 
+- **Extension methods from inside handlers.** `SessionClient` (`PromptContext.client()`) gains
+  `sendExtRequest(String, Object, TypeRef<T>)`, `sendExtRequest(String, Object)` and
+  `sendExtNotification(String, Object)`, and `SyncSessionClient` (`SyncPromptContext.client()`)
+  their blocking forms, the same calls as `AcpAsyncAgent`/`AcpSyncAgent`, so a prompt handler can
+  send `_`-prefixed requests and notifications to the client:
+  `context.client().sendExtRequest("_example.com/ping", params, PONG)`. `extRequestHandler` and
+  `extNotificationHandler` on both agent builders gain agent-aware overloads, typed and raw: a
+  two-argument lambda receives the params and the agent `build()` returned
+  (`AgentAwareHandler<T, R>` and `AgentAwareHandler<T, Void>` on the async builder,
+  `SyncAgentAwareHandler<T, R>` and `BiConsumer<T, AcpSyncAgent>` on the sync one), for example
+  `.extRequestHandler("_example.com/ask", ASK, (ask, self) -> self.sendExtRequest("_example.com/confirm", ask, ANSWER))`.
+  Migration: none; a test double that implements `SessionClient` or `SyncSessionClient` adds the
+  three methods.
+
 - **Capability builders that lead to each choice.** `ClientCapabilities.builder()` gains
   `readTextFile()`, `writeTextFile()`, `terminal()`, `elicitationForm()` and `elicitationUrl()`;
   `AgentCapabilities.builder()` gains `loadSession()`, `promptImage()`, `promptAudio()`,

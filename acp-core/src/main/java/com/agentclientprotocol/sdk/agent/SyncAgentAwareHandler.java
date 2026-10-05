@@ -11,7 +11,9 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
  * {@link AcpAgent.SyncAgentBuilder} that also receives the agent it serves, the {@link AcpSyncAgent}
  * {@code build()} returned, so it can send session updates or call the client with blocking
  * calls. Every typed setter of the synchronous builder except {@code promptHandler} has an
- * overload that takes one; a two-argument lambda picks it.
+ * overload that takes one, and so does {@code extRequestHandler} ({@code extNotificationHandler}
+ * takes a {@link java.util.function.BiConsumer} of the params and the agent); a two-argument lambda
+ * picks it.
  *
  * <pre>{@code
  * AcpSyncAgent agent = AcpAgent.sync(transport)

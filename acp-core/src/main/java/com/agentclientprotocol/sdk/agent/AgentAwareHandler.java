@@ -14,7 +14,8 @@ import reactor.core.publisher.Mono;
  * or call the client. Every typed setter of {@link AcpAgent.AsyncAgentBuilder} except
  * {@code promptHandler} (whose {@link PromptContext} already reaches the client) has an
  * overload that takes one, for the same request and response types as its own handler
- * interface; a two-argument lambda picks it.
+ * interface, and so do {@code extRequestHandler} and {@code extNotificationHandler} (an
+ * {@code AgentAwareHandler<T, Void>}); a two-argument lambda picks it.
  *
  * <pre>{@code
  * AcpAsyncAgent agent = AcpAgent.async(transport)
