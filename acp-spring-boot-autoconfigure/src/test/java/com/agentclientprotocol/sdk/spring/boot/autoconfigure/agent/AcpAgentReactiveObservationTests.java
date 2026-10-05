@@ -5,11 +5,12 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import java.net.URI;
+import java.time.Duration;
 
 import com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentHttpAutoConfigurationTests.EchoAgentConfiguration;
 import com.agentclientprotocol.sdk.test.http.HttpProbes;
+import io.micrometer.common.KeyValue;
 import io.micrometer.observation.tck.TestObservationRegistry;
-import io.micrometer.observation.tck.TestObservationRegistryAssert;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,18 +37,17 @@ class AcpAgentReactiveObservationTests {
 	private int port;
 
 	@Autowired
-	private TestObservationRegistry observations;
+	private StoppedObservations stoppedObservations;
 
 	@Test
 	void anAcpRequestIsObserved() throws Exception {
 		URI endpoint = URI.create("http://127.0.0.1:" + this.port + "/acp");
 		assertThat(HttpProbes.initialize(endpoint, null).statusCode()).isEqualTo(200);
-		TestObservationRegistryAssert.assertThat(this.observations)
-			.hasObservationWithNameEqualTo("http.server.requests")
-			.that()
-			.hasLowCardinalityKeyValue("method", "POST")
-			.hasLowCardinalityKeyValue("status", "200")
-			.hasBeenStopped();
+		// Waited for, not asserted at once: the server stops its observation after the
+		// response has reached the client. Selected by route, not taken first: the server may
+		// observe other requests, such as a probe of its port.
+		this.stoppedObservations.await("http.server.requests", Duration.ofSeconds(10), KeyValue.of("method", "POST"),
+				KeyValue.of("uri", "/acp"), KeyValue.of("status", "200"));
 	}
 
 	@SpringBootConfiguration
@@ -58,6 +58,12 @@ class AcpAgentReactiveObservationTests {
 		@Bean
 		TestObservationRegistry observationRegistry() {
 			return TestObservationRegistry.create();
+		}
+
+		/** Registered with the registry by Spring Boot, as every observation handler bean. */
+		@Bean
+		StoppedObservations stoppedObservations() {
+			return new StoppedObservations();
 		}
 
 	}
