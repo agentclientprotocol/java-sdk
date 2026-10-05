@@ -14,6 +14,7 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -377,11 +378,15 @@ class StreamableHttpAcpClientTransportTest {
 				AcpTestFixtures.createJsonRpcResponse("init-1", AcpTestFixtures.createInitializeResponse()));
 		HttpResponse<Object> response = response(200,
 				Map.of("Content-Type", "APPLICATION/JSON", "Acp-Connection-Id", "conn-1"), body);
+		// The connection stream stays open: one that ends at once makes the transport give up
+		// on it and terminate, which can beat the initialize response into the inbound stream.
+		PipedInputStream connectionStreamBody = new PipedInputStream();
+		PipedOutputStream connectionStreamWriter = new PipedOutputStream(connectionStreamBody);
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
 			HttpRequest request = invocation.getArgument(0);
 			if ("GET".equals(request.method())) {
 				return CompletableFuture.completedFuture(
-						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+						response(200, Map.of("Content-Type", "text/event-stream"), connectionStreamBody));
 			}
 			return CompletableFuture.completedFuture(response);
 		});
@@ -400,6 +405,7 @@ class StreamableHttpAcpClientTransportTest {
 		finally {
 			Locale.setDefault(defaultLocale);
 			transport.close();
+			connectionStreamWriter.close();
 		}
 	}
 
@@ -847,6 +853,11 @@ class StreamableHttpAcpClientTransportTest {
 	void connectionSseClosureTerminatesTransport() throws Exception {
 		HttpClient httpClient = mock(HttpClient.class);
 		BlockingQueue<Throwable> errors = new LinkedBlockingQueue<>();
+		// The first stream ends once initialize has completed; ended at once, the transport
+		// could give up on it before delivering the initialize response.
+		PipedInputStream firstConnectionStreamBody = new PipedInputStream();
+		PipedOutputStream firstConnectionStreamWriter = new PipedOutputStream(firstConnectionStreamBody);
+		AtomicInteger connectionGets = new AtomicInteger();
 
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
 			HttpRequest request = invocation.getArgument(0);
@@ -859,8 +870,9 @@ class StreamableHttpAcpClientTransportTest {
 						initializeResponse));
 			}
 			if ("GET".equals(request.method())) {
+				InputStream body = connectionGets.incrementAndGet() == 1 ? firstConnectionStreamBody : emptyBody();
 				return CompletableFuture.completedFuture(
-						response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+						response(200, Map.of("Content-Type", "text/event-stream"), body));
 			}
 			return CompletableFuture.completedFuture(response(202, Map.of(), null));
 		});
@@ -873,6 +885,7 @@ class StreamableHttpAcpClientTransportTest {
 			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
 					AcpTestFixtures.createInitializeRequest()))
 				.block();
+			firstConnectionStreamWriter.close();
 
 			Throwable error = errors.poll(2, TimeUnit.SECONDS);
 			assertThat(error).isInstanceOf(AcpConnectionException.class)
@@ -1124,6 +1137,11 @@ class StreamableHttpAcpClientTransportTest {
 		HttpClient httpClient = mock(HttpClient.class);
 		when(httpClient.version()).thenReturn(HttpClient.Version.HTTP_2);
 		List<HttpRequest> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
+		// The first connection stream ends once initialize has completed; ended at once, the
+		// transport could give up on it before delivering the initialize response.
+		PipedInputStream firstConnectionStreamBody = new PipedInputStream();
+		PipedOutputStream firstConnectionStreamWriter = new PipedOutputStream(firstConnectionStreamBody);
+		AtomicInteger connectionGets = new AtomicInteger();
 		when(httpClient.sendAsync(any(), any())).thenAnswer(invocation -> {
 			HttpRequest request = invocation.getArgument(0);
 			requests.add(request);
@@ -1138,8 +1156,9 @@ class StreamableHttpAcpClientTransportTest {
 				return CompletableFuture.completedFuture(response(200,
 						Map.of("Content-Type", "application/json", "Acp-Connection-Id", "conn-1"), initializeResponse));
 			}
+			InputStream body = connectionGets.incrementAndGet() == 1 ? firstConnectionStreamBody : emptyBody();
 			return CompletableFuture.completedFuture(
-					response(200, Map.of("Content-Type", "text/event-stream"), emptyBody()));
+					response(200, Map.of("Content-Type", "text/event-stream"), body));
 		});
 		StreamableHttpAcpClientTransport transport = new StreamableHttpAcpClientTransport(
 				URI.create("http://localhost:8080/acp"), jsonMapper, httpClient);
@@ -1150,9 +1169,12 @@ class StreamableHttpAcpClientTransportTest {
 			transport.sendMessage(AcpTestFixtures.createJsonRpcRequest(AcpSchema.METHOD_INITIALIZE, "init-1",
 					AcpTestFixtures.createInitializeRequest())).block();
 
-			// The mocked connection stream ends at once, so the client keeps reconnecting while
-			// this runs; take a snapshot. Reconnects must be pinned too.
+			// End the connection stream: the client reconnects until it gives up. Reconnects
+			// must be pinned too.
+			firstConnectionStreamWriter.close();
+			transport.awaitTermination().onErrorResume(error -> Mono.empty()).block(Duration.ofSeconds(5));
 			List<HttpRequest> seen = List.copyOf(requests);
+			assertThat(connectionGets).as("the connection stream was reopened").hasValueGreaterThan(1);
 			assertThat(seen.get(0).method()).as("the probe").isEqualTo("GET");
 			assertThat(seen.get(0).headers().firstValue("Acp-Connection-Id")).isEmpty();
 			assertThat(seen.subList(1, seen.size()))
