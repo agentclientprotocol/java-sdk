@@ -4,8 +4,10 @@
 
 package com.agentclientprotocol.sdk.test;
 
-import java.time.Duration;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -14,6 +16,7 @@ import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.json.TypeRef;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
@@ -55,9 +58,8 @@ public class InMemoryTransportPair {
 	private final InMemoryAgentTransport agentTransport;
 
 	private InMemoryTransportPair() {
-		// Bidirectional sinks: client→agent and agent→client
-		Sinks.Many<AcpSchema.JSONRPCMessage> clientToAgent = Sinks.many().unicast().onBackpressureBuffer();
-		Sinks.Many<AcpSchema.JSONRPCMessage> agentToClient = Sinks.many().unicast().onBackpressureBuffer();
+		Channel clientToAgent = new Channel();
+		Channel agentToClient = new Channel();
 
 		this.clientTransport = new InMemoryClientTransport(clientToAgent, agentToClient);
 		this.agentTransport = new InMemoryAgentTransport(agentToClient, clientToAgent);
@@ -97,20 +99,56 @@ public class InMemoryTransportPair {
 
 
 	/**
-	 * Emits on a sink that several threads share. {@code Sinks.many()} sinks reject a
-	 * concurrent emission from another thread with {@code FAIL_NON_SERIALIZED}; the busy
-	 * loop serialises emitters the same way the shipped transports do.
+	 * One direction of the pair, which several threads send on. A {@code Sinks.many()} sink
+	 * refuses a message while another thread is emitting on it ({@code FAIL_NON_SERIALIZED}),
+	 * and that thread can hold it for as long as the receiver takes, since delivery runs on
+	 * the emitting thread. So a send is queued, and whichever thread finds the sink free emits
+	 * the queue in order: no message is dropped and no sender waits, including a receiver that
+	 * sends from inside a delivery.
 	 */
-	private static Mono<Void> emit(Sinks.Many<AcpSchema.JSONRPCMessage> sink, AcpSchema.JSONRPCMessage message,
-			String what) {
-		return Mono.fromRunnable(() -> {
-			try {
-				sink.emitNext(message, Sinks.EmitFailureHandler.busyLooping(Duration.ofMillis(100)));
-			}
-			catch (Sinks.EmissionException e) {
-				throw new RuntimeException("Failed to send " + what + ": " + e.getReason(), e);
-			}
-		});
+	private static final class Channel {
+
+		private final Sinks.Many<AcpSchema.JSONRPCMessage> sink = Sinks.many().unicast().onBackpressureBuffer();
+
+		private final Queue<AcpSchema.JSONRPCMessage> pending = new ConcurrentLinkedQueue<>();
+
+		private final AtomicInteger emitters = new AtomicInteger();
+
+		Flux<AcpSchema.JSONRPCMessage> asFlux() {
+			return sink.asFlux();
+		}
+
+		void complete() {
+			sink.tryEmitComplete();
+		}
+
+		Mono<Void> send(AcpSchema.JSONRPCMessage message, String what) {
+			return Mono.fromRunnable(() -> {
+				pending.offer(message);
+				if (emitters.getAndIncrement() != 0) {
+					return; // the thread emitting now emits this message too
+				}
+				// A failure means the channel is closed, so it is reported to this sender.
+				Sinks.EmitResult sent = Sinks.EmitResult.OK;
+				int missed = 1;
+				do {
+					AcpSchema.JSONRPCMessage next;
+					while ((next = pending.poll()) != null) {
+						Sinks.EmitResult result = sink.tryEmitNext(next);
+						if (result.isFailure()) {
+							sent = result;
+						}
+					}
+					missed = emitters.addAndGet(-missed);
+				}
+				while (missed != 0);
+				if (sent.isFailure()) {
+					throw new RuntimeException("Failed to send " + what + ": " + sent,
+							new Sinks.EmissionException(sent));
+				}
+			});
+		}
+
 	}
 
 	/**
@@ -118,17 +156,16 @@ public class InMemoryTransportPair {
 	 */
 	private static class InMemoryClientTransport implements AcpClientTransport {
 
-		private final Sinks.Many<AcpSchema.JSONRPCMessage> outbound;
+		private final Channel outbound;
 
-		private final Sinks.Many<AcpSchema.JSONRPCMessage> inbound;
+		private final Channel inbound;
 
 		private volatile boolean connected = false;
 
 		private Consumer<Throwable> exceptionHandler = t -> {
 		};
 
-		InMemoryClientTransport(Sinks.Many<AcpSchema.JSONRPCMessage> outbound,
-				Sinks.Many<AcpSchema.JSONRPCMessage> inbound) {
+		InMemoryClientTransport(Channel outbound, Channel inbound) {
 			this.outbound = outbound;
 			this.inbound = inbound;
 		}
@@ -153,14 +190,14 @@ public class InMemoryTransportPair {
 
 		@Override
 		public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
-			return emit(outbound, message, "message");
+			return outbound.send(message, "message");
 		}
 
 		@Override
 		public Mono<Void> closeGracefully() {
 			return Mono.defer(() -> {
 				connected = false;
-				outbound.tryEmitComplete();
+				outbound.complete();
 				return Mono.empty();
 			});
 		}
@@ -182,9 +219,9 @@ public class InMemoryTransportPair {
 	 */
 	private static class InMemoryAgentTransport implements AcpAgentTransport {
 
-		private final Sinks.Many<AcpSchema.JSONRPCMessage> outbound;
+		private final Channel outbound;
 
-		private final Sinks.Many<AcpSchema.JSONRPCMessage> inbound;
+		private final Channel inbound;
 
 		private final Sinks.One<Void> terminationSink = Sinks.one();
 
@@ -193,8 +230,7 @@ public class InMemoryTransportPair {
 		private Consumer<Throwable> exceptionHandler = t -> {
 		};
 
-		InMemoryAgentTransport(Sinks.Many<AcpSchema.JSONRPCMessage> outbound,
-				Sinks.Many<AcpSchema.JSONRPCMessage> inbound) {
+		InMemoryAgentTransport(Channel outbound, Channel inbound) {
 			this.outbound = outbound;
 			this.inbound = inbound;
 		}
@@ -213,7 +249,7 @@ public class InMemoryTransportPair {
 			return inbound.asFlux()
 				.flatMap(message -> Mono.just(message)
 					.transform(handler)
-					.flatMap(response -> emit(outbound, response, "response"))
+					.flatMap(response -> outbound.send(response, "response"))
 					// A failed emission is this message's problem, not the transport's: it
 					// must not terminate the inbound subscription and kill the agent.
 					.onErrorResume(error -> {
@@ -227,14 +263,14 @@ public class InMemoryTransportPair {
 
 		@Override
 		public Mono<Void> sendMessage(AcpSchema.JSONRPCMessage message) {
-			return emit(outbound, message, "message");
+			return outbound.send(message, "message");
 		}
 
 		@Override
 		public Mono<Void> closeGracefully() {
 			return Mono.defer(() -> {
 				started = false;
-				outbound.tryEmitComplete();
+				outbound.complete();
 				terminationSink.tryEmitValue(null);
 				return Mono.empty();
 			});

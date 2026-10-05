@@ -1409,6 +1409,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **acp-test: `InMemoryTransportPair` no longer drops a message when two threads send at once under
+  load.** A send that found another thread still emitting on the same direction retried for 100 ms
+  and then failed with `FAIL_NON_SERIALIZED`, and the message was lost; since delivery runs on the
+  emitting thread, a slow receiver or a descheduled thread held the sink that long. A send is now
+  queued, and the thread already emitting delivers it, in order, without making the sender wait.
+
 - **Micronaut: `acp.agent.transport.type` and `acp.client.transport.type` bind in any case.**
   `AcpTransportType` reads the type in any case, as Spring Boot and Quarkus do, but Micronaut's own
   enum conversion took only `websocket` or `WEBSOCKET`: a mixed-case `WebSocket` failed the agent's
