@@ -81,12 +81,19 @@ import org.jspecify.annotations.Nullable;
  * accepted; any other origin is answered 403, over HTTP and on the WebSocket handshake, so a
  * web page the user visits cannot drive a local agent (DNS rebinding, cross-site requests).
  * Default empty
+ * @param webSocketIdleTimeout how long a WebSocket connection may pass no frame in either
+ * direction before the endpoint closes it (1001, going away), on every host; default 30
+ * minutes
+ * @param initializeTimeout how long a connection has to complete {@code initialize}: a
+ * WebSocket that has not sent it by then is closed (1008, policy violation), and a POST
+ * {@code initialize} whose agent has not answered by then is answered 500; default 30 seconds
  * @author Mark Pollack
  */
 public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int mailboxCapacity,
 		int maxPendingSseEvents, int maxWebSocketPendingFrames, int maxProvisionalSessions,
 		Duration keepAliveInterval, int maxConcurrentStreamsPerConnection, Duration shutdownTimeout,
-		@Nullable Executor executor, boolean virtualThreads, @Nullable String host, Set<String> allowedOrigins) {
+		@Nullable Executor executor, boolean virtualThreads, @Nullable String host, Set<String> allowedOrigins,
+		Duration webSocketIdleTimeout, Duration initializeTimeout) {
 
 	private static final long DEFAULT_MAX_POST_BODY_BYTES = 16L * 1024 * 1024;
 
@@ -104,6 +111,10 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 
 	private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(5);
 
+	private static final Duration DEFAULT_WEBSOCKET_IDLE_TIMEOUT = Duration.ofMinutes(30);
+
+	private static final Duration DEFAULT_INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
+
 	/**
 	 * Creates options with these values; prefer {@link #builder()}, which starts from the
 	 * defaults.
@@ -120,7 +131,10 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 	 * @param virtualThreads whether the listener serves on virtual threads where the JDK has them
 	 * @param host the address the listener binds, or null for loopback only
 	 * @param allowedOrigins the browser origins accepted besides the loopback ones
-	 * @throws IllegalArgumentException if a count or {@code shutdownTimeout} is not positive,
+	 * @param webSocketIdleTimeout how long a WebSocket connection may stay idle
+	 * @param initializeTimeout how long a connection has to complete {@code initialize}
+	 * @throws IllegalArgumentException if a count or a timeout other than
+	 * {@code keepAliveInterval} is not positive,
 	 * {@code keepAliveInterval} is negative or null, an executor is set with
 	 * {@code virtualThreads} false, {@code host} is blank, or {@code allowedOrigins} is null
 	 */
@@ -139,6 +153,12 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		Assert.isTrue(host == null || !host.isBlank(), "host must not be blank; null binds loopback");
 		Assert.notNull(allowedOrigins, "allowedOrigins must not be null");
 		allowedOrigins = OriginPolicy.normalize(allowedOrigins);
+		Assert.isTrue(isPositive(webSocketIdleTimeout), "webSocketIdleTimeout must be positive");
+		Assert.isTrue(isPositive(initializeTimeout), "initializeTimeout must be positive");
+	}
+
+	private static boolean isPositive(@Nullable Duration duration) {
+		return duration != null && !duration.isNegative() && !duration.isZero();
 	}
 
 	/**
@@ -199,6 +219,10 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		private @Nullable String host;
 
 		private Set<String> allowedOrigins = Set.of();
+
+		private Duration webSocketIdleTimeout = DEFAULT_WEBSOCKET_IDLE_TIMEOUT;
+
+		private Duration initializeTimeout = DEFAULT_INITIALIZE_TIMEOUT;
 
 		private Builder() {
 		}
@@ -340,6 +364,30 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		}
 
 		/**
+		 * Sets how long a WebSocket connection may pass no frame in either direction before the
+		 * endpoint closes it with 1001 (going away); default 30 minutes. Every host applies it.
+		 * @param webSocketIdleTimeout the timeout; positive
+		 * @return this builder
+		 */
+		public Builder webSocketIdleTimeout(Duration webSocketIdleTimeout) {
+			this.webSocketIdleTimeout = webSocketIdleTimeout;
+			return this;
+		}
+
+		/**
+		 * Sets how long a connection has to complete {@code initialize}; default 30 seconds. A
+		 * WebSocket that has not sent {@code initialize} by then is closed with 1008 (policy
+		 * violation); a POST {@code initialize} the agent has not answered by then is answered
+		 * 500.
+		 * @param initializeTimeout the timeout; positive
+		 * @return this builder
+		 */
+		public Builder initializeTimeout(Duration initializeTimeout) {
+			this.initializeTimeout = initializeTimeout;
+			return this;
+		}
+
+		/**
 		 * Returns the options.
 		 * @return the options
 		 * @throws IllegalArgumentException if a value is out of range
@@ -347,7 +395,8 @@ public record StreamableHttpAcpAgentTransportOptions(long maxPostBodyBytes, int 
 		public StreamableHttpAcpAgentTransportOptions build() {
 			return new StreamableHttpAcpAgentTransportOptions(maxPostBodyBytes, mailboxCapacity, maxPendingSseEvents,
 					maxWebSocketPendingFrames, maxProvisionalSessions, keepAliveInterval,
-					maxConcurrentStreamsPerConnection, shutdownTimeout, executor, virtualThreads, host, allowedOrigins);
+					maxConcurrentStreamsPerConnection, shutdownTimeout, executor, virtualThreads, host, allowedOrigins,
+					webSocketIdleTimeout, initializeTimeout);
 		}
 
 	}

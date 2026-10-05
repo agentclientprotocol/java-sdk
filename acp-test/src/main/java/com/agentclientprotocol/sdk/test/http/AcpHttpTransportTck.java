@@ -74,11 +74,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * Tomcat, fails a second one); shutdown closing open SSE and WebSocket streams promptly (a
  * closing comment, then close code 1001) without waiting out a framework's graceful timeout;
  * the {@code Origin} check over HTTP and on the WebSocket handshake; the WebSocket's
- * initialize-first rule and size limit; and, for a host that binds its own socket, the loopback
- * default.
+ * initialize-first rule, size limit, idle timeout (1001) and initialize deadline (1008); and,
+ * for a host that binds its own socket, the loopback default.
  *
- * <p>The suite starts one host for most cases, configured by {@link #standardConfig()}, and a
- * second one for the shutdown case.
+ * <p>The suite starts one host for most cases, configured by {@link #standardConfig()}, one
+ * for each WebSocket timeout case, configured by {@link #idleTimeoutConfig()} and
+ * {@link #initializeTimeoutConfig()}, and one for the shutdown case.
  *
  * @author Mark Pollack
  */
@@ -93,10 +94,26 @@ public abstract class AcpHttpTransportTck {
 	/** The inbound limit of the standard configuration. */
 	public static final long MAX_MESSAGE_BYTES = 64 * 1024;
 
+	private static final long WEBSOCKET_IDLE_TIMEOUT_MILLIS = 300;
+
+	private static final long INITIALIZE_TIMEOUT_MILLIS = 500;
+
+	/** The WebSocket idle timeout of {@link #idleTimeoutConfig()}. */
+	public static final Duration WEBSOCKET_IDLE_TIMEOUT = Duration.ofMillis(WEBSOCKET_IDLE_TIMEOUT_MILLIS);
+
+	/** The initialize timeout of {@link #initializeTimeoutConfig()}. */
+	public static final Duration INITIALIZE_TIMEOUT = Duration.ofMillis(INITIALIZE_TIMEOUT_MILLIS);
+
 	/** The async timeout a host should give its container, when it can set one. */
 	public static final Duration CONTAINER_ASYNC_TIMEOUT = Duration.ofSeconds(1);
 
 	private static final Duration TIMEOUT = Duration.ofSeconds(15);
+
+	/**
+	 * How soon a timeout case's socket must close: generous, so a loaded machine cannot fail it,
+	 * yet far below the 30 second and 30 minute defaults.
+	 */
+	private static final Duration CLOSE_WITHIN = Duration.ofSeconds(10);
 
 	private static final AcpJsonMapper JSON = AcpJsonMapper.createDefault();
 
@@ -157,7 +174,9 @@ public abstract class AcpHttpTransportTck {
 	/**
 	 * Starts the host under test, listening on an ephemeral port. A framework host whose test
 	 * runs one application may return that application each time, configured like
-	 * {@link #standardConfig()} with an agent that behaves like {@link #agentFactory()}.
+	 * {@link #standardConfig()} with an agent that behaves like {@link #agentFactory()}, and
+	 * with a WebSocket idle timeout and an initialize timeout of a few seconds at most, for the
+	 * timeout cases; the suite does not stop that application before the shutdown case.
 	 * @param config what to serve
 	 * @return the running host
 	 * @throws Exception if it cannot start
@@ -189,14 +208,40 @@ public abstract class AcpHttpTransportTck {
 	 * @return the configuration
 	 */
 	public static HostConfig standardConfig() {
-		return new HostConfig(agentFactory(),
-				StreamableHttpAcpAgentTransportOptions.builder()
-					.keepAliveInterval(Duration.ofMillis(250))
-					.maxPostBodyBytes(MAX_MESSAGE_BYTES)
-					.allowedOrigins(List.of(ALLOWED_ORIGIN))
-					.shutdownTimeout(Duration.ofSeconds(3))
-					.build(),
+		return new HostConfig(agentFactory(), standardOptions().build(), CONTAINER_ASYNC_TIMEOUT);
+	}
+
+	/**
+	 * The standard configuration with a {@value #WEBSOCKET_IDLE_TIMEOUT_MILLIS} ms WebSocket idle
+	 * timeout, for the idle timeout case.
+	 * @return the configuration
+	 */
+	public static HostConfig idleTimeoutConfig() {
+		return new HostConfig(agentFactory(), standardOptions().webSocketIdleTimeout(WEBSOCKET_IDLE_TIMEOUT).build(),
 				CONTAINER_ASYNC_TIMEOUT);
+	}
+
+	/**
+	 * The standard configuration with a {@value #INITIALIZE_TIMEOUT_MILLIS} ms initialize
+	 * timeout, for the initialize deadline case.
+	 * @return the configuration
+	 */
+	public static HostConfig initializeTimeoutConfig() {
+		return new HostConfig(agentFactory(), standardOptions().initializeTimeout(INITIALIZE_TIMEOUT).build(),
+				CONTAINER_ASYNC_TIMEOUT);
+	}
+
+	/**
+	 * The options of {@link #standardConfig()}, as a builder, for a framework host that builds
+	 * its own options.
+	 * @return a builder with the standard options set
+	 */
+	public static StreamableHttpAcpAgentTransportOptions.Builder standardOptions() {
+		return StreamableHttpAcpAgentTransportOptions.builder()
+			.keepAliveInterval(Duration.ofMillis(250))
+			.maxPostBodyBytes(MAX_MESSAGE_BYTES)
+			.allowedOrigins(List.of(ALLOWED_ORIGIN))
+			.shutdownTimeout(Duration.ofSeconds(3));
 	}
 
 	/**
@@ -360,6 +405,48 @@ public abstract class AcpHttpTransportTck {
 			assertThat(socket.nextMessage()).contains("\"result\"");
 			socket.send("x".repeat((int) MAX_MESSAGE_BYTES + 1));
 			assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1009);
+		}
+	}
+
+	@Test
+	void anIdleWebSocketIsClosedWith1001() throws Exception {
+		assumeTrue(supportsWebSocket(), "the host serves no WebSocket");
+		Host timed = startHost(idleTimeoutConfig());
+		try (RawWebSocket socket = RawWebSocket.open(timed.endpoint(), null)) {
+			socket.send(HttpProbes.INITIALIZE);
+			assertThat(socket.nextMessage()).contains("\"result\"");
+			long idleSince = System.nanoTime();
+			// Silent from here: the endpoint closes the connection once it has been idle for the
+			// timeout, not after the 30 minute default.
+			assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1001);
+			assertThat(Duration.ofNanos(System.nanoTime() - idleSince))
+				.isBetween(WEBSOCKET_IDLE_TIMEOUT.dividedBy(2), CLOSE_WITHIN);
+		}
+		finally {
+			stopUnlessShared(timed);
+		}
+	}
+
+	@Test
+	void aWebSocketThatNeverInitializesIsClosedWith1008() throws Exception {
+		assumeTrue(supportsWebSocket(), "the host serves no WebSocket");
+		Host timed = startHost(initializeTimeoutConfig());
+		try (RawWebSocket socket = RawWebSocket.open(timed.endpoint(), null)) {
+			long openedAt = System.nanoTime();
+			// No initialize: the endpoint closes the connection at the initialize timeout.
+			assertThat(socket.closeCode()).as("close code (failure: %s)", socket.error()).isEqualTo(1008);
+			assertThat(Duration.ofNanos(System.nanoTime() - openedAt))
+				.isBetween(INITIALIZE_TIMEOUT.dividedBy(2), CLOSE_WITHIN);
+		}
+		finally {
+			stopUnlessShared(timed);
+		}
+	}
+
+	/** Stops a host a case started, unless the host handed back the suite's shared one. */
+	private void stopUnlessShared(Host started) throws Exception {
+		if (!started.endpoint().equals(endpoint())) {
+			started.stop();
 		}
 	}
 

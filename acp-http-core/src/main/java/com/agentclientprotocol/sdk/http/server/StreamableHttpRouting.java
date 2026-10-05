@@ -4,7 +4,6 @@
 
 package com.agentclientprotocol.sdk.http.server;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -37,9 +36,6 @@ final class StreamableHttpRouting {
 	static final String CONTENT_TYPE_EVENT_STREAM = "text/event-stream";
 
 	static final String HEADER_ORIGIN = "Origin";
-
-	/** How long a new connection may take to answer {@code initialize}. */
-	static final Duration INITIALIZE_TIMEOUT = Duration.ofSeconds(30);
 
 	/** Agent-to-client methods that always concern one session, so params must name it. */
 	private static final Set<String> SESSION_SCOPED_AGENT_METHODS = Set.of(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,

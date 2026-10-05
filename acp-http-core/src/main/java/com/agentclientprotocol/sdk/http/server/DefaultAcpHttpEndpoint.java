@@ -38,7 +38,6 @@ import reactor.core.publisher.Sinks;
 import static com.agentclientprotocol.sdk.http.server.StreamableHttpRouting.HEADER_CONNECTION_ID;
 import static com.agentclientprotocol.sdk.http.server.StreamableHttpRouting.HEADER_ORIGIN;
 import static com.agentclientprotocol.sdk.http.server.StreamableHttpRouting.HEADER_SESSION_ID;
-import static com.agentclientprotocol.sdk.http.server.StreamableHttpRouting.INITIALIZE_TIMEOUT;
 
 /**
  * The endpoint: the status table of the Streamable HTTP profile, the WebSocket handshake, the
@@ -47,7 +46,8 @@ import static com.agentclientprotocol.sdk.http.server.StreamableHttpRouting.INIT
  * <p>Status table. POST: a body that is not {@code application/json} 415, one over the size
  * limit 413, a JSON-RPC batch 501, other invalid input 400; {@code initialize} without
  * Acp-Connection-Id opens a connection (200 with the agent's answer and the new id, 400 with the
- * header, 503 while closing, 500 if the agent fails or takes over 30 seconds); any other message
+ * header, 503 while closing, 500 if the agent fails or does not answer within the
+ * initialize timeout); any other message
  * names its connection (400 without the header, 404 for an unknown connection or session) and is
  * answered 202. GET: 406 unless the client accepts {@code text/event-stream}, else the SSE
  * stream of the connection or of a session. DELETE: 202, or 400/404 as for POST. Any method:
@@ -63,9 +63,6 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 	private static final String CONTENT_TYPE_JSON = "application/json";
 
 	private static final String CONTENT_TYPE_TEXT = "text/plain";
-
-	/** How long an accepted WebSocket may stay idle before its container closes it. */
-	private static final Duration WEBSOCKET_IDLE_TIMEOUT = Duration.ofMinutes(30);
 
 	private final AcpJsonMapper jsonMapper;
 
@@ -319,7 +316,7 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 		}
 		Mono<AcpHttpReply> answer = connection.start()
 			.then(Mono.defer(() -> connection.initialize(request)))
-			.timeout(INITIALIZE_TIMEOUT, AcpSchedulers.timeouts())
+			.timeout(options.initializeTimeout(), AcpSchedulers.timeouts())
 			.map(attempt::succeeded)
 			.onErrorResume(error -> Mono.just(attempt.failed(500, "initialize failed")));
 		// Agent creation is cheap and the handler runs on the agent's own scheduler, so this
@@ -425,7 +422,7 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 
 		@Override
 		public Duration idleTimeout() {
-			return WEBSOCKET_IDLE_TIMEOUT;
+			return options.webSocketIdleTimeout();
 		}
 
 		@Override
@@ -435,7 +432,9 @@ final class DefaultAcpHttpEndpoint implements AcpHttpEndpoint {
 				throw new IllegalStateException("Already opened");
 			}
 			WebSocketConnection connection = new WebSocketConnection(connectionId, jsonMapper, options, outbound,
-					closed -> webSocketConnections.remove(closed.id(), closed), DefaultAcpHttpEndpoint.this::reportException);
+					new WebSocketConnection.Owner(closed -> webSocketConnections.remove(closed.id(), closed),
+							DefaultAcpHttpEndpoint.this::reportException),
+					WebSocketConnection.Timing.SHARED);
 			webSocketConnections.put(connectionId, connection);
 			if (closing.get()) {
 				// Shutdown began during the upgrade: closeGracefully() may have gone through
