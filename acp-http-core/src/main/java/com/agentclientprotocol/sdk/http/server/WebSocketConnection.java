@@ -5,11 +5,14 @@
 package com.agentclientprotocol.sdk.http.server;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
 import com.agentclientprotocol.sdk.agent.transport.RemoteAcpConnection;
@@ -19,15 +22,18 @@ import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.JSONRPCMessage;
+import com.agentclientprotocol.sdk.util.AcpSchedulers;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 
 /**
  * One ACP connection over WebSocket, on any host: its agent runtime, the initialize-first
- * rule, the inbound size limit, and a serialized, bounded frame sender over the host's
- * {@link AcpWsOutbound}. The one WebSocket connection of the SDK; the Jetty-native and Vert.x
+ * rule and its deadline, the inbound size limit, the idle timeout, and a serialized, bounded
+ * frame sender over the host's {@link AcpWsOutbound}. The one WebSocket connection of the SDK; the Jetty-native and Vert.x
  * copies it replaces each held the same rules.
  *
  * @author Kaiser Dandangi
@@ -42,6 +48,8 @@ final class WebSocketConnection implements AcpWsHandler {
 	static final int GOING_AWAY = 1001;
 
 	static final int PROTOCOL_ERROR = 1002;
+
+	static final int POLICY_VIOLATION = 1008;
 
 	static final int MESSAGE_TOO_BIG = 1009;
 
@@ -72,31 +80,139 @@ final class WebSocketConnection implements AcpWsHandler {
 	/** Whether a frame is with the host. Guarded by {@code sendLock}. */
 	private boolean sendInProgress;
 
+	/** The timer of the idle check and the initialize deadline. */
+	private final Scheduler timer;
+
+	/** The clock activity is measured on, in nanoseconds. */
+	private final LongSupplier clock;
+
+	/** When a frame last arrived or was handed to the host, on {@link #clock}. */
+	private volatile long lastActivity;
+
+	/** The next idle check; disposed on close. */
+	private volatile @Nullable Disposable idleCheck;
+
+	/** The initialize deadline; disposed on initialize and on close. */
+	private volatile @Nullable Disposable initializeDeadline;
+
+	/**
+	 * What a connection reports to its endpoint.
+	 * @param deregister called once when the connection closes
+	 * @param exceptionHandler the endpoint's exception handler
+	 */
+	record Owner(Consumer<WebSocketConnection> deregister, Consumer<Throwable> exceptionHandler) {
+	}
+
+	/**
+	 * What a connection's timeouts run on: the SDK's shared timer and {@link System#nanoTime()},
+	 * or virtual time in tests.
+	 * @param timer the scheduler of the idle check and the initialize deadline
+	 * @param clock the clock activity is measured on, in nanoseconds
+	 */
+	record Timing(Scheduler timer, LongSupplier clock) {
+
+		static final Timing SHARED = new Timing(AcpSchedulers.timeouts(), System::nanoTime);
+
+	}
+
 	WebSocketConnection(String id, AcpJsonMapper jsonMapper, StreamableHttpAcpAgentTransportOptions options,
-			AcpWsOutbound outbound, Consumer<WebSocketConnection> deregister, Consumer<Throwable> exceptionHandler) {
+			AcpWsOutbound outbound, Owner owner, Timing timing) {
 		this.id = id;
 		this.jsonMapper = jsonMapper;
 		this.options = options;
 		this.outbound = outbound;
-		this.deregister = deregister;
-		this.remoteConnection = new RemoteAcpConnection(id, jsonMapper, this::sendToClient, exceptionHandler);
+		this.deregister = owner.deregister();
+		this.timer = timing.timer();
+		this.clock = timing.clock();
+		this.lastActivity = clock.getAsLong();
+		this.remoteConnection = new RemoteAcpConnection(id, jsonMapper, this::sendToClient, owner.exceptionHandler());
 	}
 
 	String id() {
 		return id;
 	}
 
-	/** Starts the agent; frames that arrive meanwhile are kept until it runs. */
+	/**
+	 * Starts the agent, the initialize deadline and the idle check; frames that arrive
+	 * meanwhile are kept until the agent runs.
+	 */
 	void start(AcpAgentFactory agentFactory) {
+		startTimers();
+		Duration startTimeout = options.initializeTimeout();
 		remoteConnection.start(agentFactory)
-			.timeout(StreamableHttpRouting.INITIALIZE_TIMEOUT, com.agentclientprotocol.sdk.util.AcpSchedulers.timeouts())
+			.timeout(startTimeout, timer)
 			.subscribe(ignored -> {
 			}, error -> close(SERVER_ERROR, "agent failed to start"));
+	}
+
+	/**
+	 * Schedules the initialize deadline and the first idle check. Each is one task on the shared
+	 * timer at a time; closing disposes both, so none outlives the connection.
+	 */
+	private void startTimers() {
+		Duration deadline = options.initializeTimeout();
+		this.initializeDeadline = timer.schedule(this::initializeDeadlinePassed, deadline.toNanos(),
+				TimeUnit.NANOSECONDS);
+		scheduleIdleCheck(options.webSocketIdleTimeout().toNanos());
+		if (closed.get()) {
+			// Closed while the timers were being scheduled.
+			cancelTimers();
+		}
+	}
+
+	private void initializeDeadlinePassed() {
+		if (!initialized.get() && !closed.get()) {
+			logger.debug("Closing ACP WebSocket connection {}: no initialize within {}", id,
+					options.initializeTimeout());
+			close(POLICY_VIOLATION, "initialize not received");
+		}
+	}
+
+	private void scheduleIdleCheck(long delayNanos) {
+		this.idleCheck = timer.schedule(this::checkIdle, delayNanos, TimeUnit.NANOSECONDS);
+		if (closed.get()) {
+			cancelTimers();
+		}
+	}
+
+	/**
+	 * Closes the connection once no frame has passed for the idle timeout; otherwise checks
+	 * again when the timeout would run out after the latest frame. Activity only records a
+	 * time, so a busy connection costs one check per timeout.
+	 */
+	private void checkIdle() {
+		if (closed.get()) {
+			return;
+		}
+		long timeout = options.webSocketIdleTimeout().toNanos();
+		long idle = clock.getAsLong() - lastActivity;
+		if (idle >= timeout) {
+			logger.debug("Closing ACP WebSocket connection {}: idle for {}", id, options.webSocketIdleTimeout());
+			close(GOING_AWAY, "idle timeout");
+			return;
+		}
+		scheduleIdleCheck(timeout - idle);
+	}
+
+	private void recordActivity() {
+		this.lastActivity = clock.getAsLong();
+	}
+
+	private void cancelTimers() {
+		Disposable deadline = this.initializeDeadline;
+		if (deadline != null) {
+			deadline.dispose();
+		}
+		Disposable check = this.idleCheck;
+		if (check != null) {
+			check.dispose();
+		}
 	}
 
 	@Override
 	public void onText(String text) {
 		logger.debug("ACP WebSocket connection {} received {} characters", id, text.length());
+		recordActivity();
 		if (closed.get()) {
 			return;
 		}
@@ -135,6 +251,10 @@ final class WebSocketConnection implements AcpWsHandler {
 				return;
 			}
 			initialized.set(true);
+			Disposable deadline = this.initializeDeadline;
+			if (deadline != null) {
+				deadline.dispose();
+			}
 		}
 		else if (message instanceof AcpSchema.JSONRPCRequest request
 				&& AcpSchema.METHOD_INITIALIZE.equals(request.method())) {
@@ -243,6 +363,7 @@ final class WebSocketConnection implements AcpWsHandler {
 	@SuppressWarnings("FutureReturnValueIgnored")
 	private boolean sendCompletedAtOnce(String payload) {
 		logger.debug("ACP WebSocket connection {} sends {} characters", id, payload.length());
+		recordActivity();
 		CompletableFuture<Void> sent;
 		try {
 			sent = outbound.sendText(payload).toCompletableFuture();
@@ -285,6 +406,7 @@ final class WebSocketConnection implements AcpWsHandler {
 			return Mono.empty();
 		}
 		deregister.accept(this);
+		cancelTimers();
 		clearQueue();
 		Mono<Void> socketClosed;
 		try {
@@ -312,6 +434,7 @@ final class WebSocketConnection implements AcpWsHandler {
 			return;
 		}
 		deregister.accept(this);
+		cancelTimers();
 		clearQueue();
 		remoteConnection.closeGracefully()
 			.subscribe(v -> {

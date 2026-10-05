@@ -10,6 +10,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import com.agentclientprotocol.sdk.agent.AcpAgentFactory;
+import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
+import com.agentclientprotocol.sdk.http.server.AcpHttpEndpoint;
+import com.agentclientprotocol.sdk.json.AcpJsonMapper;
 import com.agentclientprotocol.sdk.test.http.AcpHttpTransportTck;
 import com.agentclientprotocol.sdk.test.http.HttpProbes;
 import org.junit.jupiter.api.Test;
@@ -37,8 +40,16 @@ class SpringMvcTckTests extends AcpHttpTransportTck {
 	protected Host startHost(HostConfig config) {
 		var options = config.options();
 		ConfigurableApplicationContext context = new SpringApplicationBuilder(TckApplication.class)
-			.initializers(ctx -> ((GenericApplicationContext) ctx).registerBean("tckAgentFactory", AcpAgentFactory.class,
-					config::agents))
+			.initializers(ctx -> {
+				GenericApplicationContext app = (GenericApplicationContext) ctx;
+				app.registerBean("tckAgentFactory", AcpAgentFactory.class, config::agents);
+				if (setsWebSocketTimeouts(options)) {
+					// The starter maps no property to the WebSocket timeouts: the endpoint the
+					// autoconfiguration backs off for, with the case's options.
+					app.registerBean("acpHttpEndpoint", AcpHttpEndpoint.class,
+							() -> AcpHttpEndpoint.create(AcpJsonMapper.createDefault(), config.agents(), options));
+				}
+			})
 			.run("--server.port=0", "--server.address=127.0.0.1", "--spring.acp.agent.transport.type=http",
 					"--spring.acp.agent.transport.http.keep-alive-interval=" + options.keepAliveInterval().toMillis() + "ms",
 					"--spring.acp.agent.transport.http.max-post-body-size=" + options.maxPostBodyBytes() + "B",
@@ -81,6 +92,12 @@ class SpringMvcTckTests extends AcpHttpTransportTck {
 		finally {
 			host.stop();
 		}
+	}
+
+	private static boolean setsWebSocketTimeouts(StreamableHttpAcpAgentTransportOptions options) {
+		StreamableHttpAcpAgentTransportOptions defaults = StreamableHttpAcpAgentTransportOptions.defaults();
+		return !options.webSocketIdleTimeout().equals(defaults.webSocketIdleTimeout())
+				|| !options.initializeTimeout().equals(defaults.initializeTimeout());
 	}
 
 	@SpringBootConfiguration
