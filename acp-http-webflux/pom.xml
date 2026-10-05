@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.agentclientprotocol</groupId>
+        <artifactId>acp-java-sdk</artifactId>
+        <version>0.19.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>acp-http-webflux</artifactId>
+    <packaging>jar</packaging>
+
+    <name>ACP HTTP WebFlux</name>
+    <description>The ACP endpoint as a Spring WebFlux RouterFunction, Streamable HTTP and WebSocket on one path, for any WebFlux server: Reactor Netty, Tomcat, Jetty</description>
+
+    <properties>
+        <!-- Spring Framework 7 (Spring Boot 4.1's). The application brings its own WebFlux. -->
+        <spring-framework.version>7.0.8</spring-framework.version>
+        <!-- Coverage floors: set from the measured figures, less 2 points (parent pom, JaCoCo) -->
+        <jacoco.minimum.line>0.80</jacoco.minimum.line>
+        <jacoco.minimum.branch>0.70</jacoco.minimum.branch>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>${spring-framework.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-http-core</artifactId>
+        </dependency>
+        <!-- The application's WebFlux, and its server: Reactor Netty is used only when it is the
+             server, to raise its WebSocket frame limit above the endpoint's. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- WebFlux's WebSocket service is a Lifecycle: spring-context, which every Spring
+             application has, though WebFlux declares it optional. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor.netty</groupId>
+            <artifactId>reactor-netty-http</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
