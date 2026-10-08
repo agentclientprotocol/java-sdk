@@ -1390,11 +1390,13 @@ public class Client {
 			}
 			System.out.println("  permission request " + req.sessionId() + ": " + req.options());
 			if (this.cancelOnPermission.contains(req.sessionId())) {
+				// The SDK answers this very request with the cancelled outcome as part of cancel()
+				// (ACP v1, prompt turn, Cancellation) and stops this handler, so nothing after the
+				// cancel runs here: record the moment first. The answer below is never used.
+				this.cancelSentAt.put(req.sessionId(), System.nanoTime());
 				return this.client.cancel(new AcpSchema.CancelNotification(req.sessionId()))
-					.then(Mono.fromCallable(() -> {
-						this.cancelSentAt.put(req.sessionId(), System.nanoTime());
-						return new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionCancelled());
-					}));
+					.then(Mono.fromCallable(
+							() -> new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionCancelled())));
 			}
 			AcpSchema.PermissionOption chosen = req.options()
 				.stream()
