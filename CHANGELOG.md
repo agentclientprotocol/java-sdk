@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.80.0] - 2026-10-08
+
+### Known issues
+
+- **Spring WebFlux on Jetty:** Jetty's connection idle timeout, 30 seconds by default, closes an ACP
+  WebSocket after 30 seconds without traffic. Set `server.jetty.connection-idle-timeout` (for
+  example `30m`), or use Reactor Netty, the default for WebFlux. A fix is planned for 0.80.1.
+- **Micronaut** serves ACP on the SDK's listener, on its own port, so Micronaut's own security does
+  not apply to it. This is an interim arrangement until the Netty host planned for 0.81.0.
+- An oversized request body may surface as a connection error rather than HTTP 413 on Tomcat
+  (reactive) and Jetty hosts. The request is refused either way; only the error the client sees
+  differs. Bodies within the limit (16 MiB by default) are not affected.
+- The outbound queues of the stdio transports and the WebSocket client are unbounded: a peer that
+  keeps sending requests without reading the responses grows the sender's memory, about one
+  response per request. The server-side HTTP and WebSocket hosts are bounded. Bounded outbound
+  queues are planned for 0.81.0.
 
 ### Security
 
@@ -278,9 +293,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     permission, file system and terminal handlers. File system and terminal capabilities are off by default:
     advertise one only together with its handler.
   - **Agent:** the application's single `@AcpAgent` bean is served over stdio (the default) or, with
-    `spring.acp.agent.transport.type=http` and `acp-streamable-http-jetty` on the classpath, over Streamable
-    HTTP. In a servlet web application that means on the application's own server; otherwise on the SDK's
-    listener, which also takes WebSocket upgrades. A stdio agent closes the application context when its client
+    `spring.acp.agent.transport.type=http` and one HTTP module on the classpath, over Streamable HTTP and
+    WebSocket: `acp-http-servlet` in a servlet web application and `acp-http-webflux` in a reactive one, both
+    on the application's own server, or `acp-streamable-http-jetty`, the SDK's listener, in an application
+    without a web server. A stdio agent closes the application context when its client
     closes stdin, so a `spring.main.keep-alive` application exits 0 (`spring.acp.agent.shutdown-on-transport-end`).
 
   **Migrating from `org.springaicommunity:acp-spring-boot-starter` 0.12.0** (the old repository is redirected and
@@ -369,8 +385,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quarkus extension: `acp-quarkus` (with `acp-quarkus-deployment`).** One `@AcpAgent` class
   becomes a singleton bean (found at build time; a second one fails the build) and is served over
   stdio, or over Streamable HTTP and WebSocket on the Quarkus HTTP server
-  (`quarkus.acp.agent.transport.type=http`): the SDK's servlet on `quarkus-undertow` plus a Vert.x
-  WebSocket route on the same path, no second server. Stdio builds keep standard output for the
+  (`quarkus.acp.agent.transport.type=http`): one Vert.x route on the Quarkus router for HTTP, SSE
+  and WebSocket, no servlet container and no second server. Stdio builds keep standard output for the
   protocol (console log on stderr, no banner, no HTTP listener) and exit when input ends. Handlers
   may return Mutiny `Uni`, and `@Prompt` may stream a `Multi`. `AcpSyncClient`/`AcpAsyncClient`
   beans come from `quarkus.acp.client.*` with `AcpClientCustomizer` beans. Configuration mirrors the
@@ -900,11 +916,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `agent.awaitTermination()`; for the old immediate close, call `agent.async().close()`; use
   try-with-resources on the sync agent and the annotated agent.
 
-- **Breaking: `PromptContext.sendUpdate(update)` and `SyncPromptContext.sendUpdate(update)` replace
-  the two-argument `sendUpdate(sessionId, update)`.** The context belongs to one prompt's session,
+- **Breaking: `PromptContext.sendSessionUpdate(update)` and
+  `SyncPromptContext.sendSessionUpdate(update)` replace the two-argument
+  `sendUpdate(sessionId, update)`.** The context belongs to one prompt's session,
   so the session ID was redundant (and a wrong one sent the update to another session). Migration:
-  drop the first argument, `context.sendUpdate(sessionId, update)` becomes
-  `context.sendUpdate(update)`; to update another session, call
+  drop the first argument and use the new name, `context.sendUpdate(sessionId, update)` becomes
+  `context.sendSessionUpdate(update)`; to update another session, call
   `AcpAsyncAgent.sendSessionUpdate(sessionId, update)` (or `AcpSyncAgent.sendSessionUpdate`).
   Test doubles implementing either context implement the one-argument method.
 
@@ -1331,7 +1348,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `extRequestHandler`/`extNotificationHandler` for a method that already has one, or a raw handler
   and the typed setter for the same method) now throws `IllegalStateException` naming the setter,
   instead of silently replacing the first. A null handler still throws `IllegalArgumentException`.
-  `sessionUpdateConsumer` stays additive. **Migration:** register each method once; to compose
+  `sessionUpdateHandler` stays additive. **Migration:** register each method once; to compose
   behaviour, do it inside one handler.
 
 - **Breaking: the raw client handlers are for methods the SDK does not model.**
@@ -2574,6 +2591,7 @@ Protocol currency: catching up to ACP spec v0.13.6 (June 2026). Supersedes the n
 - SLF4J 2.0.16
 
 [0.9.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.9.0
+[0.80.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.80.0
 [0.18.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.18.0
 [0.17.0]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.17.0
 [0.16.1]: https://github.com/agentclientprotocol/java-sdk/releases/tag/v0.16.1
