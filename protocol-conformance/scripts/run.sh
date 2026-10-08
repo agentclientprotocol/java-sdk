@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the whole-roster audit.
 #
-#   protocol-conformance/scripts/run.sh --replay <run-id> [--assert-satisfied]     deterministic, no inference
+#   protocol-conformance/scripts/run.sh --replay <run-id> [--assert-satisfied] [--retain-in-run]   deterministic, no inference
 #   protocol-conformance/scripts/run.sh --live --capture <run-id> [--timeout-minutes N]  one real investigative run
 #
 # A replay without a real recording is REFUSED (exit 2): nothing is fabricated. A live run is a new immutable
@@ -18,6 +18,7 @@ while [ $# -gt 0 ]; do
     --live) MODE=live; shift ;;
     --capture) RUN_ID="$2"; shift 2 ;;
     --assert-satisfied) EXTRA+=("--assert-satisfied"); shift ;;
+    --retain-in-run) EXTRA+=("--retain-in-run"); shift ;;
     --timeout-minutes) EXTRA+=("--timeout-minutes" "$2"); shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 64 ;;
   esac

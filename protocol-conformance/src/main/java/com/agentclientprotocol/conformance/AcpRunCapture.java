@@ -49,7 +49,7 @@ public final class AcpRunCapture implements EvalModel {
         this.delegate = Objects.requireNonNull(delegate);
         this.runDir = runsDir.resolve(requireRunId(runId));
         this.identity = new LinkedHashMap<>(identity);
-        if (Files.exists(runDir)) {
+        if (Files.exists(runDir.resolve("request.txt")) || Files.exists(runDir.resolve("run.json"))) {
             throw new IllegalStateException("Run " + runDir + " already exists; a capture never replaces a recording");
         }
     }

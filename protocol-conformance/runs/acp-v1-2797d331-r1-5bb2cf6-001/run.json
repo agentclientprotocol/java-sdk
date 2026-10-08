@@ -1,0 +1,59 @@
+{
+  "subjectWorkspace": "/home/mark/acp/acp-java-conformance",
+  "subjectCommit": "c5a87a4638954612d3e1eb88eb75391a16a4e6fa",
+  "protocolCommit": "2797d33125c14e5bcfc815952930130c43e5bc4c",
+  "rosterRevision": "acp-v1-2797d331-r1",
+  "rosterSha256": "bbf8f5aad229431bcaae82fa02f69d1686ea25d4cc4027c60adde10d6f6f8196",
+  "rosterSize": 240,
+  "producer": {
+    "io.github.markpollack.judge.verdict.Verdict": {
+      "location": "/home/mark/.m2/repository/io/github/markpollack/agent-judge-core/0.18.0-SNAPSHOT/agent-judge-core-0.18.0-SNAPSHOT.jar",
+      "sha256": "cf84135b05d27115d42b833a333b5dea4b366dcddc702b66a0477a1f9e1f1401"
+    },
+    "io.github.markpollack.judge.ai.requirements.Rfc2119Jury": {
+      "location": "/home/mark/.m2/repository/io/github/markpollack/agent-judge-ai-core/0.18.0-SNAPSHOT/agent-judge-ai-core-0.18.0-SNAPSHOT.jar",
+      "sha256": "39c36f116662e4d0219a84f7551eb827cff0f70ef03e8acad0f196f3d3a3a625"
+    },
+    "io.github.markpollack.judge.serialization.VerdictCodec": {
+      "location": "/home/mark/.m2/repository/io/github/markpollack/agent-judge-json-jackson2/0.18.0-SNAPSHOT/agent-judge-json-jackson2-0.18.0-SNAPSHOT.jar",
+      "sha256": "2278395105f954aa926eaabde903faaa92367edc4a8de204f283bf6b2a32a6fa"
+    },
+    "io.github.markpollack.judge.agentclient.AgentClientEvalModel": {
+      "location": "/home/mark/.m2/repository/io/github/markpollack/agent-judge-agent-client/0.18.0-SNAPSHOT/agent-judge-agent-client-0.18.0-SNAPSHOT.jar",
+      "sha256": "338c3756ee8d1572c8e2e6d91eaacd8b79daed6501d33dc63165a9f91f37aced"
+    },
+    "io.github.markpollack.agents.client.AgentClient": {
+      "location": "/home/mark/.m2/repository/io/github/markpollack/agent-client-core/0.30.0/agent-client-core-0.30.0.jar",
+      "sha256": "d8429474c9e2dd1e490534e5cbfff616e0fc82923ee5f5ee29dc1f3eb8e416c7"
+    }
+  },
+  "runId": "acp-v1-2797d331-r1-5bb2cf6-001",
+  "started": "2026-10-08T07:18:53.374972218Z",
+  "state": "recovered-from-transcript",
+  "ended": "2026-10-08T07:46:05.405941949Z",
+  "responseSource": {
+    "kind": "claude-code-session-transcript",
+    "originalPath": "/home/mark/.claude/projects/-home-mark-acp-acp-java-conformance/60d97874-e8d5-4a9c-acc2-8927e193edbf.jsonl",
+    "copiedTo": "transcript.jsonl",
+    "transcriptSha256": "1745e8be9ae2c0197348b6ba60e76b98b1270c2b56e30464bf7e310925091fa8",
+    "responseSha256": "73c3e4de9fe1d466b9eb5a02974949137e3ab8de67ccf4d81ff4391ebdb10f37",
+    "assembly": "all assistant text blocks in transcript order, joined with one newline; unedited",
+    "assistantMessages": 179,
+    "textBlocks": 13,
+    "toolUses": {
+      "Bash": 85
+    },
+    "models": {
+      "claude-fable-5-1": 179
+    },
+    "usageFromTranscript": {
+      "input_tokens": 5580,
+      "cache_creation_input_tokens": 1288134,
+      "cache_read_input_tokens": 65365037,
+      "output_tokens": 284403
+    },
+    "firstTimestamp": "2026-10-08T07:18:54.107Z",
+    "lastTimestamp": "2026-10-08T07:46:04.416Z",
+    "why": "the harness capture failed after the agent answered: the Agent Eval bridge refused the native snapshot above its 1 MiB capture bound (see failure.txt); the agent's output is taken from the CLI's own log"
+  }
+}
