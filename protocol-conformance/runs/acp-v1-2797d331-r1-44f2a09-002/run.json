@@ -1,0 +1,35 @@
+{
+  "subjectWorkspace" : "/home/mark/acp/acp-java-conformance",
+  "subjectCommit" : "44f2a09df701e631438e67e8ca0bbec9367950ac",
+  "protocolCommit" : "2797d33125c14e5bcfc815952930130c43e5bc4c",
+  "rosterRevision" : "acp-v1-2797d331-r1",
+  "rosterSha256" : "bbf8f5aad229431bcaae82fa02f69d1686ea25d4cc4027c60adde10d6f6f8196",
+  "rosterSize" : 240,
+  "producer" : {
+    "io.github.markpollack.judge.verdict.Verdict" : {
+      "location" : "/home/mark/.m2/repository/io/github/markpollack/agent-judge-core/0.18.0-SNAPSHOT/agent-judge-core-0.18.0-SNAPSHOT.jar",
+      "sha256" : "b01b0b66bec23847b6bb75b82485503a54bbc236f59392f0f902e6e8b843ffd6"
+    },
+    "io.github.markpollack.judge.ai.requirements.Rfc2119Jury" : {
+      "location" : "/home/mark/.m2/repository/io/github/markpollack/agent-judge-ai-core/0.18.0-SNAPSHOT/agent-judge-ai-core-0.18.0-SNAPSHOT.jar",
+      "sha256" : "c458110aba185a15f613dc3b2872bd2b13df4e1bebfc00323bed83284ea86810"
+    },
+    "io.github.markpollack.judge.serialization.VerdictCodec" : {
+      "location" : "/home/mark/.m2/repository/io/github/markpollack/agent-judge-json-jackson2/0.18.0-SNAPSHOT/agent-judge-json-jackson2-0.18.0-SNAPSHOT.jar",
+      "sha256" : "eecc9ec42fbc4d59532e0c463c14b473dd76f4f98d0821dcff4beb7ad9b9cd40"
+    },
+    "io.github.markpollack.judge.agentclient.AgentClientEvalModel" : {
+      "location" : "/home/mark/.m2/repository/io/github/markpollack/agent-judge-agent-client/0.18.0-SNAPSHOT/agent-judge-agent-client-0.18.0-SNAPSHOT.jar",
+      "sha256" : "edb5ac91b70d86a7a01e3fd8a79e03d7c00945968aa492e9287ed5c6126af810"
+    },
+    "io.github.markpollack.agents.client.AgentClient" : {
+      "location" : "/home/mark/.m2/repository/io/github/markpollack/agent-client-core/0.30.0/agent-client-core-0.30.0.jar",
+      "sha256" : "d8429474c9e2dd1e490534e5cbfff616e0fc82923ee5f5ee29dc1f3eb8e416c7"
+    }
+  },
+  "runId" : "acp-v1-2797d331-r1-44f2a09-002",
+  "started" : "2026-10-08T09:30:56.298067650Z",
+  "state" : "completed",
+  "ended" : "2026-10-08T09:54:28.879505549Z",
+  "answerState" : "RETURNED"
+}

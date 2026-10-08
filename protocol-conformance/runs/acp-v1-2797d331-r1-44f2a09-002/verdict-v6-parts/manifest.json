@@ -1,0 +1,36 @@
+{
+  "format" : "v6-parts",
+  "producerBoundBytes" : 1048576,
+  "singleDocumentRefusal" : "Typed result exceeds UTF-8 preservation bound",
+  "declaredCardinality" : 240,
+  "root" : {
+    "file" : "root.json",
+    "sha256" : "88f03ef29e4fff9a2cc8c7dd5ced6ef9b283e81d1b830ce3210bfc231af4f75a"
+  },
+  "parts" : [ {
+    "file" : "part-01.json",
+    "from" : 0,
+    "to" : 60,
+    "bytes" : 668071,
+    "sha256" : "3f0690ded3d06b86237679893f675d5f8a1b271e1bf0f62d47fae084edd9f8c0"
+  }, {
+    "file" : "part-02.json",
+    "from" : 60,
+    "to" : 120,
+    "bytes" : 659908,
+    "sha256" : "9ae84a792f67c9939195a599e6f048fc3c08fa63a06e625807ff9752f805d216"
+  }, {
+    "file" : "part-03.json",
+    "from" : 120,
+    "to" : 180,
+    "bytes" : 671649,
+    "sha256" : "d36086d83907d787f03c5b737de4d7919b4f1d891dd0ce46bab2863271eb5ae6"
+  }, {
+    "file" : "part-04.json",
+    "from" : 180,
+    "to" : 240,
+    "bytes" : 821405,
+    "sha256" : "5a6aafd394d863ffc25f9875ec11974e91805394798f23bf1a37cf4c1b64ac13"
+  } ],
+  "totalBytes" : 2832169
+}

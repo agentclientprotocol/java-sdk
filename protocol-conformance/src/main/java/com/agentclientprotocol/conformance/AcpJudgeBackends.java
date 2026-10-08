@@ -51,9 +51,28 @@ public final class AcpJudgeBackends {
                 .build();
     }
 
+    /**
+     * Replay regenerates the request the recording answered, so the subject commit comes from the
+     * recording's own {@code run.json} when it has one; {@code sdkCommit} is only the fallback.
+     */
     public static EvalModel replay(Path runsDir, String runId, AcpRequirementRoster roster, String sdkCommit) {
-        return new AcpAuditContext(new AcpRecordedResponse(runsDir, runId), sdkCommit, roster.protocolCommit(),
-                roster.revision());
+        return new AcpAuditContext(new AcpRecordedResponse(runsDir, runId), recordedSubject(runsDir, runId, sdkCommit),
+                roster.protocolCommit(), roster.revision());
+    }
+
+    static String recordedSubject(Path runsDir, String runId, String fallback) {
+        Path runJson = runsDir.resolve(AcpRunCapture.requireRunId(runId)).resolve("run.json");
+        if (!Files.isRegularFile(runJson)) {
+            return fallback;
+        }
+        try {
+            var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(Files.readAllBytes(runJson));
+            String recorded = node.path("subjectCommit").asText("");
+            return recorded.isBlank() ? fallback : recorded;
+        }
+        catch (java.io.IOException e) {
+            return fallback;
+        }
     }
 
     public static EvalModel live(Path workspace, Duration timeout, Path runsDir, String runId,
