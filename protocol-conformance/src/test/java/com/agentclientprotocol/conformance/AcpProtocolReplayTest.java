@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.github.markpollack.judge.ai.model.EvalModel;
-import io.github.markpollack.judge.ai.requirements.NativeRequirementCodecs;
 import io.github.markpollack.judge.judgment.JudgmentStatus;
 import io.github.markpollack.judge.verdict.Verdict;
 
@@ -44,14 +43,13 @@ class AcpProtocolReplayTest {
             assertThat(child.requirement()).isSameAs(roster.requirements().get(i));
             assertThat(child.invocationIds()).containsExactly(root);
         }
-        RetainedVerdicts.Retained retained = RetainedVerdicts.write(verdict, Path.of("target", "replay-test", runId));
+        Path retainedDir = Path.of("target", "replay-test", runId);
+        RetainedVerdicts.Retained retained = RetainedVerdicts.write(verdict, retainedDir);
         assertThat(retained.path()).exists();
-        if (retained.format().equals("v6")) {
-            var codec = NativeRequirementCodecs.codec();
-            Verdict reopened = codec.read(codec.write(verdict));
-            assertThat(reopened.conclusion()).isEqualTo(verdict.conclusion());
-            assertThat(RosterSummary.counts(reopened)).isEqualTo(counts);
-        }
+        Verdict reopened = RetainedVerdicts.read(retainedDir);
+        assertThat(reopened).isEqualTo(verdict);
+        assertThat(reopened.conclusion()).isEqualTo(verdict.conclusion());
+        assertThat(RosterSummary.counts(reopened)).isEqualTo(counts);
         assertThat(calls).hasValue(1);
         System.out.println(RosterSummary.render(verdict));
     }

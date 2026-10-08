@@ -62,7 +62,7 @@ public final class AcpProtocolConformanceDemo {
         RetainedVerdicts.Retained retained = RetainedVerdicts.write(verdict, output);
         System.out.println(RosterSummary.render(verdict));
         System.out.println("retained: " + retained.path().toAbsolutePath() + " (" + retained.format() + ", "
-                + retained.bytes() + " bytes)");
+                + retained.parts() + " part(s), " + retained.bytes() + " bytes)");
         if (!verdict.invocations().getFirst().completed()) {
             System.out.println("REFUSED: the backend did not complete; see the ERROR reasons above. "
                     + "No judgment about the SDK was made.");
