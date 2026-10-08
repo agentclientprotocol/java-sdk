@@ -1,0 +1,95 @@
+# Scope of the derived ACP v1 testing requirements. Reviewed by hand; consumed by scripts/import-spec.py.
+
+[roster]
+label = "Derived ACP v1 testing requirements"
+# Semantic revision of the whole roster; bump when any clause's meaning changes.
+revision = "acp-v1-2797d331-r1"
+
+[protocol]
+repository = "agentclientprotocol/agent-client-protocol"
+commit = "2797d33125c14e5bcfc815952930130c43e5bc4c"
+# The stable schema bytes are identical at this commit, at schema-v1.24.1 (1761180e), schema-v1.23.0,
+# Rust v1.9.1 and in the Java SDK's vendored acp-core/src/test/resources/schema/v1/schema.json.
+schema_path = "schema/v1/schema.json"
+schema_sha256 = "3c17bd6385d90cf672d8a661fddc359d73422cf8b8ce6865213d25cfd4c0eca7"
+schema_page = "docs/protocol/v1/schema.mdx"
+# Every stable top-level v1 page listed under docs/docs.json navigation group "v1" (tag "Latest").
+selected_pages = [
+  "docs/protocol/v1/overview.mdx",
+  "docs/protocol/v1/initialization.mdx",
+  "docs/protocol/v1/authentication.mdx",
+  "docs/protocol/v1/session-setup.mdx",
+  "docs/protocol/v1/session-list.mdx",
+  "docs/protocol/v1/session-delete.mdx",
+  "docs/protocol/v1/prompt-turn.mdx",
+  "docs/protocol/v1/content.mdx",
+  "docs/protocol/v1/tool-calls.mdx",
+  "docs/protocol/v1/elicitation.mdx",
+  "docs/protocol/v1/file-system.mdx",
+  "docs/protocol/v1/cancellation.mdx",
+  "docs/protocol/v1/terminals.mdx",
+  "docs/protocol/v1/agent-plan.mdx",
+  "docs/protocol/v1/session-modes.mdx",
+  "docs/protocol/v1/session-config-options.mdx",
+  "docs/protocol/v1/slash-commands.mdx",
+  "docs/protocol/v1/extensibility.mdx",
+  "docs/protocol/v1/transports.mdx",
+  "docs/protocol/v1/error.mdx",
+  "docs/protocol/v1/schema.mdx",
+]
+# Exact bytes retained under spec/official/agent-client-protocol/.
+retained_paths = [
+  "LICENSE",
+  "docs/docs.json",
+  "docs/protocol/v1/overview.mdx",
+  "docs/protocol/v1/initialization.mdx",
+  "docs/protocol/v1/authentication.mdx",
+  "docs/protocol/v1/session-setup.mdx",
+  "docs/protocol/v1/session-list.mdx",
+  "docs/protocol/v1/session-delete.mdx",
+  "docs/protocol/v1/prompt-turn.mdx",
+  "docs/protocol/v1/content.mdx",
+  "docs/protocol/v1/tool-calls.mdx",
+  "docs/protocol/v1/elicitation.mdx",
+  "docs/protocol/v1/file-system.mdx",
+  "docs/protocol/v1/cancellation.mdx",
+  "docs/protocol/v1/terminals.mdx",
+  "docs/protocol/v1/agent-plan.mdx",
+  "docs/protocol/v1/session-modes.mdx",
+  "docs/protocol/v1/session-config-options.mdx",
+  "docs/protocol/v1/slash-commands.mdx",
+  "docs/protocol/v1/extensibility.mdx",
+  "docs/protocol/v1/transports.mdx",
+  "docs/protocol/v1/error.mdx",
+  "docs/protocol/v1/schema.mdx",
+  "schema/v1/schema.json",
+  "schema/v1/meta.json",
+  "schema/v1/CHANGELOG.md",
+]
+
+[jsonrpc]
+# ACP incorporates JSON-RPC 2.0 by reference (overview.mdx:10, :219, :227; extensibility.mdx:49).
+url = "https://www.jsonrpc.org/specification"
+retrieved = "2026-10-08"
+sha256 = "8fe1edfdca511d309e712e47447457ea5159b728ec02071a84593aed692aefeb"
+document_dates = "Origin Date: 2010-03-26 (based on the 2009-05-24 version); Updated: 2013-01-04"
+
+[[exclusions]]
+path = "docs/protocol/v1/draft/**"
+reason = "Hidden draft group ('Draft: In Progress and May Change'); unstable, not part of the stable v1 contract."
+
+[[exclusions]]
+path = "docs/protocol/v2/**"
+reason = "v2 is tagged Draft in the navigation; the Java SDK targets protocol version 1."
+
+[[exclusions]]
+path = "schema/v1/schema.unstable.json, schema/v1/meta.unstable.json"
+reason = "Unstable schema; only the stable schema.json (identical to the SDK's vendored copy) is in scope."
+
+[[exclusions]]
+path = "docs/rfds/**"
+reason = "RFDs (including the Streamable HTTP/WebSocket transport RFD) are proposals, not stable v1 clauses; the stable transports page still calls Streamable HTTP a draft proposal. The HTTP TCK remains supporting evidence only."
+
+[[exclusions]]
+path = "docs/libraries/**, docs/get-started/**"
+reason = "Library and onboarding pages, not protocol specification."

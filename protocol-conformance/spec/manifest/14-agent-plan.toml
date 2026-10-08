@@ -1,0 +1,50 @@
+# docs/protocol/v1/agent-plan.mdx — 5 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-PLAN-REPORT"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/agent-plan.mdx"
+lines = "12"
+clause = "When the language model creates an execution plan, the Agent **SHOULD** report it to the Client:"
+applicability = "Planning is the application's; the SDK is assessed on providing the `plan` session update."
+
+[[requirement]]
+id = "ACP-V1-PLAN-REPORT-UPDATES"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/agent-plan.mdx"
+lines = "77"
+clause = "As the Agent progresses through the plan, it **SHOULD** report updates by sending more `session/update` notifications with the same structure."
+applicability = "Applies when the Agent reports plans."
+
+[[requirement]]
+id = "ACP-V1-PLAN-COMPLETE-LIST"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/agent-plan.mdx"
+lines = "79"
+clause = "The Agent **MUST** send a complete list of all plan entries in each update and their current status."
+applicability = "Applies when the Agent reports plans."
+
+[[requirement]]
+id = "ACP-V1-PLAN-CLIENT-REPLACE"
+keyword = "MUST"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/agent-plan.mdx"
+lines = "79"
+clause = "The Client **MUST** replace the current plan completely."
+applicability = "Applies when the Client receives `plan` updates; plan state is the application's unless the SDK keeps it."
+
+[[requirement]]
+id = "ACP-V1-PLAN-DYNAMIC-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/agent-plan.mdx"
+lines = "83"
+clause = "The Agent **MAY** add, remove, or modify plan entries as it discovers new requirements or completes tasks, allowing it to adapt based on what it learns."

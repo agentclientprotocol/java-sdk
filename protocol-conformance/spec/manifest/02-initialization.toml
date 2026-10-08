@@ -1,0 +1,192 @@
+# docs/protocol/v1/initialization.mdx — 19 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-INIT-CLIENT-INITIALIZE-FIRST"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "24-27"
+clause = "Before a Session can be created, Clients **MUST** initialize the connection by calling the `initialize` method with: - The latest [protocol version](#protocol-version) supported - The [capabilities](#client-capabilities) supported"
+
+[[requirement]]
+id = "ACP-V1-INIT-IMPLEMENTATION-INFO"
+keyword = "SHOULD"
+role = "both"
+responsibility = "shared"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "271"
+clause = "Both Clients and Agents **SHOULD** provide information about their implementation in the `clientInfo` and `agentInfo` fields respectively."
+notes = "Canonical statement; initialization.mdx:29 and :54 restate it for each side."
+
+[[duplicate]]
+source = "docs/protocol/v1/initialization.mdx"
+lines = "29"
+clause = "They **SHOULD** also provide a name and version to the Agent."
+of = "ACP-V1-INIT-IMPLEMENTATION-INFO"
+
+[[requirement]]
+id = "ACP-V1-INIT-AGENT-RESPONSE"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "54"
+clause = "The Agent **MUST** respond with the chosen [protocol version](#protocol-version) and the [capabilities](#agent-capabilities) it supports."
+
+[[duplicate]]
+source = "docs/protocol/v1/initialization.mdx"
+lines = "54"
+clause = "It **SHOULD** also provide a name and version to the Client as well:"
+of = "ACP-V1-INIT-IMPLEMENTATION-INFO"
+
+[[requirement]]
+id = "ACP-V1-INIT-VERSION-AGREEMENT"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "88"
+clause = "Clients and Agents **MUST** agree on a protocol version and act according to its specification."
+context = "The protocol versions that appear in the `initialize` requests and responses are a single integer that identifies a MAJOR protocol version. This version is only incremented when breaking changes are introduced."
+
+[[requirement]]
+id = "ACP-V1-INIT-REQUEST-LATEST-VERSION"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "94"
+clause = "The `initialize` request **MUST** include the latest protocol version the Client supports."
+
+[[requirement]]
+id = "ACP-V1-INIT-AGENT-SAME-VERSION"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "96"
+clause = "If the Agent supports the requested version, it **MUST** respond with the same version."
+
+[[requirement]]
+id = "ACP-V1-INIT-AGENT-LATEST-VERSION"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "96"
+clause = "Otherwise, the Agent **MUST** respond with the latest version it supports."
+applicability = "Applies when the Agent does not support the protocol version requested in `initialize`."
+
+[[requirement]]
+id = "ACP-V1-INIT-CLIENT-UNSUPPORTED-VERSION"
+keyword = "SHOULD"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "98"
+clause = "If the Client does not support the version specified by the Agent in the `initialize` response, the Client **SHOULD** close the connection and inform the user about it."
+applicability = "Applies when the Agent's `initialize` response carries a protocol version the Client does not support."
+
+[[requirement]]
+id = "ACP-V1-INIT-CAPABILITIES-OPTIONAL"
+keyword = "OPTIONAL"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "104"
+clause = "All capabilities included in the `initialize` request are **OPTIONAL**."
+notes = "OPTIONAL is normalized to MAY: a peer may omit any capability and the receiver must accept the omission."
+
+[[requirement]]
+id = "ACP-V1-INIT-SUPPORT-ALL-COMBINATIONS"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "104"
+clause = "Clients and Agents **SHOULD** support all possible combinations of their peer's capabilities."
+
+[[requirement]]
+id = "ACP-V1-INIT-OMITTED-UNSUPPORTED"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "106"
+clause = "Therefore, Clients and Agents **MUST** treat all capabilities omitted in the `initialize` request as **UNSUPPORTED**."
+context = "The introduction of new capabilities is not considered a breaking change."
+
+[[requirement]]
+id = "ACP-V1-INIT-CLIENT-SPECIFY-CAPABILITIES"
+keyword = "SHOULD"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "116"
+clause = "The Client **SHOULD** specify whether it supports the following capabilities:"
+context = "The capabilities listed on the page are auth.terminal, fs.readTextFile, fs.writeTextFile, terminal, elicitation and session.configOptions.boolean."
+
+[[requirement]]
+id = "ACP-V1-INIT-AGENT-SPECIFY-CAPABILITIES"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "186"
+clause = "The Agent **SHOULD** specify whether it supports the following capabilities:"
+context = "The capabilities listed on the page are loadSession, promptCapabilities (image, audio, embeddedContext), mcpCapabilities (http, sse), auth.logout and sessionCapabilities (delete, additionalDirectories, list, resume, close)."
+
+[[requirement]]
+id = "ACP-V1-INIT-PROMPT-BASELINE"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "204"
+clause = "As a baseline, all Agents **MUST** support `ContentBlock::Text` and `ContentBlock::ResourceLink` in `session/prompt` requests."
+mirrors = ["/$defs/PromptRequest/properties/prompt", "/$defs/ContentBlock/oneOf/3", "ACP-V1-CONTENT-TEXT-SUPPORT"]
+
+[[requirement]]
+id = "ACP-V1-INIT-PROMPT-RICHER-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "206"
+clause = "Optionally, they **MAY** support richer types of [content](/protocol/v1/content) by specifying the following capabilities:"
+context = "image, audio and embeddedContext prompt capabilities."
+
+[[requirement]]
+id = "ACP-V1-INIT-SESSION-BASELINE"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "245"
+clause = "As a baseline, all Agents **MUST** support `session/new`, `session/prompt`, `session/cancel`, and `session/update`."
+mirrors = ["/$defs/SessionCapabilities"]
+
+[[requirement]]
+id = "ACP-V1-INIT-SESSION-OPTIONAL-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/initialization.mdx"
+lines = "247"
+clause = "Optionally, they **MAY** support other session methods and notifications by specifying additional capabilities."
+mirrors = ["/$defs/SessionCapabilities"]
+
+[[prose]]
+source = "docs/protocol/v1/initialization.mdx"
+lines = "280"
+text = "If not provided, the name should be used for display."
+disposition = "non-normative"
+reason = "Display fallback guidance for user interfaces; not an SDK wire or lifecycle obligation."
+
+[[prose]]
+source = "docs/protocol/v1/initialization.mdx"
+lines = "289"
+text = "Note: in future versions of the protocol, this information will be required."
+disposition = "non-normative"
+reason = "Forward-looking note, not a v1 obligation."

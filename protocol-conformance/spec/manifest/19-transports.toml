@@ -1,0 +1,98 @@
+# docs/protocol/v1/transports.mdx — 10 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-UTF8"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "6"
+clause = "JSON-RPC messages **MUST** be UTF-8 encoded."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-STDIO-SHOULD"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "13"
+clause = "Agents and clients **SHOULD** support stdio whenever possible."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-STDIO-NEWLINE-DELIMITED"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "24"
+clause = "Messages are delimited by newlines (`\\n`), and **MUST NOT** contain embedded newlines."
+applicability = "Applies to the stdio transport."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-AGENT-STDERR-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "25"
+clause = "The agent **MAY** write UTF-8 strings to its standard error (`stderr`) for logging purposes."
+applicability = "Applies to the stdio transport."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-CLIENT-STDERR-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "25"
+clause = "Clients **MAY** capture, forward, or ignore this logging."
+applicability = "Applies to the stdio transport."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-AGENT-STDOUT-ONLY-ACP"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "26"
+clause = "The agent **MUST NOT** write anything to its `stdout` that is not a valid ACP message."
+applicability = "Applies to the stdio transport."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-CLIENT-STDIN-ONLY-ACP"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "27"
+clause = "The client **MUST NOT** write anything to the agent's `stdin` that is not a valid ACP message."
+applicability = "Applies to the stdio transport."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-CUSTOM-MAY"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "50"
+clause = "Agents and clients **MAY** implement additional custom transport mechanisms to suit their specific needs."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-CUSTOM-PRESERVE-FORMAT-AND-LIFECYCLE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/transports.mdx"
+lines = "52"
+clause = "Implementers who choose to support custom transports **MUST** ensure they preserve the JSON-RPC message format and lifecycle requirements defined by ACP."
+applicability = "Applies to every custom transport the implementation offers; for the Java SDK that is its HTTP and WebSocket transports, which the stable page does not define and which are assessed here only as custom transports."
+
+[[requirement]]
+id = "ACP-V1-TRANSPORT-CUSTOM-DOCUMENT"
+keyword = "SHOULD"
+role = "both"
+responsibility = "shared"
+source = "docs/protocol/v1/transports.mdx"
+lines = "52"
+clause = "Custom transports **SHOULD** document their specific connection establishment and message exchange patterns to aid interoperability."
+applicability = "Applies to every custom transport the implementation offers."

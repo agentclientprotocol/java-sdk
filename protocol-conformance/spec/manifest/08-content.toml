@@ -1,0 +1,19 @@
+# docs/protocol/v1/content.mdx — 1 keyword occurrence
+
+[[requirement]]
+id = "ACP-V1-CONTENT-TEXT-SUPPORT"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/content.mdx"
+lines = "31"
+clause = "All Agents **MUST** support text content blocks when included in prompts."
+mirrors = ["/$defs/ContentBlock/oneOf/0"]
+
+[[prose]]
+source = "docs/protocol/v1/content.mdx"
+lines = "54-56"
+text = "Requires the `image` [prompt capability](/protocol/v1/initialization#prompt-capabilities) when included in prompts."
+disposition = "covered"
+of = ["ACP-V1-PROMPT-CLIENT-RESTRICT-CONTENT", "ACP-V1-INIT-PROMPT-RICHER-MAY"]
+reason = "Capability gating of image, audio (lines 87-89) and embedded resource (lines 123-125) content is the Client-side MUST at prompt-turn.mdx:114 and the Agent-side MAY at initialization.mdx:206."

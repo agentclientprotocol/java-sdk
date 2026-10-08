@@ -1,0 +1,267 @@
+# Structural requirements derived from schema/v1/schema.json. The schema carries no RFC2119 keyword for these;
+# each entry is a labelled derivation whose member lists are generated from the pinned bytes by the importer.
+# The method names are the stable names in schema/v1/meta.json.
+
+[[derived]]
+id = "ACP-V1-SCHEMA-INITIALIZE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`initialize` messages MUST conform to the stable schema: the request `params` is an InitializeRequest object and a successful `result` is an InitializeResponse object, each carrying every required member with its declared type, including the nested ClientCapabilities and AgentCapabilities objects whose omitted or null members mean 'not advertised'."
+pointers = ["/$defs/InitializeRequest", "/$defs/InitializeResponse", "/$defs/ClientCapabilities", "/$defs/AgentCapabilities"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-AUTHENTICATE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`authenticate` messages MUST conform to the stable schema: `params` is an AuthenticateRequest object and a successful `result` is an AuthenticateResponse object."
+pointers = ["/$defs/AuthenticateRequest", "/$defs/AuthenticateResponse"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-LOGOUT-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`logout` messages MUST conform to the stable schema: `params` is a LogoutRequest object and a successful `result` is a LogoutResponse object."
+pointers = ["/$defs/LogoutRequest", "/$defs/LogoutResponse"]
+applicability = "Applies when the Agent advertises `auth.logout`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-NEW-SESSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/new` messages MUST conform to the stable schema: `params` is a NewSessionRequest object and a successful `result` is a NewSessionResponse object, including the optional SessionModeState and SessionConfigOption structures."
+pointers = ["/$defs/NewSessionRequest", "/$defs/NewSessionResponse", "/$defs/SessionModeState", "/$defs/SessionConfigOption"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-LOAD-SESSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/load` messages MUST conform to the stable schema: `params` is a LoadSessionRequest object and a successful `result` is a LoadSessionResponse object."
+pointers = ["/$defs/LoadSessionRequest", "/$defs/LoadSessionResponse"]
+applicability = "Applies when the Agent advertises `loadSession`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-RESUME-SESSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/resume` messages MUST conform to the stable schema: `params` is a ResumeSessionRequest object and a successful `result` is a ResumeSessionResponse object."
+pointers = ["/$defs/ResumeSessionRequest", "/$defs/ResumeSessionResponse"]
+applicability = "Applies when the Agent advertises `sessionCapabilities.resume`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-CLOSE-SESSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/close` messages MUST conform to the stable schema: `params` is a CloseSessionRequest object and a successful `result` is a CloseSessionResponse object."
+pointers = ["/$defs/CloseSessionRequest", "/$defs/CloseSessionResponse"]
+applicability = "Applies when the Agent advertises `sessionCapabilities.close`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-LIST-SESSIONS-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/list` messages MUST conform to the stable schema: `params` is a ListSessionsRequest object and a successful `result` is a ListSessionsResponse object whose `sessions` entries are SessionInfo objects."
+pointers = ["/$defs/ListSessionsRequest", "/$defs/ListSessionsResponse", "/$defs/SessionInfo"]
+applicability = "Applies when the Agent advertises `sessionCapabilities.list`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-DELETE-SESSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/delete` messages MUST conform to the stable schema: `params` is a DeleteSessionRequest object and a successful `result` is a DeleteSessionResponse object."
+pointers = ["/$defs/DeleteSessionRequest", "/$defs/DeleteSessionResponse"]
+applicability = "Applies when the Agent advertises `sessionCapabilities.delete`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-SET-MODE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/set_mode` messages MUST conform to the stable schema: `params` is a SetSessionModeRequest object and a successful `result` is a SetSessionModeResponse object."
+pointers = ["/$defs/SetSessionModeRequest", "/$defs/SetSessionModeResponse"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-SET-CONFIG-OPTION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/set_config_option` messages MUST conform to the stable schema: `params` is a SetSessionConfigOptionRequest object and a successful `result` is a SetSessionConfigOptionResponse object."
+pointers = ["/$defs/SetSessionConfigOptionRequest", "/$defs/SetSessionConfigOptionResponse"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-PROMPT-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/prompt` messages MUST conform to the stable schema: `params` is a PromptRequest object whose `prompt` is an array of ContentBlock values, and a successful `result` is a PromptResponse object carrying a StopReason."
+pointers = ["/$defs/PromptRequest", "/$defs/PromptResponse"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-CANCEL-NOTIFICATION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/cancel` is a notification whose `params` MUST be a CancelNotification object."
+pointers = ["/$defs/CancelNotification"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-CANCEL-REQUEST-NOTIFICATION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`$/cancel_request` is a protocol-level notification whose `params` MUST be a CancelRequestNotification object carrying the `requestId` of the request to cancel."
+pointers = ["/$defs/CancelRequestNotification"]
+applicability = "Applies to an implementation that sends or supports `$/cancel_request`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-REQUEST-PERMISSION-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/request_permission` messages MUST conform to the stable schema: `params` is a RequestPermissionRequest object with a ToolCallUpdate and PermissionOption entries, and a successful `result` is a RequestPermissionResponse object whose `outcome` is a RequestPermissionOutcome variant (`cancelled` or `selected` with `optionId`)."
+pointers = ["/$defs/RequestPermissionRequest", "/$defs/RequestPermissionResponse", "/$defs/RequestPermissionOutcome", "/$defs/PermissionOption"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-SESSION-UPDATE-VARIANTS"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`session/update` is a notification whose `params` MUST be a SessionNotification object; its `update` MUST be exactly one SessionUpdate variant discriminated by `sessionUpdate` (user_message_chunk, agent_message_chunk, agent_thought_chunk, tool_call, tool_call_update, plan, available_commands_update, current_mode_update, config_option_update, session_info_update, usage_update), each carrying that variant's required members (for example `toolCallId` and `title` on tool_call, `entries` on plan, `used` and `size` on usage_update)."
+pointers = ["/$defs/SessionNotification", "/$defs/SessionUpdate", "/$defs/ToolCall", "/$defs/ToolCallUpdate", "/$defs/Plan", "/$defs/UsageUpdate"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-READ-TEXT-FILE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`fs/read_text_file` messages MUST conform to the stable schema: `params` is a ReadTextFileRequest object and a successful `result` is a ReadTextFileResponse object."
+pointers = ["/$defs/ReadTextFileRequest", "/$defs/ReadTextFileResponse"]
+applicability = "Applies when the Client advertises `fs.readTextFile`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-WRITE-TEXT-FILE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`fs/write_text_file` messages MUST conform to the stable schema: `params` is a WriteTextFileRequest object and a successful `result` is a WriteTextFileResponse object."
+pointers = ["/$defs/WriteTextFileRequest", "/$defs/WriteTextFileResponse"]
+applicability = "Applies when the Client advertises `fs.writeTextFile`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-TERMINAL-CREATE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`terminal/create` messages MUST conform to the stable schema: `params` is a CreateTerminalRequest object and a successful `result` is a CreateTerminalResponse object."
+pointers = ["/$defs/CreateTerminalRequest", "/$defs/CreateTerminalResponse"]
+applicability = "Applies when the Client advertises `terminal`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-TERMINAL-OUTPUT-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`terminal/output` messages MUST conform to the stable schema: `params` is a TerminalOutputRequest object and a successful `result` is a TerminalOutputResponse object with an optional TerminalExitStatus."
+pointers = ["/$defs/TerminalOutputRequest", "/$defs/TerminalOutputResponse", "/$defs/TerminalExitStatus"]
+applicability = "Applies when the Client advertises `terminal`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-TERMINAL-RELEASE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`terminal/release` messages MUST conform to the stable schema: `params` is a ReleaseTerminalRequest object and a successful `result` is a ReleaseTerminalResponse object."
+pointers = ["/$defs/ReleaseTerminalRequest", "/$defs/ReleaseTerminalResponse"]
+applicability = "Applies when the Client advertises `terminal`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-TERMINAL-WAIT-FOR-EXIT-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`terminal/wait_for_exit` messages MUST conform to the stable schema: `params` is a WaitForTerminalExitRequest object and a successful `result` is a WaitForTerminalExitResponse object."
+pointers = ["/$defs/WaitForTerminalExitRequest", "/$defs/WaitForTerminalExitResponse"]
+applicability = "Applies when the Client advertises `terminal`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-TERMINAL-KILL-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`terminal/kill` messages MUST conform to the stable schema: `params` is a KillTerminalRequest object and a successful `result` is a KillTerminalResponse object."
+pointers = ["/$defs/KillTerminalRequest", "/$defs/KillTerminalResponse"]
+applicability = "Applies when the Client advertises `terminal`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-ELICITATION-CREATE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`elicitation/create` messages MUST conform to the stable schema: `params` is a CreateElicitationRequest object with an explicit `mode` (form or url, with their mode-specific members and either `sessionId` or `requestId` scope) and a successful `result` is a CreateElicitationResponse object whose `action` is accept, decline or cancel."
+pointers = ["/$defs/CreateElicitationRequest", "/$defs/CreateElicitationResponse", "/$defs/ElicitationSchema"]
+applicability = "Applies when the Client advertises an elicitation mode."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-ELICITATION-COMPLETE-SHAPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "`elicitation/complete` is a notification whose `params` MUST be a CompleteElicitationNotification object carrying `elicitationId`."
+pointers = ["/$defs/CompleteElicitationNotification"]
+applicability = "Applies when the Agent sends `elicitation/complete`."
+
+[[derived]]
+id = "ACP-V1-SCHEMA-CONTENT-BLOCK-VARIANTS"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "Every ContentBlock MUST be exactly one of the stable variants discriminated by `type` (text, image, audio, resource, resource_link) with that variant's required members, and every ToolCallContent MUST be exactly one of content, diff or terminal."
+pointers = ["/$defs/ContentBlock", "/$defs/TextContent", "/$defs/ImageContent", "/$defs/AudioContent", "/$defs/EmbeddedResource", "/$defs/ResourceLink", "/$defs/ToolCallContent", "/$defs/Diff"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-STOP-REASON-VALUES"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "A PromptResponse `stopReason` MUST be one of the stable StopReason values (end_turn, max_tokens, max_turn_requests, refusal, cancelled)."
+pointers = ["/$defs/StopReason"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-ERROR-OBJECT"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "An error response MUST carry an Error object with integer `code` and string `message` (and optional `data`), and the predefined codes MUST keep their stable meanings: -32700 parse error, -32600 invalid request, -32601 method not found, -32602 invalid params, -32603 internal error, -32800 request cancelled, -32000 authentication required, -32002 resource not found."
+pointers = ["/$defs/Error", "/$defs/ErrorCode"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-MCP-SERVER-VARIANTS"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "Every McpServer entry MUST be exactly one of the stable variants: stdio (no `type`, with `name`, `command`, `args`), http (`type: \"http\"` with `name`, `url`, `headers`) or sse (`type: \"sse\"` with `name`, `url`, `headers`)."
+pointers = ["/$defs/McpServer", "/$defs/McpServerStdio", "/$defs/McpServerHttp", "/$defs/McpServerSse"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-AUTH-METHOD-VARIANTS"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "Every AuthMethod advertised in `authMethods` MUST be exactly one of the stable variants: agent (no `type` or `type: \"agent\"`, with `id` and `name`) or terminal (`type: \"terminal\"` with `id`, `name` and optional `args` and `env`)."
+pointers = ["/$defs/AuthMethod", "/$defs/AuthMethodAgent", "/$defs/AuthMethodTerminal"]
+
+[[derived]]
+id = "ACP-V1-SCHEMA-EXTENSION-METHOD-NAMES"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+statement = "Extension requests and notifications MUST use method names beginning with `_` and carry arbitrary JSON `params`; they are the only methods outside the stable method set that an implementation may route."
+pointers = ["/$defs/ExtRequest", "/$defs/ExtNotification", "/$defs/ExtResponse"]

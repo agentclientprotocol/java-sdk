@@ -1,0 +1,166 @@
+# schema/v1/schema.json — every description carrying an RFC2119 keyword, dispositioned by JSON Pointer.
+# docs/protocol/v1/schema.mdx is generated from these descriptions and is proven to be a mirror by the importer.
+
+[[schema_pointer]]
+pointer = "/$defs/InitializeRequest/properties/_meta"
+disposition = "requirement"
+[[schema_pointer.requirements]]
+id = "ACP-V1-EXT-META-NO-ASSUMPTIONS"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+clause = "The _meta property is reserved by ACP to allow clients and agents to attach additional metadata to their interactions. Implementations MUST NOT make assumptions about values at these keys."
+notes = "Stated identically on every `_meta` property in the schema (two wording variants, one adding 'Optional. Omitted and `null` are equivalent and mean no metadata.'); imported once here and mapped from every other occurrence."
+
+[[schema_pointer]]
+pointer_suffix = "/properties/_meta"
+disposition = "duplicate"
+of = ["ACP-V1-EXT-META-NO-ASSUMPTIONS"]
+reason = "Identical _meta description on every type that defines _meta."
+
+[[schema_pointer]]
+pointer = "/anyOf/2/properties/params/anyOf/0/anyOf/0"
+disposition = "duplicate"
+of = ["ACP-V1-CANCEL-REQUEST-MAY-CANCEL-ACTIVITY", "ACP-V1-CANCEL-REQUEST-MAY-FINISH-NOTIFICATIONS", "ACP-V1-CANCEL-REQUEST-MUST-RESPOND"]
+reason = "$/cancel_request description restates cancellation.mdx:16-22."
+
+[[schema_pointer]]
+pointer = "/$defs/AgentRequest/properties/params/anyOf/0/anyOf/2"
+disposition = "duplicate"
+of = ["ACP-V1-PROMPT-CLIENT-RESPOND-PENDING-PERMISSIONS"]
+reason = "session/request_permission description restates prompt-turn.mdx:350."
+
+[[schema_pointer]]
+pointer = "/$defs/RequestId"
+disposition = "duplicate"
+of = ["ACP-V1-JSONRPC-ID-TYPE", "ACP-V1-JSONRPC-ID-NOT-NULL", "ACP-V1-JSONRPC-ID-NO-FRACTION", "ACP-V1-JSONRPC-RESPONSE-SAME-ID"]
+reason = "Quotes the JSON-RPC 2.0 id member clauses verbatim."
+
+[[schema_pointer]]
+pointer = "/$defs/ContentBlock/oneOf/0"
+disposition = "requirement"
+of = ["ACP-V1-CONTENT-TEXT-SUPPORT"]
+[[schema_pointer.requirements]]
+id = "ACP-V1-CONTENT-CLIENT-RENDER-MARKDOWN"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+clause = "Clients SHOULD render this text as Markdown."
+context = "Text content. May be plain text or formatted with Markdown. All agents MUST support text content blocks in prompts."
+applicability = "Rendering is the Client application's; the SDK is the subject only insofar as it preserves the text unchanged."
+
+[[schema_pointer]]
+pointer = "/$defs/ContentBlock/oneOf/3"
+disposition = "duplicate"
+of = ["ACP-V1-INIT-PROMPT-BASELINE"]
+reason = "'All agents MUST support resource links in prompts' restates initialization.mdx:204."
+
+[[schema_pointer]]
+pointer = "/$defs/CreateTerminalRequest/properties/outputByteLimit"
+disposition = "duplicate"
+of = ["ACP-V1-TERM-CLIENT-TRUNCATE-AT-CHARACTER-BOUNDARY"]
+reason = "Restates terminals.mdx:86-88."
+
+[[schema_pointer]]
+pointer = "/$defs/CreateElicitationRequest/anyOf/2"
+disposition = "requirement"
+[[schema_pointer.requirements]]
+id = "ACP-V1-ELIC-CLIENT-UNKNOWN-MODE-NOT-RENDERED-AS-KNOWN"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+clause = "Clients that do not understand this mode should preserve the raw payload when storing, replaying, proxying, or forwarding elicitation requests. They MUST NOT render it as a known elicitation mode."
+context = "Custom or future elicitation mode. Values beginning with `_` are reserved for implementation-specific extensions. Unknown values that do not begin with `_` are reserved for future ACP variants."
+applicability = "Applies when the Client receives an `elicitation/create` request whose `mode` it does not understand."
+
+[[schema_pointer]]
+pointer = "/$defs/ElicitationPropertySchema/anyOf/5"
+disposition = "requirement"
+[[schema_pointer.requirements]]
+id = "ACP-V1-ELIC-CLIENT-UNKNOWN-PROPERTY-SCHEMA-NOT-RENDERED-AS-KNOWN"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+clause = "Clients that do not understand this property schema type should preserve the raw schema when storing, replaying, proxying, or forwarding elicitation requests. They MUST NOT render it as a known input control."
+context = "Custom or future elicitation property schema."
+applicability = "Applies when the Client receives a form-mode elicitation with a property schema type it does not understand."
+
+[[schema_pointer]]
+pointer = "/$defs/SessionCapabilities"
+disposition = "duplicate"
+of = ["ACP-V1-INIT-SESSION-BASELINE", "ACP-V1-INIT-SESSION-OPTIONAL-MAY"]
+reason = "Restates initialization.mdx:245-247."
+
+[[schema_pointer]]
+pointer = "/$defs/AuthMethodTerminal"
+disposition = "requirement"
+of = ["ACP-V1-AUTH-CLIENT-NO-TERMINAL-METHOD-ID"]
+[[schema_pointer.requirements]]
+id = "ACP-V1-AUTH-AGENT-TERMINAL-METHOD-ONLY-WITH-CAPABILITY"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+clause = "Agents MUST advertise this method only when the client enabled its terminal authentication capability."
+context = "Terminal-based authentication method. The client runs the configured agent program as a separate interactive process for the user to authenticate via a TUI. A zero exit status signals success; any other termination signals failure. The client MUST NOT pass this method to `authenticate`."
+applicability = "Applies when the Agent offers a `terminal` authentication method."
+
+[[schema_pointer]]
+pointer = "/$defs/SessionConfigOptionCategory"
+disposition = "duplicate"
+of = ["ACP-V1-CONFIG-CATEGORY-NOT-REQUIRED-FOR-CORRECTNESS", "ACP-V1-CONFIG-CLIENT-UNKNOWN-CATEGORY"]
+reason = "Restates session-config-options.mdx:196-197."
+
+[[schema_pointer]]
+pointer = "/$defs/StopReason/oneOf/4"
+disposition = "duplicate"
+of = ["ACP-V1-PROMPT-AGENT-CANCELLED-STOP-REASON", "ACP-V1-PROMPT-AGENT-CATCH-ABORT-ERRORS"]
+reason = "Restates prompt-turn.mdx:354 and :361."
+
+[[schema_pointer]]
+pointer = "/$defs/AgentNotification/properties/params/anyOf/0/anyOf/0"
+disposition = "duplicate"
+of = ["ACP-V1-PROMPT-CLIENT-ACCEPT-LATE-UPDATES"]
+reason = "Restates prompt-turn.mdx:367."
+
+[[schema_pointer]]
+pointer = "/$defs/McpServer/anyOf/2"
+disposition = "duplicate"
+of = ["ACP-V1-SETUP-AGENT-MCP-STDIO"]
+reason = "Restates session-setup.mdx:373/381."
+
+[[schema_pointer]]
+pointer = "/$defs/PromptRequest/properties/prompt"
+disposition = "requirement"
+of = ["ACP-V1-INIT-PROMPT-BASELINE", "ACP-V1-PROMPT-CLIENT-RESTRICT-CONTENT"]
+[[schema_pointer.requirements]]
+id = "ACP-V1-PROMPT-CLIENT-CONTEXT-BLOCKS-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "sdk"
+clause = "The client MAY include referenced pieces of context as either [`ContentBlock::Resource`] or [`ContentBlock::ResourceLink`]."
+context = "When available, ContentBlock::Resource is preferred as it avoids extra round-trips and allows the message to include pieces of context from sources the agent may not have access to."
+applicability = "Embedded resources additionally require the Agent's `embeddedContext` prompt capability."
+
+[[schema_pointer]]
+pointer = "/$defs/RequestPermissionOutcome/oneOf/0"
+disposition = "duplicate"
+of = ["ACP-V1-PROMPT-CLIENT-RESPOND-PENDING-PERMISSIONS"]
+reason = "Restates prompt-turn.mdx:350."
+
+[[schema_pointer]]
+pointer = "/$defs/CreateElicitationResponse/anyOf/3"
+disposition = "requirement"
+[[schema_pointer.requirements]]
+id = "ACP-V1-ELIC-AGENT-UNKNOWN-ACTION-NOT-TREATED-AS-KNOWN"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "sdk"
+clause = "Agents that do not understand this action should preserve the raw payload when storing, replaying, proxying, or forwarding elicitation responses. They MUST NOT treat it as a known elicitation action."
+context = "Custom or future elicitation action."
+applicability = "Applies when the Agent receives an `elicitation/create` response whose `action` it does not understand."
+
+[[schema_pointer]]
+pointer = "/$defs/ClientNotification/properties/params/anyOf/0/anyOf/0"
+disposition = "duplicate"
+of = ["ACP-V1-PROMPT-AGENT-STOP-ON-CANCEL", "ACP-V1-PROMPT-AGENT-CANCELLED-STOP-REASON"]
+reason = "session/cancel description restates prompt-turn.mdx:352-354."
