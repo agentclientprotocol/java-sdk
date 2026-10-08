@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Standalone protocol-conformance audit tier. Deliberately NOT a module of the SDK reactor:
+  it needs Java 21 and Agent Eval (BSL-licensed audit tooling), neither of which may reach the
+  shipped Apache-2.0 SDK artifacts. Invoke through the root wrapper:
+    ./mvnw -f protocol-conformance/pom.xml verify
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.agentclientprotocol</groupId>
+    <artifactId>acp-protocol-conformance</artifactId>
+    <version>0.0.0-audit</version>
+    <packaging>jar</packaging>
+    <name>ACP protocol conformance audit</name>
+    <description>Whole-specification RFC 2119 audit harness for the ACP Java SDK; never published</description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Agent Eval producer: agent-judge@b7d2d88ace7cbf110dbfd47ab57221d9e364fb7e, installed locally -->
+        <agent-judge.version>0.18.0-SNAPSHOT</agent-judge.version>
+        <!-- provided scope upstream; the consumer picks the version (same as the PetClinic tutorial) -->
+        <agent-client.version>0.30.0</agent-client.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <junit-jupiter.version>5.14.4</junit-jupiter.version>
+        <assertj.version>3.27.7</assertj.version>
+        <!-- empty defaults so the opt-in switches read as unset rather than as literal placeholders -->
+        <acp.conformance.run></acp.conformance.run>
+        <acp.conformance.assert></acp.conformance.assert>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-judge-core</artifactId>
+            <version>${agent-judge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-judge-ai-core</artifactId>
+            <version>${agent-judge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-judge-agent-client</artifactId>
+            <version>${agent-judge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-judge-json-jackson2</artifactId>
+            <version>${agent-judge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-client-core</artifactId>
+            <version>${agent-client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-claude</artifactId>
+            <version>${agent-client.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.markpollack</groupId>
+            <artifactId>agent-judge-assertj</artifactId>
+            <version>${agent-judge.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit-jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.15.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <!-- Pass-through switches for the opt-in acceptance and replay tests -->
+                    <systemPropertyVariables>
+                        <acp.conformance.run>${acp.conformance.run}</acp.conformance.run>
+                        <acp.conformance.assert>${acp.conformance.assert}</acp.conformance.assert>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.agentclientprotocol.conformance.AcpProtocolConformanceDemo</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -59,9 +59,42 @@ python3 -I protocol-conformance/scripts/import-spec.py retain \
   lifecycle-conditional clauses carry an explicit `applicability` condition; only those may be judged
   not applicable.
 
+## The harness
+
+| Path | Responsibility |
+|---|---|
+| `pom.xml` | Standalone Java 21 project (Agent Eval `0.18.0-SNAPSHOT` from producer `b7d2d88`, Agent Client 0.30.0); no deploy |
+| `AcpRequirementRoster` | Loads `spec/requirements.json`, verifies the roster digest sidecar and every retained source digest, constructs full-text native `Rfc2119Requirement`s |
+| `AcpAuditContext` | Prepends the ACP audit instruction to the producer's generated roster prompt; delegates `execute()` so native facts survive |
+| `AcpJudgeBackends` | Replay (default, zero inference) or live (`AgentClientEvalModel` over a workspace-scoped `AgentClient`), with capture |
+| `AcpRunCapture` / `AcpRecordedResponse` | Immutable run directories; replay pairs a recording only with the identical regenerated request |
+| `AcpProtocolConformanceDemo` | Builds the jury publicly, calls `vote()` once, retains the complete verdict, prints a summary |
+| `RetainedVerdicts` | V6 document when the producer accepts it; otherwise a complete portable document plus `retention.json` |
+| `ProducerIdentity` | Location and SHA-256 of the producer and bridge JARs actually loaded |
+
+```bash
+protocol-conformance/scripts/prepare.sh                      # roster check, dependencies, identity, offline tests
+protocol-conformance/scripts/run.sh --replay <run-id>        # deterministic replay; refused (exit 2) without a real recording
+protocol-conformance/scripts/run.sh --replay <run-id> --assert-satisfied
+protocol-conformance/scripts/run.sh --live --capture <run-id>   # one explicitly approved investigative run
+./mvnw -f protocol-conformance/pom.xml -o test               # offline harness tests over synthetic answers
+./mvnw -f protocol-conformance/pom.xml -o test -Dacp.conformance.run=<run-id>                     # replay regression
+./mvnw -f protocol-conformance/pom.xml -o test -Dacp.conformance.run=<run-id> -Dacp.conformance.assert=true  # acceptance
+```
+
+Response semantics the offline tests pin: every requirement reaches one backend execution unchanged;
+`CANNOT_DETERMINE` is an abstention; `NOT_APPLICABLE` is accepted only on a requirement with a
+declared condition; malformed, duplicate, missing or undeclared answers are instrument errors, never
+SDK findings; a refused replay or a crashed backend is retained as a failed run.
+
+**Known constraint.** The producer's V6 result document is bounded at 1 MiB and refuses rather than
+truncates; a 240-item full-text verdict measures about 1.7 MB (160 items already exceed the bound).
+Until the producer raises the bound, the complete verdict is retained as `verdict-portable.json`
+with the refusal recorded in `retention.json`; `AcpProtocolHarnessTest` pins this so a producer change
+is noticed.
+
 ## Status
 
-Checkpoint A (freeze and import) of the plan is complete. The Java 21 harness, the single
-investigative `Rfc2119Jury` run and offline replay are later checkpoints and are not yet present; no
-conformance judgment has been made. The roster has not been reviewed by the protocol authors and
-makes no claim of official ACP certification.
+Checkpoints A (freeze and import) and B (wire and falsify offline) are complete. No live run has been
+made, so no conformance judgment exists and `runs/` holds no recording. The roster has not been
+reviewed by the protocol authors and makes no claim of official ACP certification.

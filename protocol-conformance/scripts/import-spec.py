@@ -304,6 +304,8 @@ def build(manifest: Manifest, sources: Sources) -> dict:
             problems.append(f"duplicate id {rid}")
         if not ID_RE.match(rid) or ":" in rid:
             problems.append(f"invalid id {rid!r}")
+        if len(rid) > 64:  # Agent Eval CompositeNames: at most 64 Unicode scalars
+            problems.append(f"id longer than 64 characters: {rid}")
         ids[rid] = req
         out.append(req)
 
@@ -640,6 +642,8 @@ def build(manifest: Manifest, sources: Sources) -> dict:
         if not v:
             problems.append(f"unclaimed keyword {occurrence_keyword[key]} at {key[0]}:{occurrence_line[key]}")
 
+    if len(out) > 256:  # Agent Eval AuditJuryDescription.MAX_REQUIREMENTS
+        problems.append(f"roster has {len(out)} requirements; the producer's single-roster limit is 256")
     # ---- ordering: roster order follows manifest file order then declaration order (already)
     counts = {}
     for r in out:
@@ -792,6 +796,7 @@ def check(args: argparse.Namespace, write: bool) -> None:
     if result["problems"]:
         fail(f"{len(result['problems'])} problem(s)")
     files = rendered(result)
+    files["requirements.sha256"] = sha256(files["requirements.json"].encode("utf-8")) + "  requirements.json\n"
     changed = []
     for name, content in files.items():
         target = SPEC / name
