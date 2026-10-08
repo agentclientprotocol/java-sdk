@@ -135,21 +135,39 @@ class AcpProtocolHarnessTest {
     }
 
     /**
-     * Measured 2026-10-08 against producer b7d2d88: the V6 document of a 240-item full-text verdict is about
-     * 1.74 MB (plain Jackson measure; 160 items already exceed the bound), against VerdictCodec.MAXIMUM_BYTES
-     * = 1,048,576. The producer refuses rather than truncating. This test pins that constraint so a producer
-     * change that lifts it is noticed; RetainedVerdicts falls back to a portable document meanwhile.
+     * Measured 2026-10-08 against producer b7d2d88: one V6 document of the 240-item full-text verdict is about
+     * 1.7 MB against VerdictCodec.MAXIMUM_BYTES = 1,048,576 and is refused. The verdict is therefore retained as
+     * V6 parts, each under the bound, and reopened through the producer's codec into a Verdict equal to the
+     * one that was voted.
      */
     @Test
-    void v6RetentionOfTheWholeRosterVerdictExceedsTheProducerPreservationBound(@TempDir Path temp) throws IOException {
+    void theWholeRosterVerdictIsRetainedAsV6PartsUnderTheBoundAndReopensEqual(@TempDir Path temp) throws IOException {
         Verdict verdict = vote(completeSyntheticAnswer("ACP-V1-TRANSPORT-UTF8"));
         assertThatThrownBy(() -> NativeRequirementCodecs.codec().write(verdict))
                 .isInstanceOf(io.github.markpollack.judge.portable.PreservationLimitException.class);
         RetainedVerdicts.Retained retained = RetainedVerdicts.write(verdict, temp);
-        assertThat(retained.format()).isEqualTo("portable-jackson");
-        assertThat(retained.path()).exists();
-        assertThat(retained.bytes()).isGreaterThan(VerdictCodecBound.MAXIMUM_BYTES);
-        assertThat(Files.readString(temp.resolve("retention.json"))).contains("\"v6Refused\" : true");
+        assertThat(retained.format()).isEqualTo("v6-parts");
+        assertThat(retained.parts()).isGreaterThan(1);
+        try (var files = Files.list(temp.resolve("verdict-v6-parts"))) {
+            for (Path part : files.toList()) {
+                assertThat(Files.size(part)).as("%s under the producer bound", part).isLessThanOrEqualTo(1048576L);
+            }
+        }
+        Verdict reopened = RetainedVerdicts.read(temp);
+        assertThat(reopened).isEqualTo(verdict);
+        assertThat(reopened.conclusion()).isEqualTo(Verdict.Conclusion.FAIL);
+        assertThat(RosterSummary.counts(reopened)).isEqualTo(RosterSummary.counts(verdict));
+        assertThat(reopened.invocations()).isEqualTo(verdict.invocations());
+    }
+
+    @Test
+    void aRefusedOrIncompleteRunIsRetainedAndReopensEqualToo(@TempDir Path temp) {
+        EvalModel runtime = AcpJudgeBackends.replay(temp.resolve("runs"), "no-such-run", roster, SDK);
+        Verdict verdict = AcpProtocolConformanceDemo.configuredJury(runtime, roster).vote();
+        RetainedVerdicts.write(verdict, temp.resolve("retained"));
+        Verdict reopened = RetainedVerdicts.read(temp.resolve("retained"));
+        assertThat(reopened).isEqualTo(verdict);
+        assertThat(RosterSummary.counts(reopened).get(JudgmentStatus.ERROR)).isEqualTo(240L);
     }
 
     /** The V6 mechanism itself works for a sub-roster: this is a serialization check, not a conformance run. */
@@ -165,9 +183,24 @@ class AcpProtocolHarnessTest {
                 .requirements(sub).build().vote();
         var codec = NativeRequirementCodecs.codec();
         Verdict reopened = codec.read(codec.write(verdict));
-        assertThat(reopened.conclusion()).isEqualTo(verdict.conclusion()).isEqualTo(Verdict.Conclusion.FAIL);
+        assertThat(reopened).isEqualTo(verdict);
+        assertThat(reopened.conclusion()).isEqualTo(Verdict.Conclusion.FAIL);
         assertThat(reopened.roster()).hasSize(100);
-        assertThat(reopened.compositeAttempts()).hasSize(100);
+    }
+
+    @Test
+    void aSmallVerdictIsRetainedAsOneV6DocumentAndReopensEqual(@TempDir Path temp) {
+        List<Rfc2119Requirement> sub = roster.requirements().subList(0, 40);
+        String answer = completeSyntheticAnswer(null).lines()
+                .filter(l -> sub.stream().anyMatch(r -> l.startsWith(r.id() + ":")))
+                .reduce("", (a, b) -> a + b + "\n");
+        EvalModel runtime = new AcpAuditContext(answering(new AtomicInteger(), new AtomicReference<>(), answer), SDK,
+                roster.protocolCommit(), roster.revision());
+        Verdict verdict = io.github.markpollack.judge.ai.requirements.Rfc2119Jury.builder().runtime(runtime)
+                .requirements(sub).build().vote();
+        RetainedVerdicts.Retained retained = RetainedVerdicts.write(verdict, temp);
+        assertThat(retained.format()).isEqualTo("v6");
+        assertThat(RetainedVerdicts.read(temp)).isEqualTo(verdict);
     }
 
     @Test

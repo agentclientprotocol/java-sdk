@@ -69,7 +69,7 @@ python3 -I protocol-conformance/scripts/import-spec.py retain \
 | `AcpJudgeBackends` | Replay (default, zero inference) or live (`AgentClientEvalModel` over a workspace-scoped `AgentClient`), with capture |
 | `AcpRunCapture` / `AcpRecordedResponse` | Immutable run directories; replay pairs a recording only with the identical regenerated request |
 | `AcpProtocolConformanceDemo` | Builds the jury publicly, calls `vote()` once, retains the complete verdict, prints a summary |
-| `RetainedVerdicts` | V6 document when the producer accepts it; otherwise a complete portable document plus `retention.json` |
+| `RetainedVerdicts` | Complete V6 retention: one document, or V6 parts under the producer's 1 MiB bound, reopened and reassembled equal |
 | `ProducerIdentity` | Location and SHA-256 of the producer and bridge JARs actually loaded |
 
 ```bash
@@ -87,11 +87,13 @@ Response semantics the offline tests pin: every requirement reaches one backend 
 declared condition; malformed, duplicate, missing or undeclared answers are instrument errors, never
 SDK findings; a refused replay or a crashed backend is retained as a failed run.
 
-**Known constraint.** The producer's V6 result document is bounded at 1 MiB and refuses rather than
-truncates; a 240-item full-text verdict measures about 1.7 MB (160 items already exceed the bound).
-Until the producer raises the bound, the complete verdict is retained as `verdict-portable.json`
-with the refusal recorded in `retention.json`; `AcpProtocolHarnessTest` pins this so a producer change
-is noticed.
+**Retention under the producer's bound.** The producer bounds one V6 document at 1 MiB and refuses
+rather than truncates; a 240-item full-text verdict is about 1.7 MB. `RetainedVerdicts` therefore
+writes the verdict as V6 *parts* under `verdict-v6-parts/`: `root.json` carries the collective
+judgment and each `part-NN.json` is a complete V6 roster verdict over a contiguous slice of the
+items, every file under the bound, with `manifest.json` recording slices and digests. `read` reopens
+every part through the producer's codec and reassembles a Verdict that equals the one voted
+(asserted by the offline tests). Small verdicts stay one `verdict-v6.json`.
 
 ## Status
 
