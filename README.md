@@ -58,7 +58,7 @@ The interop and conformance suite is described in [`integration-testing/README.m
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 ```
 
@@ -70,13 +70,13 @@ JSON module next to it; `acp-agent-support`, `acp-test` and
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson2</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 <!-- or Jackson 3 (tools.jackson.databind), for example alongside Spring Boot 4 -->
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson3</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 ```
 
@@ -100,7 +100,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 ```
 
@@ -109,11 +109,11 @@ For Streamable HTTP server support (agents accepting remote HTTP/SSE connections
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-streamable-http-jetty</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.19.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.81.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -617,7 +617,17 @@ A release candidate must have a green [framework smoke matrix](integration-testi
 (`framework-smoke.yml`: Spring Boot, Micronaut and Quarkus against the TypeScript SDK) on the
 commit being released before `release.yml` is dispatched.
 
-### 0.18.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.80.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+Every stable ACP v1 method and type on both client and agent, with an annotation model that
+derives what an agent advertises from its handlers. Spring Boot, Quarkus and Micronaut
+integrations on one framework-neutral module (`acp-integration`). Streamable HTTP and WebSocket
+served by the application's own server (servlet, WebFlux, Quarkus) or by the SDK's listener, which
+binds loopback by default; browser origins are checked, and idle or never-initialized WebSockets
+are closed. This release breaks the API in places: [CHANGELOG.md](CHANGELOG.md) has every break,
+its migration and the known issues.
+
+### 0.18.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 Remote agents: the Streamable HTTP and WebSocket transport from the ACP RFD, contributed by
 @kamikaz1k, on plain `http://` (HTTP/2 over cleartext) and `https://`, with a new
