@@ -7,6 +7,7 @@ package com.agentclientprotocol.sdk.spec;
 import java.math.BigInteger;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
@@ -43,7 +44,16 @@ final class InboundRequests {
 
 		final Sinks.Empty<Void> trigger = Sinks.empty();
 
+		final AcpSchema.JSONRPCRequest request;
+
+		/** The answer to send in place of the cancelled handler's, or null for the default. */
+		volatile @Nullable Supplier<AcpSchema.JSONRPCResponse> answer;
+
 		volatile boolean requested;
+
+		Cancel(AcpSchema.JSONRPCRequest request) {
+			this.request = request;
+		}
 
 		boolean fire() {
 			this.requested = true;
@@ -85,7 +95,7 @@ final class InboundRequests {
 			return response;
 		}
 		return Mono.defer(() -> {
-			Cancel cancel = new Cancel();
+			Cancel cancel = new Cancel(request);
 			// takeUntilOther subscribes the trigger before the response, and passes
 			// onSubscribe down only once the response is subscribed: registering here means
 			// a cancel can only reach a handler that is running. A handler that fails once
@@ -93,7 +103,10 @@ final class InboundRequests {
 			return response.onErrorResume(error -> cancel.requested, error -> Mono.empty())
 				.takeUntilOther(cancel.trigger.asMono())
 				.doOnSubscribe(subscription -> register(key, cancel, request))
-				.switchIfEmpty(Mono.fromSupplier(whenCancelled))
+				.switchIfEmpty(Mono.fromSupplier(() -> {
+					Supplier<AcpSchema.JSONRPCResponse> chosen = cancel.answer;
+					return (chosen != null) ? chosen.get() : whenCancelled.get();
+				}))
 				.doOnNext(answer -> this.inFlight.remove(key, cancel))
 				.doFinally(signal -> this.inFlight.remove(key, cancel));
 		});
@@ -129,6 +142,43 @@ final class InboundRequests {
 		}
 		logger.debug("Cancelled request {}", requestId);
 		return true;
+	}
+
+	/**
+	 * Answers every request of one method still being handled for a session with the given
+	 * response instead of its handler's, and stops the handler: the client's own obligation when
+	 * it cancels a prompt turn (ACP v1, prompt turn, Cancellation: pending
+	 * {@code session/request_permission} requests are answered {@code cancelled}).
+	 * @param method the request method
+	 * @param sessionId the session the requests belong to
+	 * @param answer the response to send for each such request
+	 * @return how many requests were answered
+	 */
+	int answer(String method, String sessionId,
+			Function<AcpSchema.JSONRPCRequest, AcpSchema.JSONRPCResponse> answer) {
+		int answered = 0;
+		for (Cancel cancel : this.inFlight.values()) {
+			AcpSchema.JSONRPCRequest request = cancel.request;
+			if (method.equals(request.method()) && sessionId.equals(sessionIdOf(request.params()))) {
+				cancel.answer = () -> answer.apply(request);
+				if (cancel.fire()) {
+					answered++;
+					logger.debug("Answered pending {} request {} for cancelled session {}", method, request.id(),
+							sessionId);
+				}
+			}
+		}
+		return answered;
+	}
+
+	private static @Nullable Object sessionIdOf(@Nullable Object params) {
+		if (params instanceof AcpSchema.RequestPermissionRequest request) {
+			return request.sessionId();
+		}
+		if (params instanceof Map<?, ?> map) {
+			return map.get("sessionId");
+		}
+		return null;
 	}
 
 	/**

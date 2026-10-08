@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.agentclientprotocol.sdk.annotation.UnstableAcpApi;
 import com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities;
+import com.agentclientprotocol.sdk.error.AcpVersionException;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import com.agentclientprotocol.sdk.json.TypeRef;
 import com.agentclientprotocol.sdk.spec.AcpClientSession;
@@ -155,6 +156,9 @@ public class AcpAsyncClient {
 	 */
 	private final AtomicReference<@Nullable NegotiatedCapabilities> agentCapabilities = new AtomicReference<>();
 
+	/** The authentication methods the agent listed in its initialize answer */
+	private final AtomicReference<List<AcpSchema.AuthMethod>> authMethods = new AtomicReference<>(List.of());
+
 	/**
 	 * The capabilities the client advertised in its last initialize request.
 	 */
@@ -225,8 +229,10 @@ public class AcpAsyncClient {
 	 * capabilities and client info set on the builder
 	 * ({@link AcpClient.AsyncSpec#clientCapabilities}, {@link AcpClient.AsyncSpec#clientInfo}); the
 	 * agent answers with its protocol version, capabilities and authentication methods, and
-	 * {@link #getAgentCapabilities()} returns those capabilities from then on. The client does not
-	 * check the protocol version the agent answers with.
+	 * {@link #getAgentCapabilities()} returns those capabilities from then on. An answer with a
+	 * protocol version this SDK does not speak fails the call with
+	 * {@link com.agentclientprotocol.sdk.error.AcpVersionException} and closes the connection, as
+	 * ACP says a client should; nothing of that answer is kept.
 	 *
 	 * <p>The builder is the only place the client's capabilities are set, so what the client
 	 * advertises is also what its handlers honour (an elicitation mode it did not advertise is
@@ -258,11 +264,23 @@ public class AcpAsyncClient {
 		return Mono.fromRunnable(() -> advertisedCapabilities.set(this.clientCapabilities))
 			.then(Mono.defer(
 					() -> session.sendRequest(AcpSchema.METHOD_INITIALIZE, initializeRequest, INITIALIZE_RESPONSE_TYPE_REF)))
-			.doOnNext(response -> {
+			.flatMap(response -> {
+				// ACP v1, initialization, Version Negotiation: an answer with a version this client
+				// does not speak closes the connection; nothing of the answer is kept.
+				Integer answered = response.protocolVersion();
+				if (answered == null || answered != AcpSchema.LATEST_PROTOCOL_VERSION) {
+					int agentVersion = (answered != null) ? answered : -1;
+					logger.warn("The agent answered initialize with protocol version {}; this client speaks {}. "
+							+ "Closing the connection.", agentVersion, AcpSchema.LATEST_PROTOCOL_VERSION);
+					return closeGracefully().onErrorComplete()
+						.then(Mono.error(new AcpVersionException(agentVersion, AcpSchema.LATEST_PROTOCOL_VERSION)));
+				}
 				// Store the negotiated agent capabilities
 				NegotiatedCapabilities caps = NegotiatedCapabilities.fromAgent(response.agentCapabilities());
 				agentCapabilities.set(caps);
+				authMethods.set((response.authMethods() != null) ? List.copyOf(response.authMethods()) : List.of());
 				logger.debug("Negotiated agent capabilities: {}", caps);
+				return Mono.just(response);
 			});
 	}
 
@@ -289,7 +307,8 @@ public class AcpAsyncClient {
 	 *
 	 * <p>Pass the ID of an {@link AcpSchema.AuthMethodAgent}. Do not pass an
 	 * {@link AcpSchema.AuthMethodTerminal}: for that one the client runs the agent program itself,
-	 * in a terminal, outside this connection. This method does not check the method's type.
+	 * in a terminal, outside this connection. Passing the ID of a terminal method the agent listed
+	 * fails with {@link IllegalArgumentException} without sending anything.
 	 * @param request the ID of the chosen authentication method
 	 * @return a {@code Mono} emitting the agent's answer
 	 * @see AcpSchema#METHOD_AUTHENTICATE
@@ -297,8 +316,17 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.AuthenticateResponse> authenticate(AcpSchema.AuthenticateRequest request) {
 		Assert.notNull(request, "Authenticate request must not be null");
 		logger.debug("Authenticating with method: {}", request.methodId());
-		return afterInitialize(AcpSchema.METHOD_AUTHENTICATE, AcpAsyncClient::initializedOnly,
-				() -> session.sendRequest(AcpSchema.METHOD_AUTHENTICATE, request, AUTHENTICATE_RESPONSE_TYPE_REF));
+		return afterInitialize(AcpSchema.METHOD_AUTHENTICATE, AcpAsyncClient::initializedOnly, () -> {
+			// ACP v1, authentication: "Clients MUST NOT pass a terminal method"
+			for (AcpSchema.AuthMethod method : authMethods.get()) {
+				if (method instanceof AcpSchema.AuthMethodTerminal terminal && terminal.id().equals(request.methodId())) {
+					return Mono.error(new IllegalArgumentException("Authentication method '" + request.methodId()
+							+ "' is a terminal method: the client runs the agent program in a terminal for it and "
+							+ "must not send authenticate (ACP v1, authentication)"));
+				}
+			}
+			return session.sendRequest(AcpSchema.METHOD_AUTHENTICATE, request, AUTHENTICATE_RESPONSE_TYPE_REF);
+		});
 	}
 
 	/**
@@ -339,7 +367,7 @@ public class AcpAsyncClient {
 		Assert.notNull(request, "New session request must not be null");
 		logger.debug("Creating new session with cwd: {}", request.cwd());
 		return afterInitialize(AcpSchema.METHOD_SESSION_NEW,
-				withDirectories(AcpAsyncClient::initializedOnly, request.additionalDirectories()),
+				withMcpServers(withDirectories(AcpAsyncClient::initializedOnly, request.additionalDirectories()), request.mcpServers()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, request, NEW_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -356,7 +384,7 @@ public class AcpAsyncClient {
 		Assert.notNull(request, "Load session request must not be null");
 		logger.debug("Loading session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_LOAD,
-				withDirectories(NegotiatedCapabilities::requireLoadSession, request.additionalDirectories()),
+				withMcpServers(withDirectories(NegotiatedCapabilities::requireLoadSession, request.additionalDirectories()), request.mcpServers()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, request, LOAD_SESSION_RESPONSE_TYPE_REF));
 	}
 
@@ -437,7 +465,7 @@ public class AcpAsyncClient {
 		Assert.notNull(request, "Resume session request must not be null");
 		logger.debug("Resuming session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_RESUME,
-				withDirectories(NegotiatedCapabilities::requireResumeSession, request.additionalDirectories()),
+				withMcpServers(withDirectories(NegotiatedCapabilities::requireResumeSession, request.additionalDirectories()), request.mcpServers()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, request,
 				RESUME_SESSION_RESPONSE_TYPE_REF));
 	}
@@ -453,7 +481,7 @@ public class AcpAsyncClient {
 		Assert.notNull(request, "Fork session request must not be null");
 		logger.debug("Forking session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_FORK,
-				withDirectories(NegotiatedCapabilities::requireForkSession, request.additionalDirectories()),
+				withMcpServers(withDirectories(NegotiatedCapabilities::requireForkSession, request.additionalDirectories()), request.mcpServers()),
 				() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, request,
 				FORK_SESSION_RESPONSE_TYPE_REF));
 	}
@@ -557,7 +585,8 @@ public class AcpAsyncClient {
 	public Mono<AcpSchema.PromptResponse> prompt(AcpSchema.PromptRequest request) {
 		Assert.notNull(request, "Prompt request must not be null");
 		logger.debug("Sending prompt to session: {}", request.sessionId());
-		return afterInitialize(AcpSchema.METHOD_SESSION_PROMPT, AcpAsyncClient::initializedOnly, () -> {
+		return afterInitialize(AcpSchema.METHOD_SESSION_PROMPT,
+				withPromptContent(AcpAsyncClient::initializedOnly, request.prompt()), () -> {
 			if (session instanceof AcpClientSession clientSession) {
 				return clientSession.sendRequest(AcpSchema.METHOD_SESSION_PROMPT, request,
 						PROMPT_RESPONSE_TYPE_REF, this.promptTimeout);
@@ -621,8 +650,18 @@ public class AcpAsyncClient {
 	public Mono<Void> cancel(AcpSchema.CancelNotification notification) {
 		Assert.notNull(notification, "Cancel notification must not be null");
 		logger.debug("Canceling operations for session: {}", notification.sessionId());
-		return afterInitialize(AcpSchema.METHOD_SESSION_CANCEL, AcpAsyncClient::initializedOnly,
-				() -> session.sendNotification(AcpSchema.METHOD_SESSION_CANCEL, notification));
+		return afterInitialize(AcpSchema.METHOD_SESSION_CANCEL, AcpAsyncClient::initializedOnly, () -> {
+			// ACP v1, prompt turn, Cancellation: "The Client MUST respond to all pending
+			// session/request_permission requests with the cancelled outcome."
+			if (session instanceof AcpClientSession clientSession) {
+				int answered = clientSession.cancelPermissionRequests(notification.sessionId());
+				if (answered > 0) {
+					logger.debug("Answered {} pending permission request(s) of session {} with cancelled", answered,
+							notification.sessionId());
+				}
+			}
+			return session.sendNotification(AcpSchema.METHOD_SESSION_CANCEL, notification);
+		});
 	}
 
 	// --------------------------
@@ -698,6 +737,53 @@ public class AcpAsyncClient {
 			return requirement;
 		}
 		return requirement.andThen(NegotiatedCapabilities::requireAdditionalDirectories);
+	}
+
+	/**
+	 * Adds the MCP transport capabilities the servers of a session call need: HTTP and SSE servers
+	 * only to an agent that advertised them (ACP v1, session setup, "Checking Transport Support");
+	 * stdio servers always.
+	 */
+	private static Consumer<NegotiatedCapabilities> withMcpServers(Consumer<NegotiatedCapabilities> requirement,
+			@Nullable List<AcpSchema.McpServer> mcpServers) {
+		if (mcpServers == null || mcpServers.isEmpty()) {
+			return requirement;
+		}
+		Consumer<NegotiatedCapabilities> required = requirement;
+		for (AcpSchema.McpServer server : mcpServers) {
+			if (server instanceof AcpSchema.McpServerHttp) {
+				required = required.andThen(NegotiatedCapabilities::requireMcpHttp);
+			}
+			else if (server instanceof AcpSchema.McpServerSse) {
+				required = required.andThen(NegotiatedCapabilities::requireMcpSse);
+			}
+		}
+		return required;
+	}
+
+	/**
+	 * Adds the prompt capabilities a prompt's content needs: image, audio and embedded resource
+	 * blocks only to an agent that advertised them (ACP v1, prompt turn, "Clients MUST restrict
+	 * types of content according to the Prompt Capabilities"); text and resource links always.
+	 */
+	private static Consumer<NegotiatedCapabilities> withPromptContent(Consumer<NegotiatedCapabilities> requirement,
+			@Nullable List<AcpSchema.ContentBlock> blocks) {
+		if (blocks == null || blocks.isEmpty()) {
+			return requirement;
+		}
+		Consumer<NegotiatedCapabilities> required = requirement;
+		for (AcpSchema.ContentBlock block : blocks) {
+			if (block instanceof AcpSchema.ImageContent) {
+				required = required.andThen(NegotiatedCapabilities::requireImageContent);
+			}
+			else if (block instanceof AcpSchema.AudioContent) {
+				required = required.andThen(NegotiatedCapabilities::requireAudioContent);
+			}
+			else if (block instanceof AcpSchema.Resource) {
+				required = required.andThen(NegotiatedCapabilities::requireEmbeddedContext);
+			}
+		}
+		return required;
 	}
 
 	/** No capability needed beyond an initialized connection. */

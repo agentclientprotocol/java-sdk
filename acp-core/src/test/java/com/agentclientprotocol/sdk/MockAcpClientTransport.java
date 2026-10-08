@@ -80,6 +80,11 @@ public class MockAcpClientTransport implements AcpClientTransport {
 	 * Simulates an incoming message from the agent.
 	 * @param message the message to simulate
 	 */
+	/** Whether {@code connect} has run and neither close has yet. */
+	public boolean isConnected() {
+		return connected;
+	}
+
 	public void simulateIncomingMessage(AcpSchema.JSONRPCMessage message) {
 		if (inbound.tryEmitNext(message).isFailure()) {
 			throw new RuntimeException("Failed to process incoming message " + message);

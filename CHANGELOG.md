@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The client SDK now enforces five client-side obligations of stable ACP v1 before a message
+  leaves**, found by the whole-roster conformance audit (`protocol-conformance/`, run
+  `acp-v1-2797d331-r1-5bb2cf6-001`); each was left to the application before and the Javadoc said
+  so. `initialize` fails with the new `AcpVersionException` and closes the connection when the
+  agent answers with a protocol version this SDK does not speak. `authenticate` refuses the ID of a
+  `terminal` auth method with `IllegalArgumentException`. `session/new`, `load`, `resume` and
+  `fork` refuse HTTP and SSE MCP servers with `AcpCapabilityException` unless the agent advertised
+  `mcpCapabilities.http` / `.sse` (new `requireMcpHttp()` / `requireMcpSse()`). `session/prompt`
+  refuses image, audio and embedded-resource blocks unless the agent advertised the matching prompt
+  capability (new `requireEmbeddedContext()`); text and resource links always pass. `session/cancel`
+  answers every pending `session/request_permission` of that session with the `cancelled` outcome
+  and stops its handler, so a permission dialog the user never answers no longer leaves the agent
+  waiting.
+- **The agent SDK sends `boolean` session config options only to a client that advertised
+  `session.configOptions.boolean`.** To any other client the option is omitted from the session
+  answer, the `session/set_config_option` answer and `config_option_update`, with a warning naming
+  it; offer a `select` in its place to such clients.
+
 ### Security
 
 - Every WebSocket host now closes idle connections (after `webSocketIdleTimeout`, 30 minutes by

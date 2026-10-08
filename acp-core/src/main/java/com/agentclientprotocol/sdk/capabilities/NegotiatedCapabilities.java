@@ -582,6 +582,34 @@ public final class NegotiatedCapabilities {
 	}
 
 	/**
+	 * Checks that the agent advertised {@code promptCapabilities.embeddedContext}, and throws if it
+	 * did not (see {@link #supportsEmbeddedContext()}).
+	 * @throws AcpCapabilityException if it did not; its capability is
+	 * {@code "promptCapabilities.embeddedContext"}
+	 */
+	public void requireEmbeddedContext() {
+		require(embeddedContext, "promptCapabilities.embeddedContext");
+	}
+
+	/**
+	 * Checks that the agent advertised {@code mcpCapabilities.http}, and throws if it did not (see
+	 * {@link #supportsMcpHttp()}).
+	 * @throws AcpCapabilityException if it did not; its capability is {@code "mcpCapabilities.http"}
+	 */
+	public void requireMcpHttp() {
+		require(mcpHttp, "mcpCapabilities.http");
+	}
+
+	/**
+	 * Checks that the agent advertised {@code mcpCapabilities.sse}, and throws if it did not (see
+	 * {@link #supportsMcpSse()}).
+	 * @throws AcpCapabilityException if it did not; its capability is {@code "mcpCapabilities.sse"}
+	 */
+	public void requireMcpSse() {
+		require(mcpSse, "mcpCapabilities.sse");
+	}
+
+	/**
 	 * Returns whether the agent advertised {@code auth.logout}: a client may call {@code logout}.
 	 * @return true if {@code auth.logout} was advertised
 	 */
