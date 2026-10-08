@@ -1,5 +1,6 @@
 package com.agentclientprotocol.conformance;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -29,12 +30,17 @@ public final class AcpJudgeBackends {
     private AcpJudgeBackends() {
     }
 
-    /** A judging agent scoped to one absolute workspace; see the PetClinic lesson on default options. */
-    public static AgentClient judgingAgent(Path workspace, Duration timeout) {
+    /**
+     * A judging agent scoped to one absolute workspace; see the PetClinic lesson on default options.
+     * The CLI's JSONL trace and its verbatim session transcript are archived under {@code traceDir}.
+     */
+    public static AgentClient judgingAgent(Path workspace, Duration timeout, Path traceDir) {
         Path scope = workspace.toAbsolutePath().normalize();
         ClaudeAgentModel model = ClaudeAgentModel.builder()
                 .workingDirectory(scope)
                 .timeout(timeout)
+                .traceDir(traceDir)
+                .archiveTranscript(true)
                 .build();
         // The working directory that reaches the agent comes from the CLIENT's default options.
         return AgentClient.builder(model)
@@ -52,8 +58,13 @@ public final class AcpJudgeBackends {
 
     public static EvalModel live(Path workspace, Duration timeout, Path runsDir, String runId,
             AcpRequirementRoster roster, String sdkCommit) {
-        return liveOver(new AgentClientEvalModel(judgingAgent(workspace, timeout)), workspace, runsDir, runId, roster,
-                sdkCommit);
+        Path runDir = runsDir.resolve(AcpRunCapture.requireRunId(runId));
+        if (Files.exists(runDir.resolve("request.txt")) || Files.exists(runDir.resolve("run.json"))) {
+            throw new IllegalStateException("Run " + runDir + " already exists; a live run never replaces a recording");
+        }
+        AgentClient agent = judgingAgent(workspace, timeout, runDir.resolve("trace"));
+        return liveOver(new AgentClientEvalModel(agent, new AcpNativeCapture<>(runDir)), workspace, runsDir, runId,
+                roster, sdkCommit);
     }
 
     /** Live wiring over any investigative backend; used by tests with a synthetic delegate. */

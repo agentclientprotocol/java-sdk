@@ -20,6 +20,7 @@ import io.github.markpollack.judge.verdict.Verdict;
  *   --replay &lt;run-id&gt;                 replay a captured run (default mode; no inference)
  *   --live --capture &lt;run-id&gt;         one real investigative run, captured as a new immutable recording
  *   --assert-satisfied                exit 1 unless the retained conclusion is PASS
+ *   --retain-in-run                   with --replay: retain the verdict under runs/&lt;run-id&gt;/verdict/ (once)
  *   --spec-dir, --runs-dir, --workspace, --sdk-commit, --timeout-minutes
  * </pre>
  * The jury is built publicly and {@code vote()} is called exactly once; the complete Verdict is
@@ -53,7 +54,11 @@ public final class AcpProtocolConformanceDemo {
         }
         else {
             runtime = AcpJudgeBackends.replay(options.runsDir, options.runId, roster, options.sdkCommit);
-            output = Path.of("target", "replay", options.runId);
+            output = options.retainInRun ? options.runsDir.resolve(options.runId).resolve("verdict")
+                    : Path.of("target", "replay", options.runId);
+            if (options.retainInRun && Files.exists(output)) {
+                throw new IllegalStateException(output + " already exists; a retained verdict is never rewritten");
+            }
             System.out.println("backend: REPLAY of recorded run " + options.runId + " (no inference)");
         }
         System.out.println("producer: " + ProducerIdentity.describe());
@@ -75,11 +80,12 @@ public final class AcpProtocolConformanceDemo {
     }
 
     record Options(boolean live, String runId, Path specDir, Path runsDir, Path workspace, String sdkCommit,
-            long timeoutMinutes, boolean assertSatisfied) {
+            long timeoutMinutes, boolean assertSatisfied, boolean retainInRun) {
 
         static Options parse(String[] args) {
             boolean live = false;
             boolean assertSatisfied = false;
+            boolean retainInRun = false;
             String runId = null;
             Path specDir = Path.of("spec");
             Path runsDir = Path.of("runs");
@@ -99,6 +105,7 @@ public final class AcpProtocolConformanceDemo {
                     }
                     case "--capture" -> runId = rest.removeFirst();
                     case "--assert-satisfied" -> assertSatisfied = true;
+                    case "--retain-in-run" -> retainInRun = true;
                     case "--spec-dir" -> specDir = Path.of(rest.removeFirst());
                     case "--runs-dir" -> runsDir = Path.of(rest.removeFirst());
                     case "--workspace" -> workspace = Path.of(rest.removeFirst());
@@ -114,7 +121,8 @@ public final class AcpProtocolConformanceDemo {
                 throw new IllegalArgumentException(live ? "--live requires --capture <run-id>"
                         : "--replay requires a run id (argument or ACP_CONFORMANCE_RUN)");
             }
-            return new Options(live, runId, specDir, runsDir, workspace, sdkCommit, timeout, assertSatisfied);
+            return new Options(live, runId, specDir, runsDir, workspace, sdkCommit, timeout, assertSatisfied,
+                    retainInRun);
         }
     }
 }
