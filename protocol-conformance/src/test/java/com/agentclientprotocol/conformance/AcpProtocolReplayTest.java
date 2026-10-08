@@ -1,5 +1,6 @@
 package com.agentclientprotocol.conformance;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -34,9 +35,24 @@ class AcpProtocolReplayTest {
         assertThat(verdict.compositeAttempts()).hasSize(roster.requirements().size());
         assertThat(verdict.invocations()).hasSize(1);
         var counts = RosterSummary.counts(verdict);
-        // the recording must be a genuine complete answer, not a refusal
-        assertThat(counts.get(JudgmentStatus.ERROR)).as("replay refused or malformed: %s", counts).isZero();
+        // the recording must be a genuine completed run, not a refused replay: a refusal is an
+        // incomplete invocation with every item ERROR; a genuine run may still carry an item the
+        // judge left unanswered (an ERROR), which is part of the recorded outcome
+        assertThat(verdict.invocations().getFirst().completed()).as("replay refused: %s", counts).isTrue();
+        assertThat(counts.get(JudgmentStatus.ERROR)).isLessThan((long) roster.requirements().size());
         assertThat(RosterSummary.unbound(verdict)).isZero();
+        // and the replay reproduces the verdict retained with the recording, item for item
+        Path retainedInRun = Path.of("runs", runId, "verdict");
+        if (Files.isDirectory(retainedInRun)) {
+            Verdict retainedVerdict = RetainedVerdicts.read(retainedInRun);
+            assertThat(RosterSummary.counts(verdict)).isEqualTo(RosterSummary.counts(retainedVerdict));
+            assertThat(verdict.conclusion()).isEqualTo(retainedVerdict.conclusion());
+            for (int i = 0; i < roster.requirements().size(); i++) {
+                assertThat(RosterSummary.checks(verdict).get(i).judgment().status())
+                    .as(roster.requirements().get(i).id())
+                    .isEqualTo(RosterSummary.checks(retainedVerdict).get(i).judgment().status());
+            }
+        }
         String root = verdict.invocations().getFirst().id();
         for (int i = 0; i < roster.requirements().size(); i++) {
             var child = verdict.compositeAttempts().get(i).verdict().individual().getFirst();
