@@ -38,7 +38,7 @@ Zero-dependency annotation library for declarative ACP agent development. Use wi
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-annotations</artifactId>
-    <version>0.18.0</version>
+    <version>0.80.0</version>
 </dependency>
 ```
 

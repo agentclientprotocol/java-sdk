@@ -15,19 +15,23 @@ Streamable HTTP or WebSocket, and it builds an ACP client from `spring.acp.clien
     <artifactId>acp-spring-boot-starter</artifactId>
     <version>${acp.version}</version>
 </dependency>
-<!-- Only for an agent served over HTTP: spring.acp.agent.transport.type=http or websocket -->
+<!-- Only for an agent served over HTTP (spring.acp.agent.transport.type=http or websocket), one of:
+     acp-http-servlet (a servlet web application), acp-http-webflux (a reactive one) or
+     acp-streamable-http-jetty (no web server: the SDK's own listener) -->
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
-    <artifactId>acp-streamable-http-jetty</artifactId>
+    <artifactId>acp-http-servlet</artifactId>
     <version>${acp.version}</version>
 </dependency>
 ```
 
 The starter has the SDK's version. Do not pin the other SDK modules to a version of their own: the
 starter brings the matching ones. The client's stdio, WebSocket and Streamable HTTP transports are
-in `acp-core`, so a client needs nothing more. Only an agent served over HTTP needs
-`acp-streamable-http-jetty`. The SDK's Jackson 3 module is on the classpath, and the SDK chooses it
-over Jackson 2 (see the root [README](../README.md#installation)).
+in `acp-core`, so a client needs nothing more. Only an agent served over HTTP needs one more
+module, by application type: `acp-http-servlet` in a servlet web application (Spring MVC),
+`acp-http-webflux` in a reactive one, `acp-streamable-http-jetty` in an application without a web
+server (see [Transports](#transports) below). The SDK's Jackson 3 module is on the classpath, and
+the SDK chooses it over Jackson 2 (see the root [README](../README.md#installation)).
 
 ## An agent
 
@@ -232,6 +236,12 @@ Reactor Netty, or a servlet application, for large WebSocket messages. WebFlux r
 completion per WebSocket frame, so the route sends a frame only when the server asks for one:
 a client that stops reading fills the endpoint's bounded send queue, and the socket closes with
 1011, as on every host.
+
+**Known issue in 0.80.0: WebFlux on Jetty.** Jetty's connection idle timeout, 30 seconds by
+default, closes an ACP WebSocket after 30 seconds without traffic, well before
+`spring.acp.agent.transport.http.web-socket-idle-timeout`. Set
+`server.jetty.connection-idle-timeout` (for example `30m`), or use Reactor Netty, the default
+server for WebFlux. A fix is planned for 0.80.1.
 
 ### Client: `spring.acp.client.transport.*`
 
