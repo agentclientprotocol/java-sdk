@@ -120,20 +120,33 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 		if (caps != null && caps.supportsBooleanConfigOptions()) {
 			return result;
 		}
-		if (result instanceof AcpSchema.NewSessionResponse r && hasBoolean(r.configOptions())) {
-			return new AcpSchema.NewSessionResponse(r.sessionId(), r.modes(), withoutBooleans(r.configOptions()),
-					r.meta());
+		Object gated = withoutBooleansInSessionAnswer(result);
+		return (gated != null) ? gated : withoutBooleansInConfigAnswer(result);
+	}
+
+	/** The session lifecycle answers that carry config options, or null when {@code result} is none. */
+	private static @Nullable Object withoutBooleansInSessionAnswer(Object result) {
+		if (result instanceof AcpSchema.NewSessionResponse r) {
+			return hasBoolean(r.configOptions()) ? new AcpSchema.NewSessionResponse(r.sessionId(), r.modes(),
+					withoutBooleans(r.configOptions()), r.meta()) : r;
 		}
-		if (result instanceof AcpSchema.LoadSessionResponse r && hasBoolean(r.configOptions())) {
-			return new AcpSchema.LoadSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta());
+		if (result instanceof AcpSchema.LoadSessionResponse r) {
+			return hasBoolean(r.configOptions())
+					? new AcpSchema.LoadSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta()) : r;
 		}
-		if (result instanceof AcpSchema.ResumeSessionResponse r && hasBoolean(r.configOptions())) {
-			return new AcpSchema.ResumeSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta());
+		if (result instanceof AcpSchema.ResumeSessionResponse r) {
+			return hasBoolean(r.configOptions())
+					? new AcpSchema.ResumeSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta()) : r;
 		}
-		if (result instanceof AcpSchema.ForkSessionResponse r && hasBoolean(r.configOptions())) {
-			return new AcpSchema.ForkSessionResponse(r.sessionId(), r.modes(), withoutBooleans(r.configOptions()),
-					r.meta());
+		if (result instanceof AcpSchema.ForkSessionResponse r) {
+			return hasBoolean(r.configOptions()) ? new AcpSchema.ForkSessionResponse(r.sessionId(), r.modes(),
+					withoutBooleans(r.configOptions()), r.meta()) : r;
 		}
+		return null;
+	}
+
+	/** The config option answer and update, or {@code result} unchanged when it is neither. */
+	private static Object withoutBooleansInConfigAnswer(Object result) {
 		if (result instanceof AcpSchema.SetSessionConfigOptionResponse r && hasBoolean(r.configOptions())) {
 			return new AcpSchema.SetSessionConfigOptionResponse(withoutBooleans(r.configOptions()), r.meta());
 		}
