@@ -1,0 +1,115 @@
+# docs/protocol/v1/session-list.mdx — 11 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-LIST-INIT-FIRST"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "10"
+clause = "Before listing sessions, Clients **MUST** first complete the [initialization](/protocol/v1/initialization) phase to verify the Agent supports this capability."
+
+[[requirement]]
+id = "ACP-V1-LIST-CLIENT-CHECK-CAPABILITY"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "37"
+clause = "Before attempting to list sessions, Clients **MUST** verify that the Agent supports this capability by checking the `sessionCapabilities.list` field in the `initialize` response:"
+
+[[requirement]]
+id = "ACP-V1-LIST-CLIENT-NO-LIST-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "54"
+clause = "If `sessionCapabilities.list` is not present, the Agent does not support listing sessions and Clients **MUST NOT** attempt to call `session/list`."
+
+[[requirement]]
+id = "ACP-V1-LIST-AGENT-RESPONSE"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "94"
+clause = "The Agent **MUST** respond with a list of sessions and optional pagination metadata:"
+applicability = "Applies when the Agent advertises `sessionCapabilities.list`."
+
+[[requirement]]
+id = "ACP-V1-LIST-ADDITIONAL-DIRS-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "139-143"
+clause = "If the Agent advertises `sessionCapabilities.additionalDirectories`, it MAY include this field to report the complete ordered additional-root list associated with the listed session. Omitted and empty values are equivalent: this `SessionInfo` response reports no additional roots."
+context = "Definition of the `additionalDirectories` field of `SessionInfo`."
+applicability = "Applies when the Agent advertises `sessionCapabilities.list` and `sessionCapabilities.additionalDirectories`."
+
+[[requirement]]
+id = "ACP-V1-LIST-CLIENT-NO-MERGE-ADDITIONAL-DIRS"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "144-145"
+clause = "Clients MUST NOT merge this field with prior values or infer additional roots from agent-specific state."
+context = "Definition of the `additionalDirectories` field of `SessionInfo`."
+
+[[requirement]]
+id = "ACP-V1-LIST-EMPTY-ARRAY"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "166"
+clause = "When no sessions match the criteria, the Agent **MUST** return an empty `sessions` array."
+applicability = "Applies when the Agent advertises `sessionCapabilities.list`."
+
+[[requirement]]
+id = "ACP-V1-LIST-CLIENT-MISSING-CURSOR-IS-END"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "172"
+clause = "Clients **MUST** treat a missing `nextCursor` as the end of results"
+
+[[requirement]]
+id = "ACP-V1-LIST-CLIENT-OPAQUE-CURSOR"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "173"
+clause = "Clients **MUST** treat cursors as opaque tokens — do not parse, modify, or persist them"
+
+[[requirement]]
+id = "ACP-V1-LIST-AGENT-INVALID-CURSOR-ERROR"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "174"
+clause = "Agents **SHOULD** return an error if the cursor is invalid"
+applicability = "Applies when the Agent advertises `sessionCapabilities.list`; cursor validity is the application's to judge, so the SDK is assessed on letting the handler fail the request with an error."
+
+[[requirement]]
+id = "ACP-V1-LIST-AGENT-PAGE-SIZE"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-list.mdx"
+lines = "175"
+clause = "Agents **SHOULD** enforce reasonable page sizes internally"
+applicability = "Applies when the Agent advertises `sessionCapabilities.list`; page sizing is the application's."
+
+[[prose]]
+source = "docs/protocol/v1/session-list.mdx"
+lines = "85"
+text = "Must be an absolute path."
+disposition = "covered"
+of = ["ACP-V1-OVERVIEW-ABSOLUTE-PATHS"]
+reason = "The `cwd` filter parameter is a file path; the general MUST applies."

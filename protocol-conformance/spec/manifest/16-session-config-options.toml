@@ -1,0 +1,216 @@
+# docs/protocol/v1/session-config-options.mdx — 19 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-PREFER-CONFIG-OPTIONS"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "9-12"
+clause = "If an Agent provides `configOptions`, Clients **SHOULD** use them instead of the [`modes`](/protocol/v1/session-modes) field."
+applicability = "Applies when the Agent provides `configOptions`; which selector the UI uses is the application's."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-INITIAL-STATE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "17"
+clause = "During [Session Setup](/protocol/v1/session-setup) the Agent **MAY** return a list of configuration options and their current values:"
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-RESPECT-ORDER"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "70-74"
+clause = "The order of this array represents the Agent's preferred priority. Clients **SHOULD** respect this ordering when displaying options."
+context = "Definition of the `configOptions` field."
+applicability = "Display order is the application's; the SDK is assessed on preserving array order."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-BOOLEAN-ONLY-AFTER-CAPABILITY-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "156-157"
+clause = "Agents **MAY** include boolean config options only after the Client advertises support during initialization:"
+
+[[requirement]]
+id = "ACP-V1-CONFIG-NO-BOOLEAN-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "187-188"
+clause = "Agents **MUST NOT** include `type: \"boolean\"` options in `configOptions` payloads unless the Client advertised support."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CATEGORY-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "193"
+clause = "Each config option **MAY** include a `category` field."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CATEGORY-NOT-REQUIRED-FOR-CORRECTNESS"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "196-197"
+clause = "Categories are for UX purposes only and **MUST NOT** be required for correctness."
+mirrors = ["/$defs/SessionConfigOptionCategory"]
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-UNKNOWN-CATEGORY"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "197"
+clause = "Clients **MUST** handle missing or unknown categories gracefully."
+mirrors = ["/$defs/SessionConfigOptionCategory"]
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-RENDER-MODEL-CONFIG-NEAR-MODEL"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "209"
+clause = "Clients **SHOULD** render `model_config` options near the `model` selector, such as in the same popover or panel."
+applicability = "Rendering is the Client application's; the SDK is the subject only insofar as it exposes `category`."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-TIE-ORDER"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "211"
+clause = "When multiple options share the same category, Clients **SHOULD** use the array ordering to resolve ties, preferring earlier options in the list for prominent placement or keyboard shortcuts."
+applicability = "Placement is the Client application's; the SDK is assessed on preserving array order."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-AGENT-PRIORITY-ORDER"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "215"
+clause = "The order of the `configOptions` array is significant. Agents **SHOULD** place higher-priority options first in the list."
+applicability = "Option priority is the Agent application's; the SDK is assessed on preserving array order."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-ORDERING"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "217-221"
+clause = "Clients **SHOULD**: - Display options in the order provided by the Agent - Use ordering to resolve ties when multiple options share the same category - If displaying a limited number of options, prefer those at the beginning of the list"
+applicability = "Display is the Client application's; the SDK is assessed on preserving array order."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-AGENT-DEFAULTS"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "225"
+clause = "Agents **MUST** always provide a default value for every configuration option."
+context = "This ensures the Agent can operate correctly even if: the Client doesn't support configuration options; the Client chooses not to display certain options; the Client receives an option type it doesn't recognize."
+applicability = "Applies when the Agent provides `configOptions`; `currentValue` is required by the schema, so the SDK is assessed on requiring it."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-IGNORE-UNKNOWN-TYPE"
+keyword = "SHOULD"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "231"
+clause = "If a Client receives an option with an unrecognized `type`, it **SHOULD** ignore that option."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-SET-RESPONSE-COMPLETE"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "284"
+clause = "The Agent **MUST** respond with the complete list of all configuration options and their current values:"
+applicability = "Applies when the Agent handles `session/set_config_option`."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-AGENT-SEND-BOTH-DURING-TRANSITION"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "359-362"
+clause = "However, during the transition period, Agents that provide mode-like configuration **SHOULD** send both: - `configOptions` with a `category: \"mode\"` option for Clients that support config options - `modes` for Clients that only support the older API"
+applicability = "Applies to Agents that provide mode-like configuration; what to send is the application's choice, the SDK is assessed on allowing both fields."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-USE-CONFIG-EXCLUSIVELY"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "366"
+clause = "Clients that support config options **SHOULD** use `configOptions` exclusively and ignore `modes`"
+context = "If an Agent provides both `configOptions` and `modes` in the session response."
+applicability = "Applies when both fields are present; the choice is the Client application's."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-CLIENT-FALLBACK-TO-MODES"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "367"
+clause = "Clients that don't support config options **SHOULD** fall back to `modes`"
+applicability = "Applies to Clients without config-option support when both fields are present; the choice is the application's."
+
+[[requirement]]
+id = "ACP-V1-CONFIG-AGENT-KEEP-IN-SYNC"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "368"
+clause = "Agents **SHOULD** keep both in sync to ensure consistent behavior regardless of which field the Client uses"
+applicability = "Applies when the Agent sends both `configOptions` and `modes`; the values are the application's."
+
+[[prose]]
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "106-110"
+text = "Required when `type` is `\"select\"` and omitted when `type` is `\"boolean\"`."
+disposition = "covered"
+of = ["ACP-V1-SCHEMA-NEW-SESSION-SHAPE"]
+reason = "Conditional structure of SessionConfigOption is fixed by the schema's variant definitions."
+
+[[prose]]
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "262-266"
+text = "For `select` options, this must be one of the values listed in the option's `options` array. For `boolean` options, this must be a boolean."
+disposition = "import"
+id = "ACP-V1-CONFIG-SET-VALUE-VALID"
+keyword = "MUST"
+role = "client"
+responsibility = "shared"
+applicability = "Applies when the Client calls `session/set_config_option`."
+reason = "the parameter definition fixes a validity rule for `value`; the type half is also fixed by the schema."
+
+[[prose]]
+source = "docs/protocol/v1/session-config-options.mdx"
+lines = "188-189"
+text = "Agents that need to support older Clients should omit the boolean option or provide a `select` fallback."
+disposition = "non-normative"
+reason = "Advice to Agent applications on compatibility strategy; the enforceable rule is the MUST NOT at line 187."

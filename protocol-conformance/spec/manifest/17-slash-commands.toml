@@ -1,0 +1,10 @@
+# docs/protocol/v1/slash-commands.mdx — 1 keyword occurrence
+
+[[requirement]]
+id = "ACP-V1-COMMANDS-ADVERTISE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/slash-commands.mdx"
+lines = "10"
+clause = "After creating a session, the Agent **MAY** send a list of available commands via the `available_commands_update` session notification:"

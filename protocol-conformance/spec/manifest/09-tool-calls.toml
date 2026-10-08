@@ -1,0 +1,64 @@
+# docs/protocol/v1/tool-calls.mdx — 6 keyword occurrences (SHOULD NOT wraps lines 40-41)
+
+[[requirement]]
+id = "ACP-V1-TOOLS-REPORT-TOOL-CALL"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "14"
+clause = "When the language model requests a tool invocation, the Agent **SHOULD** report it to the Client:"
+applicability = "The model loop is the application's; the SDK is assessed on providing the `tool_call` session update for the application to report."
+
+[[requirement]]
+id = "ACP-V1-TOOLS-NAME-IN-FIRST-REPORT"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "39-40"
+clause = "Agents **SHOULD** include it in the first report when available"
+context = "The optional programmatic name of the invoked tool, such as `read_file`."
+
+[[requirement]]
+id = "ACP-V1-TOOLS-NAME-STABLE"
+keyword = "SHOULD NOT"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "40-43"
+clause = "**SHOULD NOT** change it later except to correct metadata. Names are opaque, informational metadata: they do not advertise a capability or grant authorization."
+context = "The optional programmatic name of the invoked tool."
+
+[[requirement]]
+id = "ACP-V1-TOOLS-PERMISSION-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "135"
+clause = "The Agent **MAY** request permission from the user before executing a tool call by calling the `session/request_permission` method:"
+
+[[requirement]]
+id = "ACP-V1-TOOLS-CLIENT-AUTO-PERMISSION-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "191"
+clause = "Clients **MAY** automatically allow or reject permission requests according to the user settings."
+applicability = "A permission for Client applications; the SDK is the subject only insofar as it lets the permission handler answer without user interaction."
+
+[[duplicate]]
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "193"
+clause = "If the current prompt turn gets [cancelled](/protocol/v1/prompt-turn#cancellation), the Client **MUST** respond with the `\"cancelled\"` outcome:"
+of = "ACP-V1-PROMPT-CLIENT-RESPOND-PENDING-PERMISSIONS"
+
+[[prose]]
+source = "docs/protocol/v1/tool-calls.mdx"
+lines = "128-131"
+text = "All fields except `toolCallId` are optional in updates. Only the fields being changed need to be included. For `name`, omission and `null` both leave the existing value unchanged, while a string sets or replaces it. ACP v1 cannot clear a previously reported name."
+disposition = "covered"
+of = ["ACP-V1-SCHEMA-SESSION-UPDATE-VARIANTS"]
+reason = "Optionality of ToolCallUpdate members is fixed by the schema; the merge semantics are descriptive of the v1 data model."

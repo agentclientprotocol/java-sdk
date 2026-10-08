@@ -1,0 +1,204 @@
+# docs/protocol/v1/prompt-turn.mdx — 20 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-PROMPT-INIT-AND-SETUP-FIRST"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "8"
+clause = "Before sending prompts, Clients **MUST** first complete the [initialization](/protocol/v1/initialization) phase and [session setup](/protocol/v1/session-setup)."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-CLIENT-RESTRICT-CONTENT"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "114"
+clause = "Clients **MUST** restrict types of content according to the [Prompt Capabilities](/protocol/v1/initialization#prompt-capabilities) established during [initialization](/protocol/v1/initialization)."
+mirrors = ["/$defs/PromptRequest/properties/prompt"]
+
+[[non_normative]]
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "124"
+reason = "'the language model, which MAY respond with text content, tool calls, or both' describes the language model's possible output, not an obligation or permission on a protocol party."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-MESSAGE-ID-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "191"
+clause = "The Agent **MAY** include an opaque, unique `messageId` on message chunks. Chunks with the same `messageId` belong to the same message; a changed `messageId` indicates a new message."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-USAGE-UPDATE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "214"
+clause = "The Agent **MAY** also report current session context and cumulative cost state with a `usage_update`:"
+
+[[requirement]]
+id = "ACP-V1-PROMPT-RESPOND-WITH-STOP-REASON"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "239"
+clause = "If there are no pending tool calls, the turn ends and the Agent **MUST** respond to the original `session/prompt` request with a `StopReason`:"
+
+[[requirement]]
+id = "ACP-V1-PROMPT-AGENT-MAY-STOP"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "251"
+clause = "Agents **MAY** stop the turn at any point by returning the corresponding [`StopReason`](#stop-reasons)."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-PERMISSION-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "255"
+clause = "Before proceeding with execution, the Agent **MAY** request permission from the Client via the `session/request_permission` method."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-TOOL-IN-PROGRESS"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "257"
+clause = "Once permission is granted (if required), the Agent **SHOULD** invoke the tool and report a status update marking the tool as `in_progress`:"
+applicability = "Tool invocation is the application's; the SDK is assessed on letting the application report the `in_progress` status update."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-TOOL-UPDATES-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "274"
+clause = "As the tool runs, the Agent **MAY** send additional updates, providing real-time feedback about tool execution progress."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-TOOLS-MAY-USE-CLIENT-CAPABILITIES"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "276"
+clause = "While tools execute on the Agent, they **MAY** leverage Client capabilities such as the file system (`fs`) methods to access resources within the Client's environment."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-CLIENT-CANCEL-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "336"
+clause = "Clients **MAY** cancel an ongoing prompt turn at any time by sending a `session/cancel` notification:"
+
+[[requirement]]
+id = "ACP-V1-PROMPT-CLIENT-MARK-CANCELLED"
+keyword = "SHOULD"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "348"
+clause = "The Client **SHOULD** preemptively mark all non-finished tool calls pertaining to the current turn as `cancelled` as soon as it sends the `session/cancel` notification."
+applicability = "Tool-call display state is the application's; the SDK is assessed on giving the application the hook to do this when `session/cancel` is sent."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-CLIENT-RESPOND-PENDING-PERMISSIONS"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "350"
+clause = "The Client **MUST** respond to all pending `session/request_permission` requests with the `cancelled` outcome."
+mirrors = ["/$defs/RequestPermissionOutcome/oneOf/0", "/$defs/AgentRequest/properties/params/anyOf/0/anyOf/2"]
+
+[[requirement]]
+id = "ACP-V1-PROMPT-AGENT-STOP-ON-CANCEL"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "352"
+clause = "When the Agent receives this notification, it **SHOULD** stop all language model requests and all tool call invocations as soon as possible."
+mirrors = ["/$defs/ClientNotification/properties/params/anyOf/0/anyOf/0"]
+applicability = "Model and tool execution are the application's; the SDK is assessed on delivering cancellation to the running prompt promptly."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-AGENT-CANCELLED-STOP-REASON"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "354"
+clause = "After all ongoing operations have been successfully aborted and pending updates have been sent, the Agent **MUST** respond to the original `session/prompt` request with the `cancelled` [stop reason](#stop-reasons)."
+mirrors = ["/$defs/StopReason/oneOf/4"]
+
+[[requirement]]
+id = "ACP-V1-PROMPT-AGENT-CATCH-ABORT-ERRORS"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "361"
+clause = "Agents **MUST** catch these errors and return the semantically meaningful `cancelled` stop reason, so that Clients can reliably confirm the cancellation."
+context = "API client libraries and tools often throw an exception when their operation is aborted, which may propagate as an error response to `session/prompt`. Clients often display unrecognized errors from the Agent to the user, which would be undesirable for cancellations as they aren't considered errors."
+mirrors = ["/$defs/StopReason/oneOf/4"]
+
+[[requirement]]
+id = "ACP-V1-PROMPT-UPDATES-AFTER-CANCEL-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "365"
+clause = "The Agent **MAY** send `session/update` notifications with content or tool call updates after receiving the `session/cancel` notification,"
+
+[[requirement]]
+id = "ACP-V1-PROMPT-UPDATES-BEFORE-RESPONSE"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "365"
+clause = "but it **MUST** ensure that it does so before responding to the `session/prompt` request."
+context = "The Agent MAY send `session/update` notifications with content or tool call updates after receiving the `session/cancel` notification."
+
+[[requirement]]
+id = "ACP-V1-PROMPT-CLIENT-ACCEPT-LATE-UPDATES"
+keyword = "SHOULD"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "367"
+clause = "The Client **SHOULD** still accept tool call updates received after sending `session/cancel`."
+mirrors = ["/$defs/AgentNotification/properties/params/anyOf/0/anyOf/0"]
+
+[[prose]]
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "235"
+text = "`used` and `size` are required and non-null token counts for the current session context. `cost` is optional and, if present, `amount` and `currency` are required."
+disposition = "covered"
+of = ["ACP-V1-SCHEMA-SESSION-UPDATE-VARIANTS"]
+reason = "Required members of UsageUpdate and Cost are fixed by the schema."
+
+[[prose]]
+source = "docs/protocol/v1/prompt-turn.mdx"
+lines = "316"
+text = "When an Agent stops a turn, it must specify the corresponding `StopReason`:"
+disposition = "covered"
+of = ["ACP-V1-PROMPT-RESPOND-WITH-STOP-REASON", "ACP-V1-SCHEMA-STOP-REASON-VALUES"]
+reason = "Restates the MUST at line 239; the value set is fixed by the schema."

@@ -1,0 +1,344 @@
+# docs/protocol/v1/elicitation.mdx — 32 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-IDENTIFY-AGENT"
+keyword = "MUST"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "17-18"
+clause = "Clients **MUST** clearly identify the Agent requesting information, respect user privacy, and provide clear decline and cancel controls."
+applicability = "User-interface conduct is the Client application's; the SDK is the subject only insofar as it exposes the request, the decline and the cancel actions to the application."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-FORM-REVIEW"
+keyword = "MUST"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "18-19"
+clause = "For form mode, Clients **MUST** let users review and modify responses before sending them."
+applicability = "Applies when the Client advertises form-mode elicitation; the form UI is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-URL-CONSENT"
+keyword = "MUST"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "19-21"
+clause = "For URL mode, Clients **MUST** display the target host and obtain consent before navigating to it."
+applicability = "Applies when the Client advertises URL-mode elicitation; the consent UI is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-PRESENT-MESSAGE"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "21-22"
+clause = "Clients **SHOULD** present the request's `message` so users understand what is requested and why."
+applicability = "Applies when the Client advertises elicitation; presentation is the application's, the SDK is assessed on exposing `message`."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-NO-UNADVERTISED-MODE"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "54"
+clause = "Agents **MUST NOT** request a mode the Client has not advertised."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-FALLBACK"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "54-55"
+clause = "Agents **SHOULD** provide a graceful fallback when the required mode is unavailable."
+applicability = "The fallback is the Agent application's; the SDK is the subject only insofar as it reports which modes the Client advertised."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-BIND-CONNECTION"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "69-71"
+clause = "Agents **MUST** bind each elicitation and related state to the receiving Client connection and, when authentication exists, the verified user identity. A `sessionId` alone or an unverified Client-provided identity is not sufficient."
+applicability = "Applies when the Agent uses elicitation."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-VALIDATE"
+keyword = "SHOULD"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "99"
+clause = "Clients **SHOULD** validate submitted values before responding,"
+context = "Form schemas are flat objects whose properties use the supported primitive and enum schemas."
+applicability = "Applies when the Client advertises form-mode elicitation."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-REVALIDATE"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "99-100"
+clause = "and Agents **SHOULD** validate them again."
+context = "Clients SHOULD validate submitted values before responding."
+applicability = "Applies when the Agent uses form-mode elicitation."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-DEFAULTS"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "102-103"
+clause = "Clients that support schema defaults **SHOULD** pre-populate form fields with their declared default values."
+applicability = "Applies only to Clients that support schema defaults; form rendering is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-FORM-NO-SECRETS"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "105-108"
+clause = "Form mode **MUST NOT** be used to request secrets or credentials that grant access or authorize transactions, such as passwords, API keys, access or refresh tokens, private keys, recovery codes, or payment credentials."
+applicability = "What is requested is the Agent application's choice; the SDK is the subject only if it itself composes elicitation requests."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-URL-FOR-SENSITIVE"
+keyword = "MUST"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "109-110"
+clause = "Agents **MUST** use URL mode for sensitive interactions."
+applicability = "What is requested is the Agent application's choice; the SDK is the subject only if it itself composes elicitation requests."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-NO-FORM-FALLBACK"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "110-111"
+clause = "If the Client does not support URL mode, the Agent **MUST NOT** fall back to form mode; it must use another safe flow or fail the operation."
+applicability = "Applies when the Client has not advertised URL mode; the choice is the Agent application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-NO-CREDENTIALS-OVER-ACP"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "134-135"
+clause = "Agents **MUST NOT** send credentials or tokens obtained through URL mode back over ACP or place them in Client or model context."
+applicability = "Applies when the Agent uses URL-mode elicitation; the handling of obtained credentials is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-ACCEPT-CONTENT-SCHEMA"
+keyword = "SHOULD"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "147-148"
+clause = "For an accepted form elicitation, `content` **SHOULD** conform to the requested schema."
+applicability = "Applies when the Client accepts a form-mode elicitation."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-NO-ASSUME-SUCCESS"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "151"
+clause = "Agents **MUST NOT** assume an elicitation succeeds."
+applicability = "Applies when the Agent uses elicitation; the SDK is assessed on surfacing every action (`accept`, `decline`, `cancel`) and failures to the application."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-HANDLE-OUTCOMES"
+keyword = "MUST"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "151-153"
+clause = "They **MUST** handle `decline`, `cancel`, and failures by safely falling back, retrying, or failing the originating operation as appropriate."
+applicability = "Applies when the Agent uses elicitation; the handling is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-UNIQUE-ELICITATION-ID"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "158-160"
+clause = "The Agent **MUST** keep each `elicitationId` unique among outstanding URL elicitations on that Agent-Client connection,"
+applicability = "Applies when the Agent uses URL-mode elicitation."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-OPAQUE-ELICITATION-ID"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "160"
+clause = "and the Client **MUST** treat it as opaque."
+context = "The Agent MUST keep each `elicitationId` unique among outstanding URL elicitations on that Agent-Client connection."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-COMPLETE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "160-161"
+clause = "The Agent **MAY** send `elicitation/complete` after the external interaction finishes."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-COMPLETE-SAME-CLIENT"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "161-163"
+clause = "It **MUST** send that notification only to the same Client that received the original request and include the original `elicitationId`."
+applicability = "Applies when the Agent sends `elicitation/complete`."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-IGNORE-UNKNOWN-COMPLETE"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "163-164"
+clause = "Clients **MUST** ignore unknown or already-completed IDs."
+
+[[prose]]
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "166-167"
+text = "Requests using a mode the Client has not advertised produce JSON-RPC `-32602` (Invalid params)."
+disposition = "import"
+id = "ACP-V1-ELIC-CLIENT-UNADVERTISED-MODE-INVALID-PARAMS"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+reason = "the sentence fixes the wire error for a specific condition; 'produce' is read as the Client's required response."
+
+[[non_normative]]
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "171"
+reason = "'Agents and Clients implementing URL mode MUST follow these requirements:' introduces the itemized list that follows; each item is imported separately."
+
+[[requirement]]
+id = "ACP-V1-ELIC-URL-NO-CREDENTIALS"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "177-178"
+clause = "Agents **MUST NOT** put credentials, personal data, or pre-authenticated access in the URL"
+applicability = "Applies when the Agent uses URL-mode elicitation; the URL is composed by the application."
+
+[[requirement]]
+id = "ACP-V1-ELIC-URL-HTTPS"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "178"
+clause = "and **SHOULD** use HTTPS outside development."
+context = "Agents MUST NOT put credentials, personal data, or pre-authenticated access in the URL."
+applicability = "Applies when the Agent uses URL-mode elicitation; the URL is composed by the application."
+
+[[requirement]]
+id = "ACP-V1-ELIC-FORM-NO-CLICKABLE-URLS"
+keyword = "SHOULD NOT"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "179-180"
+clause = "Agents **SHOULD NOT** include URLs intended to be clickable in any field of a form-mode request."
+applicability = "Applies when the Agent uses form-mode elicitation; the request content is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-NO-PREFETCH"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "181-182"
+clause = "Clients **MUST NOT** prefetch the URL or open it without explicit user consent."
+applicability = "Applies when the Client advertises URL-mode elicitation; navigation is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-SHOW-FULL-URL"
+keyword = "MUST"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "182"
+clause = "They **MUST** show the full URL before asking for consent."
+context = "Clients MUST NOT prefetch the URL or open it without explicit user consent."
+applicability = "Applies when the Client advertises URL-mode elicitation; the consent UI is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-SECURE-CONTEXT"
+keyword = "MUST"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "183-184"
+clause = "Clients **MUST** open the URL in a secure context that prevents the Client or Agent's language model from inspecting the page or user input."
+applicability = "Applies when the Client advertises URL-mode elicitation; navigation is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-HIGHLIGHT-DOMAIN"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "185-186"
+clause = "Clients **SHOULD** highlight the domain and warn about suspicious or ambiguous URLs, including Punycode domains."
+applicability = "Applies when the Client advertises URL-mode elicitation; the UI is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-CLIENT-NO-CLICKABLE-FIELDS"
+keyword = "SHOULD NOT"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "187-189"
+clause = "Clients **SHOULD NOT** render a URL as clickable in any elicitation field except the `url` field of a URL-mode request, subject to the restrictions above."
+applicability = "Applies when the Client advertises elicitation; rendering is the application's."
+
+[[requirement]]
+id = "ACP-V1-ELIC-AGENT-VERIFY-SAME-USER"
+keyword = "MUST"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "190-191"
+clause = "The Agent **MUST** verify that the authenticated user who started the elicitation is the same user who completes the external interaction."
+applicability = "Applies when the Agent uses URL-mode elicitation; the external interaction is the application's."
+
+[[prose]]
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "44-45"
+text = "Form support exists only when `form` is explicitly present and non-null. URL support exists only when `url` is explicitly present and non-null."
+disposition = "covered"
+of = ["ACP-V1-ELIC-AGENT-NO-UNADVERTISED-MODE", "ACP-V1-SCHEMA-INITIALIZE-SHAPE"]
+reason = "Defines what 'advertised' means for the MUST NOT at line 54; the capability object shape is fixed by the schema."
+
+[[prose]]
+source = "docs/protocol/v1/elicitation.mdx"
+lines = "111"
+text = "it must use another safe flow or fail the operation."
+disposition = "covered"
+of = ["ACP-V1-ELIC-AGENT-NO-FORM-FALLBACK"]
+reason = "Second half of the same sentence as the MUST NOT."

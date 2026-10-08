@@ -1,0 +1,22 @@
+# docs/protocol/v1/session-modes.mdx — 1 keyword occurrence
+
+[[requirement]]
+id = "ACP-V1-MODES-INITIAL-STATE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-modes.mdx"
+lines = "17"
+clause = "During [Session Setup](/protocol/v1/session-setup) the Agent **MAY** return a list of modes it can operate in and the currently active mode:"
+
+[[prose]]
+source = "docs/protocol/v1/session-modes.mdx"
+lines = "101-104"
+text = "The ID of the mode to switch to. Must be one of the modes listed in `availableModes`"
+disposition = "import"
+id = "ACP-V1-MODES-SET-MODE-ID-LISTED"
+keyword = "MUST"
+role = "client"
+responsibility = "shared"
+applicability = "Applies when the Client calls `session/set_mode`."
+reason = "the parameter definition fixes a validity rule for `modeId`; the same rule is stated in the schema description of SetSessionModeRequest ('The mode must be one of the modes advertised in availableModes')."

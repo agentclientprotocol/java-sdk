@@ -1,0 +1,30 @@
+# docs/protocol/v1/file-system.mdx — 3 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-FS-AGENT-CHECK-CAPABILITY"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/file-system.mdx"
+lines = "10"
+clause = "Before attempting to use filesystem methods, Agents **MUST** verify that the Client supports these capabilities by checking the [Client Capabilities](/protocol/v1/initialization#client-capabilities) field in the Client's `initialize` request:"
+
+[[requirement]]
+id = "ACP-V1-FS-AGENT-NO-CALL-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/file-system.mdx"
+lines = "29"
+clause = "If `readTextFile` or `writeTextFile` is `false` or not present, the Agent **MUST NOT** attempt to call the corresponding filesystem method."
+
+[[requirement]]
+id = "ACP-V1-FS-CLIENT-CREATE-FILE"
+keyword = "MUST"
+role = "client"
+responsibility = "shared"
+source = "docs/protocol/v1/file-system.mdx"
+lines = "98-101"
+clause = "Absolute path to the file to write. The Client **MUST** create the file if it doesn't exist."
+context = "Definition of the `path` parameter of `fs/write_text_file`."
+applicability = "Applies when the Client advertises `fs.writeTextFile`; the file write is performed by the application's handler unless the SDK supplies one."

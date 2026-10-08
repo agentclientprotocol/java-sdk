@@ -1,0 +1,38 @@
+# docs/protocol/v1/session-delete.mdx — 4 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-DELETE-INIT-FIRST"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-delete.mdx"
+lines = "8"
+clause = "Before deleting sessions, Clients **MUST** first complete the [initialization](/protocol/v1/initialization) phase and verify the Agent supports this capability."
+
+[[requirement]]
+id = "ACP-V1-DELETE-CLIENT-CHECK-CAPABILITY"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-delete.mdx"
+lines = "35"
+clause = "Before attempting to delete a session, Clients **MUST** verify that the Agent supports this capability by checking the `sessionCapabilities.delete` field in the `initialize` response:"
+
+[[requirement]]
+id = "ACP-V1-DELETE-CLIENT-NO-DELETE-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-delete.mdx"
+lines = "52"
+clause = "If `sessionCapabilities.delete` is omitted or `null`, the Agent does not support deleting sessions and Clients **MUST NOT** attempt to call `session/delete`. Supplying `{}` means the Agent supports the method."
+
+[[requirement]]
+id = "ACP-V1-DELETE-IDEMPOTENT"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-delete.mdx"
+lines = "86"
+clause = "Deleting an already-deleted session, or a session that never existed, **SHOULD** succeed silently."
+applicability = "Applies when the Agent advertises `sessionCapabilities.delete`; the outcome is decided by the application's delete handler."

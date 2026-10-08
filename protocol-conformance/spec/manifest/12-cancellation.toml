@@ -1,0 +1,60 @@
+# docs/protocol/v1/cancellation.mdx — 6 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-CANCEL-REQUEST-MAY-CANCEL-ACTIVITY"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "16-18"
+clause = "When a `$/cancel_request` notification is received by a supporting implementation, the implementation: - **MAY** cancel the corresponding request activity and all nested activities related to that request"
+mirrors = ["/anyOf/2/properties/params/anyOf/0/anyOf/0"]
+applicability = "Applies to an implementation that supports `$/cancel_request`; support is optional (cancellation.mdx:14)."
+
+[[requirement]]
+id = "ACP-V1-CANCEL-REQUEST-MAY-FINISH-NOTIFICATIONS"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "19"
+clause = "**MAY** finish sending any pending notifications before responding"
+context = "When a `$/cancel_request` notification is received by a supporting implementation, the implementation: ..."
+mirrors = ["/anyOf/2/properties/params/anyOf/0/anyOf/0"]
+applicability = "Applies to an implementation that supports `$/cancel_request`."
+
+[[requirement]]
+id = "ACP-V1-CANCEL-REQUEST-MUST-RESPOND"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "20-22"
+clause = "**MUST** send one of these responses for the original request: - A valid response with appropriate data (such as partial results or cancellation marker) - An error response with code [`-32800` (Request Cancelled)](/protocol/v1/schema#errorcode)"
+context = "When a `$/cancel_request` notification is received by a supporting implementation, the implementation: ..."
+mirrors = ["/anyOf/2/properties/params/anyOf/0/anyOf/0"]
+applicability = "Applies to an implementation that supports `$/cancel_request`."
+
+[[requirement]]
+id = "ACP-V1-CANCEL-CALLER-MAY-WAIT"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "24"
+clause = "The calling side **MAY** implement graceful cancellation processing by waiting for the response from the remote side."
+
+[[non_normative]]
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "26"
+reason = "'Cancellation MAY also be done explicitly on a per-feature basis within the protocol' describes how the protocol itself defines features (such as prompt-turn cancellation); it places no obligation or permission on an implementation beyond those features' own clauses."
+
+[[requirement]]
+id = "ACP-V1-CANCEL-INTERNAL-SHOULD"
+keyword = "SHOULD"
+role = "both"
+responsibility = "shared"
+source = "docs/protocol/v1/cancellation.mdx"
+lines = "35-38"
+clause = "When internal cancellation occurs, the executing party **SHOULD**: - Send the same `-32800` (Cancelled) error response as if `$/cancel_request` was received - Ensure consistent behavior regardless of cancellation source"
+applicability = "Applies when the executing party cancels a request internally (for example on timeout or shutdown)."

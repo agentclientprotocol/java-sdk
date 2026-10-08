@@ -1,0 +1,63 @@
+# docs/protocol/v1/authentication.mdx — 5 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-AUTH-CLIENT-NO-LOGOUT-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/authentication.mdx"
+lines = "74-76"
+clause = "If `agentCapabilities.auth.logout` is omitted or `null`, the Agent does not support `logout` and Clients **MUST NOT** call it. Supplying `{}` means the Agent supports the method."
+
+[[requirement]]
+id = "ACP-V1-AUTH-CLIENT-NO-TERMINAL-METHOD-ID"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/authentication.mdx"
+lines = "151-154"
+clause = "The ID of an advertised authentication method whose type defines the `authenticate` flow. Clients MUST NOT pass a `terminal` method."
+context = "Definition of the `methodId` parameter of `authenticate`."
+mirrors = ["/$defs/AuthMethodTerminal"]
+
+[[duplicate]]
+source = "docs/protocol/v1/authentication.mdx"
+lines = "186-188"
+clause = "The terminal process is not the ACP connection, so the Client **MUST NOT** send an `authenticate` request for a terminal method."
+of = "ACP-V1-AUTH-CLIENT-NO-TERMINAL-METHOD-ID"
+
+[[requirement]]
+id = "ACP-V1-AUTH-AGENT-TERMINAL-LOGIN-ARGS"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/authentication.mdx"
+lines = "183-184"
+clause = "Agents **SHOULD** provide arguments that enter a login-only flow and exit when it completes."
+applicability = "Applies only to an Agent that advertises a `terminal` authentication method; the arguments are the Agent program's, so the SDK is the subject only insofar as it models and transmits the method descriptor."
+
+[[requirement]]
+id = "ACP-V1-AUTH-CLIENT-AFTER-LOGOUT"
+keyword = "SHOULD"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/authentication.mdx"
+lines = "224-226"
+clause = "Clients **SHOULD** be prepared for active session operations to fail with authentication-related errors after logout and should prompt the user to authenticate again when appropriate."
+applicability = "The user prompt is the embedding application's; the SDK is the subject insofar as it surfaces `auth_required` errors on active sessions after `logout` rather than hiding them."
+
+[[prose]]
+source = "docs/protocol/v1/authentication.mdx"
+lines = "126-128"
+text = "A Client advertises this capability only when it can reproduce the configured Agent invocation in an interactive terminal. An Agent may advertise a `terminal` method only when this capability is `true`."
+disposition = "covered"
+of = ["ACP-V1-AUTH-AGENT-TERMINAL-METHOD-ONLY-WITH-CAPABILITY"]
+reason = "The Agent half is stated with MUST in the schema description of AuthMethodTerminal; the Client half is a precondition for advertising, assessed under ACP-V1-INIT-CLIENT-SPECIFY-CAPABILITIES."
+
+[[prose]]
+source = "docs/protocol/v1/authentication.mdx"
+lines = "193-194"
+text = "Clients should only call it after verifying the Agent advertised `agentCapabilities.auth.logout` during initialization."
+disposition = "covered"
+of = ["ACP-V1-AUTH-CLIENT-NO-LOGOUT-WITHOUT-CAPABILITY"]
+reason = "Restates the MUST NOT at line 75."

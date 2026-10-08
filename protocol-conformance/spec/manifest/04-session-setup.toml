@@ -1,0 +1,327 @@
+# docs/protocol/v1/session-setup.mdx — 31 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-SETUP-INIT-BEFORE-SESSION"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "8"
+clause = "Before creating a session, Clients **MUST** first complete the [initialization](/protocol/v1/initialization) phase to establish protocol compatibility and capabilities."
+
+[[requirement]]
+id = "ACP-V1-SETUP-NEW-SESSION-ID"
+keyword = "MUST"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "71"
+clause = "The Agent **MUST** respond with a unique [Session ID](#session-id) that identifies this conversation:"
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-CHECK-LOADSESSION"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "89"
+clause = "Before attempting to load a session, Clients **MUST** verify that the Agent supports this capability by checking the `loadSession` field in the `initialize` response:"
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-NO-LOAD-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "104"
+clause = "If `loadSession` is `false` or not present, the Agent does not support loading sessions and Clients **MUST NOT** attempt to call `session/load`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-LOAD-REQUEST-CONTENTS"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "108-112"
+clause = "To load an existing session, Clients **MUST** call the `session/load` method with: - The [Session ID](#session-id) to resume - [MCP servers](#mcp-servers) to connect to - The [working directory](#working-directory)"
+applicability = "Applies when the Client loads a session (the Agent advertised `loadSession`)."
+
+[[requirement]]
+id = "ACP-V1-SETUP-LOAD-REPLAY"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "134"
+clause = "The Agent **MUST** replay the entire conversation to the Client in the form of `session/update` notifications (like `session/prompt`)."
+applicability = "Applies when the Agent advertises `loadSession`; the conversation history is the application's, so the SDK is assessed on whether it lets the application replay through `session/update` before the `session/load` response."
+
+[[requirement]]
+id = "ACP-V1-SETUP-LOAD-RESPOND-AFTER-REPLAY"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "178"
+clause = "When **all** the conversation entries have been streamed to the Client, the Agent **MUST** respond to the original `session/load` request."
+applicability = "Applies when the Agent advertises `loadSession`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-CHECK-RESUME"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "196"
+clause = "Before attempting to resume a session, Clients **MUST** verify that the Agent supports this capability by checking for the `sessionCapabilities.resume` field in the `initialize` response:"
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-NO-RESUME-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "213"
+clause = "If `sessionCapabilities.resume` is not present, the Agent does not support resuming sessions and Clients **MUST NOT** attempt to call `session/resume`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-RESUME-REQUEST-CONTENTS"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "217-221"
+clause = "To resume an existing session without replaying prior messages, Clients **MUST** call the `session/resume` method with: - The [Session ID](#session-id) to resume - [MCP servers](#mcp-servers) to connect to - The [working directory](#working-directory)"
+applicability = "Applies when the Client resumes a session (the Agent advertised `sessionCapabilities.resume`)."
+
+[[requirement]]
+id = "ACP-V1-SETUP-RESUME-NO-REPLAY"
+keyword = "MUST NOT"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "243"
+clause = "Unlike `session/load`, the Agent **MUST NOT** replay the conversation history via `session/update` notifications before responding. Instead, it restores the session context, reconnects to the requested MCP servers, and returns once the session is ready to continue."
+applicability = "Applies when the Agent advertises `sessionCapabilities.resume`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-RESUME-RESPONSE-STATE-MAY"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "253"
+clause = "The response **MAY** also include initial mode, model, or session configuration state when those features are supported by the Agent."
+applicability = "Applies when the Agent advertises `sessionCapabilities.resume`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-CHECK-CLOSE"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "261"
+clause = "Before attempting to close a session, Clients **MUST** verify that the Agent supports this capability by checking the `sessionCapabilities.close` field in the `initialize` response:"
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-NO-CLOSE-WITHOUT-CAPABILITY"
+keyword = "MUST NOT"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "278"
+clause = "If `sessionCapabilities.close` is not present, the Agent does not support closing sessions and Clients **MUST NOT** attempt to call `session/close`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLOSE-REQUEST"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "282"
+clause = "To close an active session, Clients **MUST** call the `session/close` method with the session ID:"
+applicability = "Applies when the Client closes a session (the Agent advertised `sessionCapabilities.close`)."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLOSE-CANCELS-AND-FREES"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "299"
+clause = "The Agent **MUST** cancel any ongoing work for that session as if [`session/cancel`](/protocol/v1/prompt-turn#cancellation) had been called, then free the resources associated with the session."
+applicability = "Applies when the Agent advertises `sessionCapabilities.close`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLOSE-MAY-ERROR"
+keyword = "MAY"
+role = "agent"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "311"
+clause = "Agents MAY return an error if the session does not exist or is not currently active."
+applicability = "Applies when the Agent advertises `sessionCapabilities.close`."
+
+[[requirement]]
+id = "ACP-V1-SETUP-ADDITIONAL-DIRS-ABSOLUTE"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "340"
+clause = "each `additionalDirectories` entry **MUST** be an absolute path"
+context = "When present, `additionalDirectories` has the following behavior: `cwd` remains the primary working directory and the base for relative paths."
+applicability = "Applies when `additionalDirectories` is sent (the Agent advertised `sessionCapabilities.additionalDirectories`)."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-ADDITIONAL-DIRS-ONLY-WITH-CAPABILITY"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "344"
+clause = "Clients **MUST** only send `additionalDirectories` when the Agent advertises `sessionCapabilities.additionalDirectories`."
+
+[[prose]]
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "342"
+text = "on `session/load` and `session/resume`, Clients must send the full intended additional-root list again; that list may differ from any previous or reported list as long as the request `cwd` matches the session's `cwd`, and omitting the field or providing an empty array does not restore stored roots implicitly"
+disposition = "import"
+id = "ACP-V1-SETUP-ADDITIONAL-DIRS-FULL-LIST-ON-LOAD"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+applicability = "Applies when the Client sends `additionalDirectories` on `session/load` or `session/resume`."
+reason = "the sentence is an itemized behavioral rule in the same list as a bolded MUST (line 340) and the schema offers no other home for it; 'must' here is the ordinary imperative."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CWD-ABSOLUTE"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "362"
+clause = "**MUST** be an absolute path"
+context = "The `cwd` (current working directory) parameter establishes the primary file system context for the session. This directory: ..."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CWD-USED-REGARDLESS-OF-SPAWN"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "363"
+clause = "**MUST** be used for the session regardless of where the Agent subprocess was spawned"
+context = "The `cwd` (current working directory) parameter establishes the primary file system context for the session. This directory: ..."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CWD-RELATIVE-BASE"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "364"
+clause = "**MUST** remain the base for relative-path resolution"
+context = "The `cwd` (current working directory) parameter establishes the primary file system context for the session. This directory: ..."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CWD-IN-ROOT-SET"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "365"
+clause = "**MUST** be part of the session's effective root set"
+context = "The `cwd` (current working directory) parameter establishes the primary file system context for the session. This directory: ..."
+
+[[requirement]]
+id = "ACP-V1-SETUP-ROOT-SET-BOUNDARY"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "367"
+clause = "This root set **SHOULD** serve as a boundary for tool operations on the file system."
+context = "When `sessionCapabilities.additionalDirectories` is in use, the session's effective root set is `[cwd, ...additionalDirectories]`."
+applicability = "Tool operations are the Agent application's; the SDK is the subject only insofar as it exposes the effective root set to the application."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-MCP-SERVERS-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "371"
+clause = "When creating a session, Clients **MAY** include connection details for MCP servers that the Agent should connect to."
+
+[[requirement]]
+id = "ACP-V1-SETUP-AGENT-MCP-STDIO"
+keyword = "MUST"
+role = "agent"
+responsibility = "shared"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "373"
+clause = "All Agents **MUST** support the stdio transport, while HTTP and SSE transports are optional capabilities that can be checked during initialization."
+mirrors = ["/$defs/McpServer/anyOf/2"]
+applicability = "Connecting to MCP servers is the Agent application's; the SDK is assessed on accepting and exposing stdio MCP server configurations unconditionally."
+
+[[duplicate]]
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "381"
+clause = "All Agents **MUST** support connecting to MCP servers via stdio (standard input/output)."
+of = "ACP-V1-SETUP-AGENT-MCP-STDIO"
+
+[[requirement]]
+id = "ACP-V1-SETUP-AGENT-MCP-HTTP-SHOULD"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "375"
+clause = "While they are not required to by the spec, new Agents **SHOULD** support the HTTP transport to ensure compatibility with modern MCP servers."
+applicability = "MCP connectivity is the Agent application's; the SDK is the subject only insofar as it models the HTTP MCP server configuration and the `mcpCapabilities.http` capability."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-CHECK-MCP-TRANSPORT"
+keyword = "MUST"
+role = "client"
+responsibility = "sdk"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "522"
+clause = "Before using HTTP or SSE transports, Clients **MUST** verify the Agent's capabilities during initialization:"
+
+[[requirement]]
+id = "ACP-V1-SETUP-AGENT-CONNECT-ALL-MCP"
+keyword = "SHOULD"
+role = "agent"
+responsibility = "application"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "543"
+clause = "Agents **SHOULD** connect to all MCP servers specified by the Client."
+applicability = "MCP connectivity is the Agent application's; the SDK is the subject only insofar as it delivers every configured server to the application."
+
+[[requirement]]
+id = "ACP-V1-SETUP-CLIENT-OWN-MCP-MAY"
+keyword = "MAY"
+role = "client"
+responsibility = "application"
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "545"
+clause = "Clients **MAY** use this ability to provide tools directly to the underlying language model by including their own MCP server."
+applicability = "A permission for Client applications; the SDK is the subject only insofar as it does not prevent including a Client-owned MCP server."
+
+[[prose]]
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "429"
+text = "Must be `\"http\"` to indicate HTTP transport"
+disposition = "covered"
+of = ["ACP-V1-SCHEMA-MCP-SERVER-VARIANTS"]
+reason = "Discriminator constant fixed by the schema."
+
+[[prose]]
+source = "docs/protocol/v1/session-setup.mdx"
+lines = "480"
+text = "Must be `\"sse\"` to indicate SSE transport"
+disposition = "covered"
+of = ["ACP-V1-SCHEMA-MCP-SERVER-VARIANTS"]
+reason = "Discriminator constant fixed by the schema."

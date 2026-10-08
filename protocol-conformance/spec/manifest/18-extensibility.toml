@@ -1,0 +1,78 @@
+# docs/protocol/v1/extensibility.mdx — 7 keyword occurrences
+
+[[requirement]]
+id = "ACP-V1-EXT-META-TRACE-KEYS-RESERVED"
+keyword = "SHOULD"
+role = "both"
+responsibility = "shared"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "37-41"
+clause = "The following root-level keys in `_meta` **SHOULD** be reserved for [W3C trace context](https://www.w3.org/TR/trace-context/) to guarantee interop with existing MCP implementations and OpenTelemetry tooling: - `traceparent` - `tracestate` - `baggage`"
+applicability = "Applies to any implementation that writes `_meta`; the SDK is assessed on not using these keys for anything else."
+
+[[requirement]]
+id = "ACP-V1-EXT-NO-ROOT-CUSTOM-FIELDS"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "43"
+clause = "Implementations **MUST NOT** add any custom fields at the root of a type that's part of the specification. All possible names are reserved for future protocol versions."
+
+[[requirement]]
+id = "ACP-V1-EXT-CUSTOM-REQUESTS-MAY"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "56"
+clause = "In addition to the requests specified by the protocol, implementations **MAY** expose and call custom JSON-RPC requests as long as their name starts with an underscore (`_`)."
+
+[[requirement]]
+id = "ACP-V1-EXT-RESPOND-TO-CUSTOM-REQUEST"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "69"
+clause = "Upon receiving a custom request, implementations **MUST** respond accordingly with the provided `id`:"
+
+[[prose]]
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "84"
+text = "If the receiving end doesn't recognize the custom method name, it should respond with the standard \"Method not found\" error:"
+disposition = "import"
+id = "ACP-V1-EXT-UNKNOWN-METHOD-NOT-FOUND"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+reason = "the sentence fixes the wire response (-32601) for an unrecognized custom request, consistent with the incorporated JSON-RPC error table."
+
+[[requirement]]
+id = "ACP-V1-EXT-ADVERTISE-CUSTOM-CAPABILITIES"
+keyword = "SHOULD"
+role = "both"
+responsibility = "application"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "97"
+clause = "To avoid such cases, extensions **SHOULD** advertise their [custom capabilities](#advertising-custom-capabilities) so that callers can check their availability first and adapt their behavior or interface accordingly."
+applicability = "Applies to implementations that define extension methods; what to advertise is the application's, the SDK is assessed on allowing `_meta` in capability objects."
+
+[[requirement]]
+id = "ACP-V1-EXT-IGNORE-UNKNOWN-NOTIFICATIONS"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "113"
+clause = "Unlike with custom requests, implementations **SHOULD** ignore unrecognized notifications."
+
+[[requirement]]
+id = "ACP-V1-EXT-META-FOR-CUSTOM-CAPABILITIES"
+keyword = "SHOULD"
+role = "both"
+responsibility = "shared"
+source = "docs/protocol/v1/extensibility.mdx"
+lines = "117"
+clause = "Implementations **SHOULD** use the `_meta` field in capability objects to advertise support for extensions and their methods:"
+applicability = "Applies to implementations that support extensions; the SDK is assessed on carrying `_meta` in capability objects."

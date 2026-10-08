@@ -1,0 +1,198 @@
+# JSON-RPC 2.0 clauses incorporated by reference. ACP: "The protocol follows the JSON-RPC 2.0 specification"
+# (overview.mdx:10), "All methods follow standard JSON-RPC 2.0 error handling" (:219), "The JSON-RPC envelope fields
+# (jsonrpc, id, method, params, result, and error) follow the JSON-RPC 2.0 specification" (:227), and extension methods
+# "follow standard JSON-RPC 2.0 semantics" (extensibility.mdx:49). The retained bytes are the specification page at
+# https://www.jsonrpc.org/specification (Updated 2013-01-04), which declares RFC 2119 in its Conventions section.
+
+[[jsonrpc_section]]
+anchor = "overview"
+disposition = "non-normative"
+reason = "Overview; no keyword."
+
+[[jsonrpc_section]]
+anchor = "conventions"
+disposition = "non-normative"
+reason = "RFC 2119 declaration and type vocabulary; 'member names ... should be considered to be case-sensitive' is covered by ACP-V1-JSONRPC-PARAM-NAMES-EXACT."
+
+[[jsonrpc_section]]
+anchor = "compatibility"
+disposition = "non-normative"
+reason = "JSON-RPC 1.0 compatibility advice; ACP is 2.0 only."
+
+[[jsonrpc_section]]
+anchor = "request_object"
+disposition = "requirement"
+incorporated_by = "overview.mdx:10 and :227 (envelope fields follow JSON-RPC 2.0)"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-VERSION-MEMBER"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "A String specifying the version of the JSON-RPC protocol. MUST be exactly \"2.0\"."
+context = "The `jsonrpc` member of every Request and Response object; stated identically in sections 4 and 5."
+incorporated_by = "overview.mdx:10 and :227"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RPC-PREFIX-RESERVED"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+clause = "Method names that begin with the word rpc followed by a period character (U+002E or ASCII 46) are reserved for rpc-internal methods and extensions and MUST NOT be used for anything else."
+incorporated_by = "overview.mdx:227 and extensibility.mdx:49"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-PARAMS-MAY-BE-OMITTED"
+keyword = "MAY"
+role = "both"
+responsibility = "sdk"
+clause = "A Structured value that holds the parameter values to be used during the invocation of the method. This member MAY be omitted."
+incorporated_by = "overview.mdx:227"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ID-TYPE"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "An identifier established by the Client that MUST contain a String, Number, or NULL value if included. If it is not included it is assumed to be a notification."
+incorporated_by = "overview.mdx:227; quoted verbatim in schema.json #/$defs/RequestId"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ID-NOT-NULL"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+clause = "The value SHOULD normally not be Null [1]"
+context = "[1] The use of Null as a value for the id member in a Request object is discouraged, because this specification uses a value of Null for Responses with an unknown id."
+incorporated_by = "overview.mdx:227; quoted verbatim in schema.json #/$defs/RequestId"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ID-NO-FRACTION"
+keyword = "SHOULD NOT"
+role = "both"
+responsibility = "sdk"
+clause = "Numbers SHOULD NOT contain fractional parts [2]"
+context = "[2] Fractional parts may be problematic, since many decimal fractions cannot be represented exactly as binary fractions."
+incorporated_by = "overview.mdx:227; quoted verbatim in schema.json #/$defs/RequestId"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RESPONSE-SAME-ID"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "The Server MUST reply with the same value in the Response object if included. This member is used to correlate the context between the two objects."
+incorporated_by = "overview.mdx:227 and extensibility.mdx:69; quoted verbatim in schema.json #/$defs/RequestId"
+
+[[jsonrpc_section]]
+anchor = "notification"
+disposition = "requirement"
+incorporated_by = "overview.mdx:13, :223 and extensibility.mdx:52"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-NO-REPLY-TO-NOTIFICATION"
+keyword = "MUST NOT"
+role = "both"
+responsibility = "sdk"
+clause = "The Server MUST NOT reply to a Notification, including those that are within a batch request."
+context = "A Notification is a Request object without an \"id\" member."
+incorporated_by = "overview.mdx:13 ('One-way messages that don't expect a response'), :223 and extensibility.mdx:52"
+
+[[jsonrpc_section]]
+anchor = "parameter_structures"
+disposition = "requirement"
+incorporated_by = "overview.mdx:227; every ACP method defines by-name (Object) params"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-PARAMS-STRUCTURED"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "If present, parameters for the rpc call MUST be provided as a Structured value. Either by-position through an Array or by-name through an Object."
+incorporated_by = "overview.mdx:227; ACP defines by-name Object params for every method"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-PARAM-NAMES-EXACT"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "The names MUST match exactly, including case, to the method's expected parameters."
+context = "by-name: params MUST be an Object, with member names that match the Server expected parameter names. The absence of expected names MAY result in an error being generated."
+incorporated_by = "overview.mdx:227 (camelCase property keys)"
+
+[[jsonrpc_section]]
+anchor = "response_object"
+disposition = "requirement"
+incorporated_by = "overview.mdx:219-223 and :227"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RESPONSE-REQUIRED"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "When a rpc call is made, the Server MUST reply with a Response, except for in the case of Notifications."
+incorporated_by = "overview.mdx:12 ('Request-response pairs that expect a result or error') and extensibility.mdx:69"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RESULT-ON-SUCCESS"
+keyword = "REQUIRED"
+role = "both"
+responsibility = "sdk"
+clause = "This member is REQUIRED on success. This member MUST NOT exist if there was an error invoking the method."
+context = "The `result` member of a Response object."
+incorporated_by = "overview.mdx:221 ('Successful responses include a result field')"
+notes = "REQUIRED is normalized to MUST; the same sentence also carries the MUST NOT, retained in the clause text."
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ERROR-MEMBER-ON-ERROR"
+keyword = "REQUIRED"
+role = "both"
+responsibility = "sdk"
+clause = "This member is REQUIRED on error. This member MUST NOT exist if there was no error triggered during invocation. The value for this member MUST be an Object as defined in section 5.1."
+context = "The `error` member of a Response object."
+incorporated_by = "overview.mdx:222 ('Errors include an error object with code and message')"
+notes = "REQUIRED is normalized to MUST."
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RESPONSE-ID-ECHO"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "It MUST be the same as the value of the id member in the Request Object. If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null."
+context = "The `id` member of a Response object: This member is REQUIRED."
+incorporated_by = "overview.mdx:227 and extensibility.mdx:69"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-RESULT-XOR-ERROR"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "Either the result member or error member MUST be included, but both members MUST NOT be included."
+incorporated_by = "overview.mdx:219-222"
+
+[[jsonrpc_section]]
+anchor = "error_object"
+disposition = "requirement"
+incorporated_by = "overview.mdx:219 (error handling) and schema.json #/$defs/Error, #/$defs/ErrorCode"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ERROR-CODE-INTEGER"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "A Number that indicates the error type that occurred. This MUST be an integer."
+context = "The `code` member of an Error object."
+incorporated_by = "overview.mdx:219; schema.json #/$defs/Error"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ERROR-MESSAGE-CONCISE"
+keyword = "SHOULD"
+role = "both"
+responsibility = "sdk"
+clause = "A String providing a short description of the error. The message SHOULD be limited to a concise single sentence."
+context = "The `message` member of an Error object."
+incorporated_by = "overview.mdx:219; schema.json #/$defs/Error"
+[[jsonrpc_section.requirements]]
+id = "ACP-V1-JSONRPC-ERROR-RESPONSE-CONTAINS-ERROR"
+keyword = "MUST"
+role = "both"
+responsibility = "sdk"
+clause = "When a rpc call encounters an error, the Response Object MUST contain the error member with a value that is a Object with the following members:"
+incorporated_by = "overview.mdx:219-222"
+
+[[jsonrpc_section]]
+anchor = "batch"
+disposition = "unresolved"
+reason = "ACP never mentions batch requests; its stdio transport frames 'individual JSON-RPC requests, notifications, or responses' one per line (transports.mdx:23-24). Whether a conforming ACP implementation must accept a JSON Array batch is an open interpretation and is recorded as a readiness gap rather than imported at MAY/SHOULD strength."
+
+[[jsonrpc_section]]
+anchor = "examples"
+disposition = "non-normative"
+reason = "Worked examples."
+
+[[jsonrpc_section]]
+anchor = "extensions"
+disposition = "duplicate"
+reason = "'Method names that begin with rpc. are reserved for system extensions, and MUST NOT be used for anything else' restates ACP-V1-JSONRPC-RPC-PREFIX-RESERVED; 'All system extensions are OPTIONAL' concerns JSON-RPC's own extensions, none of which ACP uses."
