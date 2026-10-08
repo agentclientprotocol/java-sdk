@@ -49,6 +49,8 @@ class SchedulerBestPracticesTest {
 		List<Path> roots = new ArrayList<>();
 		try (Stream<Path> modules = Files.list(REPO_ROOT)) {
 			modules.filter(Files::isDirectory)
+				// protocol-conformance is the standalone audit tier, outside the reactor and its rules
+				.filter(module -> !module.getFileName().toString().equals("protocol-conformance"))
 				.map(module -> module.resolve("src/main/java"))
 				.filter(Files::isDirectory)
 				.forEach(roots::add);

@@ -173,7 +173,13 @@ public abstract class AbstractAcpClientAgentIT {
 				.resumeSessionHandler(request -> Mono.just(new AcpSchema.ResumeSessionResponse(null, options)))
 				.promptHandler((request, context) -> Mono.just(AcpSchema.PromptResponse.endTurn()))
 				.build();
-			AcpAsyncClient client = AcpClient.async(clientTransport).requestTimeout(TIMEOUT).build();
+			// ACP v1 (session-config-options.mdx:187): the boolean option reaches only a client that
+			// advertised session.configOptions.boolean; the agent SDK omits it for any other client.
+			AcpAsyncClient client = AcpClient.async(clientTransport)
+				.requestTimeout(TIMEOUT)
+				.clientCapabilities(new AcpSchema.ClientCapabilities(null, null,
+						AcpSchema.ClientSessionCapabilities.withBooleanConfigOptions(), null, null, null))
+				.build();
 			agent.start().subscribe();
 			Thread.sleep(100);
 			client.initialize().block(TIMEOUT);

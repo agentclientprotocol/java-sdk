@@ -418,6 +418,19 @@ public class AcpClientSession implements AcpSession {
 	}
 
 	/**
+	 * Answers every {@code session/request_permission} request of a session the agent is still
+	 * waiting on with the {@code cancelled} outcome, and stops its handler; the client calls this
+	 * when it sends {@code session/cancel} for the session (ACP v1, prompt turn, Cancellation).
+	 * @param sessionId the session whose prompt turn is being cancelled
+	 * @return how many requests were answered
+	 */
+	public int cancelPermissionRequests(String sessionId) {
+		return this.inbound.answer(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION, sessionId,
+				request -> InboundMessages.result(request,
+						new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionCancelled())));
+	}
+
+	/**
 	 * Closes the session gracefully, allowing pending operations to complete.
 	 * @return A Mono that completes when the session is closed
 	 */

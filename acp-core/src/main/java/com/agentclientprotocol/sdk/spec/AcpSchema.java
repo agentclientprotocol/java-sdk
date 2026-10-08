@@ -4160,10 +4160,12 @@ public final class AcpSchema {
 	 * <p>
 	 * An annotated agent takes the flags from the {@code mcpHttp} and {@code mcpSse} attributes of
 	 * {@link com.agentclientprotocol.sdk.annotation.AcpAgent @AcpAgent}; a builder agent without an
-	 * initialize handler advertises both {@code false}. The SDK checks the MCP server types on
-	 * neither side: a client checks {@code supportsMcpHttp()} and {@code supportsMcpSse()} on
+	 * initialize handler advertises both {@code false}. The client SDK checks them: a session call
+	 * carrying an HTTP or SSE server to an agent that did not advertise the matching flag fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent (see
+	 * {@code supportsMcpHttp()} and {@code supportsMcpSse()} on
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
-	 * NegotiatedCapabilities} before it sends them.
+	 * NegotiatedCapabilities}). The agent SDK does not check what arrives.
 	 *
 	 * @param http whether the agent accepts MCP servers over HTTP, or {@code null}, read as
 	 * {@code false}
@@ -4203,11 +4205,14 @@ public final class AcpSchema {
 	 * An annotated agent takes the flags from the {@code image}, {@code audio} and
 	 * {@code embeddedContext} attributes of its
 	 * {@link com.agentclientprotocol.sdk.annotation.Prompt @Prompt} method; a builder agent without
-	 * an initialize handler advertises all three {@code false}. The SDK checks prompt content on
-	 * neither side: a client checks {@code supportsImageContent()}, {@code supportsAudioContent()}
-	 * and {@code supportsEmbeddedContext()} on
+	 * an initialize handler advertises all three {@code false}. The client SDK checks prompt content:
+	 * a prompt carrying an image, audio or embedded resource block to an agent that did not
+	 * advertise the matching flag fails with
+	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent (see
+	 * {@code supportsImageContent()}, {@code supportsAudioContent()} and
+	 * {@code supportsEmbeddedContext()} on
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
-	 * NegotiatedCapabilities} before it sends such blocks. Note the component order: audio,
+	 * NegotiatedCapabilities}). The agent SDK does not check what arrives. Note the component order: audio,
 	 * embedded context, image.
 	 *
 	 * @param audio whether the agent accepts {@link AudioContent} blocks, or {@code null}, read as
@@ -4750,10 +4755,13 @@ public final class AcpSchema {
 	 * It differs from {@link SessionConfigSelect} in having no options and a boolean value. The
 	 * protocol forbids an agent to offer it to a client that did not advertise
 	 * {@code session.configOptions.boolean}
-	 * ({@link ClientSessionCapabilities#withBooleanConfigOptions()}). The SDK does not check this
-	 * when sending, so check {@code supportsBooleanConfigOptions()} on the
+	 * ({@link ClientSessionCapabilities#withBooleanConfigOptions()}). The agent SDK enforces this
+	 * when sending: to a client that did not advertise it, a boolean option a handler returned is
+	 * omitted from the session answer, {@code session/set_config_option} answer or
+	 * {@code config_option_update}, with a warning naming it. Check
+	 * {@code supportsBooleanConfigOptions()} on the
 	 * {@link com.agentclientprotocol.sdk.capabilities.NegotiatedCapabilities
-	 * NegotiatedCapabilities}, and offer a select in its place, or nothing, to other clients.
+	 * NegotiatedCapabilities} to offer a select in its place to such clients.
 	 * {@code currentValue} is required; a value that is not a JSON boolean fails to read, and with
 	 * it the message that carries it.
 	 *

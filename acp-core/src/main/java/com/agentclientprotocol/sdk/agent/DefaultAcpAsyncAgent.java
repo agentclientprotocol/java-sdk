@@ -102,8 +102,67 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 			if (request instanceof AcpSchema.PromptRequest prompt) {
 				return handlePrompt(registration, request, prompt.sessionId());
 			}
-			return registration.handler().handle(request, this).cast(Object.class);
+			return registration.handler()
+				.handle(request, this)
+				.cast(Object.class)
+				.map(this::withoutBooleanOptionsUnlessAdvertised);
 		};
+	}
+
+	/**
+	 * ACP v1, session config options: "Agents MUST NOT include type: "boolean" options in
+	 * configOptions payloads unless the Client advertised support." A boolean option the handler
+	 * returned to any other client is omitted, with a warning naming it; the agent keeps using its
+	 * default, which the protocol requires it to have.
+	 */
+	private Object withoutBooleanOptionsUnlessAdvertised(Object result) {
+		NegotiatedCapabilities caps = clientCapabilities.get();
+		if (caps != null && caps.supportsBooleanConfigOptions()) {
+			return result;
+		}
+		if (result instanceof AcpSchema.NewSessionResponse r && hasBoolean(r.configOptions())) {
+			return new AcpSchema.NewSessionResponse(r.sessionId(), r.modes(), withoutBooleans(r.configOptions()),
+					r.meta());
+		}
+		if (result instanceof AcpSchema.LoadSessionResponse r && hasBoolean(r.configOptions())) {
+			return new AcpSchema.LoadSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta());
+		}
+		if (result instanceof AcpSchema.ResumeSessionResponse r && hasBoolean(r.configOptions())) {
+			return new AcpSchema.ResumeSessionResponse(r.modes(), withoutBooleans(r.configOptions()), r.meta());
+		}
+		if (result instanceof AcpSchema.ForkSessionResponse r && hasBoolean(r.configOptions())) {
+			return new AcpSchema.ForkSessionResponse(r.sessionId(), r.modes(), withoutBooleans(r.configOptions()),
+					r.meta());
+		}
+		if (result instanceof AcpSchema.SetSessionConfigOptionResponse r && hasBoolean(r.configOptions())) {
+			return new AcpSchema.SetSessionConfigOptionResponse(withoutBooleans(r.configOptions()), r.meta());
+		}
+		if (result instanceof AcpSchema.ConfigOptionUpdate u && hasBoolean(u.configOptions())) {
+			return new AcpSchema.ConfigOptionUpdate(u.sessionUpdate(), withoutBooleans(u.configOptions()), u.meta());
+		}
+		return result;
+	}
+
+	private static boolean hasBoolean(@Nullable List<AcpSchema.SessionConfigOption> options) {
+		return options != null && options.stream().anyMatch(AcpSchema.SessionConfigBoolean.class::isInstance);
+	}
+
+	private static List<AcpSchema.SessionConfigOption> withoutBooleans(
+			@Nullable List<AcpSchema.SessionConfigOption> options) {
+		if (options == null) {
+			return List.of();
+		}
+		List<AcpSchema.SessionConfigOption> kept = new java.util.ArrayList<>(options.size());
+		for (AcpSchema.SessionConfigOption option : options) {
+			if (option instanceof AcpSchema.SessionConfigBoolean bool) {
+				logger.warn("Omitting boolean session config option '{}': the client did not advertise "
+						+ "session.configOptions.boolean (ACP v1, session config options)", bool.id());
+			}
+			else {
+				kept.add(option);
+			}
+		}
+		return List.copyOf(kept);
 	}
 
 	/**
@@ -188,7 +247,8 @@ class DefaultAcpAsyncAgent implements AcpAsyncAgent {
 
 	@Override
 	public Mono<Void> sendSessionUpdate(String sessionId, AcpSchema.SessionUpdate update) {
-		return sendNotification(AcpSchema.METHOD_SESSION_UPDATE, new AcpSchema.SessionNotification(sessionId, update));
+		AcpSchema.SessionUpdate sent = (AcpSchema.SessionUpdate) withoutBooleanOptionsUnlessAdvertised(update);
+		return sendNotification(AcpSchema.METHOD_SESSION_UPDATE, new AcpSchema.SessionNotification(sessionId, sent));
 	}
 
 	@Override
