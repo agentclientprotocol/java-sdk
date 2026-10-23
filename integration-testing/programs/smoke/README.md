@@ -50,8 +50,8 @@ integration-testing/programs/smoke/run-smoke.sh all --auth none
 
 It installs the SDK from this checkout, builds the client, and installs each pinned agent into
 `integration-testing/.cache/smoke/npm-<agent>` (never globally). Logs go to
-`integration-testing/logs/smoke/`. Prerequisites: JDK 17+, Node 22 (Node 20 works for Gemini and
-Codex), npm.
+`integration-testing/logs/smoke/`. Prerequisites: JDK 17+, the latest patched Node 22.x LTS
+(22.23.4 or newer), npm. Node 20 is end-of-life and should not be used.
 
 `--auth` (or `SMOKE_AUTH_MODE`) chooses the credentials:
 

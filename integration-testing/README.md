@@ -31,7 +31,7 @@ There are four kinds of scenarios:
 | JDK (with `jcmd`) | 17+ | the SDK, the Java programs, the runner, heap and thread samples |
 | JDK | 21 | the Kotlin SDK's Gradle toolchain (Kotlin cells only) |
 | [JBang](https://www.jbang.dev/download/) | 0.135+ | `RunScenario.java`, `GenConfigs.java` |
-| Node.js and npm | 20 | the TypeScript SDK and its programs |
+| Node.js and npm | latest patched 22.x LTS (22.23.4 or newer) | the TypeScript SDK and its programs |
 | Rust (`cargo`) | stable | the Rust SDK and its programs |
 | Python | 3.12 (`python3 -m venv`) | the Python SDK (plus Hypercorn) and its programs |
 | git | any | cloning the peer SDKs |
@@ -178,8 +178,8 @@ integration-testing/scripts/run-all.sh --only 'fw-spring-*,load-10-fw-spring'   
 gh workflow run framework-smoke.yml --ref <branch>     # the same in CI, on that branch
 ```
 
-It needs JDK 17+, Node 20 and JBang (the TypeScript SDK is cloned and built on the first run); on a
-warm machine it takes about 3 minutes.
+It needs JDK 17+, the latest patched Node 22.x LTS (22.23.4 or newer), npm and JBang (the TypeScript
+SDK is cloned and built on the first run); on a warm machine it takes about 3 minutes.
 
 ## Contracts
 
