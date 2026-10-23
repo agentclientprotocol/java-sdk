@@ -116,12 +116,13 @@ jobs:
           path: ~/.m2/wrapper
           key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         if: matrix.node
         id: node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '22'
+          check-latest: true
 
       - name: Set up Rust stable
         if: matrix.rust
@@ -216,12 +217,13 @@ jobs:
           path: ~/.m2/wrapper
           key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         if: matrix.node
         id: node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '22'
+          check-latest: true
 
       - name: Set up Rust stable
         if: matrix.rust
