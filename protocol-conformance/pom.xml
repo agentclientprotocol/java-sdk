@@ -21,8 +21,8 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.deploy.skip>true</maven.deploy.skip>
-        <!-- Agent Eval producer: agent-judge@b7d2d88ace7cbf110dbfd47ab57221d9e364fb7e, installed locally -->
-        <agent-judge.version>0.18.0-SNAPSHOT</agent-judge.version>
+        <!-- Agent Eval producer: agent-judge 0.18.0 on Maven Central (tag v0.18.0 contains the audited b7d2d88) -->
+        <agent-judge.version>0.18.0</agent-judge.version>
         <!-- provided scope upstream; the consumer picks the version (same as the PetClinic tutorial) -->
         <agent-client.version>0.30.0</agent-client.version>
         <slf4j.version>2.0.18</slf4j.version>

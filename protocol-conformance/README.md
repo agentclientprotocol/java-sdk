@@ -63,7 +63,7 @@ python3 -I protocol-conformance/scripts/import-spec.py retain \
 
 | Path | Responsibility |
 |---|---|
-| `pom.xml` | Standalone Java 21 project (Agent Eval `0.18.0-SNAPSHOT` from producer `b7d2d88`, Agent Client 0.30.0); no deploy |
+| `pom.xml` | Standalone Java 21 project (Agent Eval `0.18.0` from Maven Central, whose tag contains producer `b7d2d88`, Agent Client 0.30.0); no deploy |
 | `AcpRequirementRoster` | Loads `spec/requirements.json`, verifies the roster digest sidecar and every retained source digest, constructs full-text native `Rfc2119Requirement`s |
 | `AcpAuditContext` | Prepends the ACP audit instruction to the producer's generated roster prompt; delegates `execute()` so native facts survive |
 | `AcpJudgeBackends` | Replay (default, zero inference) or live (`AgentClientEvalModel` over a workspace-scoped `AgentClient`), with capture |
