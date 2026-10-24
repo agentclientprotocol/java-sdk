@@ -1,17 +1,17 @@
 {
   "typescript-sdk": {
     "url": "https://github.com/agentclientprotocol/typescript-sdk.git",
-    "ref": "main",
+    "ref": "1726f28fa2bf13ef7a7c3076048d30daf53d4c13",
     "build": "npm ci --no-audit --no-fund && npm run build"
   },
   "rust-sdk": {
     "url": "https://github.com/agentclientprotocol/rust-sdk.git",
-    "ref": "main",
+    "ref": "69e103f102eb5f5bdf3b98682c346dd50f1543e0",
     "build": "cargo fetch"
   },
   "python-sdk": {
     "url": "https://github.com/agentclientprotocol/python-sdk.git",
-    "ref": "main",
+    "ref": "f235530849afa976571a82b12e196e096c9d0c48",
     "build": "rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install --quiet --disable-pip-version-check -e '.[http]' 'hypercorn==0.18.0'"
   },
   "kotlin-sdk": {

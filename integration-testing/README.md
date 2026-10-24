@@ -82,12 +82,16 @@ integration-testing/scripts/run-all.sh --tag stdio --exclude 'x-java-*' --list
   `logs/run-all/<scenario>.console.log` and a line is printed as each finishes; the table at the end
   is the same. `--prepare-only` stops after the preparation (CI warms its caches with it).
 
-Against a tag or other ref of the peer SDKs (the default, from `peers.json`, is `main`):
+Against a tag or other ref of the peer SDKs. The default is each peer's ref in `peers.json`: the
+TypeScript, Rust and Python peers are pinned to the last commits this suite passed against, because
+their `main` branches moved on (TypeScript no longer builds `dist/acp.js`, Rust no longer exports what
+the interop program uses, and the Python cells time out); Kotlin follows `master`. `--peer` and
+`--peers-ref` override the pins, for example `--peer typescript-sdk=main` to see the drift.
 
 ```bash
 # every peer at the same ref
 integration-testing/scripts/run-all.sh --peers-ref v1.0.0
-# one peer at a tag, the others at main
+# one peer at a tag, the others at their peers.json ref
 integration-testing/scripts/run-all.sh --peer typescript-sdk=v0.5.0
 jbang RunScenario.java x-java-python-http --peer python-sdk=1.0.0rc2
 ```
