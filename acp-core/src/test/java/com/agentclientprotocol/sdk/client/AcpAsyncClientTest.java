@@ -151,7 +151,7 @@ class AcpAsyncClientTest {
 		AcpAsyncClient client = AcpClient.async(transport).requestTimeout(TIMEOUT).build();
 		client.initialize().block(TIMEOUT);
 
-		AcpSchema.LoadSessionRequest loadRequest = new AcpSchema.LoadSessionRequest("session-123", null, List.of());
+		AcpSchema.LoadSessionRequest loadRequest = new AcpSchema.LoadSessionRequest("session-123", "/workspace", List.of());
 
 		StepVerifier.create(client.loadSession(loadRequest)).consumeNextWith(response -> {
 			assertThat(response).isNotNull();

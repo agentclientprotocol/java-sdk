@@ -358,7 +358,10 @@ public class AcpAsyncClient {
 	 * additional directories fails with
 	 * {@link com.agentclientprotocol.sdk.error.AcpCapabilityException} without being sent unless
 	 * the agent advertises {@code sessionCapabilities.additionalDirectories}; so do
-	 * {@link #loadSession}, {@link #resumeSession} and {@link #forkSession}.
+	 * {@link #loadSession}, {@link #resumeSession} and {@link #forkSession}. They also fail with
+	 * {@link IllegalArgumentException}, without being sent, when the working directory or an
+	 * additional directory is not an absolute path, POSIX ({@code /…}) or Windows ({@code C:\…},
+	 * {@code \\server\share…}); the form is checked, not the client's own file system.
 	 * @param request the working directory, an absolute path, and the MCP servers
 	 * @return a {@code Mono} emitting the agent's answer, with the session ID
 	 * @see AcpSchema#METHOD_SESSION_NEW
@@ -368,7 +371,8 @@ public class AcpAsyncClient {
 		logger.debug("Creating new session with cwd: {}", request.cwd());
 		return afterInitialize(AcpSchema.METHOD_SESSION_NEW,
 				withMcpServers(withDirectories(AcpAsyncClient::initializedOnly, request.additionalDirectories()), request.mcpServers()),
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, request, NEW_SESSION_RESPONSE_TYPE_REF));
+				() -> withAbsolutePaths(AcpSchema.METHOD_SESSION_NEW, request.cwd(), request.additionalDirectories(),
+						() -> session.sendRequest(AcpSchema.METHOD_SESSION_NEW, request, NEW_SESSION_RESPONSE_TYPE_REF)));
 	}
 
 	/**
@@ -385,7 +389,8 @@ public class AcpAsyncClient {
 		logger.debug("Loading session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_LOAD,
 				withMcpServers(withDirectories(NegotiatedCapabilities::requireLoadSession, request.additionalDirectories()), request.mcpServers()),
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, request, LOAD_SESSION_RESPONSE_TYPE_REF));
+				() -> withAbsolutePaths(AcpSchema.METHOD_SESSION_LOAD, request.cwd(), request.additionalDirectories(),
+						() -> session.sendRequest(AcpSchema.METHOD_SESSION_LOAD, request, LOAD_SESSION_RESPONSE_TYPE_REF)));
 	}
 
 	/**
@@ -466,8 +471,9 @@ public class AcpAsyncClient {
 		logger.debug("Resuming session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_RESUME,
 				withMcpServers(withDirectories(NegotiatedCapabilities::requireResumeSession, request.additionalDirectories()), request.mcpServers()),
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, request,
-				RESUME_SESSION_RESPONSE_TYPE_REF));
+				() -> withAbsolutePaths(AcpSchema.METHOD_SESSION_RESUME, request.cwd(), request.additionalDirectories(),
+						() -> session.sendRequest(AcpSchema.METHOD_SESSION_RESUME, request,
+								RESUME_SESSION_RESPONSE_TYPE_REF)));
 	}
 
 	/**
@@ -482,8 +488,9 @@ public class AcpAsyncClient {
 		logger.debug("Forking session: {}", request.sessionId());
 		return afterInitialize(AcpSchema.METHOD_SESSION_FORK,
 				withMcpServers(withDirectories(NegotiatedCapabilities::requireForkSession, request.additionalDirectories()), request.mcpServers()),
-				() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, request,
-				FORK_SESSION_RESPONSE_TYPE_REF));
+				() -> withAbsolutePaths(AcpSchema.METHOD_SESSION_FORK, request.cwd(), request.additionalDirectories(),
+						() -> session.sendRequest(AcpSchema.METHOD_SESSION_FORK, request,
+								FORK_SESSION_RESPONSE_TYPE_REF)));
 	}
 
 	/**
@@ -725,6 +732,17 @@ public class AcpAsyncClient {
 	// --------------------------
 	// Order and capabilities
 	// --------------------------
+
+	/**
+	 * Sends a session call only when its working directory and additional directories are
+	 * absolute paths (ACP v1, session setup); otherwise fails with
+	 * {@link IllegalArgumentException} without sending it.
+	 */
+	private static <T> Mono<T> withAbsolutePaths(String method, String cwd, @Nullable List<String> additionalDirectories,
+			Supplier<Mono<T>> send) {
+		IllegalArgumentException invalid = SessionPaths.check(method, cwd, additionalDirectories);
+		return invalid != null ? Mono.error(invalid) : send.get();
+	}
 
 	/**
 	 * A session call's requirement, plus {@code sessionCapabilities.additionalDirectories} when

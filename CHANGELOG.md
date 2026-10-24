@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answers every pending `session/request_permission` of that session with the `cancelled` outcome
   and stops its handler, so a permission dialog the user never answers no longer leaves the agent
   waiting.
+- **The client SDK refuses a session call whose `cwd` or an `additionalDirectories` entry is not an
+  absolute path**, as stable ACP v1 requires of the client (session setup; found by the
+  conformance audit, run `acp-v1-2797d331-r1-44f2a09-002`). `session/new`, `load`, `resume` and
+  `fork` fail with `IllegalArgumentException` without sending. The form is checked, not the
+  client's own file system, because the agent may run on another host and operating system: a
+  POSIX path (`/…`), a Windows drive path (`C:\…`, `C:/…`) and a UNC or device path (`\\server\share…`)
+  are all absolute; `.`, `~/…`, `C:relative` and `file://` URIs are not. Migration: pass an
+  absolute path, for example `Path.of(".").toAbsolutePath().toString()` instead of `"."`.
 - **The agent SDK sends `boolean` session config options only to a client that advertised
   `session.configOptions.boolean`.** To any other client the option is omitted from the session
   answer, the `session/set_config_option` answer and `config_option_update`, with a warning naming
