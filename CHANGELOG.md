@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The six refusals below and the path check come from a whole-specification audit of the SDK against
+stable ACP v1: 240 requirements, two judged runs, every FAIL reproduced by a failing test before it
+was fixed. The roster, the per-requirement results and the report are published in
+[`protocol-conformance/`](protocol-conformance/AUDIT-REPORT.md).
+
 ### Changed
 
 - **The client SDK now enforces five client-side obligations of stable ACP v1 before a message

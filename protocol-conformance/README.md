@@ -4,6 +4,10 @@ Whole-specification RFC 2119 conformance audit of this SDK against the stable AC
 This directory is outside the Maven reactor and outside the shipped artifacts; nothing in `acp-*`
 depends on it.
 
+**Results:** [the audit report](AUDIT-REPORT.md), with one page per run under [`results/`](results):
+[run 001](results/run-001.md) (the code released as 0.80.0) and [run 002](results/run-002.md) (with
+the fixes released in 0.81.0).
+
 ## What is here now
 
 | Path | Contents |
@@ -97,6 +101,8 @@ every part through the producer's codec and reassembles a Verdict that equals th
 
 ## Status
 
-Checkpoints A (freeze and import) and B (wire and falsify offline) are complete. No live run has been
-made, so no conformance judgment exists and `runs/` holds no recording. The roster has not been
-reviewed by the protocol authors and makes no claim of official ACP certification.
+Two live runs have been made (2026-10-08); see [the report](AUDIT-REPORT.md). Their raw recordings
+are kept locally and not committed: the session transcripts carry the environment of the machine the
+judge ran on. The per-item results are published under [`results/`](results). `runs/` therefore holds
+no committed recording, and a fresh checkout can replay only a run made on that machine. The roster
+has not been reviewed by the protocol authors and makes no claim of official ACP certification.

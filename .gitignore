@@ -79,3 +79,6 @@ replay_pid*
 ### Planning and Internal Documentation ###
 plans/*
 learnings/
+
+# Conformance audit recordings stay local (session transcripts carry the judging machine's environment)
+protocol-conformance/runs/acp-v1-*/
