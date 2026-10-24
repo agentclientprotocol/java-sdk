@@ -173,13 +173,15 @@ applicability = "Applies when the Agent uses elicitation; the handling is the ap
 
 [[requirement]]
 id = "ACP-V1-ELIC-AGENT-UNIQUE-ELICITATION-ID"
+revision = 2
 keyword = "MUST"
 role = "agent"
-responsibility = "sdk"
+responsibility = "application"
 source = "docs/protocol/v1/elicitation.mdx"
 lines = "158-160"
 clause = "The Agent **MUST** keep each `elicitationId` unique among outstanding URL elicitations on that Agent-Client connection,"
-applicability = "Applies when the Agent uses URL-mode elicitation."
+applicability = "Applies when the Agent application uses URL-mode elicitation. The application chooses the elicitationId and alone knows when a URL elicitation stops being outstanding (completion is optional), so the SDK is the subject only insofar as it sends the id unchanged."
+notes = "Revision 2 (roster r2, maintainer decision 2026-10-24): responsibility moved from sdk to application after run acp-v1-2797d331-r1-44f2a09-002 judged it FAIL. A narrow SDK guard (refuse a duplicate id while its create request is in flight) is planned for a later release."
 
 [[requirement]]
 id = "ACP-V1-ELIC-CLIENT-OPAQUE-ELICITATION-ID"

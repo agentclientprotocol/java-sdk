@@ -24,14 +24,14 @@ class AcpRequirementRosterTest {
     @Test
     void loadsTheCompleteDerivedRosterWithExactSourceAssociations() {
         AcpRequirementRoster roster = AcpRequirementRoster.load(SPEC);
-        assertThat(roster.revision()).isEqualTo("acp-v1-2797d331-r1");
+        assertThat(roster.revision()).isEqualTo("acp-v1-2797d331-r2");
         assertThat(roster.protocolCommit()).isEqualTo("2797d33125c14e5bcfc815952930130c43e5bc4c");
         assertThat(roster.requirements()).hasSize(240);
         Set<String> ids = new HashSet<>();
         for (Rfc2119Requirement requirement : roster.requirements()) {
             assertThat(ids.add(requirement.id())).as("unique id %s", requirement.id()).isTrue();
             assertThat(requirement.id()).doesNotContain(":").hasSizeLessThanOrEqualTo(64);
-            assertThat(requirement.revision()).startsWith("acp-v1-2797d331-r1.");
+            assertThat(requirement.revision()).startsWith("acp-v1-2797d331-r2.");
             assertThat(requirement.specification().keyword()).isIn("MUST", "MUST NOT", "SHOULD", "SHOULD NOT", "MAY");
             // the native requirement text is the complete clause, never a title
             assertThat(requirement.text()).isEqualTo(requirement.specification().requirement());

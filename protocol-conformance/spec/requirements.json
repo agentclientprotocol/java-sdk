@@ -1,7 +1,7 @@
 {
   "kind": "derived-acp-v1-testing-requirements",
   "label": "Derived ACP v1 testing requirements",
-  "revision": "acp-v1-2797d331-r1",
+  "revision": "acp-v1-2797d331-r2",
   "protocol": {
     "repository": "agentclientprotocol/agent-client-protocol",
     "commit": "2797d33125c14e5bcfc815952930130c43e5bc4c",
@@ -90,7 +90,7 @@
   "requirements": [
     {
       "id": "ACP-V1-OVERVIEW-ABSOLUTE-PATHS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -115,7 +115,7 @@
     },
     {
       "id": "ACP-V1-INIT-CLIENT-INITIALIZE-FIRST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -137,7 +137,7 @@
     },
     {
       "id": "ACP-V1-INIT-IMPLEMENTATION-INFO",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -159,7 +159,7 @@
     },
     {
       "id": "ACP-V1-INIT-AGENT-RESPONSE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -181,7 +181,7 @@
     },
     {
       "id": "ACP-V1-INIT-VERSION-AGREEMENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -203,7 +203,7 @@
     },
     {
       "id": "ACP-V1-INIT-REQUEST-LATEST-VERSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -225,7 +225,7 @@
     },
     {
       "id": "ACP-V1-INIT-AGENT-SAME-VERSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -247,7 +247,7 @@
     },
     {
       "id": "ACP-V1-INIT-AGENT-LATEST-VERSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -269,7 +269,7 @@
     },
     {
       "id": "ACP-V1-INIT-CLIENT-UNSUPPORTED-VERSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -291,7 +291,7 @@
     },
     {
       "id": "ACP-V1-INIT-CAPABILITIES-OPTIONAL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "OPTIONAL",
@@ -313,7 +313,7 @@
     },
     {
       "id": "ACP-V1-INIT-SUPPORT-ALL-COMBINATIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -335,7 +335,7 @@
     },
     {
       "id": "ACP-V1-INIT-OMITTED-UNSUPPORTED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -357,7 +357,7 @@
     },
     {
       "id": "ACP-V1-INIT-CLIENT-SPECIFY-CAPABILITIES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -379,7 +379,7 @@
     },
     {
       "id": "ACP-V1-INIT-AGENT-SPECIFY-CAPABILITIES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -401,7 +401,7 @@
     },
     {
       "id": "ACP-V1-INIT-PROMPT-BASELINE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -427,7 +427,7 @@
     },
     {
       "id": "ACP-V1-INIT-PROMPT-RICHER-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -449,7 +449,7 @@
     },
     {
       "id": "ACP-V1-INIT-SESSION-BASELINE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -473,7 +473,7 @@
     },
     {
       "id": "ACP-V1-INIT-SESSION-OPTIONAL-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -497,7 +497,7 @@
     },
     {
       "id": "ACP-V1-AUTH-CLIENT-NO-LOGOUT-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -519,7 +519,7 @@
     },
     {
       "id": "ACP-V1-AUTH-CLIENT-NO-TERMINAL-METHOD-ID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -543,7 +543,7 @@
     },
     {
       "id": "ACP-V1-AUTH-AGENT-TERMINAL-LOGIN-ARGS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -565,7 +565,7 @@
     },
     {
       "id": "ACP-V1-AUTH-CLIENT-AFTER-LOGOUT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -587,7 +587,7 @@
     },
     {
       "id": "ACP-V1-SETUP-INIT-BEFORE-SESSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -609,7 +609,7 @@
     },
     {
       "id": "ACP-V1-SETUP-NEW-SESSION-ID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -631,7 +631,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-CHECK-LOADSESSION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -653,7 +653,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-NO-LOAD-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -675,7 +675,7 @@
     },
     {
       "id": "ACP-V1-SETUP-LOAD-REQUEST-CONTENTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -697,7 +697,7 @@
     },
     {
       "id": "ACP-V1-SETUP-LOAD-REPLAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -719,7 +719,7 @@
     },
     {
       "id": "ACP-V1-SETUP-LOAD-RESPOND-AFTER-REPLAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -741,7 +741,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-CHECK-RESUME",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -763,7 +763,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-NO-RESUME-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -785,7 +785,7 @@
     },
     {
       "id": "ACP-V1-SETUP-RESUME-REQUEST-CONTENTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -807,7 +807,7 @@
     },
     {
       "id": "ACP-V1-SETUP-RESUME-NO-REPLAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -829,7 +829,7 @@
     },
     {
       "id": "ACP-V1-SETUP-RESUME-RESPONSE-STATE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -851,7 +851,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-CHECK-CLOSE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -873,7 +873,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-NO-CLOSE-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -895,7 +895,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLOSE-REQUEST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -917,7 +917,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLOSE-CANCELS-AND-FREES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -939,7 +939,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLOSE-MAY-ERROR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -961,7 +961,7 @@
     },
     {
       "id": "ACP-V1-SETUP-ADDITIONAL-DIRS-ABSOLUTE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -983,7 +983,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-ADDITIONAL-DIRS-ONLY-WITH-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1005,7 +1005,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CWD-ABSOLUTE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1027,7 +1027,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CWD-USED-REGARDLESS-OF-SPAWN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1049,7 +1049,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CWD-RELATIVE-BASE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1071,7 +1071,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CWD-IN-ROOT-SET",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1093,7 +1093,7 @@
     },
     {
       "id": "ACP-V1-SETUP-ROOT-SET-BOUNDARY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1115,7 +1115,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-MCP-SERVERS-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1137,7 +1137,7 @@
     },
     {
       "id": "ACP-V1-SETUP-AGENT-MCP-STDIO",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1161,7 +1161,7 @@
     },
     {
       "id": "ACP-V1-SETUP-AGENT-MCP-HTTP-SHOULD",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1183,7 +1183,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-CHECK-MCP-TRANSPORT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1205,7 +1205,7 @@
     },
     {
       "id": "ACP-V1-SETUP-AGENT-CONNECT-ALL-MCP",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1227,7 +1227,7 @@
     },
     {
       "id": "ACP-V1-SETUP-CLIENT-OWN-MCP-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1249,7 +1249,7 @@
     },
     {
       "id": "ACP-V1-LIST-INIT-FIRST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1271,7 +1271,7 @@
     },
     {
       "id": "ACP-V1-LIST-CLIENT-CHECK-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1293,7 +1293,7 @@
     },
     {
       "id": "ACP-V1-LIST-CLIENT-NO-LIST-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -1315,7 +1315,7 @@
     },
     {
       "id": "ACP-V1-LIST-AGENT-RESPONSE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1337,7 +1337,7 @@
     },
     {
       "id": "ACP-V1-LIST-ADDITIONAL-DIRS-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1359,7 +1359,7 @@
     },
     {
       "id": "ACP-V1-LIST-CLIENT-NO-MERGE-ADDITIONAL-DIRS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -1381,7 +1381,7 @@
     },
     {
       "id": "ACP-V1-LIST-EMPTY-ARRAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1403,7 +1403,7 @@
     },
     {
       "id": "ACP-V1-LIST-CLIENT-MISSING-CURSOR-IS-END",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1425,7 +1425,7 @@
     },
     {
       "id": "ACP-V1-LIST-CLIENT-OPAQUE-CURSOR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1447,7 +1447,7 @@
     },
     {
       "id": "ACP-V1-LIST-AGENT-INVALID-CURSOR-ERROR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1469,7 +1469,7 @@
     },
     {
       "id": "ACP-V1-LIST-AGENT-PAGE-SIZE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1491,7 +1491,7 @@
     },
     {
       "id": "ACP-V1-DELETE-INIT-FIRST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1513,7 +1513,7 @@
     },
     {
       "id": "ACP-V1-DELETE-CLIENT-CHECK-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1535,7 +1535,7 @@
     },
     {
       "id": "ACP-V1-DELETE-CLIENT-NO-DELETE-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -1557,7 +1557,7 @@
     },
     {
       "id": "ACP-V1-DELETE-IDEMPOTENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1579,7 +1579,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-INIT-AND-SETUP-FIRST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1601,7 +1601,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-RESTRICT-CONTENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1625,7 +1625,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-MESSAGE-ID-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1647,7 +1647,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-USAGE-UPDATE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1669,7 +1669,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-RESPOND-WITH-STOP-REASON",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1691,7 +1691,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-AGENT-MAY-STOP",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1713,7 +1713,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-PERMISSION-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1735,7 +1735,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-TOOL-IN-PROGRESS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1757,7 +1757,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-TOOL-UPDATES-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1779,7 +1779,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-TOOLS-MAY-USE-CLIENT-CAPABILITIES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1801,7 +1801,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-CANCEL-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1823,7 +1823,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-MARK-CANCELLED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1845,7 +1845,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-RESPOND-PENDING-PERMISSIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1870,7 +1870,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-AGENT-STOP-ON-CANCEL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -1894,7 +1894,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-AGENT-CANCELLED-STOP-REASON",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1918,7 +1918,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-AGENT-CATCH-ABORT-ERRORS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1942,7 +1942,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-UPDATES-AFTER-CANCEL-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -1964,7 +1964,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-UPDATES-BEFORE-RESPONSE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -1986,7 +1986,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-ACCEPT-LATE-UPDATES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2010,7 +2010,7 @@
     },
     {
       "id": "ACP-V1-CONTENT-TEXT-SUPPORT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2034,7 +2034,7 @@
     },
     {
       "id": "ACP-V1-TOOLS-REPORT-TOOL-CALL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2056,7 +2056,7 @@
     },
     {
       "id": "ACP-V1-TOOLS-NAME-IN-FIRST-REPORT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2078,7 +2078,7 @@
     },
     {
       "id": "ACP-V1-TOOLS-NAME-STABLE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD NOT",
       "original_keyword": "SHOULD NOT",
@@ -2100,7 +2100,7 @@
     },
     {
       "id": "ACP-V1-TOOLS-PERMISSION-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2122,7 +2122,7 @@
     },
     {
       "id": "ACP-V1-TOOLS-CLIENT-AUTO-PERMISSION-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2144,7 +2144,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-IDENTIFY-AGENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2166,7 +2166,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-FORM-REVIEW",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2188,7 +2188,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-URL-CONSENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2210,7 +2210,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-PRESENT-MESSAGE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2232,7 +2232,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-NO-UNADVERTISED-MODE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2254,7 +2254,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-FALLBACK",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2276,7 +2276,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-BIND-CONNECTION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2298,7 +2298,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-VALIDATE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2320,7 +2320,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-REVALIDATE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2342,7 +2342,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-DEFAULTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2364,7 +2364,7 @@
     },
     {
       "id": "ACP-V1-ELIC-FORM-NO-SECRETS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2386,7 +2386,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-URL-FOR-SENSITIVE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2408,7 +2408,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-NO-FORM-FALLBACK",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2430,7 +2430,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-NO-CREDENTIALS-OVER-ACP",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2452,7 +2452,7 @@
     },
     {
       "id": "ACP-V1-ELIC-ACCEPT-CONTENT-SCHEMA",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2474,7 +2474,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-NO-ASSUME-SUCCESS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2496,7 +2496,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-HANDLE-OUTCOMES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2518,13 +2518,13 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-UNIQUE-ELICITATION-ID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.2",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
       "role": "agent",
-      "responsibility": "sdk",
-      "applicability": "Applies when the Agent uses URL-mode elicitation.",
+      "responsibility": "application",
+      "applicability": "Applies when the Agent application uses URL-mode elicitation. The application chooses the elicitationId and alone knows when a URL elicitation stops being outstanding (completion is optional), so the SDK is the subject only insofar as it sends the id unchanged.",
       "clause_mdx": "The Agent **MUST** keep each `elicitationId` unique among outstanding URL elicitations on that Agent-Client connection,",
       "text": "The Agent MUST keep each elicitationId unique among outstanding URL elicitations on that Agent-Client connection,",
       "reason": "Source: docs/protocol/v1/elicitation.mdx:L158-L160 at agent-client-protocol@2797d33125c1; the specification supplies no separate rationale for this clause.",
@@ -2536,11 +2536,11 @@
         "sha256": "1493fd5ae063f3d411893f068f6ede1225a899563ba2fa034539e03b7d5663e3"
       },
       "mirrors": [],
-      "notes": null
+      "notes": "Revision 2 (roster r2, maintainer decision 2026-10-24): responsibility moved from sdk to application after run acp-v1-2797d331-r1-44f2a09-002 judged it FAIL. A narrow SDK guard (refuse a duplicate id while its create request is in flight) is planned for a later release."
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-OPAQUE-ELICITATION-ID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2562,7 +2562,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-COMPLETE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2584,7 +2584,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-COMPLETE-SAME-CLIENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2606,7 +2606,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-IGNORE-UNKNOWN-COMPLETE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2628,7 +2628,7 @@
     },
     {
       "id": "ACP-V1-ELIC-URL-NO-CREDENTIALS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2650,7 +2650,7 @@
     },
     {
       "id": "ACP-V1-ELIC-URL-HTTPS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2672,7 +2672,7 @@
     },
     {
       "id": "ACP-V1-ELIC-FORM-NO-CLICKABLE-URLS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD NOT",
       "original_keyword": "SHOULD NOT",
@@ -2694,7 +2694,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-NO-PREFETCH",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2716,7 +2716,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-SHOW-FULL-URL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2738,7 +2738,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-SECURE-CONTEXT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2760,7 +2760,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-HIGHLIGHT-DOMAIN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -2782,7 +2782,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-NO-CLICKABLE-FIELDS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD NOT",
       "original_keyword": "SHOULD NOT",
@@ -2804,7 +2804,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-VERIFY-SAME-USER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2826,7 +2826,7 @@
     },
     {
       "id": "ACP-V1-FS-AGENT-CHECK-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2848,7 +2848,7 @@
     },
     {
       "id": "ACP-V1-FS-AGENT-NO-CALL-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -2870,7 +2870,7 @@
     },
     {
       "id": "ACP-V1-FS-CLIENT-CREATE-FILE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2892,7 +2892,7 @@
     },
     {
       "id": "ACP-V1-CANCEL-REQUEST-MAY-CANCEL-ACTIVITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2916,7 +2916,7 @@
     },
     {
       "id": "ACP-V1-CANCEL-REQUEST-MAY-FINISH-NOTIFICATIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2940,7 +2940,7 @@
     },
     {
       "id": "ACP-V1-CANCEL-REQUEST-MUST-RESPOND",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -2964,7 +2964,7 @@
     },
     {
       "id": "ACP-V1-CANCEL-CALLER-MAY-WAIT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -2986,7 +2986,7 @@
     },
     {
       "id": "ACP-V1-CANCEL-INTERNAL-SHOULD",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3008,7 +3008,7 @@
     },
     {
       "id": "ACP-V1-TERM-AGENT-CHECK-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3030,7 +3030,7 @@
     },
     {
       "id": "ACP-V1-TERM-AGENT-NO-CALL-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3052,7 +3052,7 @@
     },
     {
       "id": "ACP-V1-TERM-CLIENT-TRUNCATE-AT-CHARACTER-BOUNDARY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3076,7 +3076,7 @@
     },
     {
       "id": "ACP-V1-TERM-AGENT-RELEASE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3098,7 +3098,7 @@
     },
     {
       "id": "ACP-V1-TERM-CLIENT-DISPLAY-AFTER-RELEASE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3120,7 +3120,7 @@
     },
     {
       "id": "ACP-V1-PLAN-REPORT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3142,7 +3142,7 @@
     },
     {
       "id": "ACP-V1-PLAN-REPORT-UPDATES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3164,7 +3164,7 @@
     },
     {
       "id": "ACP-V1-PLAN-COMPLETE-LIST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3186,7 +3186,7 @@
     },
     {
       "id": "ACP-V1-PLAN-CLIENT-REPLACE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3208,7 +3208,7 @@
     },
     {
       "id": "ACP-V1-PLAN-DYNAMIC-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3230,7 +3230,7 @@
     },
     {
       "id": "ACP-V1-MODES-INITIAL-STATE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3252,7 +3252,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-PREFER-CONFIG-OPTIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3274,7 +3274,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-INITIAL-STATE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3296,7 +3296,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-RESPECT-ORDER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3318,7 +3318,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-BOOLEAN-ONLY-AFTER-CAPABILITY-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3340,7 +3340,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-NO-BOOLEAN-WITHOUT-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3362,7 +3362,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CATEGORY-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3384,7 +3384,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CATEGORY-NOT-REQUIRED-FOR-CORRECTNESS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3408,7 +3408,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-UNKNOWN-CATEGORY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3432,7 +3432,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-RENDER-MODEL-CONFIG-NEAR-MODEL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3454,7 +3454,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-TIE-ORDER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3476,7 +3476,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-AGENT-PRIORITY-ORDER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3498,7 +3498,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-ORDERING",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3520,7 +3520,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-AGENT-DEFAULTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3542,7 +3542,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-IGNORE-UNKNOWN-TYPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3564,7 +3564,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-SET-RESPONSE-COMPLETE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3586,7 +3586,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-AGENT-SEND-BOTH-DURING-TRANSITION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3608,7 +3608,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-USE-CONFIG-EXCLUSIVELY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3630,7 +3630,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-CLIENT-FALLBACK-TO-MODES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3652,7 +3652,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-AGENT-KEEP-IN-SYNC",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3674,7 +3674,7 @@
     },
     {
       "id": "ACP-V1-COMMANDS-ADVERTISE-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3696,7 +3696,7 @@
     },
     {
       "id": "ACP-V1-EXT-META-TRACE-KEYS-RESERVED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3718,7 +3718,7 @@
     },
     {
       "id": "ACP-V1-EXT-NO-ROOT-CUSTOM-FIELDS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3740,7 +3740,7 @@
     },
     {
       "id": "ACP-V1-EXT-CUSTOM-REQUESTS-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3762,7 +3762,7 @@
     },
     {
       "id": "ACP-V1-EXT-RESPOND-TO-CUSTOM-REQUEST",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3784,7 +3784,7 @@
     },
     {
       "id": "ACP-V1-EXT-ADVERTISE-CUSTOM-CAPABILITIES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3806,7 +3806,7 @@
     },
     {
       "id": "ACP-V1-EXT-IGNORE-UNKNOWN-NOTIFICATIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3828,7 +3828,7 @@
     },
     {
       "id": "ACP-V1-EXT-META-FOR-CUSTOM-CAPABILITIES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3850,7 +3850,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-UTF8",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -3872,7 +3872,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-STDIO-SHOULD",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -3894,7 +3894,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-STDIO-NEWLINE-DELIMITED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3916,7 +3916,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-AGENT-STDERR-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3938,7 +3938,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-CLIENT-STDERR-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -3960,7 +3960,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-AGENT-STDOUT-ONLY-ACP",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -3982,7 +3982,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-CLIENT-STDIN-ONLY-ACP",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -4004,7 +4004,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-CUSTOM-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -4026,7 +4026,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-CUSTOM-PRESERVE-FORMAT-AND-LIFECYCLE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4048,7 +4048,7 @@
     },
     {
       "id": "ACP-V1-TRANSPORT-CUSTOM-DOCUMENT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -4070,7 +4070,7 @@
     },
     {
       "id": "ACP-V1-CONTENT-CLIENT-RENDER-MARKDOWN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -4092,7 +4092,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-UNKNOWN-MODE-NOT-RENDERED-AS-KNOWN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -4114,7 +4114,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-UNKNOWN-PROPERTY-SCHEMA-NOT-RENDERED-AS-KNOWN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -4136,7 +4136,7 @@
     },
     {
       "id": "ACP-V1-AUTH-AGENT-TERMINAL-METHOD-ONLY-WITH-CAPABILITY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4158,7 +4158,7 @@
     },
     {
       "id": "ACP-V1-EXT-META-NO-ASSUMPTIONS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -4180,7 +4180,7 @@
     },
     {
       "id": "ACP-V1-PROMPT-CLIENT-CONTEXT-BLOCKS-MAY",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -4202,7 +4202,7 @@
     },
     {
       "id": "ACP-V1-ELIC-AGENT-UNKNOWN-ACTION-NOT-TREATED-AS-KNOWN",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "imported",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -4224,7 +4224,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-INITIALIZE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4252,7 +4252,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-AUTHENTICATE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4278,7 +4278,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-LOGOUT-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4304,7 +4304,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-NEW-SESSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4332,7 +4332,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-LOAD-SESSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4358,7 +4358,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-RESUME-SESSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4384,7 +4384,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-CLOSE-SESSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4410,7 +4410,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-LIST-SESSIONS-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4437,7 +4437,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-DELETE-SESSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4463,7 +4463,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-SET-MODE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4489,7 +4489,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-SET-CONFIG-OPTION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4515,7 +4515,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-PROMPT-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4541,7 +4541,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-CANCEL-NOTIFICATION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4566,7 +4566,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-CANCEL-REQUEST-NOTIFICATION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4591,7 +4591,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-REQUEST-PERMISSION-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4619,7 +4619,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-SESSION-UPDATE-VARIANTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4649,7 +4649,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-READ-TEXT-FILE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4675,7 +4675,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-WRITE-TEXT-FILE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4701,7 +4701,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-TERMINAL-CREATE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4727,7 +4727,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-TERMINAL-OUTPUT-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4754,7 +4754,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-TERMINAL-RELEASE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4780,7 +4780,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-TERMINAL-WAIT-FOR-EXIT-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4806,7 +4806,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-TERMINAL-KILL-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4832,7 +4832,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-ELICITATION-CREATE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4859,7 +4859,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-ELICITATION-COMPLETE-SHAPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4884,7 +4884,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-CONTENT-BLOCK-VARIANTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4916,7 +4916,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-STOP-REASON-VALUES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4941,7 +4941,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-ERROR-OBJECT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4967,7 +4967,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-MCP-SERVER-VARIANTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -4995,7 +4995,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-AUTH-METHOD-VARIANTS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5022,7 +5022,7 @@
     },
     {
       "id": "ACP-V1-SCHEMA-EXTENSION-METHOD-NAMES",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "derived",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5049,7 +5049,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-VERSION-MEMBER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5071,7 +5071,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RPC-PREFIX-RESERVED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -5093,7 +5093,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-PARAMS-MAY-BE-OMITTED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MAY",
       "original_keyword": "MAY",
@@ -5115,7 +5115,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ID-TYPE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5137,7 +5137,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ID-NOT-NULL",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -5159,7 +5159,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ID-NO-FRACTION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "SHOULD NOT",
       "original_keyword": "SHOULD NOT",
@@ -5181,7 +5181,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RESPONSE-SAME-ID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5203,7 +5203,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-NO-REPLY-TO-NOTIFICATION",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST NOT",
       "original_keyword": "MUST NOT",
@@ -5225,7 +5225,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-PARAMS-STRUCTURED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5247,7 +5247,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-PARAM-NAMES-EXACT",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5269,7 +5269,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RESPONSE-REQUIRED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5291,7 +5291,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RESULT-ON-SUCCESS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "REQUIRED",
@@ -5313,7 +5313,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ERROR-MEMBER-ON-ERROR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "REQUIRED",
@@ -5335,7 +5335,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RESPONSE-ID-ECHO",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5357,7 +5357,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-RESULT-XOR-ERROR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5379,7 +5379,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ERROR-CODE-INTEGER",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5401,7 +5401,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ERROR-MESSAGE-CONCISE",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "SHOULD",
       "original_keyword": "SHOULD",
@@ -5423,7 +5423,7 @@
     },
     {
       "id": "ACP-V1-JSONRPC-ERROR-RESPONSE-CONTAINS-ERROR",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "incorporated",
       "keyword": "MUST",
       "original_keyword": "MUST",
@@ -5445,7 +5445,7 @@
     },
     {
       "id": "ACP-V1-SETUP-ADDITIONAL-DIRS-FULL-LIST-ON-LOAD",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "prose-imported",
       "keyword": "MUST",
       "original_keyword": "(lowercase prose)",
@@ -5467,7 +5467,7 @@
     },
     {
       "id": "ACP-V1-ELIC-CLIENT-UNADVERTISED-MODE-INVALID-PARAMS",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "prose-imported",
       "keyword": "MUST",
       "original_keyword": "(lowercase prose)",
@@ -5489,7 +5489,7 @@
     },
     {
       "id": "ACP-V1-MODES-SET-MODE-ID-LISTED",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "prose-imported",
       "keyword": "MUST",
       "original_keyword": "(lowercase prose)",
@@ -5511,7 +5511,7 @@
     },
     {
       "id": "ACP-V1-CONFIG-SET-VALUE-VALID",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "prose-imported",
       "keyword": "MUST",
       "original_keyword": "(lowercase prose)",
@@ -5533,7 +5533,7 @@
     },
     {
       "id": "ACP-V1-EXT-UNKNOWN-METHOD-NOT-FOUND",
-      "revision": "acp-v1-2797d331-r1.1",
+      "revision": "acp-v1-2797d331-r2.1",
       "kind": "prose-imported",
       "keyword": "SHOULD",
       "original_keyword": "(lowercase prose)",

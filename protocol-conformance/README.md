@@ -10,7 +10,7 @@ depends on it.
 |---|---|
 | `spec/official/` | Exact pinned upstream bytes (21 stable v1 pages, stable schema, licence, JSON-RPC 2.0 page) with `SHA256SUMS` and `PROVENANCE.md` |
 | `spec/manifest/` | The reviewed manifest: scope, and one TOML file per source with every requirement, duplicate, non-normative keyword occurrence and reviewed prose sentence |
-| `spec/requirements.json` | Generated roster consumed by the Java harness — 240 requirements at roster revision `acp-v1-2797d331-r1` |
+| `spec/requirements.json` | Generated roster consumed by the Java harness — 240 requirements at roster revision `acp-v1-2797d331-r2` (runs 001 and 002 were recorded at `-r1`; a recording replays only against the roster it was made with, so replay them from a checkout of their own commit) |
 | `spec/requirements.md` | The same roster as a readable table |
 | `spec/coverage-ledger.md` | Every RFC 2119 keyword occurrence, schema description, JSON-RPC section and reviewed prose sentence with its single disposition |
 | `scripts/import-spec.py` | Deterministic retain / check / write tool (Python 3.11+, standard library only) |

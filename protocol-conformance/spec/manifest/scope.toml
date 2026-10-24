@@ -3,7 +3,7 @@
 [roster]
 label = "Derived ACP v1 testing requirements"
 # Semantic revision of the whole roster; bump when any clause's meaning changes.
-revision = "acp-v1-2797d331-r1"
+revision = "acp-v1-2797d331-r2"
 
 [protocol]
 repository = "agentclientprotocol/agent-client-protocol"
