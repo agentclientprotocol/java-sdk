@@ -17,9 +17,9 @@
     <description>Spring Boot starter for ACP clients and agents</description>
 
     <properties>
-        <spring-boot.version>4.1.0</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
         <!-- Boot 4.1's logback-core is 1.5.x; the parent's logback-classic 1.6 does not run on it. -->
-        <logback.version>1.5.34</logback.version>
+        <logback.version>1.5.38</logback.version>
         <!-- No code: nothing to cover. -->
         <jacoco.skip>true</jacoco.skip>
     </properties>
@@ -43,8 +43,9 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- The SDK's Reactor and Jackson (Jackson 2's BOM first, so jackson-annotations is 2.x's, as in the parent), not Boot 4.1.0's 2.21.4 / 3.1.4 (CVE-2026-89407, -89425, -68497,
-                 -91776, -91777): the parent's Jackson BOM imports do not win over Boot's here. -->
+            <!-- Keep the SDK's Reactor and Jackson pins (Jackson 2's BOM first, so
+                 jackson-annotations is 2.x's, as in the parent): the parent's Jackson BOM
+                 imports do not win over Boot's here. -->
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>

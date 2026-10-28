@@ -17,12 +17,12 @@
     <description>Spring Boot autoconfiguration for ACP clients, agents and transports</description>
 
     <properties>
-        <spring-boot.version>4.1.0</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
         <!-- The parent's own management wins over Boot's BOM. These two must match Boot's
-             (spring-boot-dependencies 4.1.0): logback-core comes from Boot's BOM, so the
+             (spring-boot-dependencies 4.1.2): logback-core comes from Boot's BOM, so the
              parent's newer logback-classic broke Boot's logging, and Spring Framework 7's
              test support needs JUnit 6. -->
-        <logback.version>1.5.34</logback.version>
+        <logback.version>1.5.38</logback.version>
         <junit.version>6.0.3</junit.version>
         <!-- Coverage floors: measured line 97.65%, branch 80.00%, less 2 points (parent pom, JaCoCo).
              The branch floor fell from 0.84 when the generic logic, and most of its branches, moved
@@ -55,8 +55,9 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- The SDK's Reactor and Jackson (Jackson 2's BOM first, so jackson-annotations is 2.x's, as in the parent), not Boot 4.1.0's 2.21.4 / 3.1.4 (CVE-2026-89407, -89425, -68497,
-                 -91776, -91777): the parent's Jackson BOM imports do not win over Boot's here. -->
+            <!-- Keep the SDK's Reactor and Jackson pins (Jackson 2's BOM first, so
+                 jackson-annotations is 2.x's, as in the parent): the parent's Jackson BOM
+                 imports do not win over Boot's here. -->
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>

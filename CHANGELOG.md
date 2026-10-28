@@ -12,6 +12,13 @@ stable ACP v1: 240 requirements, two judged runs, every FAIL reproduced by a fai
 was fixed. The roster, the per-requirement results and the report are published in
 [`protocol-conformance/`](protocol-conformance/AUDIT-REPORT.md).
 
+### Security
+
+- Upgrade Spring Framework from 7.0.8 to 7.0.10 and Spring Boot from 4.1.0 to 4.1.2,
+  which manages Framework 7.0.10, to address the critical Spring WebFlux advisories
+  [GHSA-9qf2-26p9-2q2q](https://github.com/advisories/GHSA-9qf2-26p9-2q2q) and
+  [GHSA-j9f9-w8pj-32f8](https://github.com/advisories/GHSA-j9f9-w8pj-32f8).
+
 ### Changed
 
 - **The client SDK now enforces five client-side obligations of stable ACP v1 before a message
