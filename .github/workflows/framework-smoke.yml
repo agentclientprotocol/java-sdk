@@ -22,12 +22,19 @@ on:
         description: 'Branch, tag or SHA of the TypeScript SDK (empty: its ref in peers.json)'
         required: false
         default: ''
+  # peer-drift.yml calls this workflow with the TypeScript SDK at its latest commit.
+  workflow_call:
+    inputs:
+      peers-ref:
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: framework-smoke-${{ github.ref }}
+  group: framework-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -72,7 +79,7 @@ jobs:
       - name: Resolve the TypeScript SDK commit
         id: peer
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
         run: integration-testing/scripts/peer-sha.sh typescript-sdk "$PEERS_REF" "" >> "$GITHUB_OUTPUT"
 
       # The same key as cross-sdk.yml's typescript legs, so either workflow's build is reused.
@@ -88,7 +95,7 @@ jobs:
 
       - name: Run the framework smoke matrix
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
           RUN_LABEL: framework-smoke
         run: |
           args=(--tag fw)

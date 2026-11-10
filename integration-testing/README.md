@@ -82,11 +82,9 @@ integration-testing/scripts/run-all.sh --tag stdio --exclude 'x-java-*' --list
   `logs/run-all/<scenario>.console.log` and a line is printed as each finishes; the table at the end
   is the same. `--prepare-only` stops after the preparation (CI warms its caches with it).
 
-Against a tag or other ref of the peer SDKs. The default is each peer's ref in `peers.json`: the
-TypeScript, Rust and Python peers are pinned to the last commits this suite passed against, because
-their `main` branches moved on (TypeScript no longer builds `dist/acp.js`, Rust no longer exports what
-the interop program uses, and the Python cells time out); Kotlin follows `master`. `--peer` and
-`--peers-ref` override the pins, for example `--peer typescript-sdk=main` to see the drift.
+Against a tag or other ref of the peer SDKs. The default is each peer's ref in `peers.json`
+([Peer pins and drift](#peer-pins-and-drift)). `--peer` and `--peers-ref` override the pins, for
+example `--peer typescript-sdk=main` to see the drift.
 
 ```bash
 # every peer at the same ref
@@ -98,6 +96,31 @@ jbang RunScenario.java x-java-python-http --peer python-sdk=1.0.0rc2
 
 A ref can be a branch, a tag or a commit SHA. Each ref gets its own checkout,
 `.cache/peers/<name>@<ref>`, so switching refs does not throw away a build.
+
+### Peer pins and drift
+
+Every peer in `peers.json` is pinned to a commit SHA, and so are the third-party packages its build
+resolves, so a nightly run changes only when this repository does:
+
+| Peer | Pinned | Third-party packages locked by |
+|---|---|---|
+| TypeScript | commit | the peer's own `package-lock.json` (`npm ci`) |
+| Rust | commit | `programs/rust/Cargo.lock` (the interop programs are their own Cargo workspace) |
+| Python | commit | `programs/python/constraints.txt` (`pip install -c`) |
+| Kotlin | commit | exact versions in the peer's `gradle/libs.versions.toml` and `programs/kotlin/build.gradle.kts` |
+
+`.github/workflows/peer-drift.yml` runs `cross-sdk.yml` and `framework-smoke.yml` weekly with every
+peer at its latest commit (`main`; Kotlin `master`) and writes a table of the pinned and latest
+commits and the result of every leg to the run summary. It is informational: no other workflow,
+branch rule or release step depends on it. A red leg there is drift. To move a pin:
+
+1. run the peer's cells at its latest commit (`run-all.sh --tag <peer> --peer <peer>-sdk=main`),
+   and adapt its programs or `expectations/<peer>.json` until they pass;
+2. set `ref` in `peers.json` to that commit's full SHA;
+3. regenerate that peer's lock: for Rust, `cargo update -p agent-client-protocol` in
+   `programs/rust` (or delete `Cargo.lock` and build); for Python, rebuild the venv without `-c`
+   and `pip freeze --exclude-editable` into `constraints.txt` (its header has the command);
+4. run `run-all.sh` with no overrides.
 
 Logs for each run go to `logs/<scenario>/`: one file per process (`agent.log`, `server.log`,
 `client.log`, `clients.log`), per build (`build-*.log`, `peer-*.log`) and `result.txt`.
@@ -452,7 +475,11 @@ language too, run on the same host at the same time.
   release gate ([Framework smoke matrix](#framework-smoke-matrix)); `release.yml` does not check it
   itself, so the maintainer confirms it is green on the release commit before dispatching a
   release.
-- Neither `interop-java.yml` nor `cross-sdk.yml` gates a release.
+- `.github/workflows/peer-drift.yml`, weekly and on manual dispatch: `cross-sdk.yml` and
+  `framework-smoke.yml` (as reusable workflows) with every peer at its latest commit, plus a
+  summary of pinned against latest commits and every leg's result
+  ([Peer pins and drift](#peer-pins-and-drift)). Informational.
+- Neither `interop-java.yml`, `cross-sdk.yml` nor `peer-drift.yml` gates a release.
 
 ## How a scenario is described
 
@@ -519,7 +546,7 @@ matrix.json               languages, pairs, transports, profiles, transport fact
 smoke.json                the framework smoke matrix: step subsets, frameworks and transports, load
 expectations/             <lang>.json expected failures, one file per language package
 jbang-lib/                config model, peer checkouts, processes, jcmd sampler, assertions
-peers.json                peer SDK git URLs, default refs and build commands
+peers.json                peer SDK git URLs, pinned commits and build commands
 configs/                  one JSON file per scenario (x-*, fw-*, load-10-fw-* generated, the rest hand-written)
 programs/<lang>/          each language's programs; launch/{build,agent,client}.sh for the cells
 programs/<framework>/     spring, micronaut, quarkus: the smoke programs, built on programs/framework

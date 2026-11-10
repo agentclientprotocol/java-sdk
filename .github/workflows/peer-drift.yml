@@ -1,0 +1,70 @@
+name: Peer drift report
+
+# Weekly: the cross-SDK suite (cross-sdk.yml) and the framework smoke matrix (framework-smoke.yml)
+# against the latest commit of every peer SDK, instead of the commits peers.json pins. A red run
+# here means a peer moved in a way the pinned suite has not caught up with: adapt the programs or
+# expectations, then move the pin (integration-testing/README.md, "Peer pins and drift").
+#
+# Informational only. It runs on a schedule and on manual dispatch, never on push or pull request,
+# and no other workflow, branch rule or release step depends on it. The release gates are
+# cross-sdk.yml and framework-smoke.yml at the pinned peers.
+on:
+  schedule:
+    - cron: '29 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: peer-drift-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cross-sdk:
+    uses: ./.github/workflows/cross-sdk.yml
+    with:
+      peer-overrides: 'typescript-sdk=main rust-sdk=main python-sdk=main kotlin-sdk=master'
+
+  framework-smoke:
+    uses: ./.github/workflows/framework-smoke.yml
+    with:
+      peers-ref: 'main'
+
+  report:
+    name: drift report
+    needs: [cross-sdk, framework-smoke]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Summarize the pinned and latest peer commits and the result of every leg
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Peer drift"
+            echo
+            echo "| Peer | Pinned (peers.json) | Latest | Moved |"
+            echo "|---|---|---|---|"
+            for p in $(jq -r 'keys[]' integration-testing/peers.json); do
+              url="$(jq -r --arg n "$p" '.[$n].url' integration-testing/peers.json)"
+              pin="$(jq -r --arg n "$p" '.[$n].ref' integration-testing/peers.json)"
+              branch=main; [ "$p" = kotlin-sdk ] && branch=master
+              latest="$(git ls-remote "$url" "refs/heads/$branch" | cut -f1)"
+              moved=no; [ "${latest}" != "${pin}" ] && moved=yes
+              echo "| $p | \`${pin:0:12}\` | \`${latest:0:12}\` ($branch) | $moved |"
+            done
+            echo
+            echo "| Leg | Result |"
+            echo "|---|---|"
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
+              --jq '.jobs[] | select(.name != "drift report") | "| \(.name) | \(.conclusion // .status) |"'
+            echo
+            echo "A failed leg is drift against that peer's latest commit; the pinned suite is unaffected."
+          } >> "$GITHUB_STEP_SUMMARY"

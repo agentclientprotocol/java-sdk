@@ -25,12 +25,27 @@ on:
         options: [all, java, typescript, rust, python, kotlin]
   schedule:
     - cron: '17 4 * * *'
+  # peer-drift.yml calls this workflow with every peer at its latest commit.
+  workflow_call:
+    inputs:
+      peers-ref:
+        type: string
+        required: false
+        default: ''
+      peer-overrides:
+        type: string
+        required: false
+        default: ''
+      peer:
+        type: string
+        required: false
+        default: 'all'
 
 permissions:
   contents: read
 
 concurrency:
-  group: cross-sdk-${{ github.ref }}
+  group: cross-sdk-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -46,7 +61,7 @@ jobs:
     steps:
       - id: pick
         env:
-          PEER: ${{ github.event.inputs.peer || 'all' }}
+          PEER: ${{ inputs.peer || 'all' }}
         run: |
           # Per peer: its toolchain, its transports (cells x-java-<peer>-<t> and x-<peer>-java-<t>),
           # and the cache paths of its build. A peer's legs also run its quarkus-<peer>-<t> scenarios
@@ -155,8 +170,8 @@ jobs:
         id: peer
         env:
           SDK: ${{ matrix.sdk }}
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
-          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
+          PEER_OVERRIDES: ${{ inputs.peer-overrides || '' }}
         run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
 
       # The key carries the toolchain version the build depends on (the Python venv, Node's
@@ -171,8 +186,8 @@ jobs:
 
       - name: Fetch and build the ${{ matrix.peer }} peer and programs
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
-          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
+          PEER_OVERRIDES: ${{ inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
         run: |
           args=(--only "$ONLY" --prepare-only)
@@ -264,8 +279,8 @@ jobs:
         id: peer
         env:
           SDK: ${{ matrix.sdk }}
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
-          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
+          PEER_OVERRIDES: ${{ inputs.peer-overrides || '' }}
         run: integration-testing/scripts/peer-sha.sh "$SDK" "$PEERS_REF" "$PEER_OVERRIDES" >> "$GITHUB_OUTPUT"
 
       # Restore only: the prepare job saved this key. On a miss the leg builds for itself.
@@ -280,8 +295,8 @@ jobs:
 
       - name: Run the ${{ matrix.leg }} scenarios
         env:
-          PEERS_REF: ${{ github.event.inputs.peers-ref || '' }}
-          PEER_OVERRIDES: ${{ github.event.inputs.peer-overrides || '' }}
+          PEERS_REF: ${{ inputs.peers-ref || '' }}
+          PEER_OVERRIDES: ${{ inputs.peer-overrides || '' }}
           ONLY: ${{ matrix.only }}
           RUN_LABEL: ${{ matrix.leg }}
         run: |
