@@ -5,12 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.81.0] - 2026-11-10
 
 The six refusals below and the path check come from a whole-specification audit of the SDK against
 stable ACP v1: 240 requirements, two judged runs, every FAIL reproduced by a failing test before it
 was fixed. The roster, the per-requirement results and the report are published in
 [`protocol-conformance/`](protocol-conformance/AUDIT-REPORT.md).
+
+### Known issues
+
+- **Spring WebFlux on Jetty:** the fix for Jetty's connection idle timeout closing an ACP WebSocket after
+  30 seconds without traffic, planned for 0.80.1, is not in 0.81.0. Set
+  `server.jetty.connection-idle-timeout` (for example `30m`), or use Reactor Netty, the default for WebFlux.
+- **Micronaut** still serves ACP on the SDK's listener, on its own port, so Micronaut's own security does not
+  apply to it. The Netty host planned for 0.81.0 moves to a later release.
+- The outbound queues of the stdio transports and the WebSocket client are still unbounded. Bounded outbound
+  queues, planned for 0.81.0, move to a later release.
 
 ### Security
 
@@ -18,6 +28,12 @@ was fixed. The roster, the per-requirement results and the report are published 
   which manages Framework 7.0.10, to address the critical Spring WebFlux advisories
   [GHSA-9qf2-26p9-2q2q](https://github.com/advisories/GHSA-9qf2-26p9-2q2q) and
   [GHSA-j9f9-w8pj-32f8](https://github.com/advisories/GHSA-j9f9-w8pj-32f8).
+- **Quarkus and Netty:** `acp-quarkus` and `acp-quarkus-deployment` declare Netty 4.1.135.Final transitively,
+  which carries HIGH denial-of-service advisories (CVE-2026-55831, CVE-2026-55833, CVE-2026-56745,
+  CVE-2026-56819; fixed in 4.1.136.Final). The documented setup imports the Quarkus platform BOM, and
+  `io.quarkus.platform:quarkus-bom` 3.40.1 manages Netty 4.1.138.Final, which is not affected. An application
+  on an older Quarkus platform whose BOM manages Netty below 4.1.136 remains exposed through its platform;
+  upgrade the platform. 0.80.0 resolved the same Netty.
 
 ### Changed
 
