@@ -1,22 +1,22 @@
 {
   "typescript-sdk": {
     "url": "https://github.com/agentclientprotocol/typescript-sdk.git",
-    "ref": "1726f28fa2bf13ef7a7c3076048d30daf53d4c13",
+    "ref": "74c78331901d950ac39b347169a27b8cb4a04807",
     "build": "npm ci --no-audit --no-fund && npm run build"
   },
   "rust-sdk": {
     "url": "https://github.com/agentclientprotocol/rust-sdk.git",
-    "ref": "69e103f102eb5f5bdf3b98682c346dd50f1543e0",
+    "ref": "e75d6f19fabb97d389fd471e89b093bbb50ba547",
     "build": "cargo fetch"
   },
   "python-sdk": {
     "url": "https://github.com/agentclientprotocol/python-sdk.git",
-    "ref": "f235530849afa976571a82b12e196e096c9d0c48",
-    "build": "rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install --quiet --disable-pip-version-check -e '.[http]' 'hypercorn==0.18.0'"
+    "ref": "6e9f70666c52fe39a950fdd7353c47a07b956af6",
+    "build": "rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install --quiet --disable-pip-version-check -c ../../../programs/python/constraints.txt -e '.[http]' 'hypercorn==0.18.0'"
   },
   "kotlin-sdk": {
     "url": "https://github.com/agentclientprotocol/kotlin-sdk.git",
-    "ref": "master",
+    "ref": "f85869365937b1d0cd9ba262218f369972b76624",
     "build": "./gradlew --quiet help"
   }
 }

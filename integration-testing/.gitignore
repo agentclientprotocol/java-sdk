@@ -5,7 +5,6 @@ logs/
 programs/java/target/
 programs/micronaut/target/
 programs/rust/target/
-programs/rust/Cargo.lock
 # The repository .gitignore ignores README.md (for plans/ research checkouts); keep ours.
 !README.md
 # Self-pair cells are generated locally (GenConfigs.java --self) and never committed.

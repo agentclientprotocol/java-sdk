@@ -1,7 +1,14 @@
 // Shared by the TypeScript interop agent and client: loads the TypeScript SDK from the checkout in
 // TS_SDK (built with `npm run build`), and holds the fixtures of the step catalogue
 // (integration-testing/steps.json, "fixtures"), hard-coded as the contract asks.
+//
+// Modules are resolved through the checkout's own package.json "exports", as a package consumer
+// would import them, so a release that moves its build output (2.0 moved dist/acp.js to
+// dist/v1/stable/acp.js) needs no change here. The protocol module is "./unstable" where the SDK
+// has one (2.0 and later: the full v1 surface, which the session.fork step needs), else "." (before
+// 2.0, "." was the full v1 surface).
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -10,13 +17,26 @@ if (!sdk) {
   console.error("TS_SDK is not set (the built typescript-sdk checkout)");
   process.exit(2);
 }
-const load = (f) => import(pathToFileURL(path.join(sdk, "dist", f)).href);
+const exportsMap = JSON.parse(readFileSync(path.join(sdk, "package.json"), "utf8")).exports ?? {};
+/** The file a package subpath ("./experimental/server") exports, or null if it has none. */
+export function exportedFile(subpath) {
+  const target = exportsMap[subpath];
+  const file = typeof target === "string" ? target : (target?.import ?? target?.default);
+  return file ? path.join(sdk, file) : null;
+}
+const load = (...subpaths) => {
+  for (const s of subpaths) {
+    const f = exportedFile(s);
+    if (f) return import(pathToFileURL(f).href);
+  }
+  throw new Error(`the SDK at ${sdk} exports none of ${subpaths.join(", ")}`);
+};
 
-export const acp = await load("acp.js");
-export const httpClient = await load("http-stream.js");
-export const wsClient = await load("ws-stream.js");
-export const server = await load("server.js");
-export const nodeAdapter = await load("node-adapter.js");
+export const acp = await load("./unstable", ".");
+export const httpClient = await load("./experimental/http-client");
+export const wsClient = await load("./experimental/ws-client");
+export const server = await load("./experimental/server");
+export const nodeAdapter = await load("./experimental/node");
 /** The `ws` package from the SDK's own node_modules (a dev dependency, installed by npm ci). */
 export const ws = createRequire(path.join(sdk, "package.json"))("ws");
 

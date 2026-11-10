@@ -54,6 +54,16 @@
       "contains": "[\"user\"]",
       "see": "peer:rust-sdk agent-client-protocol-schema 1.9.1 (pinned =1.9.1 in rust-sdk Cargo.toml:38) src/v1/content.rs:568",
       "reason": "Annotations.audience is read with VecSkipError over the closed Role enum: the unknown Role is silently dropped, so the agent reads [\"user\"]"
+    },
+    {
+      "step": "session.close",
+      "when": {
+        "agent": "rust",
+        "transport": "http"
+      },
+      "contains": "TIMEOUT",
+      "see": "peer:rust-sdk agent-client-protocol-http/src/connection.rs:538",
+      "reason": "The cancelled #slow prompt's success response arrives after session/close removed the session's stream, and response_target confirms the session again, creating a new stream no client reads; the prompt after close is answered -32602 into that stream, so the client never sees it"
     }
   ]
 }

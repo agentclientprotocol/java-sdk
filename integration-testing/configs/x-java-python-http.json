@@ -42,6 +42,7 @@
       "agent": [
         "STEP agent.init.client-capabilities PASS",
         "STEP agent.auth.authenticate PASS",
+        "STEP agent.session.close PASS",
         "STEP agent.mode.set PASS",
         "STEP agent.config.grouped PASS",
         "STEP agent.perm.selected PASS",
@@ -54,6 +55,7 @@
         "STEP agent.term.kill PASS",
         "STEP agent.elicit.form PASS",
         "STEP agent.cancel.prompt PASS",
+        "STEP agent.cancel-request.client PASS",
         "STEP agent.ext.agent-request PASS",
         "STEP agent.meta.permission PASS"
       ],
@@ -73,24 +75,10 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 65",
-      "client RESULT fail == 5"
+      "client RESULT pass == 68",
+      "client RESULT fail == 2"
     ],
     "expectedFailures": [
-      {
-        "process": "client",
-        "step": "session.resume",
-        "contains": "-32601",
-        "reason": "The SDK's HTTP server builds each AgentSideConnection without use_unstable_protocol, so session/resume (unstable in the Python SDK) is answered method-not-found although the agent implements it",
-        "see": "peer:python-sdk http/server.py:270 [expectations/python.json]"
-      },
-      {
-        "process": "client",
-        "step": "session.close",
-        "contains": "-32601",
-        "reason": "The SDK's HTTP server never enables the unstable router: session/close is answered method-not-found",
-        "see": "peer:python-sdk http/server.py:270 [expectations/python.json]"
-      },
       {
         "process": "client",
         "step": "enum.audience",
@@ -107,24 +95,17 @@
       },
       {
         "process": "client",
-        "step": "cancel-request.client",
-        "contains": "",
-        "reason": "The Python SDK routes no $/cancel_request (only the constant exists), so the #slow handler never sees it and the prompt runs its full 10 s",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
-      },
-      {
-        "process": "client",
         "step": "cancel-request.agent",
         "contains": "cancel-request",
-        "reason": "The Python agent cannot send $/cancel_request (no API), so it answers the chunk \"cancel-request unsupported\" instead of \"cancel-request sent\"",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
+        "reason": "The Python interop agent does not send $/cancel_request (python-sdk sends one only when the task awaiting a pending request is cancelled, connection.py:230; the program does not use it yet), so it answers the chunk \"cancel-request unsupported\" instead of \"cancel-request sent\"",
+        "see": "peer:python-sdk connection.py:230 [expectations/python.json]"
       },
       {
         "process": "agent",
         "step": "agent.cancel-request.agent",
         "contains": "$/cancel_request",
-        "reason": "The Python agent cannot send $/cancel_request for its pending fs/read_text_file (no API)",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
+        "reason": "The Python interop agent does not send $/cancel_request for its pending fs/read_text_file (python-sdk sends one only from a cancelled pending request, connection.py:230; the program does not use it yet)",
+        "see": "peer:python-sdk connection.py:230 [expectations/python.json]"
       }
     ],
     "report": {

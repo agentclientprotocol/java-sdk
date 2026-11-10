@@ -435,15 +435,19 @@ class InteropAgent:
         opts = dict(p.split("=", 1) for p in rest.split(" ") if "=" in p)
         grace = int(opts.get("grace", "0")) / 1000.0
         deadline = started + 10.0
-        while not turn.stop.is_set() and time.monotonic() < deadline:
-            await self._chunk(s.id, "tick")
-            try:
-                await asyncio.wait_for(turn.stop.wait(), 0.1)
-            except asyncio.TimeoutError:
-                pass
+        try:
+            while not turn.stop.is_set() and time.monotonic() < deadline:
+                await self._chunk(s.id, "tick")
+                try:
+                    await asyncio.wait_for(turn.stop.wait(), 0.1)
+                except asyncio.TimeoutError:
+                    pass
+        except asyncio.CancelledError:
+            # A $/cancel_request for this prompt (cancel-request.client): the SDK cancels the
+            # handler's task (acp/connection.py:218) and answers the request -32800 itself.
+            agent_step("cancel-request.client", True, started, "the SDK cancelled the handler on $/cancel_request")
+            raise
         if not turn.stop.is_set():
-            # Nothing cancelled the turn. A $/cancel_request (cancel-request.client) cannot reach
-            # this handler: the Python SDK routes no such method (acp/meta.py:49 is only the name).
             log(f"[agent] #slow on {s.id} ran 10 s without a cancel")
             return {"stopReason": "end_turn"}
         end = time.monotonic() + grace

@@ -10,8 +10,9 @@
 //! connection can be loaded on another (http.reconnect).
 mod common;
 
-use agent_client_protocol::schema::v1::*;
-use agent_client_protocol::{Agent, Client, ConnectTo, ConnectionTo, Dispatch, Handled, Responder, UntypedMessage};
+use agent_client_protocol::v1::schema::*;
+use agent_client_protocol::v1::{ConnectionTo, Dispatch, Responder};
+use agent_client_protocol::{Agent, Client, ConnectTo, Handled, UntypedMessage};
 use common::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -154,7 +155,7 @@ impl ConnectTo<Client> for InteropAgent {
         let c_prompt = conn.clone();
         let c_ext = conn.clone();
         Agent
-            .builder()
+            .v1()
             .name("interop-rust-agent")
             .on_receive_request(
                 async move |req: InitializeRequest, responder: Responder<InitializeResponse>, _cx| {
@@ -433,7 +434,9 @@ impl ConnectTo<Client> for InteropAgent {
                             }
                             Some(Err(e)) => {
                                 log(&format!("[agent] prompt on {sid} failed: {}", describe(&e)));
-                                let _ = responder.respond_with_error(e);
+                                if let Err(e) = responder.respond_with_error(e) {
+                                    log(&format!("[agent] answering the prompt on {sid} failed: {}", describe(&e)));
+                                }
                             }
                             None => {
                                 // #hang: never answer.

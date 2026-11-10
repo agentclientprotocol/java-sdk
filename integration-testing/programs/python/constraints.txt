@@ -1,0 +1,25 @@
+# Every third-party package the python-sdk peer venv installs, at exact versions: peers.json's
+# build installs the SDK's [http] extra and Hypercorn with `-c` this file, so a nightly run
+# resolves the same packages every time. Generated on Python 3.12 (the CI version) with
+#   pip install -e '.[http]' 'hypercorn==0.18.0' && pip freeze --exclude-editable
+# in a python-sdk checkout at the peers.json ref. Regenerate it when the pin moves
+# (integration-testing/README.md, "Peer pins and drift").
+annotated-types==0.8.0
+anyio==4.16.0
+h11==0.16.0
+h2==4.4.1
+hpack==4.2.0
+httpcore2==2.16.0
+httpx2==2.16.0
+Hypercorn==0.18.0
+hyperframe==6.1.0
+idna==3.20
+priority==2.0.0
+pydantic==2.14.3
+pydantic_core==2.50.4
+starlette==1.10.0
+truststore==0.10.5
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+websockets==17.4
+wsproto==1.3.2

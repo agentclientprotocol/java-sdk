@@ -22,7 +22,7 @@ path = "src/interop_client.rs"
 
 [dependencies]
 # unstable_session_fork: session/fork, the one step of the unstable profile (design 4.7).
-agent-client-protocol = { path = "../../.cache/peers/rust-sdk/src/agent-client-protocol", features = ["unstable_session_fork"] }
+agent-client-protocol = { path = "../../.cache/peers/rust-sdk/src/agent-client-protocol", features = ["stdio", "process", "unstable_session_fork"] }
 agent-client-protocol-http = { path = "../../.cache/peers/rust-sdk/src/agent-client-protocol-http", features = ["client", "server"] }
 tokio = { version = "1.52", features = ["full"] }
 axum = "0.8"
@@ -31,3 +31,5 @@ anyhow = "1"
 serde = "1"
 serde_json = "1"
 futures = "0.3"
+# stdio.eof-exit spawns its own agent process (the same crate the SDK's AcpAgent uses).
+async-process = "2"

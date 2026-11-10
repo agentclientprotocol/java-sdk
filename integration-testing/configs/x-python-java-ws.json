@@ -56,6 +56,7 @@
         "STEP agent.term.kill PASS",
         "STEP agent.elicit.form PASS",
         "STEP agent.cancel.prompt PASS",
+        "STEP agent.cancel-request.agent PASS",
         "STEP agent.ext.agent-request PASS",
         "STEP agent.meta.permission PASS"
       ]
@@ -66,8 +67,8 @@
       ]
     },
     "checks": [
-      "client RESULT pass == 64",
-      "client RESULT fail == 8"
+      "client RESULT pass == 65",
+      "client RESULT fail == 7"
     ],
     "expectedFailures": [
       {
@@ -95,29 +96,15 @@
         "process": "client",
         "step": "cancel-request.client",
         "contains": "no $/cancel_request API",
-        "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
-      },
-      {
-        "process": "client",
-        "step": "cancel-request.agent",
-        "contains": "",
-        "reason": "The Python client routes no $/cancel_request, so its fs read of slow.txt runs its full 10 s instead of ending -32800: the prompt ends late",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
-      },
-      {
-        "process": "agent",
-        "step": "agent.cancel-request.agent",
-        "contains": "",
-        "reason": "The Python client routes no $/cancel_request, so the agent's cancelled fs/read_text_file is never answered -32800: the read handler answers the content after 10 s",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
+        "reason": "The Python interop client does not send $/cancel_request: python-sdk sends one only when the task awaiting a pending request is cancelled (connection.py:230), which drops the response the step checks, and has no call to send one for a given id",
+        "see": "peer:python-sdk connection.py:230 [expectations/python.json]"
       },
       {
         "process": "client",
         "step": "cancel-request.unknown",
         "contains": "no $/cancel_request API",
-        "reason": "The Python SDK has only the $/cancel_request method-name constant: no API to send it",
-        "see": "peer:python-sdk meta.py:49 [expectations/python.json]"
+        "reason": "The Python interop client does not send $/cancel_request: python-sdk has no call to send one for an arbitrary (here unknown) request id, only the implicit send on a cancelled pending request (connection.py:230)",
+        "see": "peer:python-sdk connection.py:230 [expectations/python.json]"
       },
       {
         "process": "client",

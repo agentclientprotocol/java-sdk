@@ -11,10 +11,9 @@
 mod common;
 
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::schema::v1::*;
-use agent_client_protocol::{
-    AcpAgent, AcpAgentConfig, Agent, ConnectTo, ConnectionTo, Dispatch, Handled, LineDirection, Responder, UntypedMessage,
-};
+use agent_client_protocol::v1::schema::*;
+use agent_client_protocol::v1::{ConnectionTo, Dispatch, Responder};
+use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectTo, Handled, LineDirection, UntypedMessage};
 use common::*;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -147,7 +146,7 @@ async fn run_conn<T: ConnectTo<agent_client_protocol::Client> + 'static>(
     close_rx: oneshot::Receiver<()>,
 ) -> Result<(), AcpError> {
     agent_client_protocol::Client
-        .builder()
+        .v1()
         .name("interop-rust-client")
         .on_receive_notification(
             async move |n: SessionNotification, _cx| {
@@ -232,7 +231,7 @@ async fn run_conn<T: ConnectTo<agent_client_protocol::Client> + 'static>(
                         let _ = responder.respond(typed(json!({ "content": content })));
                     }
                     Err(e) => {
-                        let _ = responder.respond_with_error(AcpError::resource_not_found(Some(req.path.display().to_string()))
+                        let _ = responder.respond_with_error(AcpError::from(agent_client_protocol::v1::schema::Error::resource_not_found(Some(req.path.display().to_string())))
                             .data(json!(e.to_string())));
                     }
                 }
@@ -1283,15 +1282,29 @@ async fn http_reconnect() -> Result<String, String> {
 
 async fn stdio_eof_exit() -> Result<String, String> {
     let cmd = cfg().agent_cmd.clone().unwrap_or_default();
-    let agent = AcpAgent::new(AcpAgentConfig::new("bash").arg("-c").arg(format!("exec {cmd}")));
-    let (stdin, stdout, stderr, mut child) = agent.spawn_process().map_err(|e| describe(&e))?;
+    // The SDK's AcpAgent no longer exposes its child (spawn_process is crate-private since 5.0), and
+    // this step needs it to time the exit: spawn it the way AcpAgent does, with async-process.
+    let mut child = async_process::Command::new("bash")
+        .arg("-c")
+        .arg(format!("exec {cmd}"))
+        .stdin(async_process::Stdio::piped())
+        .stdout(async_process::Stdio::piped())
+        .stderr(async_process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("spawn of the second agent failed: {e}"))?;
+    let (stdin, stdout, stderr) = (
+        child.stdin.take().ok_or("no stdin pipe")?,
+        child.stdout.take().ok_or("no stdout pipe")?,
+        child.stderr.take().ok_or("no stderr pipe")?,
+    );
     tokio::spawn(async move {
         use futures_lite_lines::lines;
         lines(stderr, |l| relay(&l, LineDirection::Stderr)).await;
     });
     let streams = agent_client_protocol::ByteStreams::new(stdin, stdout);
     let r = agent_client_protocol::Client
-        .builder()
+        .v1()
         .name("interop-rust-eof-client")
         .connect_with(streams, async |cx: ConnectionTo<Agent>| cx.send_request(init_request()).block_task().await)
         .await;
@@ -1308,7 +1321,7 @@ async fn stdio_eof_exit() -> Result<String, String> {
     }
 }
 
-/// Reads an async_process pipe line by line (the SDK's AcpAgent exposes futures-io streams).
+/// Reads an async_process pipe (a futures-io stream) line by line.
 mod futures_lite_lines {
     pub async fn lines(pipe: impl futures::io::AsyncRead + Unpin, f: impl Fn(String)) {
         use futures::io::AsyncBufReadExt;
