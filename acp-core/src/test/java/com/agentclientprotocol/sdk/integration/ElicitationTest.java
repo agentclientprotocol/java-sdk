@@ -26,7 +26,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.CompleteElicitationNotificatio
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateElicitationRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.CreateElicitationResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ElicitationCapabilities;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;

@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>ACP Test Utilities</name>
-    <description>Test utilities for ACP SDK - InMemoryTransportPair, MockAcpAgent, MockAcpClient</description>
+    <description>Test utilities for ACP SDK - MockAcpAgent and MockAcpClient, on acp-core's in-process InMemoryTransportPair</description>
 
     <properties>
         <!-- Coverage floors: measured line 78.60%, branch 40.00% (4 of 10), less 2 points (parent pom, JaCoCo) -->

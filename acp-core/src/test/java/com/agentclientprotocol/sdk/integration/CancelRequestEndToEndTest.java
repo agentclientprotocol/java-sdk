@@ -16,7 +16,7 @@ import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.RequestCancellation;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;

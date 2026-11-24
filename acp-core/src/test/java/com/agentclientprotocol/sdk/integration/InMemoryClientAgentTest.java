@@ -6,7 +6,7 @@ package com.agentclientprotocol.sdk.integration;
 
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 
 /**
  * Integration tests using in-memory transport for fast, deterministic testing.

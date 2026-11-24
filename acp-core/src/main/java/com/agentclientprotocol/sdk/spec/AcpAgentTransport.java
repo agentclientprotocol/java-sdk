@@ -24,9 +24,9 @@ import reactor.core.publisher.Mono;
  * are not agent transports themselves: the {@code acp-streamable-http-jetty} module's
  * {@code StreamableHttpAcpAgentTransport} and {@code StreamableHttpAcpServlet} make one per
  * connection ({@link com.agentclientprotocol.sdk.agent.transport.RemoteAcpConnection}) and hand
- * it to an {@link com.agentclientprotocol.sdk.agent.AcpAgentFactory}. For tests, the
- * {@code acp-test} module's {@code InMemoryTransportPair} connects an agent and a client inside
- * one JVM.
+ * it to an {@link com.agentclientprotocol.sdk.agent.AcpAgentFactory}.
+ * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair} connects an agent and
+ * a client inside one JVM, for an application that serves its own agent and for tests.
  *
  * <p>Implementations carry one connection each and must refuse a second {@link #start}. They
  * pass each message from the client to the session's handler and write what the handler's

@@ -34,7 +34,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.SetSessionConfigOptionResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.StopReason;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;

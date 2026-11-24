@@ -22,7 +22,7 @@ import com.agentclientprotocol.sdk.annotation.Prompt;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import io.micronaut.aop.Around;
 import io.micronaut.aop.Intercepted;
 import io.micronaut.aop.InterceptorBean;

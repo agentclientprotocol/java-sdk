@@ -3,7 +3,8 @@
  */
 
 /**
- * Agent-side transports: stdio, and the connection abstraction network transports serve sessions through.
+ * Agent-side transports: stdio, the in-process {@link InMemoryTransportPair} that also hands out its
+ * client side, and the connection abstraction network transports serve sessions through.
  *
  * <p>
  * The package is null-marked: every type is non-null unless annotated

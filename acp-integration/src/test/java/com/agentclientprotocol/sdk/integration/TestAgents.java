@@ -114,7 +114,18 @@ final class TestAgents {
 	/** Initializes, opens a session and prompts once; returns the messages the agent sent. */
 	static List<String> roundTrip(AcpClientTransport transport) {
 		List<String> messages = new CopyOnWriteArrayList<>();
-		AcpSyncClient client = AcpClient.sync(transport)
+		AcpSyncClient client = client(transport, messages);
+		try {
+			return promptOnce(client, messages);
+		}
+		finally {
+			client.closeGracefully();
+		}
+	}
+
+	/** A client on the transport that adds the agent's message text to {@code messages}. */
+	static AcpSyncClient client(AcpClientTransport transport, List<String> messages) {
+		return AcpClient.sync(transport)
 			.requestTimeout(Duration.ofSeconds(10))
 			.sessionUpdateHandler(notification -> {
 				if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
@@ -123,17 +134,16 @@ final class TestAgents {
 				}
 			})
 			.build();
-		try {
-			client.initialize();
-			String session = client.newSession(new AcpSchema.NewSessionRequest("/", List.of())).sessionId();
-			AcpSchema.PromptResponse response = client
-				.prompt(new AcpSchema.PromptRequest(session, List.of(new AcpSchema.TextContent("hello"))));
-			assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
-			return messages;
-		}
-		finally {
-			client.closeGracefully();
-		}
+	}
+
+	/** Initializes the client, opens a session and prompts once; returns {@code messages}. */
+	static List<String> promptOnce(AcpSyncClient client, List<String> messages) {
+		client.initialize();
+		String session = client.newSession(new AcpSchema.NewSessionRequest("/", List.of())).sessionId();
+		AcpSchema.PromptResponse response = client
+			.prompt(new AcpSchema.PromptRequest(session, List.of(new AcpSchema.TextContent("hello"))));
+		assertThat(response.stopReason()).isEqualTo(AcpSchema.StopReason.END_TURN);
+		return messages;
 	}
 
 	/** An agent transport whose graceful close never finishes; counts its immediate closes. */

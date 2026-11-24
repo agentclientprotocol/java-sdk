@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A supported in-process transport, `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`, in
+  acp-core.** It connects an ACP client and an agent in the same JVM, without a process or a port: build the
+  agent on `agentTransport()` and the client on `clientTransport()`. An application that serves its own agent
+  to its own code (a web endpoint that drives an `@AcpAgent`, for instance) no longer needs acp-test at
+  runtime. The two sides exchange ACP's JSON-RPC messages as `AcpSchema` objects, in order, from any number
+  of sending threads. `create()` takes the JSON mapper from the classpath once for the pair;
+  `create(AcpJsonMapper)` takes one you configure.
+
+### Changed
+
+- **Either side's close now ends the in-process connection for both.** Closing the client, the agent, either
+  transport or the pair completes both transports' `awaitTermination()`: `AcpSyncAgent.run()` returns once
+  the client closes, the client fails its requests still waiting for the agent at once instead of at their
+  timeout, and a request the agent sent the client and that is still unanswered fails with `-32603`, as on
+  stdio. Messages sent before the end are still delivered; a send after it fails with
+  `AcpConnectionException` (it was a `RuntimeException`). Before, the agent transport ended only when the
+  agent side closed and the client transport never reported an end.
+- **`connect()` and `start()` on the in-process transports complete at once**, as the transport interfaces
+  specify, instead of when the connection ends. A handler failure on one message no longer stops delivery of
+  the next on the client side, and transport errors are logged at WARN unless an exception handler is set.
+
+### Deprecated
+
+- **`com.agentclientprotocol.sdk.test.InMemoryTransportPair` (acp-test)** delegates to the acp-core class and
+  is deprecated for removal in a later release. Change the import to
+  `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`; nothing else changes.
+
 ## [0.81.0] - 2026-11-10
 
 The six refusals below and the path check come from a whole-specification audit of the SDK against

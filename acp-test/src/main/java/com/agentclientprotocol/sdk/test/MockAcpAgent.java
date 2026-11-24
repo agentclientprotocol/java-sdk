@@ -23,8 +23,9 @@ import reactor.core.publisher.Mono;
  * A scripted ACP agent for testing client code: it answers {@code initialize}, {@code session/new}
  * and {@code session/prompt} with the responses set on its {@link Builder}, and records every
  * request it receives so a test can check what the client sent. Put it on the agent side of an
- * {@link InMemoryTransportPair}, or on any {@link AcpAgentTransport}, and call {@link #start()}. To
- * test an agent instead, use {@link MockAcpClient}.
+ * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair}, or on any
+ * {@link AcpAgentTransport}, and call {@link #start()}. To test an agent instead, use
+ * {@link MockAcpClient}.
  *
  * <p>Without builder settings it answers {@code initialize} with protocol version 1, no agent
  * capabilities and no authentication methods, {@code session/new} with the session ID
@@ -104,7 +105,8 @@ public class MockAcpAgent {
 
 	/**
 	 * Starts a builder for a mock agent on the given transport, with the default responses.
-	 * @param transport the agent transport, usually {@link InMemoryTransportPair#agentTransport()};
+	 * @param transport the agent transport, usually
+	 * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair#agentTransport()};
 	 * must not be null
 	 * @return a new builder
 	 */

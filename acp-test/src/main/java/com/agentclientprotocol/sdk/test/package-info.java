@@ -3,7 +3,10 @@
  */
 
 /**
- * Test support for ACP applications: an in-memory transport pair and mock agent and client.
+ * Test support for ACP applications: a mock agent and a mock client. The in-process transport
+ * they usually run on is acp-core's
+ * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair}; this package's
+ * {@code InMemoryTransportPair} is its deprecated former name.
  *
  * <p>
  * The package is null-marked: every type is non-null unless annotated

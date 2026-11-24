@@ -20,7 +20,7 @@ import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpTransportType;
 import com.agentclientprotocol.sdk.quarkus.AcpRuntimeConfig;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import reactor.core.publisher.Mono;

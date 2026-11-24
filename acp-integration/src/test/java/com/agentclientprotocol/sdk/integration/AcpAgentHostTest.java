@@ -9,13 +9,15 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
+import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
@@ -32,17 +34,26 @@ class AcpAgentHostTest {
 		assertThat(host.port()).isEmpty();
 		host.start();
 		host.start(); // once
-		assertThat(TestAgents.roundTrip(pair.clientTransport())).containsExactly("echo: hello!");
+		// The client stays open until the host has stopped: closing it would end the in-process
+		// connection, which is a transport end.
+		List<String> messages = new CopyOnWriteArrayList<>();
+		AcpSyncClient client = TestAgents.client(pair.clientTransport(), messages);
+		try {
+			assertThat(TestAgents.promptOnce(client, messages)).containsExactly("echo: hello!");
 
-		CompletionStage<Void> stopped = host.stopGracefully();
-		assertThat(host.stopGracefully()).isSameAs(stopped);
-		stopped.toCompletableFuture().get(10, TimeUnit.SECONDS);
-		host.termination().toCompletableFuture().get(10, TimeUnit.SECONDS);
-		host.stop(Duration.ofSeconds(1)); // already stopped: returns at once
-		host.start(); // nor does a start after the stop
-		Thread.sleep(200);
-		// The host stopped the agent itself: that is no transport end.
-		assertThat(transportEnds).hasValue(0);
+			CompletionStage<Void> stopped = host.stopGracefully();
+			assertThat(host.stopGracefully()).isSameAs(stopped);
+			stopped.toCompletableFuture().get(10, TimeUnit.SECONDS);
+			host.termination().toCompletableFuture().get(10, TimeUnit.SECONDS);
+			host.stop(Duration.ofSeconds(1)); // already stopped: returns at once
+			host.start(); // nor does a start after the stop
+			Thread.sleep(200);
+			// The host stopped the agent itself: that is no transport end.
+			assertThat(transportEnds).hasValue(0);
+		}
+		finally {
+			client.closeGracefully();
+		}
 	}
 
 	@Test

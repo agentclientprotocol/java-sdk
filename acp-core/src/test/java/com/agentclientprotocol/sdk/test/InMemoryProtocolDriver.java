@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.test;
 
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import java.util.function.BiConsumer;
 
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;

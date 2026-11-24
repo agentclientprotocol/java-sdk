@@ -4,6 +4,7 @@
 
 package com.agentclientprotocol.sdk.test;
 
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;

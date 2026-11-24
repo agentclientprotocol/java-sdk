@@ -96,7 +96,7 @@ import reactor.core.scheduler.Schedulers;
  * standard input carries the test fork's commands, and a reader left on it takes those bytes
  * and can stall the fork's exit. Embedders and tests should therefore use the
  * {@linkplain #StdioAcpAgentTransport(AcpJsonMapper, InputStream, OutputStream) constructor
- * that takes explicit streams}, or the in-memory transport of the {@code acp-test} module, and
+ * that takes explicit streams}, or the in-process {@link InMemoryTransportPair}, and
  * keep the {@code System.in} constructors for an agent's {@code main}. A test suite that cannot
  * avoid them (an application whose configuration builds this transport by default) can
  * install an empty standard input before any test runs, for instance with

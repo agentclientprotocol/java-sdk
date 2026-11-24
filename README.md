@@ -460,7 +460,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | `com.agentclientprotocol.sdk.client` | Client SDK (`AcpClient`, `AcpAsyncClient`, `AcpSyncClient`) |
 | `com.agentclientprotocol.sdk.client.transport` | Client transports (`StdioAcpClientTransport`, `WebSocketAcpClientTransport`, `StreamableHttpAcpClientTransport`) |
 | `com.agentclientprotocol.sdk.agent` | Agent SDK (`AcpAgent`, `AcpAsyncAgent`, `AcpSyncAgent`, `AcpAgentFactory`) |
-| `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; `StreamableHttpAcpServlet` from acp-http-servlet; `StreamableHttpAcpAgentTransport` from acp-streamable-http-jetty; `StreamableHttpAcpAgentTransportOptions` from acp-http-core) |
+| `com.agentclientprotocol.sdk.agent.transport` | Agent transports (`StdioAcpAgentTransport`; the in-process `InMemoryTransportPair`, which also hands out its client side; `StreamableHttpAcpServlet` from acp-http-servlet; `StreamableHttpAcpAgentTransport` from acp-streamable-http-jetty; `StreamableHttpAcpAgentTransportOptions` from acp-http-core) |
 | `com.agentclientprotocol.sdk.http.webflux` | The Spring WebFlux host from acp-http-webflux (`AcpWebFluxHost`) |
 | `com.agentclientprotocol.sdk.http.server` | The host contract from acp-http-core (`AcpHttpEndpoint`, `AcpHttpExchange`, `AcpHttpReply`, `AcpWsHandshake`), for writing a server adapter; unstable |
 | `com.agentclientprotocol.sdk.agent.support` | Annotation-based agent runtime (`AcpAgentSupport`), with its `resolver`, `handler`, `interceptor` and `invocation` extension points |
@@ -469,7 +469,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | `com.agentclientprotocol.sdk.error` | Exceptions (`AcpProtocolException`, `AcpCapabilityException`) |
 | `com.agentclientprotocol.sdk.json` | JSON mapping abstraction (`AcpJsonMapper`, `TypeRef`); the Jackson 2 implementation (`JacksonAcpJsonMapper`) from acp-json-jackson2 |
 | `com.agentclientprotocol.sdk.json.jackson3` | Jackson 3 implementation (`Jackson3AcpJsonMapper`) from acp-json-jackson3 |
-| `com.agentclientprotocol.sdk.test` | Test support from acp-test (`InMemoryTransportPair`, `MockAcpAgent`, `MockAcpClient`) |
+| `com.agentclientprotocol.sdk.test` | Test support from acp-test (`MockAcpAgent`, `MockAcpClient`) |
 
 ### Maven Artifacts
 
@@ -494,6 +494,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | Transport | Client | Agent | Module |
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
+| In-process (client and agent in one JVM) | `InMemoryTransportPair.clientTransport()` | `InMemoryTransportPair.agentTransport()` | acp-core |
 | WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP and WebSocket in your own Servlet 6 container | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `StreamableHttpAcpServlet` (WebSocket where the container has Jakarta WebSocket 2.1) | acp-core / acp-http-servlet |
@@ -574,9 +575,10 @@ profile on demand and uploads the report.
 Use the mock utilities for testing:
 
 ```java
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import com.agentclientprotocol.sdk.test.*;
 
-// Create in-memory transport pair for testing
+// Connect a client and an agent in this JVM (acp-core's in-process transport)
 InMemoryTransportPair pair = InMemoryTransportPair.create();
 
 // Use pair.clientTransport() for client, pair.agentTransport() for agent

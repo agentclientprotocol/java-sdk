@@ -24,7 +24,7 @@ import org.springframework.context.annotation.Configuration;
  * {@code @AcpAgent} bean on. It applies when the application has an {@code @AcpAgent} bean and no
  * {@code AcpAgentTransport} bean of its own, and {@code spring.acp.agent.transport.type} is
  * {@code stdio} or unset. An application that defines its own transport bean, such as the agent
- * side of an {@code InMemoryTransportPair} in a test, is served on that one instead.
+ * side of an in-process {@code InMemoryTransportPair}, is served on that one instead.
  *
  * <p>The stdio transport reads the client's messages from standard input and writes its own to
  * standard output, so nothing else may write to standard output: Spring Boot's banner and console

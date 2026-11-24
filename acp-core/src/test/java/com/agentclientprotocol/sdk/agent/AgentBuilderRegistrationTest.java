@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 

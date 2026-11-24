@@ -23,8 +23,8 @@ import reactor.core.publisher.Mono;
  * with the responses set on its {@link Builder}, records those requests and every session update it
  * receives, and drives the agent with blocking calls ({@link #initialize()},
  * {@link #newSession(String)}, {@link #prompt(String)}). Put it on the client side of an
- * {@link InMemoryTransportPair}, or on any {@link AcpClientTransport}. To test a client instead,
- * use {@link MockAcpAgent}.
+ * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair}, or on any
+ * {@link AcpClientTransport}. To test a client instead, use {@link MockAcpAgent}.
  *
  * <p>How it differs from {@link MockAcpAgent}: it needs no start, because building it connects its
  * transport. It advertises file reading and writing and nothing else, so on the agent side a
@@ -126,7 +126,8 @@ public class MockAcpClient {
 	/**
 	 * Starts a builder for a mock client on the given transport, with the default answers.
 	 * @param transport the client transport, usually
-	 * {@link InMemoryTransportPair#clientTransport()}; must not be null
+	 * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair#clientTransport()};
+	 * must not be null
 	 * @return a new builder
 	 */
 	public static Builder builder(AcpClientTransport transport) {

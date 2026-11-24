@@ -16,13 +16,14 @@ import reactor.core.publisher.Mono;
  * {@code AcpClient.async(transport)}; building the client connects the transport, and
  * closing the client closes it.
  *
- * <p>The SDK has three.
+ * <p>The SDK has four.
  * {@link com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport} starts the agent
  * as a child process;
  * {@link com.agentclientprotocol.sdk.client.transport.StreamableHttpAcpClientTransport} and
  * {@link com.agentclientprotocol.sdk.client.transport.WebSocketAcpClientTransport} reach an
- * agent that is already running behind a URL. For tests, the {@code acp-test} module's
- * {@code InMemoryTransportPair} connects a client and an agent inside one JVM.
+ * agent that is already running behind a URL; and the client side of an
+ * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair} reaches an agent in
+ * the same JVM, for an application that serves its own agent and for tests.
  *
  * <p>Implementations carry one connection each and must refuse a second {@link #connect}. The
  * client session passes the agent's messages to the handler given to {@code connect} and

@@ -32,7 +32,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.TerminalOutputResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WaitForTerminalExitResponse;
 import com.agentclientprotocol.sdk.spec.AcpSchema.WriteTextFileResponse;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

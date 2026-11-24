@@ -73,7 +73,7 @@ class TestKitArchitectureTest {
 	 */
 	public static final class ThisModule implements LocationProvider {
 
-		static final Class<?> ANCHOR = InMemoryTransportPair.class;
+		static final Class<?> ANCHOR = MockAcpAgent.class;
 
 		@Override
 		public Set<Location> get(Class<?> testClass) {

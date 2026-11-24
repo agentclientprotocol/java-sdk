@@ -10,7 +10,7 @@ import java.util.Map;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
-import com.agentclientprotocol.sdk.test.InMemoryTransportPair;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import io.micronaut.context.ApplicationContext;
 import org.junit.jupiter.api.Test;
 

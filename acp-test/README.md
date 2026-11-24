@@ -1,11 +1,15 @@
 # acp-test
 
 Test utilities for ACP clients and agents: they run a client and an agent in one JVM, with no
-process and no network.
+process and no network, on acp-core's in-process transport,
+`com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`: build a client on
+`clientTransport()` and an agent on `agentTransport()`. An application that connects its own
+client to its own agent uses that class from acp-core and does not need acp-test.
+`com.agentclientprotocol.sdk.test.InMemoryTransportPair`, this module's former copy, is deprecated
+and delegates to it: change the import.
 
 | Class | Purpose |
 |-------|---------|
-| `InMemoryTransportPair` | Two connected transports: build a client on `clientTransport()` and an agent on `agentTransport()` |
 | `MockAcpAgent` | A scripted agent for testing client code. It answers `initialize`, `session/new` and `session/prompt` and records every request |
 | `MockAcpClient` | A scripted client for testing agent code. It answers permission and file requests, records them and every session update, and drives the agent with blocking calls |
 
