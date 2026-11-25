@@ -229,6 +229,9 @@ public interface AcpClient {
 		/** Receives the session updates only while no handler is added. */
 		private @Nullable Function<AcpSchema.SessionNotification, Mono<Void>> defaultSessionUpdateHandler;
 
+		/** Request handlers that apply when none is registered for their method. */
+		private final Map<String, AcpClientSession.RequestHandler<?>> defaultRequestHandlers = new HashMap<>();
+
 		private @Nullable Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> createElicitationHandler;
 
 		private AsyncSpec(AcpClientTransport transport) {
@@ -547,6 +550,27 @@ public interface AcpClient {
 		}
 
 		/**
+		 * Sets the handler that answers {@code session/request_permission} when no
+		 * {@link #requestPermissionHandler} is registered: a default that the application's own
+		 * handler replaces, whichever is registered first. It is meant for frameworks, which set a
+		 * default (refusing every request, for instance) before handing the builder to the
+		 * application. Without either, the client answers the request {@code -32601} (method not
+		 * found). A later call replaces the default.
+		 * @param handler the default handler; it emits the answer to the agent
+		 * @return this builder
+		 * @throws IllegalArgumentException if {@code handler} is null
+		 */
+		public AsyncSpec defaultRequestPermissionHandler(
+				Function<AcpSchema.RequestPermissionRequest, Mono<AcpSchema.RequestPermissionResponse>> handler) {
+			Assert.notNull(handler, "Default request permission handler must not be null");
+			this.defaultRequestHandlers.put(AcpSchema.METHOD_SESSION_REQUEST_PERMISSION,
+					(AcpClientSession.RequestHandler<AcpSchema.RequestPermissionResponse>) params -> handler
+				.apply(transport.unmarshalParams(params, new TypeRef<AcpSchema.RequestPermissionRequest>() {
+				})));
+			return this;
+		}
+
+		/**
 		 * Registers a handler for an agent-to-client request method the SDK does not model, with
 		 * the params as the transport read them: the escape hatch for a method newer than this
 		 * SDK. A method with a typed setter ({@code fs/*}, {@code terminal/*},
@@ -728,8 +752,9 @@ public interface AcpClient {
 		/**
 		 * Fails when the advertised capabilities claim a capability without the handlers that
 		 * serve it, and warns once about handlers for capabilities not advertised.
+		 * @return the capabilities, checked
 		 */
-		private void checkCapabilitiesHaveHandlers(AcpSchema.ClientCapabilities capabilities) {
+		private AcpSchema.ClientCapabilities checkCapabilitiesHaveHandlers(AcpSchema.ClientCapabilities capabilities) {
 			NegotiatedCapabilities advertised = NegotiatedCapabilities.fromClient(capabilities);
 			List<String> missing = new ArrayList<>();
 			List<String> unadvertised = new ArrayList<>();
@@ -751,6 +776,7 @@ public interface AcpClient {
 						+ "call them: {}. Advertise the capabilities in clientCapabilities(..)",
 						String.join("; ", unadvertised));
 			}
+			return capabilities;
 		}
 
 		private void checkCapability(String capability, boolean advertised, List<String> methods,
@@ -800,14 +826,8 @@ public interface AcpClient {
 		public AcpAsyncClient build() {
 			// Explicit capabilities win; without them the handlers decide what is advertised
 			AcpSchema.@Nullable ClientCapabilities explicit = this.clientCapabilities;
-			AcpSchema.ClientCapabilities capabilities;
-			if (explicit != null) {
-				checkCapabilitiesHaveHandlers(explicit);
-				capabilities = explicit;
-			}
-			else {
-				capabilities = deriveCapabilities();
-			}
+			AcpSchema.ClientCapabilities capabilities = (explicit != null) ? checkCapabilitiesHaveHandlers(explicit)
+					: deriveCapabilities();
 
 			// Set up session update notification handler: the application's handlers, or else the
 			// default one
@@ -833,6 +853,7 @@ public interface AcpClient {
 			// The capabilities the client advertises when it initializes
 			AtomicReference<AcpSchema.@Nullable ClientCapabilities> advertised = new AtomicReference<>();
 			Map<String, AcpClientSession.RequestHandler<?>> handlers = new HashMap<>(requestHandlers);
+			this.defaultRequestHandlers.forEach(handlers::putIfAbsent);
 			Function<AcpSchema.CreateElicitationRequest, Mono<AcpSchema.CreateElicitationResponse>> elicitation = this.createElicitationHandler;
 			if (elicitation != null) {
 				AcpClientSession.RequestHandler<AcpSchema.CreateElicitationResponse> rawHandler = params -> {
