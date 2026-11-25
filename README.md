@@ -58,7 +58,7 @@ The interop and conformance suite is described in [`integration-testing/README.m
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-core</artifactId>
-    <version>0.81.0</version>
+    <version>0.82.0</version>
 </dependency>
 ```
 
@@ -70,13 +70,13 @@ JSON module next to it; `acp-agent-support`, `acp-test` and
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson2</artifactId>
-    <version>0.81.0</version>
+    <version>0.82.0</version>
 </dependency>
 <!-- or Jackson 3 (tools.jackson.databind), for example alongside Spring Boot 4 -->
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-json-jackson3</artifactId>
-    <version>0.81.0</version>
+    <version>0.82.0</version>
 </dependency>
 ```
 
@@ -100,7 +100,7 @@ For annotation-based agent development:
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-agent-support</artifactId>
-    <version>0.81.0</version>
+    <version>0.82.0</version>
 </dependency>
 ```
 
@@ -109,11 +109,11 @@ For Streamable HTTP server support (agents accepting remote HTTP/SSE connections
 <dependency>
     <groupId>com.agentclientprotocol</groupId>
     <artifactId>acp-streamable-http-jetty</artifactId>
-    <version>0.81.0</version>
+    <version>0.82.0</version>
 </dependency>
 ```
 
-For snapshot builds (unreleased features), add the snapshot repository and use `0.82.0-SNAPSHOT`:
+For snapshot builds (unreleased features), add the snapshot repository and use `0.83.0-SNAPSHOT`:
 ```xml
 <repositories>
     <repository>
@@ -620,7 +620,17 @@ A release candidate must have a green [framework smoke matrix](integration-testi
 (`framework-smoke.yml`: Spring Boot, Micronaut and Quarkus against the TypeScript SDK) on the
 commit being released before `release.yml` is dispatched.
 
-### 0.81.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+### 0.82.0 (Current — [Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
+
+An `@AcpAgent` runs in the application's own JVM with one property, `transport.type=in-process`, in Spring
+Boot, Micronaut and Quarkus: the integration serves the agent in process and gives the application an
+initialized `AcpSyncClient`, with handler beans for session updates (`AcpSessionUpdateHandler`) and permission
+requests (`AcpPermissionHandler`). `@AcpAgent` alone makes a class a bean in all three; Micronaut needs the new
+`acp-micronaut-processor` on its annotation processor path. acp-core adds the supported in-process transport,
+`InMemoryTransportPair`; the acp-test copy is removed. Some 0.81.0 behaviour changes on purpose:
+[CHANGELOG.md](CHANGELOG.md) marks each **Breaking** change.
+
+### 0.81.0 ([Maven Central](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-core))
 
 The client refuses, before sending, what stable ACP v1 forbids it to send: an unspoken protocol version
 (new `AcpVersionException`), a `terminal` auth method, unadvertised HTTP/SSE MCP servers and prompt blocks,

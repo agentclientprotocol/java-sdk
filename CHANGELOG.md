@@ -5,9 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.82.0] - 2026-11-25
 
-Breaking changes in this release are marked **Breaking**; pre-1.0, they come without compatibility shims.
+An `@AcpAgent` runs in the application's own JVM with configuration only, in Spring Boot, Micronaut and
+Quarkus. Breaking changes in this release are marked **Breaking**; pre-1.0, they come without compatibility
+shims.
+
+### Known issues
+
+- **Spring WebFlux on Jetty:** Jetty's connection idle timeout still closes an ACP WebSocket after 30 seconds
+  without traffic. Set `server.jetty.connection-idle-timeout` (for example `30m`), or use Reactor Netty, the
+  default for WebFlux.
+- **Micronaut** still serves ACP over HTTP on the SDK's listener, on its own port, so Micronaut's own security
+  does not apply to it. The in-process mode is unaffected. A Netty host is planned for a later release.
+- The outbound queues of the stdio transports and the WebSocket client are still unbounded. Bounded outbound
+  queues are planned for a later release.
 
 ### Added
 

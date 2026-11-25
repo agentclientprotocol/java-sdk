@@ -169,8 +169,8 @@ Micronaut's filters, `micronaut-security` rules, CORS, TLS and metrics never see
 binds the loopback interface by default, so only programs on the same machine can connect, and it
 refuses browser requests from foreign origins. Setting `acp.agent.transport.http.listener.host=0.0.0.0`
 exposes an endpoint without authentication to the network: put a proxy that authenticates in front
-of it. This is the interim arrangement for 0.80.0; serving ACP on Micronaut's own server, where its
-security applies, is planned for 0.81.0.
+of it. This is an interim arrangement; serving ACP on Micronaut's own server, where its security
+applies, is planned for a later release.
 
 ## A client
 
