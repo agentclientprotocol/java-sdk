@@ -25,7 +25,8 @@ processor path, as in any Micronaut application.
 Annotate the agent class `@AcpAgent`. With `acp-micronaut-processor` on the annotation processor
 path, beside `micronaut-inject-java`, that alone makes it a singleton bean; without it, add
 `@Singleton` (any bean-defining annotation works). It is an ordinary bean, so other beans are
-injected into it.
+injected into it. An agent class compiled in another module or jar needs `@Import` (see
+[An agent compiled elsewhere](#in-process-the-agent-and-the-applications-own-client)).
 
 ```xml
 <annotationProcessorPaths>
@@ -147,6 +148,17 @@ class Approvals implements AcpPermissionHandler {       // at most one; without 
 Both may block. Closing the context closes the client, stops the agent and closes an
 `AutoCloseable` agent bean; the end of the in-process connection never closes the context.
 Setting an `acp.client.transport.*` property as well fails the startup.
+
+**An agent compiled elsewhere.** Micronaut writes bean definitions only for the sources it
+compiles, so the processor maps `@AcpAgent` only there. When the agent class comes from a module
+built without Micronaut's processors, or from a library jar, import its package on one of the
+application's own classes; with `acp-micronaut-processor` on the application's processor path, the
+imported `@AcpAgent` class becomes a singleton bean as well:
+
+```java
+@Import(packages = "com.example.claims.agent")   // io.micronaut.context.annotation.Import
+public class Application { ... }
+```
 
 **HTTP runs on its own port.** Streamable HTTP and WebSocket are served by the SDK's Jetty
 listener (`StreamableHttpAcpAgentTransport`). It runs next to Micronaut's HTTP server if you have

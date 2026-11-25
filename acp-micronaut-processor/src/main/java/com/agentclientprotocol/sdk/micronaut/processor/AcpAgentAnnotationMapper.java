@@ -20,7 +20,10 @@ import io.micronaut.inject.visitor.VisitorContext;
  *
  * <p>Micronaut finds mappers on the annotation processor path only. Add this module there, beside
  * {@code micronaut-inject-java}, in every module whose sources hold the {@code @AcpAgent} class;
- * the application's runtime dependencies are unchanged.
+ * the application's runtime dependencies are unchanged. An agent class compiled without Micronaut's
+ * processors, in a shared module or a library jar, is imported instead:
+ * {@code @Import(packages = "...")} on one of the application's classes, which is then compiled
+ * with this module on its processor path.
  *
  * @author Mark Pollack
  */
