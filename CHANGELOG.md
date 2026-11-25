@@ -69,6 +69,8 @@ Breaking changes in this release are marked **Breaking**; pre-1.0, they come wit
 - **`connect()` and `start()` on the in-process transports complete at once**, as the transport interfaces
   specify, instead of when the connection ends. A handler failure on one message no longer stops delivery of
   the next on the client side, and transport errors are logged at WARN unless an exception handler is set.
+- **SLF4J 2.0.20 and JSpecify 1.0.1**, the versions Spring Boot 4.1.2 manages (were 2.0.18 and 1.0.0), so a plain
+  SDK consumer and a Spring Boot one resolve the same.
 
 ### Removed
 

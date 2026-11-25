@@ -83,8 +83,10 @@
              the jackson-annotations 2.x that jackson.version manages. -->
         <jackson3.version>3.1.7</jackson3.version>
 
-        <slf4j.version>2.0.18</slf4j.version>
-        <jspecify.version>1.0.0</jspecify.version>
+        <!-- The versions Spring Boot 4.1.2 manages, so a plain SDK consumer and a Boot one resolve
+             the same SLF4J and JSpecify (Owner follow-up for 0.82.0, 2026-10-30). -->
+        <slf4j.version>2.0.20</slf4j.version>
+        <jspecify.version>1.0.1</jspecify.version>
         <jetty.version>12.1.12</jetty.version>
         <!-- The servlet host's APIs, the minimum it compiles against (the container provides
              them; not managed here, so a framework's BOM keeps its own), and the Tomcat its tests
