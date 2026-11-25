@@ -123,7 +123,38 @@ class AcpAgentSettingsTest {
 		assertThat(AcpTransportType.parse(" Http ")).isEqualTo(AcpTransportType.HTTP);
 		assertThat(AcpTransportType.STDIO.value()).isEqualTo("stdio");
 		assertThatThrownBy(() -> AcpTransportType.parse("udp")).isInstanceOf(IllegalArgumentException.class)
-			.hasMessageContaining("use stdio, websocket or http");
+			.hasMessageContaining("use stdio, websocket, http or in-process");
+	}
+
+	@Test
+	void inProcessIsWrittenWithAHyphenAndReadEitherWay() {
+		assertThat(AcpTransportType.IN_PROCESS.value()).isEqualTo("in-process");
+		assertThat(AcpTransportType.parse("in-process")).isEqualTo(AcpTransportType.IN_PROCESS);
+		assertThat(AcpTransportType.parse(" IN_PROCESS ")).isEqualTo(AcpTransportType.IN_PROCESS);
+		AcpAgentSettings settings = AcpAgentSettings.from(MapSettingsSource.of("acp.agent.transport.type", "in-process"),
+				"acp.agent");
+		assertThat(settings.inProcess()).isTrue();
+		assertThat(settings.servesHttp()).isFalse();
+		assertThat(AcpAgentSettings.builder().transport(AcpTransportType.WEBSOCKET).build().servesHttp()).isTrue();
+		AcpAgentSettings http = AcpAgentSettings.builder().transport(AcpTransportType.HTTP).build();
+		assertThat(http.servesHttp()).isTrue();
+		assertThat(http.inProcess()).isFalse();
+		assertThat(AcpAgentSettings.builder().build().servesHttp()).isFalse();
+	}
+
+	@Test
+	void onlyTheStdioTransportsEndStopsTheApplication() {
+		AcpAgentSettings shuttingDown = AcpAgentSettings.builder().build();
+		AcpAgentSettings keepingOn = AcpAgentSettings.builder().shutdownOnTransportEnd(false).build();
+		com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport stdio = new com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport(
+				com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault(), new java.io.ByteArrayInputStream(new byte[0]),
+				new java.io.ByteArrayOutputStream());
+		com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair pair = com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair
+			.create();
+
+		assertThat(shuttingDown.shutsDownWhenEnded(stdio)).isTrue();
+		assertThat(keepingOn.shutsDownWhenEnded(stdio)).isFalse();
+		assertThat(shuttingDown.shutsDownWhenEnded(pair.agentTransport())).isFalse();
 	}
 
 	@Test

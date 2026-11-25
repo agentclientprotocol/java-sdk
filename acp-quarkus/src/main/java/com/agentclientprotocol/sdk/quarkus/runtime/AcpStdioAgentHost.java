@@ -7,26 +7,34 @@ package com.agentclientprotocol.sdk.quarkus.runtime;
 import java.time.Duration;
 
 import com.agentclientprotocol.sdk.agent.support.AcpAgentSupport;
+import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpAgentHost;
+import com.agentclientprotocol.sdk.integration.AcpInProcess;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Singleton;
+import jakarta.interceptor.Interceptor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Serves the {@code @AcpAgent} bean over one agent transport, stdio unless the application provides
- * its own {@link AcpAgentTransport} bean, on an {@link AcpAgentHost}. The extension adds it when
- * {@code quarkus.acp.agent.transport.type} is {@code stdio} and the application has an
- * {@code @AcpAgent} class. The agent starts with the application; when the transport ends (the
- * client closed standard input and every answer has been written) the application exits, unless
- * {@code quarkus.acp.agent.shutdown-on-transport-end} is off; when the application stops, the agent
- * closes gracefully, waiting at most 30 seconds. An application does not call it; a test can inject
- * it to reach the running agent.
+ * Serves the {@code @AcpAgent} bean over one agent transport, on an {@link AcpAgentHost}: stdio
+ * unless the application provides its own {@link AcpAgentTransport} bean, or the in-process pair's
+ * agent side. The extension adds it when {@code quarkus.acp.agent.transport.type} is {@code stdio}
+ * or {@code in-process} and the application has an {@code @AcpAgent} class. The agent starts with
+ * the application, in process followed by the initialization of the application's
+ * {@code AcpSyncClient}; when the stdio transport ends (the client closed standard input and every
+ * answer has been written) the application exits, unless
+ * {@code quarkus.acp.agent.shutdown-on-transport-end} is off, and the end of any other transport
+ * never stops it. When the application stops, the agent closes gracefully, waiting at most 30
+ * seconds, and then an {@code AutoCloseable} agent bean is closed. An application does not call
+ * it; a test can inject it to reach the running agent.
  *
  * @author Mark Pollack
  */
@@ -46,25 +54,34 @@ public class AcpStdioAgentHost {
 
 	private volatile @Nullable AcpAgentHost host;
 
-	AcpStdioAgentHost(AcpAgentAssembly assembly, AcpAgentTransport transport) {
+	private final Instance<AcpSyncClient> client;
+
+	AcpStdioAgentHost(AcpAgentAssembly assembly, AcpAgentTransport transport, Instance<AcpSyncClient> client) {
 		this.assembly = assembly;
 		this.transport = transport;
+		this.client = client;
 	}
 
-	void start(@Observes StartupEvent event) {
+	// Early, so that the application's own startup observers find the in-process client ready.
+	void start(@Observes @Priority(Interceptor.Priority.LIBRARY_BEFORE) StartupEvent event) {
 		AcpAgentSupport support = assembly.builder().transport(transport).build();
-		Runnable onTransportEnd = assembly.settings().shutdownOnTransportEnd() ? AcpStdioAgentHost::exit : () -> {
+		Runnable onTransportEnd = assembly.settings().shutsDownWhenEnded(transport) ? AcpStdioAgentHost::exit : () -> {
 		};
 		AcpAgentHost started = new AcpAgentHost(support, onTransportEnd);
 		this.agent = support;
 		this.host = started;
 		started.start();
+		if (assembly.settings().inProcess()) {
+			// The client on the pair's other side is the application's: ready once started.
+			AcpInProcess.initialize(client.get());
+		}
 	}
 
 	void stop(@Observes ShutdownEvent event) {
 		AcpAgentHost current = this.host;
 		if (current != null) {
 			current.stop(STOP_TIMEOUT);
+			assembly.closeAgentBean();
 		}
 	}
 

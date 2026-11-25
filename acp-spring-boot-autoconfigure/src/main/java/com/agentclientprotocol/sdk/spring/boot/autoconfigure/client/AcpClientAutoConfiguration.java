@@ -10,8 +10,11 @@ import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientHandlers;
 import com.agentclientprotocol.sdk.integration.AcpClientHost;
 import com.agentclientprotocol.sdk.integration.AcpClients;
+import com.agentclientprotocol.sdk.integration.AcpPermissionHandler;
+import com.agentclientprotocol.sdk.integration.AcpSessionUpdateHandler;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
 import org.springframework.beans.factory.DisposableBean;
@@ -31,18 +34,23 @@ import org.springframework.context.annotation.Bean;
  * or the application defines itself.
  *
  * <p>The client advertises the capabilities and uses the timeouts of {@link AcpClientProperties}.
- * Every {@link AcpClientCustomizer} bean is applied to its builder, in bean order: register the
- * session-update handler, the permission handler, and the file system, terminal and elicitation
- * handlers there. Without a session-update handler of the application's own, session updates are
- * logged at DEBUG. Creating the client connects the transport (for stdio, starts the agent process)
- * when the context starts; the application then calls {@code initialize()} and opens sessions.
+ * Every {@link AcpSessionUpdateHandler} bean receives the session updates, and the one
+ * {@link AcpPermissionHandler} bean answers permission requests; without one, they are refused.
+ * Every {@link AcpClientCustomizer} bean is then applied to its builder, in bean order: register the
+ * file system, terminal and elicitation handlers there. Without a session-update handler, session
+ * updates are logged at DEBUG. Creating the client connects the transport (for stdio, starts the
+ * agent process) when the context starts; the application then calls {@code initialize()} and opens
+ * sessions. With {@code spring.acp.agent.transport.type=in-process} the transport is the
+ * application's own agent, and the agent's lifecycle initializes the client once the agent has
+ * started.
  *
  * <p>When the context closes, the client is closed once: pending notifications are delivered,
  * waiting at most the request timeout plus 10 seconds, then the transport is closed. An
  * {@code AcpAsyncClient} or {@code AcpSyncClient} bean of the application's own replaces the one
  * created here.
  */
-@AutoConfiguration(after = AcpClientTransportAutoConfiguration.class)
+@AutoConfiguration(after = AcpClientTransportAutoConfiguration.class,
+		afterName = "com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent.AcpAgentTransportAutoConfiguration")
 @ConditionalOnClass(AcpClient.class)
 @ConditionalOnBean(AcpClientTransport.class)
 @EnableConfigurationProperties(AcpClientProperties.class)
@@ -54,8 +62,11 @@ public class AcpClientAutoConfiguration {
 	@Bean(destroyMethod = "")
 	@ConditionalOnMissingBean
 	AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientProperties properties,
-			ObjectProvider<AcpClientCustomizer> customizers) {
-		return AcpClients.async(transport, properties.toSettings(), customizers.orderedStream().toList(),
+			ObjectProvider<AcpSessionUpdateHandler> sessionUpdateHandlers,
+			ObjectProvider<AcpPermissionHandler> permissionHandlers, ObjectProvider<AcpClientCustomizer> customizers) {
+		AcpClientHandlers handlers = AcpClientHandlers.of(sessionUpdateHandlers.orderedStream().toList(),
+				permissionHandlers.orderedStream().toList());
+		return AcpClients.async(transport, properties.toSettings(), handlers, customizers.orderedStream().toList(),
 				AcpClientTransportAutoConfiguration.PREFIX);
 	}
 

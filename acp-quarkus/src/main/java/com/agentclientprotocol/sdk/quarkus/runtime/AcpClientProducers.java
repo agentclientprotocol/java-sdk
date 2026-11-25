@@ -9,6 +9,9 @@ import java.util.List;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientHandlers;
+import com.agentclientprotocol.sdk.integration.AcpPermissionHandler;
+import com.agentclientprotocol.sdk.integration.AcpSessionUpdateHandler;
 import com.agentclientprotocol.sdk.integration.AcpClientHost;
 import com.agentclientprotocol.sdk.integration.AcpClientSettings;
 import com.agentclientprotocol.sdk.integration.AcpClientTransports;
@@ -70,9 +73,13 @@ public class AcpClientProducers {
 	}
 
 	/**
-	 * Produces the client, customized by every {@link AcpClientCustomizer} bean, highest priority
-	 * first. Session updates are logged at DEBUG unless a customizer consumes them.
+	 * Produces the client: every {@link AcpSessionUpdateHandler} bean receives the session updates,
+	 * the one {@link AcpPermissionHandler} bean answers permission requests (without one, they are
+	 * refused), then every {@link AcpClientCustomizer} bean customizes it, highest priority first.
+	 * Session updates are logged at DEBUG when nothing consumes them.
 	 * @param transport the client transport
+	 * @param sessionUpdateHandlers the session-update handler beans
+	 * @param permissionHandlers the permission handler beans; at most one is allowed
 	 * @param customizers the customizer beans
 	 * @return the async client
 	 * @throws IllegalStateException if a capability property is true but no customizer registers
@@ -81,8 +88,11 @@ public class AcpClientProducers {
 	@Produces
 	@Singleton
 	@DefaultBean
-	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, @All List<AcpClientCustomizer> customizers) {
-		return AcpClients.async(transport, settings(), customizers, AcpSettings.CLIENT_PREFIX);
+	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport,
+			@All List<AcpSessionUpdateHandler> sessionUpdateHandlers, @All List<AcpPermissionHandler> permissionHandlers,
+			@All List<AcpClientCustomizer> customizers) {
+		return AcpClients.async(transport, settings(), AcpClientHandlers.of(sessionUpdateHandlers, permissionHandlers),
+				customizers, AcpSettings.CLIENT_PREFIX);
 	}
 
 	/**

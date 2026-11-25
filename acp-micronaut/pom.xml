@@ -137,6 +137,12 @@
             <artifactId>micronaut-test-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Builds before this module: its tests are compiled with the processor. -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-micronaut-processor</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.agentclientprotocol</groupId>
             <artifactId>acp-test</artifactId>
@@ -184,6 +190,13 @@
                             <groupId>io.micronaut</groupId>
                             <artifactId>micronaut-inject-java</artifactId>
                             <version>${micronaut.core.version}</version>
+                        </path>
+                        <!-- The tests' @AcpAgent classes carry no @Singleton: the mapper makes
+                             them beans, as in an application. -->
+                        <path>
+                            <groupId>com.agentclientprotocol</groupId>
+                            <artifactId>acp-micronaut-processor</artifactId>
+                            <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

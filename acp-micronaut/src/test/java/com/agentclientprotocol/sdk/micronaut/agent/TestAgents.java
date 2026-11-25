@@ -112,6 +112,39 @@ final class TestAgents {
 
 	}
 
+	static final String CLOSING = "test.agent.closing";
+
+	static final String CLOSING_FAILS = "test.agent.closing.fails";
+
+	/** An agent that is {@code AutoCloseable}: counts its closes, and fails them when told to. */
+	@Singleton
+	@AcpAgent
+	@Requires(property = CLOSING, value = "true")
+	static class ClosingAgent implements AutoCloseable {
+
+		static final java.util.concurrent.atomic.AtomicInteger CLOSES = new java.util.concurrent.atomic.AtomicInteger();
+
+		private final boolean fails;
+
+		ClosingAgent(@io.micronaut.context.annotation.Value("${" + CLOSING_FAILS + ":false}") boolean fails) {
+			this.fails = fails;
+		}
+
+		@Prompt
+		AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request) {
+			return AcpSchema.PromptResponse.endTurn();
+		}
+
+		@Override
+		public void close() {
+			CLOSES.incrementAndGet();
+			if (fails) {
+				throw new IllegalStateException("cannot close");
+			}
+		}
+
+	}
+
 	/** A second agent, for the "exactly one" rule. */
 	@Singleton
 	@AcpAgent
@@ -176,6 +209,31 @@ final class TestAgents {
 
 	static Map<String, Object> echoInMemory() {
 		return Map.of(ECHO, "true", IN_MEMORY, "true");
+	}
+
+	static final String STDIO_PIPE = "test.stdio-pipe";
+
+	/** A stdio transport over a pipe, whose writing end the test closes as a client would. */
+	@Factory
+	@Requires(property = STDIO_PIPE, value = "true")
+	static class StdioPipe {
+
+		@Singleton
+		java.io.PipedOutputStream clientSide() {
+			return new java.io.PipedOutputStream();
+		}
+
+		@Singleton
+		AcpAgentTransport agentTransport(java.io.PipedOutputStream clientSide) throws java.io.IOException {
+			return new com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport(
+					com.agentclientprotocol.sdk.json.AcpJsonMapper.createDefault(), new java.io.PipedInputStream(clientSide),
+					new java.io.ByteArrayOutputStream());
+		}
+
+	}
+
+	static Map<String, Object> echoOverAPipe() {
+		return Map.of(ECHO, "true", STDIO_PIPE, "true");
 	}
 
 }

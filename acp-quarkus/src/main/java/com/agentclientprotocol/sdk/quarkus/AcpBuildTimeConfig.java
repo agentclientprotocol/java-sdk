@@ -65,7 +65,8 @@ public interface AcpBuildTimeConfig {
 		 * listener is disabled unless set otherwise, because standard output carries the protocol;
 		 * the agent reads standard input, and an application bean of type {@code AcpAgentTransport}
 		 * replaces stdio. With {@code http}, the agent is served on the Quarkus HTTP server's port
-		 * ({@code quarkus.http.port}), not a port of its own. Maps to
+		 * ({@code quarkus.http.port}), not a port of its own. With {@code in-process}, the agent is
+		 * served to the application's own {@code AcpSyncClient}, initialized at startup. Maps to
 		 * {@code AcpAgentSettings.transport}.
 		 * @return the transport type
 		 */

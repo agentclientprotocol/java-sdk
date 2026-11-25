@@ -155,8 +155,8 @@ public class AcpAgentConfiguration {
 	 * Returns whether the application context closes when the agent's transport ends on its own
 	 * ({@code acp.agent.shutdown-on-transport-end}): for stdio, when the client closes the agent's
 	 * standard input and every answer has been written. Default {@code true}, so the process exits
-	 * with its client. It applies to a single transport (stdio, or an {@code AcpAgentTransport}
-	 * bean of the application's own), not to the HTTP listener, which serves many clients. Maps to
+	 * with its client. It applies to a stdio transport only, never to the in-process transport,
+	 * another {@code AcpAgentTransport} bean of the application's own, or the HTTP listener. Maps to
 	 * {@link AcpAgentSettings#shutdownOnTransportEnd()}.
 	 * @return whether the context closes at transport end
 	 */
@@ -267,6 +267,8 @@ public class AcpAgentConfiguration {
 		 * upgrades on its path. It needs {@code acp-streamable-http-jetty} on the classpath;
 		 * without it the startup fails naming the module.</li>
 		 * <li>{@code websocket}: the same listener as {@code http}.</li>
+		 * <li>{@code in-process}: in the application's own JVM, to its own {@code AcpSyncClient},
+		 * initialized once the agent has started.</li>
 		 * </ul>
 		 * The value is read in any case, such as {@code http} or {@code Http}.
 		 * @return the transport type

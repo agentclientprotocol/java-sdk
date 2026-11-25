@@ -10,8 +10,11 @@ import java.util.concurrent.ExecutorService;
 import com.agentclientprotocol.sdk.client.AcpAsyncClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpClientCustomizer;
+import com.agentclientprotocol.sdk.integration.AcpClientHandlers;
 import com.agentclientprotocol.sdk.integration.AcpClientTransports;
 import com.agentclientprotocol.sdk.integration.AcpClients;
+import com.agentclientprotocol.sdk.integration.AcpPermissionHandler;
+import com.agentclientprotocol.sdk.integration.AcpSessionUpdateHandler;
 import com.agentclientprotocol.sdk.integration.AcpTransportThreads;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import io.micronaut.context.BeanContext;
@@ -24,7 +27,9 @@ import jakarta.inject.Singleton;
 /**
  * Creates the application's ACP client from {@code acp.client.*} ({@link AcpClientConfiguration})
  * when a transport is named, that is when {@code acp.client.transport.type},
- * {@code .stdio.command}, {@code .websocket.uri} or {@code .http.uri} is set: its transport, an
+ * {@code .stdio.command}, {@code .websocket.uri} or {@code .http.uri} is set, or when
+ * {@code acp.agent.transport.type=in-process} connects it to the application's own agent: its
+ * transport (in process, the pair's client side), an
  * {@link AcpAsyncClient}, and an {@link AcpSyncClient} facade over that same client, so both share
  * one transport connection. Inject either. An application that sets none of these four gets none
  * of these beans, even with other client properties set, such as
@@ -42,7 +47,7 @@ import jakarta.inject.Singleton;
  * annotated {@code @Replaces(bean = AcpClientTransport.class, factory = AcpClientBeans.class)}.
  */
 @Factory
-@Requires(condition = AcpClientTransportCondition.class)
+@Requires(condition = AcpClientCondition.class)
 public class AcpClientBeans {
 
 	/**
@@ -58,6 +63,7 @@ public class AcpClientBeans {
 	 * type without its command or URI
 	 */
 	@Singleton
+	@Requires(condition = AcpClientTransportCondition.class)
 	public AcpClientTransport acpClientTransport(AcpClientConfiguration config, BeanContext context) {
 		AcpTransportThreads threads = context
 			.findBean(ExecutorService.class, Qualifiers.byName(TaskExecutors.VIRTUAL))
@@ -70,9 +76,13 @@ public class AcpClientBeans {
 
 	/**
 	 * Creates the client, once, over the transport, which this connects. Its capabilities and
-	 * timeouts come from the configuration; then each customizer is applied to its builder.
+	 * timeouts come from the configuration; every {@link AcpSessionUpdateHandler} bean receives the
+	 * session updates and the one {@link AcpPermissionHandler} bean answers permission requests
+	 * (without one, they are refused); then each customizer is applied to its builder.
 	 * @param transport the client transport
 	 * @param config the client settings
+	 * @param sessionUpdateHandlers every session-update handler bean, in bean order
+	 * @param permissionHandlers every permission handler bean; at most one is allowed
 	 * @param customizers every customizer bean, in bean order
 	 * @return the async client
 	 * @throws IllegalStateException if a capability property is true but no customizer registers
@@ -80,8 +90,10 @@ public class AcpClientBeans {
 	 */
 	@Singleton
 	public AcpAsyncClient acpAsyncClient(AcpClientTransport transport, AcpClientConfiguration config,
+			List<AcpSessionUpdateHandler> sessionUpdateHandlers, List<AcpPermissionHandler> permissionHandlers,
 			List<AcpClientCustomizer> customizers) {
-		return AcpClients.async(transport, config.toSettings(), customizers, AcpClientConfiguration.PREFIX);
+		return AcpClients.async(transport, config.toSettings(),
+				AcpClientHandlers.of(sessionUpdateHandlers, permissionHandlers), customizers, AcpClientConfiguration.PREFIX);
 	}
 
 	/**

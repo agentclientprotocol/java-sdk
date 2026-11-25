@@ -153,7 +153,7 @@ class AcpClientBeansTest {
 		assertThatThrownBy(() -> transport(Map.of("acp.client.transport.type", "pigeon",
 				"acp.client.transport.http.uri", "http://localhost:9/acp")))
 			.rootCause()
-			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket or http");
+			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket, http or in-process");
 	}
 
 	/**

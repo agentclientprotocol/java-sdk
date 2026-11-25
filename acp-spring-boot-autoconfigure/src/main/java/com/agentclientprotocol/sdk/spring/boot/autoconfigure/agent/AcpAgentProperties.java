@@ -166,9 +166,9 @@ public class AcpAgentProperties {
 	 *
 	 * <p>A stdio transport ends when the client closes the agent's standard input and every answer
 	 * has been written. The agent then has no one left to serve, so closing the context lets an
-	 * application kept alive by {@code spring.main.keep-alive} exit. It applies to the single
-	 * transport only: the stdio transport, or an {@code AcpAgentTransport} bean of the
-	 * application's own. An HTTP endpoint serves many clients and never ends because one leaves.
+	 * application kept alive by {@code spring.main.keep-alive} exit. It applies to a stdio transport
+	 * only: the end of the in-process transport, of another {@code AcpAgentTransport} bean of the
+	 * application's own, or of a client's HTTP connection never closes the context.
 	 * @return whether the context closes at transport end
 	 */
 	public boolean isShutdownOnTransportEnd() {
@@ -294,6 +294,8 @@ public class AcpAgentProperties {
 		 * startup naming them. See {@link AcpAgentHttpAutoConfiguration} for where the endpoint is
 		 * served.</li>
 		 * <li>{@code websocket}: the same as {@code http}.</li>
+		 * <li>{@code in-process}: in the application's own JVM, to its own {@code AcpSyncClient},
+		 * initialized once the agent has started.</li>
 		 * </ul>
 		 * The value is read in any case.
 		 * @return the transport, or {@code null} when unset

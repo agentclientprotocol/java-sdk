@@ -45,7 +45,7 @@ class VertxHostTckTest extends AcpHttpTransportTck {
 		AcpBuildTimeConfig buildTime = mock(AcpBuildTimeConfig.class, Answers.RETURNS_DEEP_STUBS);
 		when(buildTime.agent().transport().http().path()).thenReturn("acp");
 		AcpVertxHost host = new AcpVertxHost(assembly, runtime, buildTime);
-		AcpHttpAgentHost agentHost = new AcpHttpAgentHost(host);
+		AcpHttpAgentHost agentHost = new AcpHttpAgentHost(host, HostsAndProducersTest.unresolvable());
 		Router router = Router.router(vertx);
 		host.register(router);
 		HttpServer server = vertx.createHttpServer(new HttpServerOptions().setHost("127.0.0.1").setPort(0))

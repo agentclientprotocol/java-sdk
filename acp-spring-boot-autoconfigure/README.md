@@ -153,6 +153,65 @@ class Ask implements CommandLineRunner {
 - **Your own beans win.** An `AcpClientTransport`, `AcpAsyncClient` or `AcpSyncClient` bean of your
   own replaces the one the autoconfiguration creates.
 
+The handler beans of the next section, `AcpSessionUpdateHandler` and `AcpPermissionHandler`,
+apply to this client as well; without a permission handler, the agent's permission requests are
+refused. An `AcpClientCustomizer` that registers its own permission handler replaces the refusal, but
+not a bean as well.
+
+## In process: the agent and the application's own client
+
+An application that drives its own agent, a web endpoint that answers by prompting it for
+instance, serves the agent in process with one property:
+
+```yaml
+spring:
+  acp:
+    agent:
+      transport:
+        type: in-process
+```
+
+The `@AcpAgent` class needs no `@Component`: every `@AcpAgent` class in the application's packages
+(those of its `@SpringBootApplication`) is a bean, constructed with its dependencies injected, and an
+application serves one. The starter then connects the application's `AcpSyncClient` and
+`AcpAsyncClient` to it over an `InMemoryTransportPair` and initializes the client once the agent has
+started, so inject the client and open sessions:
+
+```java
+@RestController
+class ClaimsController {
+
+    private final AcpSyncClient client;
+
+    ClaimsController(AcpSyncClient client) {
+        this.client = client;
+    }
+    // client.newSession(...), client.prompt(...)
+}
+```
+
+The client gets the `spring.acp.client.*` timeouts and capabilities, and the application's handler
+beans:
+
+```java
+@Component
+class Chat implements AcpSessionUpdateHandler {         // every bean receives every update
+    public void onSessionUpdate(AcpSchema.SessionNotification notification) { ... }
+}
+
+@Component
+class Approvals implements AcpPermissionHandler {       // at most one; without it, requests are refused
+    public AcpSchema.RequestPermissionResponse onPermissionRequest(AcpSchema.RequestPermissionRequest request) { ... }
+}
+```
+
+Both may block. Without an `AcpPermissionHandler` bean the client refuses every permission request,
+choosing the agent's reject option. When the context closes, the agent stops, the client closes,
+and an `AutoCloseable` agent bean is closed. The end of the in-process connection never closes the
+context: `spring.acp.agent.shutdown-on-transport-end` applies to stdio only. Setting a
+`spring.acp.client.transport.*` property as well fails the startup, since the application's client
+is the in-process one.
+
 ## Transports
 
 ### Agent: `spring.acp.agent.transport.type`
@@ -162,6 +221,7 @@ class Ask implements CommandLineRunner {
 | `stdio`, or unset | Standard input and output. A web application serves the agent on stdio too, unless you set `http`. |
 | `http` | ACP Streamable HTTP, with WebSocket upgrades on the same path. It needs `acp-http-servlet` in a servlet web application, `acp-http-webflux` in a reactive (WebFlux) one, or `acp-streamable-http-jetty` for the SDK's own listener; without any of them the startup fails, naming them. See the next table for where it is served. |
 | `websocket` | The same as `http`. |
+| `in-process` | In the application's own JVM, to the application's own client: see [In process](#in-process-the-agent-and-the-applications-own-client). |
 
 The value is read in any case. With `http` or `websocket`, the kind of application decides where
 the endpoint runs:

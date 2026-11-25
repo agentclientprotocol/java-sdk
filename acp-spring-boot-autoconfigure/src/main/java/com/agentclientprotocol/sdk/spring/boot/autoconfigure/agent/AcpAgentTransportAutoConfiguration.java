@@ -5,8 +5,11 @@
 package com.agentclientprotocol.sdk.spring.boot.autoconfigure.agent;
 
 import com.agentclientprotocol.sdk.agent.AcpAgent;
+import com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair;
 import com.agentclientprotocol.sdk.integration.AcpAgentTransports;
+import com.agentclientprotocol.sdk.integration.AcpInProcess;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
+import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -18,13 +21,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 /**
- * Creates the stdio transport that {@link AcpAgentAutoConfiguration} serves the application's
- * {@code @AcpAgent} bean on. It applies when the application has an {@code @AcpAgent} bean and no
- * {@code AcpAgentTransport} bean of its own, and {@code spring.acp.agent.transport.type} is
- * {@code stdio} or unset. An application that defines its own transport bean, such as the agent
- * side of an in-process {@code InMemoryTransportPair}, is served on that one instead.
+ * Creates the single transport that {@link AcpAgentAutoConfiguration} serves the application's
+ * {@code @AcpAgent} bean on, when the application has an {@code @AcpAgent} bean and no
+ * {@code AcpAgentTransport} bean of its own:
+ * <ul>
+ * <li>{@code spring.acp.agent.transport.type} {@code stdio} or unset: the stdio transport;</li>
+ * <li>{@code in-process}: an {@link InMemoryTransportPair} bean, its agent side as the agent
+ * transport and its client side as the {@code AcpClientTransport} bean, so the client
+ * autoconfiguration gives the application its {@code AcpSyncClient} and {@code AcpAsyncClient},
+ * connected to its own agent and initialized once the agent has started. Setting a
+ * {@code spring.acp.client.transport.*} property as well fails the startup.</li>
+ * </ul>
+ * An application that defines its own transport bean is served on that one instead.
  *
  * <p>The stdio transport reads the client's messages from standard input and writes its own to
  * standard output, so nothing else may write to standard output: Spring Boot's banner and console
@@ -55,6 +66,34 @@ public class AcpAgentTransportAutoConfiguration {
 		@Bean(destroyMethod = "")
 		AcpAgentTransport acpAgentTransport() {
 			return AcpAgentTransports.stdio();
+		}
+
+	}
+
+	// The agent and the application's own client, in one JVM: one pair for the application.
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnMissingBean(AcpAgentTransport.class)
+	@ConditionalOnBean(annotation = com.agentclientprotocol.sdk.annotation.AcpAgent.class)
+	@Conditional(OnInProcessAgentTransportCondition.class)
+	static class InProcessAgentTransportConfiguration {
+
+		// The agent lifecycle and the client lifecycle close the two sides. The client
+		// settings are read here only to refuse a client transport of another agent.
+		@Bean(destroyMethod = "")
+		InMemoryTransportPair acpInProcessTransportPair(Environment environment) {
+			boolean clientTransport = java.util.stream.Stream.of("type", "stdio.command", "websocket.uri", "http.uri")
+				.anyMatch(key -> environment.containsProperty("spring.acp.client.transport." + key));
+			return AcpInProcess.pair(clientTransport, "spring.acp.client", "spring.acp.agent");
+		}
+
+		@Bean(destroyMethod = "")
+		AcpAgentTransport acpAgentTransport(InMemoryTransportPair pair) {
+			return pair.agentTransport();
+		}
+
+		@Bean(destroyMethod = "")
+		AcpClientTransport acpClientTransport(InMemoryTransportPair pair) {
+			return pair.clientTransport();
 		}
 
 	}

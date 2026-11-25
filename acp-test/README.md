@@ -4,9 +4,9 @@ Test utilities for ACP clients and agents: they run a client and an agent in one
 process and no network, on acp-core's in-process transport,
 `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`: build a client on
 `clientTransport()` and an agent on `agentTransport()`. An application that connects its own
-client to its own agent uses that class from acp-core and does not need acp-test.
-`com.agentclientprotocol.sdk.test.InMemoryTransportPair`, this module's former copy, is deprecated
-and delegates to it: change the import.
+client to its own agent sets the in-process transport type in its framework integration instead
+(`spring.acp.agent.transport.type=in-process`, and the same in Micronaut and Quarkus), and needs
+neither this module nor the pair.
 
 | Class | Purpose |
 |-------|---------|

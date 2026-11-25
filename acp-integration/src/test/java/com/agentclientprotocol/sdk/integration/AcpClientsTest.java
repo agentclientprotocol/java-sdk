@@ -38,8 +38,7 @@ class AcpClientsTest {
 			.requestTimeout(Duration.ofSeconds(10))
 			.capabilities(new AcpClientSettings.Capabilities(false, false, false, false, false, true))
 			.build();
-		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), settings,
-				List.of(spec -> customized.add("first"), spec -> {
+		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), settings, AcpClientHandlers.NONE, List.of(spec -> customized.add("first"), spec -> {
 					customized.add("second");
 					spec.sessionUpdateHandler(notification -> {
 						if (notification.update() instanceof AcpSchema.AgentMessageChunk chunk
@@ -65,7 +64,7 @@ class AcpClientsTest {
 
 	@Test
 	void unsetRequestTimeoutKeepsTheSdkDefault() {
-		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(), List.of());
+		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(), AcpClientHandlers.NONE, List.of());
 		new AcpClientHost(async).close(Duration.ofSeconds(5));
 	}
 
@@ -80,7 +79,7 @@ class AcpClientsTest {
 	void aCloseThatDoesNotFinishInTimeClosesAtOnce() {
 		AtomicInteger closes = new AtomicInteger();
 		AcpClientTransport stuck = new StuckClientTransport(pair.clientTransport(), closes);
-		AcpAsyncClient async = AcpClients.async(stuck, AcpClientSettings.builder().build(), List.of());
+		AcpAsyncClient async = AcpClients.async(stuck, AcpClientSettings.builder().build(), AcpClientHandlers.NONE, List.of());
 		new AcpClientHost(async).close(Duration.ofMillis(50));
 		assertThat(closes).hasPositiveValue();
 	}
@@ -90,7 +89,7 @@ class AcpClientsTest {
 		AcpClientSettings settings = AcpClientSettings.builder()
 			.capabilities(new AcpClientSettings.Capabilities(true, false, false, true, false, false))
 			.build();
-		assertThatThrownBy(() -> AcpClients.async(pair.clientTransport(), settings, List.of(), "my.acp.client"))
+		assertThatThrownBy(() -> AcpClients.async(pair.clientTransport(), settings, AcpClientHandlers.NONE, List.of(), "my.acp.client"))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageContaining("readTextFileHandler")
 			.hasMessageContaining("my.acp.client.capabilities.read-text-file=true, "
@@ -119,8 +118,7 @@ class AcpClientsTest {
 		AcpAgentSupport agent = agent();
 		agent.start();
 		List<String> chunks = new CopyOnWriteArrayList<>();
-		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(),
-				List.of(spec -> spec.sessionUpdateHandler(notification -> {
+		AcpAsyncClient async = AcpClients.async(pair.clientTransport(), AcpClientSettings.builder().build(), AcpClientHandlers.NONE, List.of(spec -> spec.sessionUpdateHandler(notification -> {
 					chunks.add(notification.sessionId());
 					return Mono.empty();
 				})));

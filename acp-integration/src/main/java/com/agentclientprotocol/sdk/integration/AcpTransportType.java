@@ -10,8 +10,8 @@ import java.util.Locale;
  * The value of the {@code transport.type} setting: the transport an agent is served over
  * ({@link AcpAgentSettings#transport()}) or a client connects with
  * ({@link AcpClientSettings#transport()}). Configuration writes it in any case, as {@code stdio},
- * {@code websocket} or {@code http}; {@link #parse(String)} reads it and {@link #value()} writes
- * it back.
+ * {@code websocket}, {@code http} or {@code in-process}; {@link #parse(String)} reads it and
+ * {@link #value()} writes it back.
  *
  * <p>For an agent, {@link #WEBSOCKET} means the same as {@link #HTTP}: the SDK's listener serves
  * Streamable HTTP and accepts WebSocket upgrades on the same path
@@ -37,31 +37,42 @@ public enum AcpTransportType {
 	 * ACP Streamable HTTP: the client posts its messages to one endpoint and reads the agent's
 	 * from Server-Sent Event (SSE) streams.
 	 */
-	HTTP;
+	HTTP,
 
 	/**
-	 * Returns the type a configuration value names, ignoring case and surrounding white space.
-	 * @param value {@code stdio}, {@code websocket} or {@code http}
+	 * In the application's own JVM: the framework serves the agent on one side of an
+	 * {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair} and gives the
+	 * application its client on the other side, initialized once the agent has started. An agent
+	 * setting only: the client follows from it, so a client's {@code transport.type} cannot name it.
+	 */
+	IN_PROCESS;
+
+	/**
+	 * Returns the type a configuration value names, ignoring case, surrounding white space, and
+	 * whether words are joined by {@code -} or {@code _}.
+	 * @param value {@code stdio}, {@code websocket}, {@code http} or {@code in-process}
 	 * @return the type
-	 * @throws IllegalArgumentException if the value names no type; the message lists the three
+	 * @throws IllegalArgumentException if the value names no type; the message lists the four
 	 * values
 	 */
 	public static AcpTransportType parse(String value) {
-		String name = value.trim().toUpperCase(Locale.ROOT);
+		String name = value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
 		for (AcpTransportType type : values()) {
 			if (type.name().equals(name)) {
 				return type;
 			}
 		}
-		throw new IllegalArgumentException("Unknown ACP transport type '" + value + "': use stdio, websocket or http");
+		throw new IllegalArgumentException(
+				"Unknown ACP transport type '" + value + "': use stdio, websocket, http or in-process");
 	}
 
 	/**
 	 * Returns the configuration value for this type, as messages and settings write it.
-	 * @return the lower-case name: {@code stdio}, {@code websocket} or {@code http}
+	 * @return the lower-case name, words joined by {@code -}: {@code stdio}, {@code websocket},
+	 * {@code http} or {@code in-process}
 	 */
 	public String value() {
-		return name().toLowerCase(Locale.ROOT);
+		return name().toLowerCase(Locale.ROOT).replace('_', '-');
 	}
 
 }

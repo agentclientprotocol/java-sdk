@@ -27,8 +27,10 @@
         <module>acp-integration</module>
         <module>acp-spring-boot-autoconfigure</module>
         <module>acp-spring-boot-starter</module>
+        <module>acp-micronaut-processor</module>
         <module>acp-micronaut</module>
         <module>acp-micronaut-sample</module>
+        <module>acp-micronaut-integration-tests</module>
         <module>acp-quarkus</module>
         <module>acp-quarkus-deployment</module>
         <module>acp-quarkus-integration-tests</module>
@@ -236,6 +238,11 @@
             <dependency>
                 <groupId>com.agentclientprotocol</groupId>
                 <artifactId>acp-integration</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-micronaut-processor</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -738,6 +745,7 @@
                                  reactor, so skipping there skips the whole release. -->
                             <excludeArtifacts>
                                 <excludeArtifact>acp-micronaut-sample</excludeArtifact>
+                                <excludeArtifact>acp-micronaut-integration-tests</excludeArtifact>
                                 <excludeArtifact>acp-quarkus-integration-tests</excludeArtifact>
                             </excludeArtifacts>
                         </configuration>

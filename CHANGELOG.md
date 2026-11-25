@@ -7,34 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Breaking changes in this release are marked **Breaking**; pre-1.0, they come without compatibility shims.
+
 ### Added
 
+- **An `@AcpAgent` runs in process with configuration only, in Spring Boot, Micronaut and Quarkus.** Set
+  `spring.acp.agent.transport.type=in-process`, `acp.agent.transport.type=in-process` or
+  `quarkus.acp.agent.transport.type=in-process`, and the integration serves the `@AcpAgent` bean on one side of
+  an `InMemoryTransportPair` and gives the application its `AcpSyncClient` and `AcpAsyncClient` on the other,
+  with the client properties, initialized once the agent has started and closed when the application stops.
+  The application writes no transport, pair, client or lifecycle code. Setting a client transport property as
+  well fails the startup. `AcpTransportType.IN_PROCESS` is the new value, written `in-process`.
+- **Client handler beans:** `AcpSessionUpdateHandler` (every bean receives every session update) and
+  `AcpPermissionHandler` (at most one; it answers `session/request_permission`), in
+  `com.agentclientprotocol.sdk.integration`. Every client the three integrations build picks them up, on every
+  transport; they may block.
+- **`@AcpAgent` alone makes a class a bean in Spring Boot and Micronaut**, as it already did in Quarkus.
+  Spring Boot scans the application's packages (those of its `@SpringBootApplication`) for `@AcpAgent` classes
+  and registers each that is not a bean already. Micronaut needs the new `acp-micronaut-processor` on the
+  annotation processor path, beside `micronaut-inject-java`; it maps `@AcpAgent` to `@Singleton` at compile
+  time. `acp-annotations` keeps no framework dependency.
+- **The integrations close an `AutoCloseable` agent bean** once the agent has stopped: Micronaut and Quarkus
+  now do it themselves, on every transport; Spring Boot closes such a bean as it closes any.
+- **`AcpClient.AsyncSpec.defaultRequestPermissionHandler`**, a permission handler that applies when the
+  application registers none, for frameworks, like `defaultSessionUpdateHandler`.
 - **A supported in-process transport, `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`, in
   acp-core.** It connects an ACP client and an agent in the same JVM, without a process or a port: build the
-  agent on `agentTransport()` and the client on `clientTransport()`. An application that serves its own agent
-  to its own code (a web endpoint that drives an `@AcpAgent`, for instance) no longer needs acp-test at
-  runtime. The two sides exchange ACP's JSON-RPC messages as `AcpSchema` objects, in order, from any number
-  of sending threads. `create()` takes the JSON mapper from the classpath once for the pair;
-  `create(AcpJsonMapper)` takes one you configure.
+  agent on `agentTransport()` and the client on `clientTransport()`. The two sides exchange ACP's JSON-RPC
+  messages as `AcpSchema` objects, in order, from any number of sending threads. `create()` takes the JSON
+  mapper from the classpath once for the pair; `create(AcpJsonMapper)` takes one you configure.
 
 ### Changed
 
+- **Breaking: `shutdown-on-transport-end` applies to stdio only.** Before, the end of any single transport,
+  an application's own `AcpAgentTransport` bean included, closed the application; now only the end of a stdio
+  transport does, in all three integrations. An application that relied on its own transport's end to stop
+  must stop itself.
+- **Breaking: a client an integration builds refuses permission requests it has no handler for.** Without an
+  `AcpPermissionHandler` bean or a customizer's handler, the client answers `session/request_permission` by
+  selecting the agent's first reject option (`reject_once`, else `reject_always`), or `cancelled` when it
+  offers none. Before, it answered `-32601` (method not found). A permission handler bean and a customizer's
+  permission handler together fail the startup.
+- **Breaking: in Spring Boot, every `@AcpAgent` class in the application's packages is a bean.** An
+  application with several such classes there, one of them a bean of its own before, now fails the startup
+  ("Found 2 @AcpAgent beans"): keep one, or exclude `AcpAgentScanAutoConfiguration` and declare the agent
+  yourself.
+- **Breaking: `AcpClients.async(...)` takes the handler beans** (`AcpClientHandlers`) before the customizers;
+  framework integrations pass `AcpClientHandlers.of(updateHandlers, permissionHandlers)`.
+- **Breaking: `AcpTransportType.parse` and `value()` know `in-process`**, reading `-` and `_` alike; its error
+  message lists the four values. `AcpAgentSettings.servesHttp()` is true for `http` and `websocket` only. A
+  client's `transport.type=in-process` fails, naming the agent setting.
+- **Breaking (Quarkus internals):** `AcpStdioAgentHost` and `AcpHttpAgentHost` take CDI `Instance`s of the
+  client and the assembly; `AcpStdioAgentHost` starts the agent early in `StartupEvent`, so the application's
+  own startup observers find the in-process client ready.
 - **Either side's close now ends the in-process connection for both.** Closing the client, the agent, either
   transport or the pair completes both transports' `awaitTermination()`: `AcpSyncAgent.run()` returns once
   the client closes, the client fails its requests still waiting for the agent at once instead of at their
   timeout, and a request the agent sent the client and that is still unanswered fails with `-32603`, as on
   stdio. Messages sent before the end are still delivered; a send after it fails with
-  `AcpConnectionException` (it was a `RuntimeException`). Before, the agent transport ended only when the
-  agent side closed and the client transport never reported an end.
+  `AcpConnectionException` (it was a `RuntimeException`).
 - **`connect()` and `start()` on the in-process transports complete at once**, as the transport interfaces
   specify, instead of when the connection ends. A handler failure on one message no longer stops delivery of
   the next on the client side, and transport errors are logged at WARN unless an exception handler is set.
 
-### Deprecated
+### Removed
 
-- **`com.agentclientprotocol.sdk.test.InMemoryTransportPair` (acp-test)** delegates to the acp-core class and
-  is deprecated for removal in a later release. Change the import to
-  `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair`; nothing else changes.
+- **Breaking: `com.agentclientprotocol.sdk.test.InMemoryTransportPair` (acp-test).** Use
+  `com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair` from acp-core, or, in a framework
+  application, `transport.type=in-process`. acp-test keeps `MockAcpAgent` and `MockAcpClient`.
 
 ## [0.81.0] - 2026-11-10
 

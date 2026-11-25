@@ -41,7 +41,7 @@ class HostsAndProducersTest {
 		when(assembly.builder()).thenReturn(AcpAgentSupport.create(new PingAgent()));
 		when(assembly.settings()).thenReturn(AcpAgentSettings.builder().shutdownOnTransportEnd(false).build());
 
-		AcpStdioAgentHost host = new AcpStdioAgentHost(assembly, pair.agentTransport());
+		AcpStdioAgentHost host = new AcpStdioAgentHost(assembly, pair.agentTransport(), unresolvable());
 		assertThat(host.agent()).isNull();
 		host.start(null);
 		assertThat(host.agent()).isNotNull();
@@ -75,10 +75,69 @@ class HostsAndProducersTest {
 		// A close that never finishes is given up after the shutdown timeout.
 		when(route.closeGracefully()).thenReturn(Mono.never());
 
-		AcpHttpAgentHost host = new AcpHttpAgentHost(route);
+		AcpAgentAssembly assembly = mock(AcpAgentAssembly.class);
+		AcpHttpAgentHost host = new AcpHttpAgentHost(route, resolvable(assembly));
 		assertThat(host.activeConnectionCount()).isEqualTo(5);
 		host.stop(null);
 		verify(route).closeGracefully();
+		// Then the agent bean, once nothing is served on it.
+		verify(assembly).closeAgentBean();
+	}
+
+	@Test
+	void inProcessTheHostInitializesTheApplicationsClientOnceTheAgentHasStarted() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		AcpAgentAssembly assembly = mock(AcpAgentAssembly.class);
+		when(assembly.builder()).thenReturn(AcpAgentSupport.create(new PingAgent()));
+		when(assembly.settings())
+			.thenReturn(AcpAgentSettings.builder().transport(AcpTransportType.IN_PROCESS).build());
+		AcpSyncClient client = AcpClient.sync(pair.clientTransport()).requestTimeout(Duration.ofSeconds(5)).build();
+		AcpStdioAgentHost host = new AcpStdioAgentHost(assembly, pair.agentTransport(), resolvable(client));
+
+		host.start(null);
+
+		// Initialized by the host: a session opens at once.
+		assertThat(client.newSession(new AcpSchema.NewSessionRequest("/", List.of())).sessionId()).isNotBlank();
+		host.stop(null);
+		verify(assembly).closeAgentBean();
+		client.close();
+	}
+
+	@Test
+	void anAutoCloseableAgentBeanIsClosedAndAFailureIsOnlyLogged() {
+		java.util.concurrent.atomic.AtomicInteger closes = new java.util.concurrent.atomic.AtomicInteger();
+		AcpAgentAssembly.closeIfAutoCloseable((AutoCloseable) closes::incrementAndGet);
+		AcpAgentAssembly.closeIfAutoCloseable((AutoCloseable) () -> {
+			throw new IllegalStateException("cannot close");
+		});
+		AcpAgentAssembly.closeIfAutoCloseable(new Object());
+		assertThat(closes).hasValue(1);
+	}
+
+	@Test
+	void theInProcessProducerMakesOnePairAndItsTwoSides() {
+		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
+		AcpInProcessProducer producer = new AcpInProcessProducer(config);
+		InMemoryTransportPair pair = producer.acpInProcessTransportPair();
+		assertThat(producer.acpInProcessAgentTransport(pair)).isSameAs(pair.agentTransport());
+		assertThat(producer.acpInProcessClientTransport(pair)).isSameAs(pair.clientTransport());
+
+		when(config.client().transport().stdio().command()).thenReturn(Optional.of("some-agent"));
+		org.assertj.core.api.Assertions.assertThatThrownBy(producer::acpInProcessTransportPair)
+			.hasMessageContaining("remove quarkus.acp.client.transport.*");
+	}
+
+	@SuppressWarnings("unchecked")
+	static <T> jakarta.enterprise.inject.Instance<T> resolvable(T bean) {
+		jakarta.enterprise.inject.Instance<T> instance = mock(jakarta.enterprise.inject.Instance.class);
+		when(instance.isResolvable()).thenReturn(true);
+		when(instance.get()).thenReturn(bean);
+		return instance;
+	}
+
+	@SuppressWarnings("unchecked")
+	static <T> jakarta.enterprise.inject.Instance<T> unresolvable() {
+		return mock(jakarta.enterprise.inject.Instance.class);
 	}
 
 	@Test
@@ -94,7 +153,7 @@ class HostsAndProducersTest {
 		assertThat(producers.acpClientTransport()).isNotNull();
 
 		List<String> customized = new java.util.ArrayList<>();
-		AcpAsyncClient client = producers.acpAsyncClient(pair.clientTransport(),
+		AcpAsyncClient client = producers.acpAsyncClient(pair.clientTransport(), List.of(), List.of(),
 				List.of(spec -> customized.add("first"), spec -> customized.add("second"),
 						// serves the file reads the configuration advertises
 						spec -> spec.readTextFileHandler(request -> Mono.empty())));
@@ -111,7 +170,8 @@ class HostsAndProducersTest {
 		AcpClientProducers producers = new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
 
 		assertThatThrownBy(
-				() -> producers.acpAsyncClient(InMemoryTransportPair.create().clientTransport(), List.of()))
+				() -> producers.acpAsyncClient(InMemoryTransportPair.create().clientTransport(), List.of(), List.of(),
+						List.of()))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageContaining("readTextFileHandler")
 			.hasMessageContaining("createElicitationHandler")
@@ -179,7 +239,7 @@ class HostsAndProducersTest {
 		agent.start();
 		AcpRuntimeConfig config = mock(AcpRuntimeConfig.class, Answers.RETURNS_DEEP_STUBS);
 		AcpClientProducers producers = new AcpClientProducers(config, new AcpExecutors(java.util.concurrent.ForkJoinPool.commonPool()));
-		AcpSyncClient client = producers.acpSyncClient(producers.acpAsyncClient(pair.clientTransport(), customizers));
+		AcpSyncClient client = producers.acpSyncClient(producers.acpAsyncClient(pair.clientTransport(), List.of(), List.of(), customizers));
 		try {
 			client.initialize();
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()));

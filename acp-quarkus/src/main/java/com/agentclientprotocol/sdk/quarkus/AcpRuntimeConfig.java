@@ -114,8 +114,8 @@ public interface AcpRuntimeConfig {
 
 		/**
 		 * Whether the application exits when the stdio transport ends: the client closed standard
-		 * input and every answer has been written. It applies to the single transport (stdio, or an
-		 * {@code AcpAgentTransport} bean of the application's own), not to HTTP. Maps to
+		 * input and every answer has been written. It applies to a stdio transport only, never to
+		 * the in-process transport, another {@code AcpAgentTransport} bean, or HTTP. Maps to
 		 * {@code AcpAgentSettings.shutdownOnTransportEnd}.
 		 * @return whether to exit on transport end
 		 */

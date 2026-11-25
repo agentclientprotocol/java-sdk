@@ -487,6 +487,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | [`acp-test`](https://central.sonatype.com/artifact/com.agentclientprotocol/acp-test) | In-memory transport and mock utilities for testing |
 | `acp-spring-boot-starter` | Spring Boot 4.1 starter: serves an `@AcpAgent` bean over stdio, Streamable HTTP or WebSocket, and builds a client from `spring.acp.client.*`; the autoconfiguration is `acp-spring-boot-autoconfigure` ([README](acp-spring-boot-autoconfigure/README.md)) |
 | `acp-micronaut` | Micronaut 4 integration: serves an `@AcpAgent` bean over stdio, Streamable HTTP or WebSocket, and builds a client from `acp.client.*` ([README](acp-micronaut/README.md)) |
+| `acp-micronaut-processor` | Micronaut annotation processing: makes an `@AcpAgent` class a singleton bean; add it to the annotation processor path ([README](acp-micronaut/README.md)) |
 | `acp-quarkus` | Quarkus extension: an `@AcpAgent` bean over stdio, or Streamable HTTP and WebSocket on the Quarkus HTTP server; client beans from `quarkus.acp.*` ([README](acp-quarkus/README.md)) |
 
 ### Transports
@@ -494,7 +495,7 @@ that authenticates in front. Browser requests whose `Origin` is not a loopback o
 | Transport | Client | Agent | Module |
 |-----------|--------|-------|--------|
 | Stdio | `StdioAcpClientTransport` | `StdioAcpAgentTransport` | acp-core |
-| In-process (client and agent in one JVM) | `InMemoryTransportPair.clientTransport()` | `InMemoryTransportPair.agentTransport()` | acp-core |
+| In-process (client and agent in one JVM) | `InMemoryTransportPair.clientTransport()` | `InMemoryTransportPair.agentTransport()` | acp-core; in Spring Boot, Micronaut and Quarkus, `transport.type=in-process` on the agent wires both and gives the application its client |
 | WebSocket | `WebSocketAcpClientTransport` | `StreamableHttpAcpAgentTransport` (upgrade on the same path) | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP | `StreamableHttpAcpClientTransport` | `StreamableHttpAcpAgentTransport` | acp-core / acp-streamable-http-jetty |
 | Streamable HTTP and WebSocket in your own Servlet 6 container | `StreamableHttpAcpClientTransport`, `WebSocketAcpClientTransport` | `StreamableHttpAcpServlet` (WebSocket where the container has Jakarta WebSocket 2.1) | acp-core / acp-http-servlet |

@@ -183,6 +183,21 @@ class AcpAgentAutoConfigurationTests {
 	}
 
 	@Test
+	void theEndOfATransportOtherThanStdioKeepsTheContext() {
+		InMemoryTransportPair pair = InMemoryTransportPair.create();
+		new ApplicationContextRunner().withConfiguration(AGENT_AUTO_CONFIGURATIONS)
+			.withUserConfiguration(SingleAgentConfiguration.class)
+			.withBean(AcpAgentTransport.class, pair::agentTransport)
+			.run(context -> {
+				ConfigurableApplicationContext source = (ConfigurableApplicationContext) context
+					.getSourceApplicationContext();
+				pair.clientTransport().closeGracefully().block(Duration.ofSeconds(5));
+				pair.agentTransport().awaitTermination().block(Duration.ofSeconds(5));
+				await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).until(source::isActive);
+			});
+	}
+
+	@Test
 	void keepsContextWhenShutdownOnTransportEndDisabled() throws IOException {
 		PipedOutputStream clientSide = new PipedOutputStream();
 		PipedInputStream agentInput = new PipedInputStream(clientSide);

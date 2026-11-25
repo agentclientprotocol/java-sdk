@@ -39,7 +39,8 @@ class AcpAgentHttpServletIntegrationTests {
 	}
 
 	@SpringBootConfiguration
-	@EnableAutoConfiguration
+	// The agent is imported: scanning this package would find every test's @AcpAgent class.
+	@EnableAutoConfiguration(exclude = AcpAgentScanAutoConfiguration.class)
 	@Import(EchoAgentConfiguration.class)
 	static class TestApplication {
 

@@ -18,7 +18,7 @@ import jakarta.inject.Singleton;
  * separately.
  */
 @Singleton
-@Requires(property = AcpClientConfiguration.PREFIX + ".transport")
+@Requires(condition = AcpClientCondition.class)
 final class AcpClientCloser implements BeanPreDestroyEventListener<AcpAsyncClient> {
 
 	private final AcpClientConfiguration config;

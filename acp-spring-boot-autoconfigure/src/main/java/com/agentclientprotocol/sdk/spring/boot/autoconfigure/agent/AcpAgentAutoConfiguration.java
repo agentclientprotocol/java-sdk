@@ -14,10 +14,13 @@ import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
 import com.agentclientprotocol.sdk.integration.AcpAgentHost;
+import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpAgents;
+import com.agentclientprotocol.sdk.integration.AcpInProcess;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,10 +49,12 @@ import org.springframework.util.ClassUtils;
  * <p>It creates an {@link AcpAgentFactory} bean, which builds one agent per connection for the
  * Streamable HTTP endpoint ({@link AcpAgentHttpAutoConfiguration}); an {@code AcpAgentFactory} bean
  * of the application's own replaces it. When there is an {@code AcpAgentTransport} bean (the stdio
- * transport from {@link AcpAgentTransportAutoConfiguration}, or the application's own), it also
- * serves one agent on that transport: started with the context, and stopped with it, waiting at
- * most 30 seconds for a graceful stop. When that transport ends on its own, the context is closed,
- * unless {@code spring.acp.agent.shutdown-on-transport-end=false}.
+ * or in-process transport from {@link AcpAgentTransportAutoConfiguration}, or the application's
+ * own), it also serves one agent on that transport: started with the context, and stopped with it,
+ * waiting at most 30 seconds for a graceful stop. When the stdio transport ends on its own, the
+ * context is closed, unless {@code spring.acp.agent.shutdown-on-transport-end=false}; the end of
+ * any other transport never closes it. In process, the application's {@code AcpSyncClient} is
+ * initialized right after the agent starts, so it is ready when the context has started.
  *
  * <p>The handler methods are found on the bean's own class, so a bean proxied by Spring AOP (CGLIB)
  * is served with its advice. {@code AcpInterceptor}, {@code ArgumentResolver} and
@@ -85,13 +90,19 @@ public class AcpAgentAutoConfiguration {
 					returnValueHandlers)
 				.transport(transport)
 				.build();
+			AcpAgentSettings settings = properties.toSettings();
 			Runnable onTransportEnd = () -> {
 			};
-			if (properties.isShutdownOnTransportEnd()
+			if (settings.shutsDownWhenEnded(transport)
 					&& applicationContext instanceof ConfigurableApplicationContext configurable) {
 				onTransportEnd = () -> closeContext(configurable);
 			}
-			return new AcpAgentLifecycle(new AcpAgentHost(agent, onTransportEnd));
+			// In process, the client on the pair's other side is the application's: ready once started.
+			ObjectProvider<AcpSyncClient> client = applicationContext.getBeanProvider(AcpSyncClient.class);
+			Runnable afterStart = settings.inProcess() ? () -> AcpInProcess.initialize(client.getObject())
+					: () -> {
+					};
+			return new AcpAgentLifecycle(new AcpAgentHost(agent, onTransportEnd), afterStart);
 		}
 
 	}
@@ -158,16 +169,20 @@ public class AcpAgentAutoConfiguration {
 
 		private final AcpAgentHost host;
 
+		private final Runnable afterStart;
+
 		private volatile boolean running = false;
 
-		AcpAgentLifecycle(AcpAgentHost host) {
+		AcpAgentLifecycle(AcpAgentHost host, Runnable afterStart) {
 			this.host = host;
+			this.afterStart = afterStart;
 		}
 
 		@Override
 		public void start() {
 			host.start();
 			running = true;
+			afterStart.run();
 		}
 
 		@Override

@@ -22,13 +22,14 @@ import reactor.core.publisher.Mono;
 /**
  * Builds the application's ACP client the same way in every framework: one
  * {@link AcpAsyncClient} on the transport from {@link AcpClientTransports}, configured from the
- * {@link AcpClientSettings} and the application's {@link AcpClientCustomizer}s, and one
- * {@link AcpSyncClient} facade over that same client. A framework exposes both as beans, and
+ * {@link AcpClientSettings}, the application's handler beans ({@link AcpClientHandlers}) and its
+ * {@link AcpClientCustomizer}s, and one {@link AcpSyncClient} facade over that same client. A framework exposes both as beans, and
  * closes the async one through an {@link AcpClientHost} when the container shuts down.
  *
  * <p>What the shared code does: it advertises the settings' capabilities, applies the request
  * and prompt timeouts, sets a default session-update handler that logs each update at DEBUG
- * (so the SDK does not warn about updates nobody handles), applies the customizers in order,
+ * (so the SDK does not warn about updates nobody handles) and a default permission handler that
+ * refuses, registers the handler beans, applies the customizers in order,
  * and turns a missing-handler error into one that names the framework's capability settings.
  * What the framework does: create the transport, collect the customizer beans in its bean
  * order, and pass its own property prefix so errors name its keys.
@@ -42,30 +43,34 @@ public final class AcpClients {
 
 	/**
 	 * Returns the async client as
-	 * {@link #async(AcpClientTransport, AcpClientSettings, List, String)} builds it, with errors
-	 * that name {@code acp.client.*} keys.
+	 * {@link #async(AcpClientTransport, AcpClientSettings, AcpClientHandlers, List, String)} builds
+	 * it, with errors that name {@code acp.client.*} keys.
 	 * @param transport the client transport
 	 * @param settings the client settings
+	 * @param handlers the application's handler beans
 	 * @param customizers the customizers, in order
 	 * @return the client, not yet initialized
 	 * @throws IllegalStateException if a capability setting is true but no customizer registers
 	 * the handlers that serve it, or the transport refuses to connect
 	 */
 	public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
-			List<? extends AcpClientCustomizer> customizers) {
-		return async(transport, settings, customizers, AcpClientTransports.DEFAULT_PREFIX);
+			AcpClientHandlers handlers, List<? extends AcpClientCustomizer> customizers) {
+		return async(transport, settings, handlers, customizers, AcpClientTransports.DEFAULT_PREFIX);
 	}
 
 	/**
 	 * Returns the async client on the transport: the settings' capabilities, their request
 	 * timeout (unset keeps the SDK default, 60 seconds) and prompt timeout (unset: none), a
-	 * default session-update handler, then the customizers in order. The default update handler logs
-	 * each update at DEBUG; the first update handler a customizer adds with
-	 * {@code sessionUpdateHandler} replaces it, rather than running beside it. Building the
+	 * default session-update handler, the handler beans, then the customizers in order. The default
+	 * update handler logs each update at DEBUG; an {@link AcpSessionUpdateHandler} bean, or an
+	 * update handler a customizer adds with {@code sessionUpdateHandler}, replaces it rather than
+	 * running beside it. Permission requests go to the {@link AcpPermissionHandler} bean, else to a
+	 * customizer's handler, else are refused ({@link AcpClientHandlers#refuse}). Building the
 	 * client connects the transport (for stdio, starts the agent process); the ACP handshake
 	 * waits for the application's {@code initialize()}.
 	 * @param transport the client transport, not yet used by another client
 	 * @param settings the client settings
+	 * @param handlers the application's handler beans
 	 * @param customizers the customizers, in order
 	 * @param prefix the framework's prefix of the client keys, such as {@code spring.acp.client},
 	 * which errors name
@@ -75,10 +80,11 @@ public final class AcpClients {
 	 * such as {@code spring.acp.client.capabilities.terminal=true}. A customizer that calls
 	 * {@code defaultSessionUpdateHandler} also fails, since the default is already set, and so
 	 * does a transport that refuses to connect: one already connected, or a stdio command that
-	 * cannot be started
+	 * cannot be started. A permission handler bean and a customizer's permission handler together
+	 * fail too
 	 */
 	public static AcpAsyncClient async(AcpClientTransport transport, AcpClientSettings settings,
-			List<? extends AcpClientCustomizer> customizers, String prefix) {
+			AcpClientHandlers handlers, List<? extends AcpClientCustomizer> customizers, String prefix) {
 		AcpClient.AsyncSpec spec = AcpClient.async(transport)
 			.clientCapabilities(settings.capabilities().toClientCapabilities())
 			// Session updates always have an update handler, so the SDK does not warn about an unhandled
@@ -92,6 +98,7 @@ public final class AcpClients {
 		if (promptTimeout != null) {
 			spec.promptTimeout(promptTimeout);
 		}
+		handlers.register(spec);
 		customizers.forEach(customizer -> customizer.customize(spec));
 		try {
 			return spec.build();

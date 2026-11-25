@@ -21,20 +21,26 @@ class OnHttpAgentTransportCondition extends SpringBootCondition {
 
 	@Override
 	public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
+		return outcome(context, type -> type == AcpTransportType.HTTP || type == AcpTransportType.WEBSOCKET);
+	}
+
+	/**
+	 * Matches when {@value #PROPERTY} names a type the test accepts; an unset or unknown value
+	 * never matches (the properties binding reports an unknown one).
+	 */
+	static ConditionOutcome outcome(ConditionContext context, java.util.function.Predicate<AcpTransportType> test) {
 		String type = context.getEnvironment().getProperty(PROPERTY);
 		if (type == null || type.isBlank()) {
 			return ConditionOutcome.noMatch(PROPERTY + " is not set");
 		}
-		boolean http;
+		boolean matches;
 		try {
-			http = AcpTransportType.parse(type) != AcpTransportType.STDIO;
+			matches = test.test(AcpTransportType.parse(type));
 		}
 		catch (IllegalArgumentException ex) {
-			// The properties binding reports the value.
 			return ConditionOutcome.noMatch(PROPERTY + "=" + type + " is no transport type");
 		}
-		return http ? ConditionOutcome.match(PROPERTY + "=" + type)
-				: ConditionOutcome.noMatch(PROPERTY + "=" + type);
+		return matches ? ConditionOutcome.match(PROPERTY + "=" + type) : ConditionOutcome.noMatch(PROPERTY + "=" + type);
 	}
 
 }

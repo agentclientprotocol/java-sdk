@@ -82,8 +82,8 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
     AcpAgentSupport.Builder builder = AcpAgents.builder(agent, settings, interceptors, resolvers, handlers);
     AcpHost host = settings.servesHttp()
             ? new AcpListenerHost(AcpListeners.listener(settings, builder.buildFactory()))
-            : new AcpAgentHost(builder.transport(AcpAgentTransports.stdio()).build(),
-                    settings.shutdownOnTransportEnd() ? container::close : () -> { });
+            : new AcpAgentHost(builder.transport(transport).build(),   // stdio, or the in-process pair's agent side
+                    settings.shutsDownWhenEnded(transport) ? container::close : () -> { });
     host.start();                            // from the container's start hook
     // host.stop(Duration.ofSeconds(30))     // from its stop hook, or a JVM shutdown hook
 });
@@ -104,15 +104,23 @@ AcpAgentDiscovery.requireSingle(candidates, "my.acp.agent.enabled").ifPresent(ag
   the `onTransportEnd` action given at construction runs once, on a thread of the host's own,
   never when the host stopped the agent itself.
 - `AcpListenerHost`: the SDK listener, one agent per connection; it ends only when stopped.
+- `settings.shutsDownWhenEnded(transport)`: `shutdown-on-transport-end` applies to a stdio
+  transport only.
+- In process (`transport.type=in-process`, `settings.inProcess()`): `AcpInProcess.pair(...)` once,
+  refusing a client transport configured as well; serve the agent on `pair.agentTransport()`, build
+  the client on `pair.clientTransport()`, and `AcpInProcess.initialize(client)` right after the
+  host has started. On stop, an `AutoCloseable` agent bean is closed once the agent has stopped.
 - `AcpServletHost.closeBeforeShutdown`: closes the servlet's connections before the container's
   graceful shutdown, which would otherwise wait for every open SSE response.
 
 ## The client
 
-`AcpClients.async(transport, settings, customizers)` builds the one async client: capabilities,
-request and prompt timeouts, a session-update handler that logs each update at DEBUG, its content
-included, then the
-`AcpClientCustomizer`s in order. Building the client connects the transport (for stdio, it starts
+`AcpClients.async(transport, settings, handlers, customizers)` builds the one async client:
+capabilities, request and prompt timeouts, a session-update handler that logs each update at
+DEBUG, its content included, a permission handler that refuses, then the application's handler beans
+(`AcpClientHandlers.of(sessionUpdateHandlers, permissionHandlers)`: every `AcpSessionUpdateHandler`,
+at most one `AcpPermissionHandler`, each run where it may block), then the `AcpClientCustomizer`s in
+order. Building the client connects the transport (for stdio, it starts
 the agent process); a stdio command that cannot be started, or a transport already connected,
 fails the build. The ACP handshake waits for the application's `initialize()`.
 `AcpClients.sync(async)` is the sync facade over that same client

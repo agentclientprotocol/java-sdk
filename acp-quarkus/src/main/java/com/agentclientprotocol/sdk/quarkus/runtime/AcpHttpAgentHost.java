@@ -9,6 +9,7 @@ import java.time.Duration;
 import io.quarkus.runtime.ShutdownEvent;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,12 +31,19 @@ public class AcpHttpAgentHost {
 
 	private final AcpVertxHost host;
 
-	AcpHttpAgentHost(AcpVertxHost host) {
+	private final Instance<AcpAgentAssembly> assembly;
+
+	AcpHttpAgentHost(AcpVertxHost host, Instance<AcpAgentAssembly> assembly) {
 		this.host = host;
+		this.assembly = assembly;
 	}
 
 	void stop(@Observes @Priority(0) ShutdownEvent event) {
 		drain();
+		// Then an AutoCloseable agent bean, once nothing is served on it any more.
+		if (assembly.isResolvable()) {
+			assembly.get().closeAgentBean();
+		}
 	}
 
 	/**

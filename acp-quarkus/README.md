@@ -82,7 +82,42 @@ Standard output carries the protocol, so a stdio build sets these defaults (your
 Never print to `System.out`. The application exits when the client closes standard input
 (`quarkus.acp.agent.shutdown-on-transport-end=false` keeps it running). Dev mode (`quarkus dev`)
 owns the terminal's standard input, so develop a stdio agent in tests (an application bean of type
-`AcpAgentTransport`, such as an in-memory one from `acp-test`, replaces stdio) or over HTTP.
+`AcpAgentTransport` replaces stdio) or over HTTP. `shutdown-on-transport-end` applies to the stdio
+transport only: the end of any other never stops the application. When the application stops, an
+`AutoCloseable` agent bean is closed once the agent has stopped, on every transport.
+
+### In process: the agent and the application's own client
+
+An application that drives its own agent, a REST endpoint that answers by prompting it for
+instance, serves it in process with one build-time property:
+
+```properties
+quarkus.acp.agent.transport.type=in-process
+```
+
+The extension serves the `@AcpAgent` bean on one side of an `InMemoryTransportPair` and connects the
+application's `AcpSyncClient` and `AcpAsyncClient` to the other, with the `quarkus.acp.client.*`
+timeouts and capabilities, and initializes the client at startup, once the agent has started (its
+startup observer runs early, so your own `StartupEvent` observers find the client ready). The
+Quarkus HTTP server, banner and console logging stay as they are. Inject the client and open
+sessions. The application's handler beans receive the agent's updates and answer its permission
+requests:
+
+```java
+@Singleton
+class Chat implements AcpSessionUpdateHandler {         // every bean receives every update
+    public void onSessionUpdate(AcpSchema.SessionNotification notification) { ... }
+}
+
+@Singleton
+class Approvals implements AcpPermissionHandler {       // at most one; without it, requests are refused
+    public AcpSchema.RequestPermissionResponse onPermissionRequest(AcpSchema.RequestPermissionRequest request) { ... }
+}
+```
+
+Both may block. When the application stops, the agent stops, the client closes and an
+`AutoCloseable` agent bean is closed. Setting a `quarkus.acp.client.transport.*` property as well
+fails the startup.
 
 ### Over HTTP and WebSocket
 
@@ -132,7 +167,9 @@ class Updates implements AcpClientCustomizer {        // optional; @Priority ord
 ```
 
 `AcpClientCustomizer` is `com.agentclientprotocol.sdk.integration.AcpClientCustomizer`, the same
-type in every framework integration. The client beans are created when first injected and closed when the application stops; a bean of
+type in every framework integration, and so are the handler beans `AcpSessionUpdateHandler` and
+`AcpPermissionHandler` of the section above, which apply to this client too: without a permission
+handler, the agent's permission requests are refused. The client beans are created when first injected and closed when the application stops; a bean of
 your own of the same type replaces each. Client callbacks run on SDK threads, not on a Vert.x
 context: from a `Uni` built over a client call, hop back with `emitOn` when you need the context.
 
@@ -150,7 +187,7 @@ Build time (fixed when the application is built):
 | Property | Default | |
 |---|---|---|
 | `quarkus.acp.agent.enabled` | `true` | serve the `@AcpAgent` bean |
-| `quarkus.acp.agent.transport.type` | `stdio` | `stdio` or `http` (`websocket` means the same as `http`) |
+| `quarkus.acp.agent.transport.type` | `stdio` | `stdio`, `http` (`websocket` means the same as `http`) or `in-process` (the application's own client) |
 | `quarkus.acp.agent.transport.http.path` | `/acp` | endpoint path (Streamable HTTP and WebSocket) |
 
 Run time:
@@ -161,7 +198,7 @@ Run time:
 | `quarkus.acp.agent.request-timeout` | SDK default | agent requests to the client |
 | `quarkus.acp.agent.cancel-grace-period` | SDK default | |
 | `quarkus.acp.agent.max-prompt-duration` | none | |
-| `quarkus.acp.agent.shutdown-on-transport-end` | `true` | stdio: exit when input ends |
+| `quarkus.acp.agent.shutdown-on-transport-end` | `true` | stdio only: exit when input ends |
 | `quarkus.acp.agent.transport.http.max-post-body-size` | 16M | POST body and WebSocket message |
 | `quarkus.acp.agent.transport.http.keep-alive-interval` | 15s | |
 | `quarkus.acp.agent.transport.http.mailbox-capacity` | 1024 | |

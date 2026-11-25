@@ -97,6 +97,7 @@ public final class AcpClientTransports {
 			case WEBSOCKET -> webSocket(required(settings.websocket().uri(), type, prefix, "websocket.uri"), threads)
 				.connectTimeout(settings.websocket().connectTimeout());
 			case HTTP -> http(required(settings.http().uri(), type, prefix, "http.uri"), threads);
+			case IN_PROCESS -> throw notAClientTransport(prefix);
 		});
 	}
 
@@ -155,6 +156,12 @@ public final class AcpClientTransports {
 			agent.env(stdio.env());
 		}
 		return new StdioAcpClientTransport(agent.build());
+	}
+
+	/** A client's in-process transport comes from the agent's setting, never from its own. */
+	static IllegalStateException notAClientTransport(String prefix) {
+		return new IllegalStateException(prefix + ".transport.type=in-process is not a client transport: set the agent's "
+				+ "transport.type=in-process, and the application's client is connected to its own agent");
 	}
 
 	private static <T> T required(@Nullable T value, AcpTransportType type, String prefix, String property) {

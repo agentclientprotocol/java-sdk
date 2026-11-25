@@ -17,6 +17,7 @@ import com.agentclientprotocol.sdk.quarkus.runtime.AcpClientProducers;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpExecutors;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpHttpConfigBuilder;
+import com.agentclientprotocol.sdk.quarkus.runtime.AcpInProcessProducer;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpRecorder;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioAgentHost;
 import com.agentclientprotocol.sdk.quarkus.runtime.AcpStdioConfigBuilder;
@@ -118,7 +119,15 @@ class AcpProcessor {
 			return;
 		}
 		beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpAgentAssembly.class));
-		if (config.agent().transport().type() == AcpTransportType.STDIO) {
+		AcpTransportType type = config.agent().transport().type();
+		if (type == AcpTransportType.IN_PROCESS) {
+			// The agent and the application's client, in one JVM, beside Quarkus' own server.
+			beans.produce(AdditionalBeanBuildItem.builder()
+				.addBeanClasses(AcpStdioAgentHost.class, AcpInProcessProducer.class)
+				.setUnremovable()
+				.build());
+		}
+		else if (type == AcpTransportType.STDIO) {
 			beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpStdioAgentHost.class));
 			beans.produce(AdditionalBeanBuildItem.unremovableOf(AcpStdioTransportProducer.class));
 			// Standard output carries the protocol: nothing else may write there, and a

@@ -141,7 +141,7 @@ class AcpAgentConfigurationTest {
 			}
 		}
 		assertThatThrownBy(() -> ApplicationContext.run(Map.of("acp.agent.transport.type", "pigeon")))
-			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket or http");
+			.hasMessageContaining("Unknown ACP transport type 'pigeon': use stdio, websocket, http or in-process");
 	}
 
 }

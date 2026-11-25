@@ -25,14 +25,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AcpAgentLifecycleTest {
 
 	@Test
-	void theTransportEndingClosesTheApplicationContext() {
-		try (ApplicationContext context = ApplicationContext.run(TestAgents.echoInMemory())) {
-			InMemoryTransportPair pair = context.getBean(InMemoryTransportPair.class);
-			AcpSyncClient client = AcpClient.sync(pair.clientTransport()).requestTimeout(Duration.ofSeconds(10)).build();
-			client.initialize();
-
-			// What the end of standard input does for stdio: the agent transport ends by itself
-			pair.agentTransport().closeGracefully().block(Duration.ofSeconds(5));
+	void theStdioTransportEndingClosesTheApplicationContext() throws Exception {
+		try (ApplicationContext context = ApplicationContext.run(TestAgents.echoOverAPipe())) {
+			// The end of standard input: the agent transport ends by itself
+			context.getBean(java.io.PipedOutputStream.class).close();
 
 			eventually(Duration.ofSeconds(10), () -> assertThat(context.isRunning()).isFalse());
 			eventually(Duration.ofSeconds(5), () -> assertThat(threadNamed("acp-agent-await")).isFalse());
@@ -40,12 +36,26 @@ class AcpAgentLifecycleTest {
 	}
 
 	@Test
-	void withShutdownOnTransportEndOffTheContextStaysUp() {
-		Map<String, Object> properties = new HashMap<>(TestAgents.echoInMemory());
+	void withShutdownOnTransportEndOffTheContextStaysUp() throws Exception {
+		Map<String, Object> properties = new HashMap<>(TestAgents.echoOverAPipe());
 		properties.put("acp.agent.shutdown-on-transport-end", "false");
 		try (ApplicationContext context = ApplicationContext.run(properties)) {
+			context.getBean(java.io.PipedOutputStream.class).close();
+			eventually(Duration.ofSeconds(5), () -> assertThat(threadNamed("acp-agent-await")).isFalse());
+			assertThat(context.isRunning()).isTrue();
+		}
+	}
+
+	@Test
+	void theEndOfATransportOtherThanStdioKeepsTheContextUp() {
+		try (ApplicationContext context = ApplicationContext.run(TestAgents.echoInMemory())) {
 			InMemoryTransportPair pair = context.getBean(InMemoryTransportPair.class);
-			pair.agentTransport().closeGracefully().block(Duration.ofSeconds(5));
+			AcpSyncClient client = AcpClient.sync(pair.clientTransport()).requestTimeout(Duration.ofSeconds(10)).build();
+			client.initialize();
+
+			client.close();
+
+			pair.agentTransport().awaitTermination().block(Duration.ofSeconds(5));
 			eventually(Duration.ofSeconds(5), () -> assertThat(threadNamed("acp-agent-await")).isFalse());
 			assertThat(context.isRunning()).isTrue();
 		}

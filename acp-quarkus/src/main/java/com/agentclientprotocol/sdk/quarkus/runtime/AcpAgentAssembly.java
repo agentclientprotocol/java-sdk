@@ -91,6 +91,27 @@ public class AcpAgentAssembly {
 		return builder().buildFactory();
 	}
 
+	/**
+	 * Closes the agent bean if it is {@code AutoCloseable}, once the agent has stopped: the hosts
+	 * call it when the application stops. A failure is logged.
+	 */
+	public void closeAgentBean() {
+		closeIfAutoCloseable(Arc.container().select(agentClass.type(), Any.Literal.INSTANCE).get());
+	}
+
+	/** Closes the bean if it is {@code AutoCloseable}, logging a failure. */
+	static void closeIfAutoCloseable(Object bean) {
+		if (bean instanceof AutoCloseable closeable) {
+			try {
+				closeable.close();
+			}
+			catch (Exception ex) {
+				org.slf4j.LoggerFactory.getLogger(AcpAgentAssembly.class)
+					.warn("Closing the @AcpAgent bean {} failed: {}", bean.getClass().getName(), ex.toString(), ex);
+			}
+		}
+	}
+
 	private <T> AcpAgentSupport.Builder builder(Class<T> type) {
 		T bean = Arc.container().select(type, Any.Literal.INSTANCE).get();
 		return AcpAgents.builder(new AgentCandidate<>(type.getName(), type, () -> bean), settings, interceptors,

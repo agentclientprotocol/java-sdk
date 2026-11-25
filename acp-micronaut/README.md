@@ -22,11 +22,27 @@ processor path, as in any Micronaut application.
 
 ## An agent
 
-Annotate the agent class `@AcpAgent` and make it a bean with `@Singleton` (any bean-defining
-annotation works). It is an ordinary bean, so other beans are injected into it.
+Annotate the agent class `@AcpAgent`. With `acp-micronaut-processor` on the annotation processor
+path, beside `micronaut-inject-java`, that alone makes it a singleton bean; without it, add
+`@Singleton` (any bean-defining annotation works). It is an ordinary bean, so other beans are
+injected into it.
+
+```xml
+<annotationProcessorPaths>
+    <path>
+        <groupId>io.micronaut</groupId>
+        <artifactId>micronaut-inject-java</artifactId>
+        <version>${micronaut.core.version}</version>
+    </path>
+    <path>
+        <groupId>com.agentclientprotocol</groupId>
+        <artifactId>acp-micronaut-processor</artifactId>
+        <version>${acp.version}</version>
+    </path>
+</annotationProcessorPaths>
+```
 
 ```java
-@Singleton
 @AcpAgent(name = "echo", version = "1.0.0")
 public class EchoAgent {
 
@@ -70,6 +86,8 @@ public final class Application {
   - **Over stdio**, the application stays up while the transport runs. When the client closes the
     agent's input and every answer has been written, the context closes and the process exits 0.
   - **Over HTTP**, the listener runs until the application stops.
+  - **In process**, see below.
+  - **Closing.** After the agent has stopped, an `AutoCloseable` agent bean is closed.
   - **On SIGTERM**, the agent closes gracefully. Without an embedded server, Micronaut registers no
     shutdown hook of its own, so the runtime registers one.
   - **Graceful shutdown.** With `micronaut.lifecycle.graceful-shutdown.enabled=true`, the HTTP
@@ -88,7 +106,7 @@ public final class Application {
 | `acp.agent.max-prompt-duration` | `0s` (none) | a longer prompt is answered `-32800` |
 | `acp.agent.shutdown-on-transport-end` | `true` | close the context when the stdio input ends |
 | `acp.agent.shutdown-timeout` | `10s` | how long closing waits for a stdio agent's graceful close, then closes it at once |
-| `acp.agent.transport.type` | `stdio` | `stdio`, `http` or `websocket`, in any case (the last two mean the same listener) |
+| `acp.agent.transport.type` | `stdio` | `stdio`, `http`, `websocket` (the same listener as `http`) or `in-process`, in any case |
 | `acp.agent.transport.http.listener.host` | loopback | the address the listener binds; unset binds `127.0.0.1` and `::1` only, `0.0.0.0` every interface (an explicit opt-in: the listener has no authentication) |
 | `acp.agent.transport.http.allowed-origins` | none | browser origins accepted besides `localhost`, `127.0.0.1` and `[::1]`; any other `Origin` is answered 403, over HTTP and on the WebSocket handshake; `*` for any |
 | `acp.agent.transport.http.listener.port` | `8080` | the listener's own port; `0` for an ephemeral one (`AcpAgentRuntime.port()`) |
@@ -97,8 +115,38 @@ public final class Application {
 | `acp.agent.transport.http.max-post-body-size` | SDK (16MB) | e.g. `4MB` |
 | `acp.agent.transport.http.keep-alive-interval`, `mailbox-capacity`, `max-pending-sse-events`, `max-web-socket-pending-frames`, `max-provisional-sessions`, `shutdown-timeout`, `web-socket-idle-timeout` (30m: an idle WebSocket is closed with 1001), `initialize-timeout` (30s: a WebSocket without `initialize` is closed with 1008) | SDK | `StreamableHttpAcpAgentTransportOptions`; closing waits for the listener at most `shutdown-timeout` plus 5 seconds |
 
-An application bean of type `AcpAgentTransport` replaces stdio, for example the in-memory
-transport of `acp-test` in a test.
+An application bean of type `AcpAgentTransport` replaces stdio. `shutdown-on-transport-end`
+applies to the stdio transport only: the end of any other never closes the context.
+
+### In process: the agent and the application's own client
+
+An application that drives its own agent serves it in process with one property:
+
+```properties
+acp.agent.transport.type=in-process
+```
+
+The runtime serves the `@AcpAgent` bean on one side of an `InMemoryTransportPair` and connects the
+application's `AcpSyncClient` and `AcpAsyncClient` to the other, with the `acp.client.*` timeouts
+and capabilities, and initializes the client once the agent has started. Inject the client and
+open sessions. The application's handler beans receive the agent's updates and answer its
+permission requests:
+
+```java
+@Singleton
+class Chat implements AcpSessionUpdateHandler {         // every bean receives every update
+    public void onSessionUpdate(AcpSchema.SessionNotification notification) { ... }
+}
+
+@Singleton
+class Approvals implements AcpPermissionHandler {       // at most one; without it, requests are refused
+    public AcpSchema.RequestPermissionResponse onPermissionRequest(AcpSchema.RequestPermissionRequest request) { ... }
+}
+```
+
+Both may block. Closing the context closes the client, stops the agent and closes an
+`AutoCloseable` agent bean; the end of the in-process connection never closes the context.
+Setting an `acp.client.transport.*` property as well fails the startup.
 
 **HTTP runs on its own port.** Streamable HTTP and WebSocket are served by the SDK's Jetty
 listener (`StreamableHttpAcpAgentTransport`). It runs next to Micronaut's HTTP server if you have

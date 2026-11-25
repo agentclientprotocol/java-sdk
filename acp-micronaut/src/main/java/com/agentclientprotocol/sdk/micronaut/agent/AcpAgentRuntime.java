@@ -16,6 +16,7 @@ import com.agentclientprotocol.sdk.agent.support.handler.ReturnValueHandler;
 import com.agentclientprotocol.sdk.agent.support.interceptor.AcpInterceptor;
 import com.agentclientprotocol.sdk.agent.support.resolver.ArgumentResolver;
 import com.agentclientprotocol.sdk.annotation.AcpAgent;
+import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery;
 import com.agentclientprotocol.sdk.integration.AcpAgentDiscovery.AgentCandidate;
 import com.agentclientprotocol.sdk.integration.AcpAgentHost;
@@ -23,6 +24,7 @@ import com.agentclientprotocol.sdk.integration.AcpAgentSettings;
 import com.agentclientprotocol.sdk.integration.AcpAgentTransports;
 import com.agentclientprotocol.sdk.integration.AcpAgents;
 import com.agentclientprotocol.sdk.integration.AcpHost;
+import com.agentclientprotocol.sdk.integration.AcpInProcess;
 import com.agentclientprotocol.sdk.integration.AcpListenerHost;
 import com.agentclientprotocol.sdk.integration.AcpListeners;
 import com.agentclientprotocol.sdk.integration.AcpTransportThreads;
@@ -109,6 +111,8 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 
 	private @Nullable AcpHost host;
 
+	private @Nullable AgentCandidate<?> agentBean;
+
 	private @Nullable Thread shutdownHook;
 
 	private boolean started;
@@ -174,8 +178,13 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 			newHost.port()
 				.ifPresent(port -> logger.info("ACP agent listening on port {}, path {}", port, settings.http().path()));
 			this.host = newHost;
-			if (!settings.servesHttp()) {
-				// The SDK's threads are daemons: hold the JVM while the single transport runs.
+			this.agentBean = agent;
+			if (settings.inProcess()) {
+				// The client on the pair's other side is the application's: ready once started.
+				context.findBean(AcpSyncClient.class).ifPresent(AcpInProcess::initialize);
+			}
+			else if (!settings.servesHttp()) {
+				// The SDK's threads are daemons: hold the JVM while the stdio transport runs.
 				newHost.holdJvmUntilTermination();
 			}
 		}
@@ -224,15 +233,33 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	@PreDestroy
 	public void close() {
 		AcpHost current;
+		AgentCandidate<?> agent;
 		synchronized (lock) {
 			closing = true;
 			current = this.host;
+			agent = this.agentBean;
 			this.host = null;
+			this.agentBean = null;
 		}
 		removeShutdownHook();
 		if (current != null) {
 			logger.info("Stopping the ACP agent");
 			current.stop(closeTimeout());
+		}
+		if (agent != null) {
+			closeAgentBean(agent);
+		}
+	}
+
+	/** Closes an {@code AutoCloseable} agent bean once the agent has stopped. */
+	private static void closeAgentBean(AgentCandidate<?> agent) {
+		if (agent.instance().get() instanceof AutoCloseable closeable) {
+			try {
+				closeable.close();
+			}
+			catch (Exception ex) {
+				logger.warn("Closing the @AcpAgent bean {} failed: {}", agent.userClass().getName(), ex.toString(), ex);
+			}
 		}
 	}
 
@@ -282,7 +309,7 @@ public final class AcpAgentRuntime implements ApplicationEventListener<StartupEv
 	private AcpHost createHost(AcpAgentSupport.Builder builder, AcpAgentSettings settings) {
 		if (!settings.servesHttp()) {
 			AcpAgentTransport transport = transportBean.isPresent() ? transportBean.get() : AcpAgentTransports.stdio();
-			Runnable onTransportEnd = settings.shutdownOnTransportEnd() ? this::onTransportEnd : () -> {
+			Runnable onTransportEnd = settings.shutsDownWhenEnded(transport) ? this::onTransportEnd : () -> {
 			};
 			return new AcpAgentHost(builder.transport(transport).build(), onTransportEnd);
 		}

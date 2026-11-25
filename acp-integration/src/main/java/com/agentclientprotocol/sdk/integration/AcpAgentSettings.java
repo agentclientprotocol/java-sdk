@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.agent.transport.StreamableHttpAcpAgentTransportOptions;
+import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -30,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  * cancel-grace-period                                   SDK default, 60s
  * max-prompt-duration                                   SDK default (none)
  * shutdown-on-transport-end                             true
- * transport.type                                        stdio | http | websocket (same as http)
+ * transport.type                                        stdio | http | websocket (same as http) | in-process
  * transport.http.path                                   /acp
  * transport.http.allowed-origins                        none (loopback origins only)
  * transport.http.max-post-body-size, keep-alive-interval, mailbox-capacity,
@@ -53,8 +55,8 @@ import org.jspecify.annotations.Nullable;
  * @param cancelGracePeriod how long a prompt handler has after {@code session/cancel}; null for
  * the SDK default
  * @param maxPromptDuration how long a prompt turn may run; null for the SDK default (no limit)
- * @param shutdownOnTransportEnd whether the application stops when a single transport (stdio)
- * ends by itself
+ * @param shutdownOnTransportEnd whether the application stops when the stdio transport ends by
+ * itself; it never applies to another transport ({@link #shutsDownWhenEnded})
  * @param transport the transport; {@link AcpTransportType#WEBSOCKET} means the same as
  * {@link AcpTransportType#HTTP}
  * @param http the Streamable HTTP endpoint, used only when {@link #servesHttp()}
@@ -146,10 +148,34 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 	 * Returns whether the agent is served over Streamable HTTP (and WebSocket) rather than on one
 	 * transport. A framework uses it to choose between an {@link AcpListenerHost} or servlet and
 	 * an {@link AcpAgentHost}.
-	 * @return true for {@code http} and {@code websocket}, false for {@code stdio}
+	 * @return true for {@code http} and {@code websocket}, false for {@code stdio} and
+	 * {@code in-process}
 	 */
 	public boolean servesHttp() {
-		return transport != AcpTransportType.STDIO;
+		return transport == AcpTransportType.HTTP || transport == AcpTransportType.WEBSOCKET;
+	}
+
+	/**
+	 * Returns whether the agent is served in process, with the application's client on the other
+	 * side of an {@link com.agentclientprotocol.sdk.agent.transport.InMemoryTransportPair}.
+	 * @return true for {@code in-process}
+	 */
+	public boolean inProcess() {
+		return transport == AcpTransportType.IN_PROCESS;
+	}
+
+	/**
+	 * Returns whether the application stops when this transport ends by itself: only when
+	 * {@link #shutdownOnTransportEnd()} is true and the transport is stdio, where the end means
+	 * the client that started the agent process has gone. An in-process transport, or another
+	 * transport the application provides, ends when the application's own client closes, so it
+	 * never stops the application. The framework gives an {@link AcpAgentHost} the action that
+	 * stops it only when this is true.
+	 * @param transport the transport the agent is served on
+	 * @return whether the transport's end stops the application
+	 */
+	public boolean shutsDownWhenEnded(AcpAgentTransport transport) {
+		return shutdownOnTransportEnd && transport instanceof StdioAcpAgentTransport;
 	}
 
 	/**
@@ -350,9 +376,9 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 		}
 
 		/**
-		 * Sets whether the application stops when a single transport (stdio) ends by itself,
-		 * that is, when the client closed the agent's input. Default true. The framework acts on
-		 * it through the action it gives {@link AcpAgentHost}.
+		 * Sets whether the application stops when the stdio transport ends by itself, that is,
+		 * when the client closed the agent's input. Default true; it never applies to another
+		 * transport. The framework acts on it through the action it gives {@link AcpAgentHost}.
 		 * @param shutdownOnTransportEnd whether to stop at transport end
 		 * @return this builder
 		 */
@@ -363,7 +389,8 @@ public record AcpAgentSettings(boolean enabled, @Nullable Duration requestTimeou
 
 		/**
 		 * Sets the transport. Default {@link AcpTransportType#STDIO};
-		 * {@link AcpTransportType#WEBSOCKET} means the same as {@link AcpTransportType#HTTP}.
+		 * {@link AcpTransportType#WEBSOCKET} means the same as {@link AcpTransportType#HTTP}, and
+		 * {@link AcpTransportType#IN_PROCESS} serves the agent to the application's own client.
 		 * @param transport the transport
 		 * @return this builder
 		 */

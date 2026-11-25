@@ -83,7 +83,8 @@ class DefaultSessionUpdateLoggingTest {
 			.build();
 		agent.start();
 		AcpSyncClient client = new AcpSyncClient(
-				new AcpClientBeans().acpAsyncClient(pair.clientTransport(), new AcpClientConfiguration(), customizers));
+				new AcpClientBeans().acpAsyncClient(pair.clientTransport(), new AcpClientConfiguration(), List.of(),
+						List.of(), customizers));
 		try {
 			client.initialize();
 			client.newSession(new AcpSchema.NewSessionRequest("/workspace", List.of()));
