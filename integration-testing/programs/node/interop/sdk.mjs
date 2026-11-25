@@ -58,7 +58,8 @@ export const fixtures = {
       loadSession: true,
       promptCapabilities: { image: false, audio: false, embeddedContext: false },
       mcpCapabilities: { http: false, sse: false },
-      sessionCapabilities: { list: {}, resume: {}, close: {}, delete: {} },
+      // fork: the agent implements session/fork (unstable), which a client may call only when advertised.
+      sessionCapabilities: { list: {}, resume: {}, close: {}, delete: {}, fork: {} },
       auth: { logout: {} },
     },
     authMethods: [{ id: "interop-auth", name: "Interop auth", description: "Accepts any authenticate call" }],

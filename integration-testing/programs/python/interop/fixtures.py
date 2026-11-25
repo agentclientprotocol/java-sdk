@@ -18,7 +18,8 @@ AGENT_CAPABILITIES = {
     "loadSession": True,
     "promptCapabilities": {"image": False, "audio": False, "embeddedContext": False},
     "mcpCapabilities": {"http": False, "sse": False},
-    "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}},
+    # fork: the agent implements session/fork (unstable), which a client may call only when advertised.
+    "sessionCapabilities": {"list": {}, "resume": {}, "close": {}, "delete": {}, "fork": {}},
     "auth": {"logout": {}},
 }
 AUTH_METHOD = {"id": "interop-auth", "name": "Interop auth", "description": "Accepts any authenticate call"}

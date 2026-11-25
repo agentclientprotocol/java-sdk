@@ -186,6 +186,8 @@ class AgentConnection(val protocol: Protocol, val tap: TapTransport) : AgentSupp
                 promptCapabilities = PromptCapabilities(audio = false, image = false, embeddedContext = false),
                 mcpCapabilities = McpCapabilities(http = false, sse = false),
                 sessionCapabilities = SessionCapabilities(
+                    // forkSession is implemented below; a client may call it only when advertised.
+                    fork = SessionForkCapabilities(),
                     list = SessionListCapabilities(),
                     resume = SessionResumeCapabilities(),
                     close = SessionCloseCapabilities(),

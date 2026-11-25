@@ -255,7 +255,7 @@ public class Agent {
 				log("[agent] initialize " + r);
 				return Mono.just(new AcpSchema.InitializeResponse(1,
 						new AcpSchema.AgentCapabilities(true,
-								new AcpSchema.SessionCapabilities(Map.of(), Map.of(), Map.of(), Map.of(), null, null),
+								new AcpSchema.SessionCapabilities(Map.of(), Map.of(), Map.of(), Map.of(), null, Map.of()),
 								new AcpSchema.McpCapabilities(false, false), new AcpSchema.PromptCapabilities(false, false, false),
 								AcpSchema.AgentAuthCapabilities.withLogout(), null, null),
 						authMethods(r.clientCapabilities()),
