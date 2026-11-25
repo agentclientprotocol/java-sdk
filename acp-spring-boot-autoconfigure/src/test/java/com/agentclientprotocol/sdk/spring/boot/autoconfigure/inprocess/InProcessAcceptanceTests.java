@@ -67,6 +67,15 @@ class InProcessAcceptanceTests {
 		}
 	}
 
+	/** One agent is served, so it is discovered, and logged, once (claims desk finding, 2026-11-25). */
+	@Test
+	@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+	void theAgentIsDiscoveredOnce(org.springframework.boot.test.system.CapturedOutput output) {
+		try (ConfigurableApplicationContext context = start()) {
+			assertThat(output.getOut().split("Discovered @AcpAgent bean", -1)).hasSize(2);
+		}
+	}
+
 	@Test
 	void aClientTransportOfAnotherAgentIsRefused() {
 		assertThatThrownBy(() -> start("spring.acp.client.transport.stdio.command=some-agent"))

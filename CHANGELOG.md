@@ -72,6 +72,11 @@ Breaking changes in this release are marked **Breaking**; pre-1.0, they come wit
 - **SLF4J 2.0.20 and JSpecify 1.0.1**, the versions Spring Boot 4.1.2 manages (were 2.0.18 and 1.0.0), so a plain
   SDK consumer and a Spring Boot one resolve the same.
 
+### Fixed
+
+- **Spring Boot logs "Discovered @AcpAgent bean" once.** The `AcpAgentFactory` bean, which only an HTTP endpoint
+  uses, is now lazy, so an agent served on stdio or in process is discovered once.
+
 ### Removed
 
 - **Breaking: `com.agentclientprotocol.sdk.test.InMemoryTransportPair` (acp-test).** Use

@@ -38,6 +38,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -109,8 +110,10 @@ public class AcpAgentAutoConfiguration {
 
 	// Listener-backed transports (Streamable HTTP) host one agent runtime per remote
 	// connection, each dispatching to the same @AcpAgent bean, so its handlers must be
-	// thread-safe.
+	// thread-safe. Lazy: built when an HTTP endpoint injects it, so an agent served on one
+	// transport is discovered (and logged) once.
 	@Bean
+	@Lazy
 	@ConditionalOnBean(annotation = AcpAgent.class)
 	@ConditionalOnMissingBean
 	AcpAgentFactory acpAgentFactory(ApplicationContext applicationContext, AcpAgentProperties properties,
